@@ -1,0 +1,81 @@
+site_name: nexus-raw
+site_description: A general-purpose client for Sonatype Nexus raw repositories — claim, sha-sibling markers, symmetric diff, resume.
+repo_url: https://gitcode.com/rri_opensource/nexus-raw
+
+theme:
+  name: material
+  logo: assets/nxr.svg
+  favicon: assets/nxr.svg
+  icon:
+    repo: fontawesome/brands/git-alt
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Get started: get-started.md
+  - How-to:
+      - Publish a version: how-to/publish.md
+      - Consume artifacts: how-to/consume.md
+      - Configure profiles: how-to/configure.md
+      - Use in CI: how-to/ci.md
+      - When it breaks: how-to/troubleshoot.md
+  - Reference:
+      - reference/cli.md
+      - Config and credentials: reference/config.md
+      - Wire protocol: reference/protocol.md
+      - Errors and exit codes: reference/errors.md
+      - Rust API: reference/api.md
+  - Explanation:
+      - Design: explanation/design.md
+      - Conformance: explanation/conformance.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.keys
+  - def_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg

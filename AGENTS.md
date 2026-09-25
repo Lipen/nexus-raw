@@ -37,8 +37,9 @@ The protocol summary lives in the `crates/nexus-raw-core/src/lib.rs` crate docs;
 ## Verify before reporting done
 
 ```bash
-just check       # fmt + clippy + prek + tests: the full gate
-just test        # unit and conformance suites alone
+just check        # fmt + clippy + prek + tests: the full gate
+just check-docs   # the docs site builds and every page resolves
+just test         # unit and conformance suites alone
 just nxr -- --help
 ```
 
@@ -53,6 +54,7 @@ The scenario list in `mock-nexus` is the single source; do not fork it.
 | `crates/nexus-raw-core/` | the protocol: names, digest, sibling, claim, state, diff, remote (reqwest), retry, up, down, pointer, creds, config, events, errors; the `Nxr` facade is the single entry |
 | `crates/nexus-raw/` | the `nxr` binary: clap parsing, human and NDJSON rendering |
 | `mock/mock-nexus/` | the mock server (std-only HTTP/1.1) with the nine failure scenarios; lib for Rust tests, binary for humans and external test suites |
+| `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack); `just docs` serves it with live reload |
 | `node/` | future home of the npm packaging; does not exist yet |
 
 ## Commits

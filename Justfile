@@ -63,3 +63,16 @@ build *args:
 [group('build')]
 release:
     {{cargo}} build --release -p nexus-raw
+
+# The whole site, written in docs/ (zensical, Material stack).
+# Live reload included: edit a page, the browser refreshes itself.
+[doc('Serve the docs site with live reload (http://localhost:8000).')]
+[group('docs')]
+docs *args:
+    uvx zensical serve {{args}}
+
+# A docs link or config typo fails the build instead of shipping broken pages.
+[doc('Build the docs and fail on issues.')]
+[group('docs')]
+check-docs *args:
+    uvx zensical build {{args}}

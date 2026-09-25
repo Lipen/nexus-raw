@@ -84,6 +84,7 @@ Exit codes: 0 ok, 1 data (mismatch, incomplete, claim drift, missing), 2 misuse,
 | `crates/nexus-raw-core/` | the Rust library: the `Nxr` facade, typed errors, event stream |
 | `crates/nexus-raw/` | the `nxr` binary: flags and rendering only, no protocol logic |
 | `mock/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
+| `docs/` + `mkdocs.yml` | the documentation site (zensical); `just docs` serves it |
 | `node/` | future home of the npm packaging; does not exist yet |
 
 ## Development
@@ -95,5 +96,10 @@ just mock atomic --port 8080
 just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.4.0
 ```
 
-User documentation lives here; reference documentation is planned under `docs/` (mdbook).
+User documentation lives in [docs/](docs/index.md) and renders as a site:
+
+```bash
+just docs     # http://localhost:8000, live reload
+```
+
 The Russian readme: [README.ru.md](README.ru.md).

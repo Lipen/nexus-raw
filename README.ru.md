@@ -84,6 +84,7 @@ Exit-коды: 0 ок, 1 данные (mismatch, incomplete, claim drift, missin
 | `crates/nexus-raw-core/` | Rust-библиотека: фасад `Nxr`, типизированные ошибки, поток событий |
 | `crates/nexus-raw/` | бинарь `nxr`: только флаги и рендер, без протокольной логики |
 | `mock/mock-nexus/` | мок-сервер с таблицей отказов, конформанс-фикстура |
+| `docs/` + `mkdocs.yml` | сайт документации (zensical); `just docs` поднимает его |
 | `node/` | будущая npm-упаковка; пока не существует |
 
 ## Разработка
@@ -95,5 +96,10 @@ just mock atomic --port 8080
 just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.4.0
 ```
 
-Пользовательская документация здесь; справочная планируется под `docs/` (mdbook).
+Пользовательская документация живёт в [docs/](docs/index.md) и собирается в сайт:
+
+```bash
+just docs     # http://localhost:8000, live reload
+```
+
 Английский readme: [README.md](README.md).

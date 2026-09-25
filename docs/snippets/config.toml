@@ -1,0 +1,15 @@
+# nexus-raw reads exactly these keys; anything else is refused.
+# Credentials never go here: auth/password keys are a hard error.
+
+default_profile = "main"
+
+[main]
+url = "https://nexus.example.com/repository/raw-main/"
+
+[nightly]
+url = "https://nexus.example.com/repository/raw-main/"
+tls_insecure = false
+
+[dev]
+url = "http://localhost:8080/repository/raw-dev/"
+tls_insecure = true
