@@ -53,5 +53,5 @@ pub use crate::model::claim::Claim;
 pub use crate::model::digest::Digest;
 pub use crate::model::name::ArtifactName;
 pub use crate::model::state::{LocalStatus, RemoteStatus};
-pub use crate::ops::PointOutcome;
 pub use crate::nxr::Nxr;
+pub use crate::ops::PointOutcome;

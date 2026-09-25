@@ -45,11 +45,7 @@ pub async fn execute(
                     .done(name.as_str(), Dir::Down, true, 0, None)
                     .await;
             }
-            Action::Download {
-                name,
-                size,
-                digest,
-            } => {
+            Action::Download { name, size, digest } => {
                 let permit = workers
                     .clone()
                     .acquire_owned()
@@ -74,12 +70,14 @@ pub async fn execute(
     };
     let mut failed: Vec<String> = Vec::new();
     let mut mismatched: Vec<String> = Vec::new();
+    let mut first_error: Option<Error> = None;
     while let Some(res) = set.join_next().await {
         match res {
             Ok(Ok(_)) => summary.downloaded += 1,
             Ok(Err((name, Failure::Failed(e)))) => {
                 failed.push(name.to_string());
                 log::error!("down failed: {e}");
+                first_error.get_or_insert(e);
             }
             Ok(Err((name, Failure::Mismatch(detail)))) => {
                 mismatched.push(format!("{name}: {detail}"));
@@ -95,8 +93,10 @@ pub async fn execute(
             detail: "remote content diverges from its sha-sibling".to_owned(),
         });
     }
-    if !failed.is_empty() {
-        return Err(Error::Incomplete { names: failed });
+    // Transport failures after retries surface as Transport (exit 3);
+    // the failed names are listed in the summary above.
+    if let Some(e) = first_error {
+        return Err(e);
     }
     Ok(summary)
 }

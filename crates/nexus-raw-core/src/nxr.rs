@@ -51,6 +51,19 @@ impl Nxr {
         self.client.get_pointer(pointer).await
     }
 
+    /// The pointer's resolved version token: the trailing newline is stripped,
+    /// a 404 is an [`Error::Http`], an unparseable pointer file is a data error.
+    pub async fn resolve_pointer(&self, pointer: &str) -> Result<String, Error> {
+        let url = self.client.pointer_url(pointer);
+        match self.read_pointer(pointer).await? {
+            None => Err(Error::Http { status: 404, url }),
+            Some(raw) => crate::model::pointer::parse_token(&raw).map_err(|e| Error::Mismatch {
+                name: pointer.to_owned(),
+                detail: format!("pointer file does not parse: {e}"),
+            }),
+        }
+    }
+
     /// Remote states of the given names, in `names` order.
     pub async fn remote_states(
         &self,

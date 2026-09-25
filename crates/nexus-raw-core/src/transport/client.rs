@@ -21,8 +21,8 @@ use crate::model::sibling;
 use crate::model::state::RemoteStatus;
 use crate::transport::retry::{is_retryable, AttemptFailure, RetryPolicy};
 
-/// Outgoing body chunk size: with channel-based stall detection the chunk must
-/// be small relative to the stall timeout (~1.5 s per 16 KiB at 11 KB/s).
+/// Outgoing body chunk size: small enough that a full outbound buffer drains
+/// well inside the stall timeout, so channel backpressure means a real stall.
 const UPLOAD_CHUNK: usize = 16 * 1024;
 /// Depth of the outgoing body channel.
 const UPLOAD_CHANNEL: usize = 4;
@@ -147,6 +147,9 @@ impl NexusClient {
     }
 
     /// HEAD an object: Some(content-length), or None on 404.
+    ///
+    /// The size comes from the raw header: hyper reports a zero body size hint
+    /// for HEAD responses regardless of Content-Length.
     pub async fn head(&self, url: &str) -> Result<Option<u64>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -154,7 +157,14 @@ impl NexusClient {
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status();
                 match status {
-                    s if s.is_success() => Ok(resp.content_length()),
+                    s if s.is_success() => {
+                        let size = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_LENGTH)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<u64>().ok());
+                        Ok(size)
+                    }
                     s if s.as_u16() == 404 => Ok(None),
                     s => Err(this.status_failure(url, s)),
                 }
@@ -249,12 +259,13 @@ impl NexusClient {
                 let total = resp.content_length().or(total_hint);
                 progress.started(&subject_name, Dir::Down, total).await;
                 let mut body = resp.bytes_stream();
-                let mut file = tokio::fs::File::create(&dest)
-                    .await
-                    .map_err(|e| AttemptFailure {
-                        retryable: false,
-                        error: Error::io(&dest, e),
-                    })?;
+                let mut file =
+                    tokio::fs::File::create(&dest)
+                        .await
+                        .map_err(|e| AttemptFailure {
+                            retryable: false,
+                            error: Error::io(&dest, e),
+                        })?;
                 let mut hasher = Sha256::new();
                 let mut done: u64 = 0;
                 loop {
@@ -354,22 +365,23 @@ impl NexusClient {
                     }
                 });
                 progress.started(&subject_name, Dir::Up, Some(size)).await;
-                let body = reqwest::Body::wrap_stream(futures_util::stream::poll_fn(
-                    move |cx| {
-                        use futures_util::task::Poll;
-                        match rx.poll_recv(cx) {
-                            Poll::Ready(Some(Ok(chunk))) => Poll::Ready(Some(Ok::<
-                                Vec<u8>,
-                                Box<dyn std::error::Error + Send + Sync>,
-                            >(chunk))),
-                            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(
-                                Box::<dyn std::error::Error + Send + Sync>::from(e),
-                            ))),
-                            Poll::Ready(None) => Poll::Ready(None),
-                            Poll::Pending => Poll::Pending,
+                let body = reqwest::Body::wrap_stream(futures_util::stream::poll_fn(move |cx| {
+                    use futures_util::task::Poll;
+                    match rx.poll_recv(cx) {
+                        Poll::Ready(Some(Ok(chunk))) => {
+                            Poll::Ready(Some(
+                                Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(chunk),
+                            ))
                         }
-                    },
-                ));
+                        Poll::Ready(Some(Err(e))) => {
+                            Poll::Ready(Some(Err(
+                                Box::<dyn std::error::Error + Send + Sync>::from(e),
+                            )))
+                        }
+                        Poll::Ready(None) => Poll::Ready(None),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }));
                 let req = this
                     .authorize(this.http.put(url))
                     .header(reqwest::header::CONTENT_LENGTH, size)
@@ -402,7 +414,10 @@ impl NexusClient {
     }
 
     /// Read the remote claim: None on 404; a broken claim is ClaimDrift (§4.1 sane check).
-    pub async fn get_claim(&self, version: &str) -> Result<Option<crate::model::claim::Claim>, Error> {
+    pub async fn get_claim(
+        &self,
+        version: &str,
+    ) -> Result<Option<crate::model::claim::Claim>, Error> {
         let url = self.claim_url(version);
         match self.get_small(&url).await? {
             None => Ok(None),
@@ -416,11 +431,7 @@ impl NexusClient {
     }
 
     /// PUT the claim with a drift check: present and byte-equal — ok, different — refuse (§6.1).
-    pub async fn put_claim_checked(
-        &self,
-        version: &str,
-        claim_bytes: &[u8],
-    ) -> Result<(), Error> {
+    pub async fn put_claim_checked(&self, version: &str, claim_bytes: &[u8]) -> Result<(), Error> {
         let url = self.claim_url(version);
         match self.get_small(&url).await? {
             Some(existing) if existing == claim_bytes => Ok(()),
@@ -473,10 +484,13 @@ impl NexusClient {
                     .append_pair("continuationToken", token);
             }
             let page_url = page.to_string();
-            let bytes = self.get_small(&page_url).await?.ok_or_else(|| Error::Http {
-                status: 404,
-                url: page_url.clone(),
-            })?;
+            let bytes = self
+                .get_small(&page_url)
+                .await?
+                .ok_or_else(|| Error::Http {
+                    status: 404,
+                    url: page_url.clone(),
+                })?;
             let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
                 Error::transport(&page_url, format!("search response is not JSON: {e}"))
             })?;

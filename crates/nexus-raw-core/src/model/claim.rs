@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Error;
 use super::name::{validate_version, ArtifactName, CLAIM_FILE};
+use crate::error::Error;
 
 pub const CLAIM_VERSION: u32 = 1;
 
@@ -28,8 +28,8 @@ impl Claim {
     /// Parse + sane check: `claim_version == 1`, version is a valid segment,
     /// every name passes the §3 grammar.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
-        let raw: RawClaim = serde_json::from_slice(bytes)
-            .map_err(|e| Error::misuse(format!("claim.json: {e}")))?;
+        let raw: RawClaim =
+            serde_json::from_slice(bytes).map_err(|e| Error::misuse(format!("claim.json: {e}")))?;
         if raw.claim_version != CLAIM_VERSION {
             return Err(Error::misuse(format!(
                 "claim.json: claim_version {} != {CLAIM_VERSION}",

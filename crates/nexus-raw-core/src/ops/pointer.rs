@@ -9,8 +9,12 @@ use crate::transport::client::NexusClient;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PointOutcome {
     /// `from` is the previous value when it was readable.
-    Written { from: Option<String> },
-    Skipped { current: String },
+    Written {
+        from: Option<String>,
+    },
+    Skipped {
+        current: String,
+    },
 }
 
 /// PUT a pointer with the optional forward-only guard (`--if-newer`).

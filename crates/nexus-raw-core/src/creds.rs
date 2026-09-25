@@ -29,24 +29,18 @@ pub fn resolve(profile: Option<&str>) -> Result<Option<Creds>, Error> {
             }));
         }
     }
-    for (user_key, pass_key) in [("NXR_USERNAME", "NXR_PASSWORD")] {
-        let user = std::env::var(user_key).ok().filter(|s| !s.is_empty());
-        let pass = std::env::var(pass_key).ok().filter(|s| !s.is_empty());
-        match (user, pass) {
-            (Some(u), Some(p)) => {
-                return Ok(Some(Creds {
-                    header: format!("Basic {}", basic(&u, &p)),
-                }));
-            }
-            (Some(_), None) | (None, Some(_)) => {
-                return Err(Error::misuse(format!(
-                    "{user_key} and {pass_key} must be set together"
-                )));
-            }
-            (None, None) => {}
-        }
+    let (user_key, pass_key) = ("NXR_USERNAME", "NXR_PASSWORD");
+    let user = std::env::var(user_key).ok().filter(|s| !s.is_empty());
+    let pass = std::env::var(pass_key).ok().filter(|s| !s.is_empty());
+    match (user, pass) {
+        (Some(u), Some(p)) => Ok(Some(Creds {
+            header: format!("Basic {}", basic(&u, &p)),
+        })),
+        (Some(_), None) | (None, Some(_)) => Err(Error::misuse(format!(
+            "{user_key} and {pass_key} must be set together"
+        ))),
+        (None, None) => Ok(None),
     }
-    Ok(None)
 }
 
 /// `user:pass` → standard base64.

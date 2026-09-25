@@ -41,7 +41,7 @@ impl RetryPolicy {
                 .unwrap_or(0),
         )
             .hash(&mut h);
-        let jitter = (h.finish() % (self.jitter.as_millis().max(1) as u64 + 1)) as u64;
+        let jitter = h.finish() % (self.jitter.as_millis().max(1) as u64 + 1);
         exp + Duration::from_millis(jitter)
     }
 }

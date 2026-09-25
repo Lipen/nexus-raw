@@ -238,7 +238,10 @@ mod tests {
         p.bytes("a", Dir::Down, 1, None).await;
         p.bytes("a", Dir::Down, 2, None).await; // immediately — coalesced away
         p.bytes("b", Dir::Down, 1, None).await; // another name — passes
-        assert!(matches!(rx.recv().await, Some(Event::ArtifactBytes { done: 1, .. })));
+        assert!(matches!(
+            rx.recv().await,
+            Some(Event::ArtifactBytes { done: 1, .. })
+        ));
         assert!(matches!(
             rx.recv().await,
             Some(Event::ArtifactBytes { name, .. }) if name == "b"

@@ -11,46 +11,28 @@ use std::fmt;
 pub enum Error {
     /// Digest mismatch on a completed artifact.
     #[error("mismatch: {name}: {detail}")]
-    Mismatch {
-        name: String,
-        detail: String,
-    },
+    Mismatch { name: String, detail: String },
     /// Names lacking completion after the work (or before it).
     #[error("incomplete: {}", .names.join(", "))]
     Incomplete { names: Vec<String> },
     /// Name rejected by the §3 grammar.
     #[error("unsafe name: {name}: {reason}")]
-    UnsafeName {
-        name: String,
-        reason: String,
-    },
+    UnsafeName { name: String, reason: String },
     /// Remote claim differs from the local one (or does not parse).
     #[error("claim drift: version {version}: {detail}")]
-    ClaimDrift {
-        version: String,
-        detail: String,
-    },
+    ClaimDrift { version: String, detail: String },
     /// Claimed names exist neither locally nor remotely.
     #[error("missing: {}: claimed but exist nowhere", .names.join(", "))]
     Missing { names: Vec<String> },
     /// 401/403 or missing credentials when required.
     #[error("auth: {url}: {reason}")]
-    Auth {
-        url: String,
-        reason: String,
-    },
+    Auth { url: String, reason: String },
     /// Network, TLS, 5xx, timeout after retries.
     #[error("transport: {url}: {detail}")]
-    Transport {
-        url: String,
-        detail: String,
-    },
+    Transport { url: String, detail: String },
     /// Any other unexpected status.
     #[error("http {status}: {url}")]
-    Http {
-        status: u16,
-        url: String,
-    },
+    Http { status: u16, url: String },
     /// Bad flags, missing file/directory, broken config.
     #[error("misuse: {0}")]
     Misuse(String),
@@ -92,7 +74,10 @@ pub enum Verdict {
     Mismatch { name: String, detail: String },
     #[error("missing: {}: claimed but exist nowhere", fmt_names(names))]
     Missing { names: Vec<String> },
-    #[error("incomplete: {}: local copies are not Complete before publish", fmt_names(names))]
+    #[error(
+        "incomplete: {}: local copies are not Complete before publish",
+        fmt_names(names)
+    )]
     LocalIncomplete { names: Vec<String> },
 }
 

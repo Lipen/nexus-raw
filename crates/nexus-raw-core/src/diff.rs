@@ -3,9 +3,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::error::Verdict;
 use crate::model::claim::Claim;
 use crate::model::digest::Digest;
-use crate::error::Verdict;
 use crate::model::name::ArtifactName;
 use crate::model::state::{bytes_path, local_status, LocalStatus, RemoteStatus};
 
@@ -60,10 +60,7 @@ pub fn classify(
     let mut actions = Vec::with_capacity(claim.artifacts.len());
     let mut missing: Vec<String> = Vec::new();
     for (name, local) in locals {
-        let remote = remotes
-            .get(&name)
-            .cloned()
-            .unwrap_or(RemoteStatus::Absent);
+        let remote = remotes.get(&name).cloned().unwrap_or(RemoteStatus::Absent);
         match (&local, &remote) {
             (LocalStatus::Complete(ld), RemoteStatus::Complete { digest: rd, .. }) => {
                 if ld == rd {
@@ -86,10 +83,7 @@ pub fn classify(
                     .unwrap_or(0);
                 actions.push(Action::Upload { name, size });
             }
-            (
-                LocalStatus::Markerless,
-                RemoteStatus::Complete { digest, size },
-            ) => {
+            (LocalStatus::Markerless, RemoteStatus::Complete { digest, size }) => {
                 // The remote sibling is the truth: re-verify locally (§5.2).
                 actions.push(Action::Download {
                     name,
@@ -111,10 +105,7 @@ pub fn classify(
                 });
             }
             (LocalStatus::Absent, RemoteStatus::Absent) => missing.push(name.to_string()),
-            (
-                LocalStatus::Absent,
-                RemoteStatus::Complete { digest, size },
-            ) => {
+            (LocalStatus::Absent, RemoteStatus::Complete { digest, size }) => {
                 actions.push(Action::Download {
                     name,
                     size: *size,
@@ -197,10 +188,7 @@ mod tests {
     #[test]
     fn broken_local_never_overwritten() {
         let claim = claim_of(&["a.zip"]);
-        let locals = vec![(
-            name("a.zip"),
-            LocalStatus::Broken("digest mismatch".into()),
-        )];
+        let locals = vec![(name("a.zip"), LocalStatus::Broken("digest mismatch".into()))];
         let remotes = BTreeMap::from([(
             name("a.zip"),
             RemoteStatus::Complete {
@@ -235,10 +223,8 @@ mod tests {
     fn markerless_remote_download_without_digest() {
         let claim = claim_of(&["a.zip"]);
         let locals = vec![(name("a.zip"), LocalStatus::Absent)];
-        let remotes = BTreeMap::from([(
-            name("a.zip"),
-            RemoteStatus::Markerless { size: Some(10) },
-        )]);
+        let remotes =
+            BTreeMap::from([(name("a.zip"), RemoteStatus::Markerless { size: Some(10) })]);
         let actions = classify(Path::new("/nonexistent"), &claim, locals, remotes).unwrap();
         assert!(matches!(
             &actions[..],

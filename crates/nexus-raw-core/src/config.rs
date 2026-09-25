@@ -150,7 +150,11 @@ fn forbid_secrets(
 
 /// Base URL normalization: http/https scheme, a host, trailing `/`, no query/fragment.
 pub fn normalize_base(base: &str) -> Result<String, Error> {
-    let err = || Error::misuse(format!("invalid base URL {base:?}: need absolute http(s) URL"));
+    let err = || {
+        Error::misuse(format!(
+            "invalid base URL {base:?}: need absolute http(s) URL"
+        ))
+    };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none_or(str::is_empty) {
         return Err(err());

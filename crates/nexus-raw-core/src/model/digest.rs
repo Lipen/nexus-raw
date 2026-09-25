@@ -16,11 +16,7 @@ pub struct Digest(String);
 
 impl Digest {
     pub fn from_hex(s: &str) -> Result<Self, String> {
-        if s.len() != HEX_LEN
-            || !s
-                .bytes()
-                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-        {
+        if s.len() != HEX_LEN || !s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
             return Err(format!("expected {HEX_LEN} lowercase hex chars, got {s:?}"));
         }
         Ok(Self(s.to_owned()))
