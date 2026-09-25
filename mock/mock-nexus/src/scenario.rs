@@ -208,11 +208,15 @@ fn answer_bad_request(shared: &Shared, stream: &mut TcpStream, method: &str, pat
 }
 
 fn log_request(shared: &Shared, method: &str, path: &str, outcome: Outcome) {
-    shared.log.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(ReqLog {
-        method: method.to_owned(),
-        path: path.to_owned(),
-        outcome,
-    });
+    shared
+        .log
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(ReqLog {
+            method: method.to_owned(),
+            path: path.to_owned(),
+            outcome,
+        });
 }
 
 /// Return this path's previous counter value and increment it.
@@ -251,7 +255,10 @@ fn drift_claim(version: &str) -> Vec<u8> {
 /// (simulating a sibling written for a foreign object). Everything else is
 /// stored verbatim; shorter payloads pass through unchanged.
 fn zero_digest(marker: &[u8]) -> Vec<u8> {
-    let line_end = marker.iter().position(|&b| b == b'\n').unwrap_or(marker.len());
+    let line_end = marker
+        .iter()
+        .position(|&b| b == b'\n')
+        .unwrap_or(marker.len());
     let mut out = marker.to_vec();
     if line_end >= 64 {
         out[..64].fill(b'0');
@@ -276,9 +283,9 @@ mod tests {
 
     #[test]
     fn zeroes_64_char_digest_of_marker() {
-        let marker = format!("{}  panda.zip\n", "a".repeat(64));
+        let marker = format!("{}  sample.zip\n", "a".repeat(64));
         let out = zero_digest(marker.as_bytes());
-        assert_eq!(out, format!("{}  panda.zip\n", "0".repeat(64)).into_bytes());
+        assert_eq!(out, format!("{}  sample.zip\n", "0".repeat(64)).into_bytes());
     }
 
     #[test]

@@ -47,9 +47,7 @@ pub enum Scenario {
     /// The first PUT per path is cut off after `first_attempt_bytes` body
     /// bytes: the connection closes with no response and nothing is stored.
     /// Later PUT attempts on that path are read fully and stored.
-    PartialPut {
-        first_attempt_bytes: usize,
-    },
+    PartialPut { first_attempt_bytes: usize },
     /// The first request per path (any method) is read fully, then answered
     /// with a TCP reset. Later requests are served normally.
     DropConnection,
@@ -158,7 +156,9 @@ impl MockNexus {
             _ => None,
         };
         let (partial_first_put, flaky_first) = match &scenario {
-            Scenario::PartialPut { first_attempt_bytes } => (Some(*first_attempt_bytes), None),
+            Scenario::PartialPut {
+                first_attempt_bytes,
+            } => (Some(*first_attempt_bytes), None),
             Scenario::Flaky { first_failures } => (None, Some(*first_failures)),
             _ => (None, None),
         };
@@ -217,7 +217,9 @@ impl MockNexus {
         self.requests()
             .iter()
             .filter(|req| {
-                req.method == "PUT" && req.path == path && matches!(req.outcome, Outcome::Status(200..=300))
+                req.method == "PUT"
+                    && req.path == path
+                    && matches!(req.outcome, Outcome::Status(200..=300))
             })
             .count()
     }
@@ -260,7 +262,9 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>
 /// Lock a mutex, surviving poisoning: a panicking test thread must not take
 /// unrelated assertions down with it.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]
@@ -304,7 +308,10 @@ mod tests {
             }
             let n = stream.read(&mut chunk)?;
             if n == 0 {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "truncated response"));
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "truncated response",
+                ));
             }
             buf.extend_from_slice(&chunk[..n]);
         };
@@ -367,26 +374,26 @@ mod tests {
         assert_eq!(server.base_url(), format!("http://{}/", server.addr()));
 
         let (status, headers, body) =
-            exchange(server.addr(), "PUT", "/1.14.0/panda.zip", b"PAYLOAD", &[]).unwrap();
+            exchange(server.addr(), "PUT", "/1.14.0/sample.zip", b"PAYLOAD", &[]).unwrap();
         assert_eq!(status, 201);
         assert_eq!(header_value(&headers, "connection"), Some("close"));
         assert!(body.is_empty());
 
         let (status, headers, body) =
-            exchange(server.addr(), "GET", "/1.14.0/panda.zip", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/sample.zip", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, b"PAYLOAD");
         assert_eq!(header_value(&headers, "content-length"), Some("7"));
 
         // Query strings are stripped before the store lookup.
         let (status, _, body) =
-            exchange(server.addr(), "GET", "/1.14.0/panda.zip?x=1", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/sample.zip?x=1", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, b"PAYLOAD");
 
         // HEAD carries the same headers, including Content-Length, no body.
         let (status, headers, body) =
-            exchange(server.addr(), "HEAD", "/1.14.0/panda.zip", b"", &[]).unwrap();
+            exchange(server.addr(), "HEAD", "/1.14.0/sample.zip", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(header_value(&headers, "content-length"), Some("7"));
         assert!(body.is_empty());
@@ -396,21 +403,33 @@ mod tests {
         assert_eq!(status, 404);
         assert_eq!(body, b"not found\n");
 
-        assert_eq!(server.store_get("1.14.0/panda.zip").as_deref(), Some(b"PAYLOAD".as_slice()));
-        assert_eq!(server.put_count("1.14.0/panda.zip"), 1);
+        assert_eq!(
+            server.store_get("1.14.0/sample.zip").as_deref(),
+            Some(b"PAYLOAD".as_slice())
+        );
+        assert_eq!(server.put_count("1.14.0/sample.zip"), 1);
     }
 
     #[test]
     fn partial_put_first_attempt_cut_then_stores() {
-        let server = MockNexus::start(Scenario::PartialPut { first_attempt_bytes: 4 }).unwrap();
+        let server = MockNexus::start(Scenario::PartialPut {
+            first_attempt_bytes: 4,
+        })
+        .unwrap();
 
         // First PUT: server reads 4 body bytes, closes with no response.
-        let mut stream =
-            send(server.addr(), &request_bytes("PUT", "/1.14.0/big.zip", b"0123456789", &[])).unwrap();
+        let mut stream = send(
+            server.addr(),
+            &request_bytes("PUT", "/1.14.0/big.zip", b"0123456789", &[]),
+        )
+        .unwrap();
         let mut buf = [0u8; 64];
         let probe = stream.read(&mut buf);
         // Reset (Err) and premature EOF (Ok(0)) both mean "no response arrived".
-        assert!(matches!(probe, Err(_) | Ok(0)), "expected closed connection, got {probe:?}");
+        assert!(
+            matches!(probe, Err(_) | Ok(0)),
+            "expected closed connection, got {probe:?}"
+        );
         assert_eq!(server.store_get("1.14.0/big.zip"), None);
 
         // Second PUT is read fully and stored.
@@ -418,7 +437,10 @@ mod tests {
             exchange(server.addr(), "PUT", "/1.14.0/big.zip", b"0123456789", &[]).unwrap();
         assert_eq!(status, 201);
         assert!(body.is_empty());
-        assert_eq!(server.store_get("1.14.0/big.zip").as_deref(), Some(b"0123456789".as_slice()));
+        assert_eq!(
+            server.store_get("1.14.0/big.zip").as_deref(),
+            Some(b"0123456789".as_slice())
+        );
 
         // Log: cut attempt as PartialRead{4}, retry as 201; only the retry counts.
         let log = server.requests();
@@ -434,11 +456,17 @@ mod tests {
         let server = MockNexus::start(Scenario::DropConnection).unwrap();
         server.insert("1.14.0/claim.json", b"{}");
 
-        let mut stream =
-            send(server.addr(), &request_bytes("GET", "/1.14.0/claim.json", b"", &[])).unwrap();
+        let mut stream = send(
+            server.addr(),
+            &request_bytes("GET", "/1.14.0/claim.json", b"", &[]),
+        )
+        .unwrap();
         let mut buf = [0u8; 64];
         let probe = stream.read(&mut buf);
-        assert!(matches!(probe, Err(_) | Ok(0)), "expected reset, got {probe:?}");
+        assert!(
+            matches!(probe, Err(_) | Ok(0)),
+            "expected reset, got {probe:?}"
+        );
         assert_eq!(server.requests()[0].outcome, Outcome::Reset);
 
         // Later requests on the same path are served normally.
@@ -463,10 +491,18 @@ mod tests {
         assert_eq!(status, 200);
         assert_eq!(body, b"X");
 
-        let outcomes: Vec<Outcome> = server.requests().into_iter().map(|req| req.outcome).collect();
+        let outcomes: Vec<Outcome> = server
+            .requests()
+            .into_iter()
+            .map(|req| req.outcome)
+            .collect();
         assert_eq!(
             outcomes,
-            vec![Outcome::Status(503), Outcome::Status(503), Outcome::Status(200)]
+            vec![
+                Outcome::Status(503),
+                Outcome::Status(503),
+                Outcome::Status(200)
+            ]
         );
     }
 
@@ -474,19 +510,19 @@ mod tests {
     fn foreign_marker_zeroes_stored_digest() {
         let server = MockNexus::start(Scenario::ForeignMarker).unwrap();
 
-        let marker = format!("{}  panda.zip\n", "a".repeat(64));
+        let marker = format!("{}  sample.zip\n", "a".repeat(64));
         let (status, _, _) = exchange(
             server.addr(),
             "PUT",
-            "/1.14.0/panda.zip.sha256",
+            "/1.14.0/sample.zip.sha256",
             marker.as_bytes(),
             &[],
         )
         .unwrap();
         assert_eq!(status, 201);
         assert_eq!(
-            server.store_get("1.14.0/panda.zip.sha256").unwrap(),
-            format!("{}  panda.zip\n", "0".repeat(64)).into_bytes()
+            server.store_get("1.14.0/sample.zip.sha256").unwrap(),
+            format!("{}  sample.zip\n", "0".repeat(64)).into_bytes()
         );
 
         // insert() bypasses the scenario: stored verbatim, served verbatim.
@@ -501,26 +537,29 @@ mod tests {
     fn markerless_loses_marker_keeps_bytes() {
         let server = MockNexus::start(Scenario::Markerless).unwrap();
 
-        let marker = format!("{}  panda.zip\n", "b".repeat(64));
+        let marker = format!("{}  sample.zip\n", "b".repeat(64));
         let (status, _, _) = exchange(
             server.addr(),
             "PUT",
-            "/1.14.0/panda.zip.sha256",
+            "/1.14.0/sample.zip.sha256",
             marker.as_bytes(),
             &[],
         )
         .unwrap();
         assert_eq!(status, 201);
-        assert_eq!(server.store_get("1.14.0/panda.zip.sha256"), None);
+        assert_eq!(server.store_get("1.14.0/sample.zip.sha256"), None);
 
         let (status, _, _) =
-            exchange(server.addr(), "PUT", "/1.14.0/panda.zip", b"BYTES", &[]).unwrap();
+            exchange(server.addr(), "PUT", "/1.14.0/sample.zip", b"BYTES", &[]).unwrap();
         assert_eq!(status, 201);
-        assert_eq!(server.store_get("1.14.0/panda.zip").as_deref(), Some(b"BYTES".as_slice()));
+        assert_eq!(
+            server.store_get("1.14.0/sample.zip").as_deref(),
+            Some(b"BYTES".as_slice())
+        );
 
         // Both PUTs were acknowledged with 201.
-        assert_eq!(server.put_count("1.14.0/panda.zip.sha256"), 1);
-        assert_eq!(server.put_count("1.14.0/panda.zip"), 1);
+        assert_eq!(server.put_count("1.14.0/sample.zip.sha256"), 1);
+        assert_eq!(server.put_count("1.14.0/sample.zip"), 1);
     }
 
     #[test]
@@ -563,11 +602,13 @@ mod tests {
         server.insert("v1/a", b"X");
 
         // No credentials.
-        let (status, headers, body) =
-            exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+        let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
         assert_eq!(status, 401);
         assert_eq!(body, b"auth required\n");
-        assert_eq!(header_value(&headers, "www-authenticate"), Some("Basic realm=\"nexus\""));
+        assert_eq!(
+            header_value(&headers, "www-authenticate"),
+            Some("Basic realm=\"nexus\"")
+        );
 
         // Wrong password.
         let (status, _, _) = exchange(

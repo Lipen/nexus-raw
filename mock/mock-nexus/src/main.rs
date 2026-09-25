@@ -154,12 +154,18 @@ mod tests {
         let mut flags = Flags::default();
         parse_flags(
             &args(&[
-                "--port", "8080",
-                "--chunk-delay-ms", "25",
-                "--chunk-size", "512",
-                "--partial-bytes", "128",
-                "--flaky", "5",
-                "--auth", "alice:wonder",
+                "--port",
+                "8080",
+                "--chunk-delay-ms",
+                "25",
+                "--chunk-size",
+                "512",
+                "--partial-bytes",
+                "128",
+                "--flaky",
+                "5",
+                "--auth",
+                "alice:wonder",
             ]),
             &mut flags,
         )
@@ -195,22 +201,44 @@ mod tests {
     fn scenarios_pick_up_flag_values() {
         let mut flags = Flags::default();
         parse_flags(
-            &args(&["--partial-bytes", "9", "--flaky", "3", "--chunk-size", "7", "--chunk-delay-ms", "11", "--auth", "u:p"]),
+            &args(&[
+                "--partial-bytes",
+                "9",
+                "--flaky",
+                "3",
+                "--chunk-size",
+                "7",
+                "--chunk-delay-ms",
+                "11",
+                "--auth",
+                "u:p",
+            ]),
             &mut flags,
         )
         .unwrap();
         assert_eq!(
             build_scenario("partial-put", &flags),
-            Some(Scenario::PartialPut { first_attempt_bytes: 9 })
+            Some(Scenario::PartialPut {
+                first_attempt_bytes: 9
+            })
         );
-        assert_eq!(build_scenario("flaky", &flags), Some(Scenario::Flaky { first_failures: 3 }));
+        assert_eq!(
+            build_scenario("flaky", &flags),
+            Some(Scenario::Flaky { first_failures: 3 })
+        );
         assert_eq!(
             build_scenario("slow", &flags),
-            Some(Scenario::Slow { chunk_delay_ms: 11, chunk_size: 7 })
+            Some(Scenario::Slow {
+                chunk_delay_ms: 11,
+                chunk_size: 7
+            })
         );
         assert_eq!(
             build_scenario("auth-401", &flags),
-            Some(Scenario::Auth401 { user: "u".to_owned(), pass: "p".to_owned() })
+            Some(Scenario::Auth401 {
+                user: "u".to_owned(),
+                pass: "p".to_owned()
+            })
         );
     }
 }

@@ -117,7 +117,10 @@ pub(crate) fn parse_head(head: &[u8]) -> io::Result<Request> {
     let method = parts.next().unwrap_or_default();
     let target = parts.next().unwrap_or_default();
     let version = parts.next().unwrap_or_default();
-    if parts.next().is_some() || method.is_empty() || target.is_empty() || !version.starts_with("HTTP/")
+    if parts.next().is_some()
+        || method.is_empty()
+        || target.is_empty()
+        || !version.starts_with("HTTP/")
     {
         return Err(malformed("malformed request line"));
     }
@@ -314,7 +317,8 @@ mod tests {
 
     #[test]
     fn parses_content_length_body() {
-        let (rest, req) = parse(b"PUT /a%20b HTTP/1.1\r\nContent-Length: 5\r\nX-Bernard: 1\r\n\r\nhello");
+        let (rest, req) =
+            parse(b"PUT /a%20b HTTP/1.1\r\nContent-Length: 5\r\nX-Bernard: 1\r\n\r\nhello");
         assert!(rest.is_empty());
         assert_eq!(req.method, "PUT");
         assert_eq!(req.target, "/a%20b");

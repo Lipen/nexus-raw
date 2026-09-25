@@ -16,11 +16,24 @@ pub(crate) fn encode(data: &[u8]) -> String {
             chunk.get(2).copied().unwrap_or(0),
         ];
         let n = (u32::from(triple[0]) << 16) | (u32::from(triple[1]) << 8) | u32::from(triple[2]);
-        let quad = [(n >> 18) & 0x3f, (n >> 12) & 0x3f, (n >> 6) & 0x3f, n & 0x3f];
+        let quad = [
+            (n >> 18) & 0x3f,
+            (n >> 12) & 0x3f,
+            (n >> 6) & 0x3f,
+            n & 0x3f,
+        ];
         out.push(ALPHABET[quad[0] as usize] as char);
         out.push(ALPHABET[quad[1] as usize] as char);
-        out.push(if chunk.len() > 1 { ALPHABET[quad[2] as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHABET[quad[3] as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            ALPHABET[quad[2] as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[quad[3] as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }
