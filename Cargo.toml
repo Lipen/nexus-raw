@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/nexus-raw-core",
+    "crates/nexus-raw",
+    "mock/mock-nexus",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "fs", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream"] }
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "2"
+percent-encoding = "2"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+log = "0.4"
+tempfile = "3"
+
+[profile.release]
+strip = true
+lto = true

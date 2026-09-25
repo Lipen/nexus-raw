@@ -1,0 +1,14 @@
+[package]
+name = "mock-nexus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Mock Nexus raw server with a failure-scenario table for conformance tests (Rust and Python)"
+
+[lib]
+name = "mock_nexus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mock-nexus"
+path = "src/main.rs"
