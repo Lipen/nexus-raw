@@ -4,7 +4,7 @@ A client for a storage protocol is only as good as its failure handling, so the 
 
 ## The scenario table
 
-The mock server (`mock/mock-nexus`) implements one behavior table; the Rust conformance suites and external test suites (a Python client, a CI job) drive the exact same list.
+The mock server (`crates/mock-nexus`) implements one behavior table; the Rust conformance suites and external test suites (a Python client, a CI job) drive the exact same list.
 
 | Scenario | Behavior | What the client must survive |
 |:---------|:---------|:-----------------------------|
@@ -40,5 +40,5 @@ It prints its address and serves until killed — point any client at it, includ
 
 ## The one-list rule
 
-A new failure scenario enters `mock/mock-nexus` (the `SCENARIOS` list) **in the same change** as the client code that needs it.
+A new failure scenario enters `crates/mock-nexus` (the `SCENARIOS` list) **in the same change** as the client code that needs it.
 Implementations in other languages regenerate their fixtures from that list, so "the table" never forks.

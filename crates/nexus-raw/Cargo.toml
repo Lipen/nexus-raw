@@ -17,5 +17,5 @@ serde_json = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
-mock-nexus = { path = "../../mock/mock-nexus" }
+mock-nexus = { path = "../mock-nexus" }
 tempfile = { workspace = true }

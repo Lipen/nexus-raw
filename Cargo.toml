@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/nexus-raw-core",
     "crates/nexus-raw",
-    "mock/mock-nexus",
+    "crates/mock-nexus",
 ]
 
 [workspace.package]
