@@ -1,8 +1,17 @@
 # nexus-raw
 
-Надёжная доставка артефактов через плохой канал: claim, sha-маркеры, симметричный дифф, resume.
-Один статический бинарь `nxr` для всех и Rust-библиотека `nexus-raw-core`; ноль серверных компонент.
-Говорит на раскладке claim_version 1 из [SPEC.md](SPEC.md) (harbor, panda-sdk §6) и заменяет десяток самодельных curl-скриптов: одна политика auth, одна политика ретраев, TLS проверяется по умолчанию, креды никогда не в argv.
+Клиент общего назначения для raw-репозитория Sonatype Nexus.
+`nxr` закачивает и скачивает каталоги версий, описанные `claim.json`, проверяет sha256-маркеры-сиблинги и докачивает прерванные передачи через дифф локального и удалённого состояния.
+Крейт `nexus-raw-core` даёт те же операции как Rust-библиотека.
+Ноль серверных компонент.
+
+Возможности:
+
+- `up`, `down`, локальный `verify`, план передачи `diff`, `ls`, обновление указателей (`point`).
+- Завершённость — байты плюс маркер `<name>.sha256` в формате `sha256sum -c`.
+- Параллельные передачи (8 воркеров по умолчанию), ретраи с backoff, детект остановки.
+- TLS проверяется по умолчанию; креды только из env.
+- `--json` NDJSON-вывод; стабильные exit-коды 0/1/2/3.
 
 ## Установка
 
@@ -15,36 +24,44 @@ cargo install --path crates/nexus-raw    # бинарь nxr
 В конфиге только URL, `~/.config/nxr/config.toml` (переопределяется `$NXR_CONFIG`):
 
 ```toml
-default_profile = "panda"
+default_profile = "release"
 
-[panda]
-url = "https://nexus.example/repository/koala-raw/panda/"
+[release]
+url = "https://nexus.example.com/repository/raw-main/"
 
 [dev]
-url = "http://localhost:8080/raw/dev/"
+url = "http://localhost:8080/repository/raw-dev/"
 tls_insecure = true
 ```
 
-Креды берутся из env по порядку: `NXR_<PROFILE>_AUTH` (base64 `user:pass`), `NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`, `OPENLAB_USERNAME` + `OPENLAB_PASSWORD`.
+Креды берутся из env по порядку:
+
+1. `NXR_<PROFILE>_AUTH` — base64 `user:pass`, имя профиля в верхнем регистре, `-` превращается в `_`.
+2. `NXR_AUTH` — то же, для всех профилей сразу.
+3. `NXR_USERNAME` + `NXR_PASSWORD`.
+
 Пароли в TOML-конфиге отвергаются.
+`--base <url>` вместо `--profile` работает вовсе без конфига.
 
 ## Быстрый старт
 
 ```bash
-# продюсер
-nxr up --profile panda --dir dist/1.14.0          # обрыв не страшен: повтори ту же команду
-nxr point latest 1.14.0 --if-newer --profile panda
+# публикация каталога версии с claim.json + артефактами + .sha256-маркерами
+nxr up --profile release --dir dist/1.4.0
+nxr point latest 1.4.0 --if-newer --profile release
 
-# потребитель
-nxr down --profile panda --pointer latest --dir third-party/panda/prebuilt
+# скачивание версии через указатель
+nxr down --profile release --pointer latest --dir vendor/prebuilt
 
 # проверить локальную сборку без сети
-nxr verify --dir dist/1.14.0
+nxr verify --dir dist/1.4.0
 
 # план против сервера, ничего не пишется
-nxr diff --profile panda --dir dist/1.14.0
-nxr up --profile panda --dir dist/1.14.0 --dry-run
+nxr diff --profile release --dir dist/1.4.0
+nxr up --profile release --dir dist/1.4.0 --dry-run
 ```
+
+Прерванная передача докачивается повтором той же команды.
 
 ## Команды
 
@@ -64,19 +81,19 @@ Exit-коды: 0 ок, 1 данные (mismatch, incomplete, claim drift, missin
 
 | Путь | Для |
 |:-----|:----|
-| [SPEC.md](SPEC.md) | канонический протокол: раскладки, маркеры, таблица диффа, ошибки |
 | `crates/nexus-raw-core/` | Rust-библиотека: фасад `Nxr`, типизированные ошибки, поток событий |
-| `crates/nexus-raw/` | бинарь `nxr` |
-| `mock/mock-nexus/` | мок-сервер с таблицей отказов (`just mock atomic`) |
+| `crates/nexus-raw/` | бинарь `nxr`: только флаги и рендер, без протокольной логики |
+| `mock/mock-nexus/` | мок-сервер с таблицей отказов, конформанс-фикстура |
+| `node/` | будущая npm-упаковка; пока не существует |
 
 ## Разработка
 
 ```bash
 just check        # fmt + clippy + prek + тесты
-just test
+just test         # юнит- и конформанс-наборы
 just mock atomic --port 8080
-just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.14.0
+just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.4.0
 ```
 
-Полная инструкция: [AGENTS.md](AGENTS.md).
+Пользовательская документация здесь; справочная планируется под `docs/` (mdbook).
 Английский readme: [README.md](README.md).

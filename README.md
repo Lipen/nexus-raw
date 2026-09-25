@@ -1,8 +1,17 @@
 # nexus-raw
 
-Reliable artifact delivery over a bad channel: claim, sha-sibling markers, symmetric diff, resume.
-One static binary `nxr` for everyone and the Rust library `nexus-raw-core`; zero server-side components.
-It speaks the claim_version 1 raw layout described in [SPEC.md](SPEC.md) (harbor, panda-sdk §6) and replaces a dozen ad-hoc curl scripts: one auth policy, one retry policy, TLS verified by default, credentials never in argv.
+A general-purpose client for a Sonatype Nexus raw repository.
+`nxr` uploads and downloads version directories described by a `claim.json`, verifies sha256 sibling markers, and resumes interrupted transfers by diffing local and remote state.
+The `nexus-raw-core` crate exposes the same operations as a Rust library.
+Zero server-side components.
+
+Features:
+
+- `up`, `down`, local `verify`, transfer `diff`, `ls`, pointer updates (`point`).
+- Completion is bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
+- Parallel transfers (8 workers by default), retries with backoff, stall detection.
+- TLS verification on by default; credentials only from env vars.
+- `--json` NDJSON output; stable exit codes 0/1/2/3.
 
 ## Install
 
@@ -12,39 +21,47 @@ cargo install --path crates/nexus-raw    # the nxr binary
 
 ## Setup
 
-Config holds only URLs, at `~/.config/nxr/config.toml` (override with `$NXR_CONFIG`):
+The config holds only URLs, at `~/.config/nxr/config.toml` (override with `$NXR_CONFIG`):
 
 ```toml
-default_profile = "panda"
+default_profile = "release"
 
-[panda]
-url = "https://nexus.example/repository/koala-raw/panda/"
+[release]
+url = "https://nexus.example.com/repository/raw-main/"
 
 [dev]
-url = "http://localhost:8080/raw/dev/"
+url = "http://localhost:8080/repository/raw-dev/"
 tls_insecure = true
 ```
 
-Credentials resolve from env, in order: `NXR_<PROFILE>_AUTH` (base64 `user:pass`), `NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`, `OPENLAB_USERNAME` + `OPENLAB_PASSWORD`.
+Credentials resolve from env, in order:
+
+1. `NXR_<PROFILE>_AUTH` — base64 `user:pass`, uppercased profile name, `-` becomes `_`.
+2. `NXR_AUTH` — the same, for every profile.
+3. `NXR_USERNAME` + `NXR_PASSWORD`.
+
 Passwords in the TOML config are refused.
+Use `--base <url>` instead of `--profile` to skip the config entirely.
 
 ## Quickstart
 
 ```bash
-# producer
-nxr up --profile panda --dir dist/1.14.0          # an interruption is fine: repeat the same command
-nxr point latest 1.14.0 --if-newer --profile panda
+# publish a version directory that contains claim.json + artifacts + .sha256 markers
+nxr up --profile release --dir dist/1.4.0
+nxr point latest 1.4.0 --if-newer --profile release
 
-# consumer
-nxr down --profile panda --pointer latest --dir third-party/panda/prebuilt
+# fetch a version through a pointer
+nxr down --profile release --pointer latest --dir vendor/prebuilt
 
 # check a local build without touching the network
-nxr verify --dir dist/1.14.0
+nxr verify --dir dist/1.4.0
 
 # plan against the server, nothing written
-nxr diff --profile panda --dir dist/1.14.0
-nxr up --profile panda --dir dist/1.14.0 --dry-run
+nxr diff --profile release --dir dist/1.4.0
+nxr up --profile release --dir dist/1.4.0 --dry-run
 ```
+
+An interrupted transfer is resumed by repeating the same command.
 
 ## Commands
 
@@ -64,19 +81,19 @@ Exit codes: 0 ok, 1 data (mismatch, incomplete, claim drift, missing), 2 misuse,
 
 | Path | For |
 |:-----|:----|
-| [SPEC.md](SPEC.md) | the canonical protocol: layouts, markers, diff table, errors |
 | `crates/nexus-raw-core/` | the Rust library: the `Nxr` facade, typed errors, event stream |
-| `crates/nexus-raw/` | the `nxr` binary |
-| `mock/mock-nexus/` | the mock server with the failure-scenario table (`just mock atomic`) |
+| `crates/nexus-raw/` | the `nxr` binary: flags and rendering only, no protocol logic |
+| `mock/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
+| `node/` | future home of the npm packaging; does not exist yet |
 
 ## Development
 
 ```bash
 just check        # fmt + clippy + prek + tests
-just test
+just test         # unit and conformance suites
 just mock atomic --port 8080
-just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.14.0
+just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.4.0
 ```
 
-The full story: [AGENTS.md](AGENTS.md).
+User documentation lives here; reference documentation is planned under `docs/` (mdbook).
 The Russian readme: [README.ru.md](README.ru.md).

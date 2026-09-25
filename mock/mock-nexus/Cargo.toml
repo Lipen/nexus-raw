@@ -3,7 +3,7 @@ name = "mock-nexus"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Mock Nexus raw server with a failure-scenario table for conformance tests (Rust and Python)"
+description = "Mock Sonatype Nexus raw server with a failure-scenario table for conformance tests"
 
 [lib]
 name = "mock_nexus"
