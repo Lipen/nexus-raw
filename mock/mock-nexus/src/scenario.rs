@@ -285,7 +285,10 @@ mod tests {
     fn zeroes_64_char_digest_of_marker() {
         let marker = format!("{}  sample.zip\n", "a".repeat(64));
         let out = zero_digest(marker.as_bytes());
-        assert_eq!(out, format!("{}  sample.zip\n", "0".repeat(64)).into_bytes());
+        assert_eq!(
+            out,
+            format!("{}  sample.zip\n", "0".repeat(64)).into_bytes()
+        );
     }
 
     #[test]
