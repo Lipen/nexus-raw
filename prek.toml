@@ -1,0 +1,22 @@
+# prek hooks: `uvx prek run --all-files`, or `just lint`.
+# Install as a git hook once per clone: `uvx prek install` (or `prek install`).
+# The lint contract lives in Cargo.toml; the local hooks below call the project's own toolchain,
+# so the editor, `just lint` and this hook all speak one rustfmt and one clippy.
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "cargo-fmt", name = "cargo fmt", entry = "cargo fmt --all -- --check", language = "system", pass_filenames = false },
+  { id = "cargo-clippy", name = "cargo clippy", entry = "cargo clippy --workspace --all-targets -- -D warnings", language = "system", pass_filenames = false },
+]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files" },
+  { id = "detect-private-key" },
+]
