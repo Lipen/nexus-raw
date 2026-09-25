@@ -29,7 +29,9 @@ fn print_states(json: bool, rows: &[(nexus_raw_core::ArtifactName, RemoteStatus)
     if json {
         for (name, state) in rows {
             let (state, size, digest) = match state {
-                RemoteStatus::Complete { digest, size } => ("complete", *size, Some(digest.to_string())),
+                RemoteStatus::Complete { digest, size } => {
+                    ("complete", *size, Some(digest.to_string()))
+                }
                 RemoteStatus::Markerless { size } => ("markerless", *size, None),
                 RemoteStatus::Absent => ("absent", None, None),
                 RemoteStatus::Broken(_) => ("broken", None, None),
@@ -44,7 +46,11 @@ fn print_states(json: bool, rows: &[(nexus_raw_core::ArtifactName, RemoteStatus)
         }
         return;
     }
-    let width = rows.iter().map(|(n, _)| n.as_str().len()).max().unwrap_or(4);
+    let width = rows
+        .iter()
+        .map(|(n, _)| n.as_str().len())
+        .max()
+        .unwrap_or(4);
     println!("{:<width$}  {:<10}  size", "name", "state", width = width);
     for (name, state) in rows {
         let (label, size) = match state {
@@ -57,7 +63,13 @@ fn print_states(json: bool, rows: &[(nexus_raw_core::ArtifactName, RemoteStatus)
             Some(s) => s.to_string(),
             None => "-".into(),
         };
-        println!("{:<width$}  {:<10}  {}", name.as_str(), label, size, width = width);
+        println!(
+            "{:<width$}  {:<10}  {}",
+            name.as_str(),
+            label,
+            size,
+            width = width
+        );
     }
 }
 

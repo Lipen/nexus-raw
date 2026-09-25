@@ -7,9 +7,14 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config_setup::build_config;
 use crate::render::{Mode, Session};
-use crate::{Cli, cmd};
+use crate::{cmd, Cli};
 
-pub(crate) async fn run(cli: &Cli, dir: &Path, dry_run: bool, names: Option<&Path>) -> Result<(), Error> {
+pub(crate) async fn run(
+    cli: &Cli,
+    dir: &Path,
+    dry_run: bool,
+    names: Option<&Path>,
+) -> Result<(), Error> {
     cmd::require_dir(dir)?;
     let claim = cmd::load_claim(dir, names)?;
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));

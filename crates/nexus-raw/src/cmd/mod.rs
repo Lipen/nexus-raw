@@ -27,7 +27,17 @@ pub(crate) async fn dispatch(cli: &crate::Cli) -> Result<(), Error> {
             pointer,
             only,
             names,
-        } => down::run(cli, dir, version.as_deref(), pointer.as_deref(), only, names.as_deref()).await,
+        } => {
+            down::run(
+                cli,
+                dir,
+                version.as_deref(),
+                pointer.as_deref(),
+                only,
+                names.as_deref(),
+            )
+            .await
+        }
         Cmd::Verify { dir, names } => verify::run(cli, dir, names.as_deref()).await,
         Cmd::Diff { dir, names } => diff::run(cli, dir, names.as_deref()).await,
         Cmd::Ls { version } => ls::run(cli, version.as_deref()).await,
@@ -67,7 +77,10 @@ pub(crate) fn only_filter(
     if only.is_empty() && names_claim.is_none() {
         return Ok(None);
     }
-    let mut filter: Vec<ArtifactName> = only.iter().map(|s| ArtifactName::parse(s)).collect::<Result<_, _>>()?;
+    let mut filter: Vec<ArtifactName> = only
+        .iter()
+        .map(|s| ArtifactName::parse(s))
+        .collect::<Result<_, _>>()?;
     if let Some(claim) = names_claim {
         filter.extend(claim?.artifacts);
     }
@@ -99,6 +112,9 @@ pub(crate) fn send_plan(tx: &UnboundedSender<Event>, actions: &[Action]) -> Resu
 
 /// Convenience for commands whose core calls emit no events: keep the receiver
 /// alive so the channel never looks closed.
-pub(crate) fn event_channel() -> (UnboundedSender<Event>, tokio::sync::mpsc::UnboundedReceiver<Event>) {
+pub(crate) fn event_channel() -> (
+    UnboundedSender<Event>,
+    tokio::sync::mpsc::UnboundedReceiver<Event>,
+) {
     tokio::sync::mpsc::unbounded_channel()
 }

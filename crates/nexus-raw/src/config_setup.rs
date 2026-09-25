@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use nexus_raw_core::config as core_config;
-use nexus_raw_core::{Config, Error, creds};
+use nexus_raw_core::{creds, Config, Error};
 
 use crate::Cli;
 
@@ -33,7 +33,11 @@ pub(crate) fn build_config(cli: &Cli, network: bool) -> Result<Config, Error> {
                 .ok_or_else(|| Error::Misuse(format!("profile {name:?} not found in config")))
         })
         .transpose()?;
-    let base = match cli.base.clone().or_else(|| profile.as_ref().map(|p| p.url.clone())) {
+    let base = match cli
+        .base
+        .clone()
+        .or_else(|| profile.as_ref().map(|p| p.url.clone()))
+    {
         Some(b) => core_config::normalize_base(&b)?,
         None if network => {
             return Err(Error::Misuse(
@@ -43,7 +47,10 @@ pub(crate) fn build_config(cli: &Cli, network: bool) -> Result<Config, Error> {
         }
         None => LOCAL_BASE.into(),
     };
-    let tls_insecure = cli.tls_insecure || profile.as_ref().is_some_and(|p| p.tls_insecure == Some(true));
+    let tls_insecure = cli.tls_insecure
+        || profile
+            .as_ref()
+            .is_some_and(|p| p.tls_insecure == Some(true));
     let auth = if network {
         creds::resolve(profile_name.as_deref())?.map(|c| c.header)
     } else {

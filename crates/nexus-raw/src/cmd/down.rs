@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config_setup::build_config;
 use crate::render::{Mode, Session};
-use crate::{Cli, cmd};
+use crate::{cmd, Cli};
 
 pub(crate) async fn run(
     cli: &Cli,
@@ -19,17 +19,29 @@ pub(crate) async fn run(
 ) -> Result<(), Error> {
     match (version, pointer) {
         (Some(_), Some(_)) => {
-            return Err(Error::Misuse("--version and --pointer are mutually exclusive".into()));
+            return Err(Error::Misuse(
+                "--version and --pointer are mutually exclusive".into(),
+            ));
         }
         (None, None) => {
-            return Err(Error::Misuse("one of --version or --pointer is required".into()));
+            return Err(Error::Misuse(
+                "one of --version or --pointer is required".into(),
+            ));
         }
         _ => {}
     }
     // Parse and validate the filter before touching the network.
     let only = cmd::only_filter(only, names.map(Claim::read))?;
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
-    let result = execute(cli, dir, version, pointer, only.as_deref(), &session.sender()).await;
+    let result = execute(
+        cli,
+        dir,
+        version,
+        pointer,
+        only.as_deref(),
+        &session.sender(),
+    )
+    .await;
     session.finish().await;
     result
 }
@@ -46,12 +58,10 @@ async fn execute(
     let base = cfg.base.clone();
     let nxr = Nxr::new(cfg, tx.clone())?;
     let version = match pointer {
-        Some(p) => match nxr.read_pointer(p).await? {
-            Some(v) => v,
-            // Missing pointer file is a 404 at its url.
-            None => return Err(Error::Http { status: 404, url: format!("{base}{p}") }),
-        },
-        None => version.expect("version checked in run: exactly one of version/pointer").to_owned(),
+        Some(p) => nxr.resolve_pointer(p).await?,
+        None => version
+            .expect("version checked in run: exactly one of version/pointer")
+            .to_owned(),
     };
     let claim = match nxr.read_remote_claim(&version).await? {
         Some(c) => c,

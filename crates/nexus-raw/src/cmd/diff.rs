@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config_setup::build_config;
 use crate::render::{Mode, Session};
-use crate::{Cli, cmd};
+use crate::{cmd, Cli};
 
 pub(crate) async fn run(cli: &Cli, dir: &Path, names: Option<&Path>) -> Result<(), Error> {
     cmd::require_dir(dir)?;
@@ -18,7 +18,12 @@ pub(crate) async fn run(cli: &Cli, dir: &Path, names: Option<&Path>) -> Result<(
     result
 }
 
-async fn execute(cli: &Cli, dir: &Path, claim: &Claim, tx: &UnboundedSender<Event>) -> Result<(), Error> {
+async fn execute(
+    cli: &Cli,
+    dir: &Path,
+    claim: &Claim,
+    tx: &UnboundedSender<Event>,
+) -> Result<(), Error> {
     let cfg = build_config(cli, true)?;
     let nxr = Nxr::new(cfg, tx.clone())?;
     let actions = nxr.diff(dir, claim).await?;

@@ -3,7 +3,7 @@
 mod json;
 
 use nexus_raw_core::{Dir, Event};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// How the event stream is rendered.
 #[derive(Debug, Clone, Copy)]
@@ -92,15 +92,17 @@ fn human(ev: &Event, quiet: bool, verbose: bool) {
         }
         Event::ArtifactStarted { name, total, .. } => {
             if verbose && !quiet {
-                println!("→ {name} ({})", (*total).map(|t| t.to_string()).unwrap_or_else(|| "?".into()));
+                println!(
+                    "→ {name} ({})",
+                    (*total)
+                        .map(|t| t.to_string())
+                        .unwrap_or_else(|| "?".into())
+                );
             }
         }
         Event::ArtifactBytes { .. } => {}
         Event::ArtifactDone {
-            name,
-            dir,
-            skipped,
-            ..
+            name, dir, skipped, ..
         } => {
             if quiet {
                 return;

@@ -7,7 +7,12 @@ use crate::cmd;
 use crate::config_setup::build_config;
 use crate::Cli;
 
-pub(crate) async fn run(cli: &Cli, pointer: &str, version: &str, if_newer: bool) -> Result<(), Error> {
+pub(crate) async fn run(
+    cli: &Cli,
+    pointer: &str,
+    version: &str,
+    if_newer: bool,
+) -> Result<(), Error> {
     let cfg = build_config(cli, true)?;
     // No events are emitted; keep the receiver alive so sends never fail.
     let (tx, _rx) = cmd::event_channel();
