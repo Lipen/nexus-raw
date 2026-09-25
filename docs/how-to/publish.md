@@ -17,8 +17,8 @@ dist/1.4.0/
 
 Rules the client enforces before anything leaves the machine:
 
-- every claim name must be **complete** locally: bytes present, marker present, digest matching;
-- names may not collide with protocol objects: no `claim.json`, no `latest`/`nightly`, no `.sha256` suffix;
+- every claim name must be **complete** locally: bytes present, marker present, digest matching.
+- names may not collide with protocol objects: no `claim.json`, no `latest`/`nightly`, no `.sha256` suffix.
 - segments match `[A-Za-z0-9._-]+` and are at most 255 bytes.
 
 A violation is a local build problem and fails with exit code 1 or 2 before any request is made.
@@ -94,7 +94,8 @@ nxr point nightly "$V" --profile main
     `<hex>  <name>\n` — two spaces, lowercase hex, trailing newline — exactly what `sha256sum f > f.sha256` writes.
     `nxr verify` is the judge of any marker you produce.
 
-Every nightly is a fresh immutable version; `nightly` just names the newest one.
+Every nightly is a fresh immutable version.
+`nightly` just names the newest one.
 
 !!! note "Deleting is out of scope"
 

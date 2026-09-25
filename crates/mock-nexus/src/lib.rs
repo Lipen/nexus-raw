@@ -7,8 +7,8 @@
 //! mode (partial PUT bodies, connection resets, slow links, drifted claims,
 //! flaky 503s, Basic-auth gating).
 //!
-//! Rust conformance tests use the library API directly; the `mock-nexus`
-//! binary exposes the same scenarios to shell- and Python-driven tests:
+//! Rust conformance tests use the library API directly.
+//! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:
 //!
 //! ```text
 //! let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic)?;
@@ -58,22 +58,24 @@ pub enum Scenario {
         chunk_size: usize,
     },
     /// Stored `.sha256` markers get their 64-char digest replaced by 64 zeros
-    /// (digest of a foreign object); everything else is stored verbatim.
+    /// (digest of a foreign object).
+    /// Everything else is stored verbatim.
     ForeignMarker,
-    /// `.sha256` markers are acknowledged (201 Created) but never stored;
-    /// non-marker bytes are stored normally.
+    /// `.sha256` markers are acknowledged (201 Created) but never stored.
+    /// Non-marker bytes are stored normally.
     Markerless,
-    /// Every request requires `Authorization: Basic base64(user:pass)`;
-    /// otherwise 401 with `WWW-Authenticate: Basic realm="nexus"`. Valid
-    /// credentials behave like [`Scenario::Atomic`].
+    /// Every request requires `Authorization: Basic base64(user:pass)`.
+    /// Otherwise 401 with `WWW-Authenticate: Basic realm="nexus"`.
+    /// Valid credentials behave like [`Scenario::Atomic`].
     Auth401 { user: String, pass: String },
-    /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`];
-    /// afterwards every GET of a `*/claim.json` path serves a synthesized
-    /// claim with a ghost artifact. PUTs keep storing verbatim, and
-    /// [`MockNexus::disable_drift`] restores store-backed responses.
+    /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`].
+    /// Afterwards every GET of a `*/claim.json` path serves a synthesized
+    /// claim with a ghost artifact.
+    /// PUTs keep storing verbatim, and [`MockNexus::disable_drift`] restores store-backed responses.
     ClaimDrift,
     /// The first `first_failures` requests per path (any method) get
-    /// 503 Service Unavailable; later requests are served normally.
+    /// 503 Service Unavailable.
+    /// Later requests are served normally.
     Flaky { first_failures: u32 },
 }
 
@@ -84,7 +86,8 @@ pub enum Outcome {
     Status(u16),
     /// The connection was reset without a response.
     Reset,
-    /// The request body ended after `bytes` bytes; no response was written.
+    /// The request body ended after `bytes` bytes.
+    /// No response was written.
     PartialRead { bytes: usize },
 }
 
@@ -119,8 +122,9 @@ pub(crate) struct Shared {
     pub(crate) flaky_first: Option<u32>,
 }
 
-/// Handle to a running mock server. Dropping it stops the accept loop and
-/// releases the port; in-flight connection threads finish on their own.
+/// Handle to a running mock server.
+/// Dropping it stops the accept loop and releases the port.
+/// In-flight connection threads finish on their own.
 #[derive(Debug)]
 pub struct MockNexus {
     shared: Arc<Shared>,
@@ -244,7 +248,8 @@ impl Drop for MockNexus {
     }
 }
 
-/// Accept connections until `stop` is set; one thread per connection.
+/// Accept connections until `stop` is set.
+/// One thread per connection.
 fn accept_loop(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
     loop {
         let conn = match listener.accept() {
@@ -298,7 +303,8 @@ mod tests {
         bytes
     }
 
-    /// Read one full response; returns (status, headers, body).
+    /// Read one full response.
+    /// Returns (status, headers, body).
     fn read_response(stream: &mut TcpStream) -> io::Result<Response> {
         let mut buf = Vec::new();
         let mut chunk = [0u8; 4096];
@@ -442,7 +448,8 @@ mod tests {
             Some(b"0123456789".as_slice())
         );
 
-        // Log: cut attempt as PartialRead{4}, retry as 201; only the retry counts.
+        // Log: cut attempt as PartialRead{4}, retry as 201.
+        // Only the retry counts.
         let log = server.requests();
         assert_eq!(log[0].method, "PUT");
         assert_eq!(log[0].path, "1.14.0/big.zip");

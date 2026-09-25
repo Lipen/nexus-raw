@@ -68,8 +68,8 @@ pub(crate) fn require_dir(dir: &Path) -> Result<(), Error> {
 
 /// Union of `--only` values and the artifacts of the `--names` claim file.
 ///
-/// `Ok(None)` means no restriction; every parsed name goes through
-/// [`ArtifactName::parse`] so unsafe names fail with exit code 2.
+/// `Ok(None)` means no restriction.
+/// Every parsed name goes through [`ArtifactName::parse`] so unsafe names fail with exit code 2.
 pub(crate) fn only_filter(
     only: &[String],
     names_claim: Option<Result<Claim, Error>>,

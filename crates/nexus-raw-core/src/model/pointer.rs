@@ -24,6 +24,13 @@ pub fn format_token(version: &str) -> String {
 ///
 /// A segment is (numeric prefix, suffix): a release is newer than its own
 /// prerelease, so `1.0.0-rc1` cannot roll a pointer back from `1.0.0`.
+///
+/// ```rust
+/// use nexus_raw_core::model::pointer::version_ge;
+/// assert!(version_ge("1.10.0", "1.9.9"));
+/// assert!(version_ge("1.0.0", "1.0.0-rc1"));
+/// assert!(!version_ge("1.4.0", "1.14.0"));
+/// ```
 pub fn version_ge(a: &str, b: &str) -> bool {
     compare(a, b) != std::cmp::Ordering::Less
 }
@@ -48,8 +55,9 @@ fn compare(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// A segment is (numeric prefix, suffix).
 ///
-/// Prefixes compare as numbers; on a tie the release (`"0"`) is newer than its
-/// prerelease (`"0-rc1"`), remaining suffixes compare lexicographically.
+/// Prefixes compare as numbers.
+/// On a tie the release (`"0"`) is newer than its prerelease (`"0-rc1"`).
+/// Remaining suffixes compare lexicographically.
 fn compare_segment(x: &str, y: &str) -> std::cmp::Ordering {
     let (xn, xs) = split_num_prefix(x);
     let (yn, ys) = split_num_prefix(y);

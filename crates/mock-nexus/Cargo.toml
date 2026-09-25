@@ -3,6 +3,7 @@ name = "mock-nexus"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 description = "Mock Sonatype Nexus raw server with a failure-scenario table for conformance tests"
 
 [lib]

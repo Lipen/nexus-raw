@@ -78,7 +78,8 @@ async fn main() -> Result<(), nexus_raw_core::Error> {
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy; `Error::exit_code()` maps it to the CLI's exit classes.
+`nexus_raw_core::Error` is the whole taxonomy.
+`Error::exit_code()` maps it to the CLI's exit classes.
 `Verdict` (diff refusals) converts into `Error` with `From`, so a refused diff and a refused transfer look identical to a caller.
 
 ## Guarantees

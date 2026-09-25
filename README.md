@@ -10,8 +10,10 @@ Features:
 - `up`, `down`, local `verify`, transfer `diff`, `ls`, pointer updates (`point`).
 - Completion is bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
 - Parallel transfers (8 workers by default), retries with backoff, stall detection.
-- TLS verification on by default; credentials only from env vars.
-- `--json` NDJSON output; stable exit codes 0/1/2/3.
+- TLS verification on by default.
+- Credentials only from env vars.
+- `--json` NDJSON output.
+- Stable exit codes 0/1/2/3.
 
 ## Install
 
@@ -68,14 +70,15 @@ An interrupted transfer is resumed by repeating the same command.
 | Command | Does |
 |:--------|:-----|
 | `nxr up --dir <dir> [--names <file>] [--dry-run]` | claim (drift check) → diff → PUT bytes + markers |
-| `nxr down --dir <dir> (--version <v> \| --pointer <latest\|nightly>) [--only <name>]...` | GET claim → diff → tmp+hash → rename → marker; resume is always on |
+| `nxr down --dir <dir> (--version <v> \| --pointer <latest\|nightly>) [--only <name>]...` | GET claim → diff → tmp+hash → rename → marker (resume is always on) |
 | `nxr verify --dir <dir>` | local bytes + marker + digest only, no network |
 | `nxr diff --dir <dir>` | the plan against the server, symmetric for up and down |
 | `nxr ls [--version <v>]` | per-name remote states, or the version list (REST search, experimental) |
-| `nxr point <latest\|nightly> <version> [--if-newer]` | atomic pointer PUT; `--if-newer` is forward-only |
+| `nxr point <latest\|nightly> <version> [--if-newer]` | atomic pointer PUT (`--if-newer` is forward-only) |
 
 Exit codes: 0 ok, 1 data (mismatch, incomplete, claim drift, missing), 2 misuse, 3 transport (network, auth, TLS, 5xx).
-`--json` emits NDJSON events of the same structs the core uses; pipe it to `jq`.
+`--json` emits NDJSON events of the same structs the core uses.
+Pipe it to `jq`.
 
 ## Layout
 
@@ -84,8 +87,8 @@ Exit codes: 0 ok, 1 data (mismatch, incomplete, claim drift, missing), 2 misuse,
 | `crates/nexus-raw-core/` | the Rust library: the `Nxr` facade, typed errors, event stream |
 | `crates/nexus-raw/` | the `nxr` binary: flags and rendering only, no protocol logic |
 | `crates/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
-| `docs/` + `mkdocs.yml` | the documentation site (zensical); `just docs` serves it |
-| `node/` | future home of the npm packaging; does not exist yet |
+| `docs/` + `mkdocs.yml` | the documentation site (zensical), served by `just docs` |
+| `node/` | future home of the npm packaging, which does not exist yet |
 
 ## Development
 

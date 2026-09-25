@@ -11,7 +11,8 @@ Everything `nxr` reads besides its flags: one TOML file and four environment var
 | XDG default | `$XDG_CONFIG_HOME/nxr/config.toml`, else `~/.config/nxr/config.toml` |
 | opt out | `--no-config` |
 
-An explicit path or `$NXR_CONFIG` that does not exist is an error; the XDG default may be absent.
+An explicit path or `$NXR_CONFIG` that does not exist is an error.
+The XDG default may be absent.
 
 ## Keys
 
@@ -25,7 +26,8 @@ An explicit path or `$NXR_CONFIG` that does not exist is an error; the XDG defau
 | `url` | profile | the repository base URL, required |
 | `tls_insecure` | profile | skip certificate verification, default `false` |
 
-Unknown keys are refused; `auth` and `password` keys are refused with an explicit message — credentials never live in the config.
+Unknown keys are refused.
+`auth` and `password` keys are refused with an explicit message — credentials never live in the config.
 
 ## Environment
 
@@ -33,11 +35,12 @@ Unknown keys are refused; `auth` and `password` keys are refused with an explici
 |:---------|:--------|
 | `NXR_<PROFILE>_AUTH` | `Basic` credential for one profile: base64 `user:pass` |
 | `NXR_AUTH` | the same, for every profile |
-| `NXR_USERNAME` + `NXR_PASSWORD` | the readable pair; encoded on the fly |
+| `NXR_USERNAME` + `NXR_PASSWORD` | the readable pair, encoded on the fly |
 | `NXR_CONFIG` | config file path |
 
 Resolution order: per-profile `AUTH`, then global `AUTH`, then the username/password pair.
-The first chain that yields a credential wins; a half-set pair is an error.
+The first chain that yields a credential wins.
+A half-set pair is an error.
 
 ```bash
 printf '%s:%s' ci-bot "$TOKEN" | base64     # -> NXR_MAIN_AUTH
@@ -52,8 +55,8 @@ flowchart LR
   E["environment: credentials, NXR_CONFIG"] --> W
 ```
 
-- the base URL: `--base`, else the selected profile's `url`, else `default_profile`'s;
-- `tls_insecure`: the flag ORs with the profile's value;
+- the base URL: `--base`, else the selected profile's `url`, else `default_profile`'s.
+- `tls_insecure`: the flag ORs with the profile's value.
 - credentials: env only, selected by the profile name when present.
 
 ## A minimal setup

@@ -14,7 +14,8 @@ pub(crate) async fn run(
     if_newer: bool,
 ) -> Result<(), Error> {
     let cfg = build_config(cli, true)?;
-    // No events are emitted; keep the receiver alive so sends never fail.
+    // No events are emitted.
+    // Keep the receiver alive so sends never fail.
     let (tx, _rx) = cmd::event_channel();
     let nxr = Nxr::new(cfg, tx)?;
     match nxr.point(pointer, version, if_newer).await? {

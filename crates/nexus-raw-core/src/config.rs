@@ -1,4 +1,5 @@
-//! Config: TOML profiles (URLs only), XDG path; merging with flags stays in the CLI.
+//! Config: TOML profiles (URLs only), XDG path.
+//! Merging with flags stays in the CLI.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -6,7 +7,8 @@ use std::time::Duration;
 
 use crate::error::Error;
 
-/// The full core configuration; the CLI builds it from profile, flags and env.
+/// The full core configuration.
+/// The CLI builds it from profile, flags and env.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub base: String,
@@ -39,7 +41,8 @@ impl Config {
         Ok(())
     }
 
-    /// Alias used by the transport; keeps `normalize_base` import-free there.
+    /// Alias used by the transport.
+    /// Keeps `normalize_base` import-free there.
     pub fn normalized_base(base: &str) -> Result<String, Error> {
         normalize_base(base)
     }
@@ -61,7 +64,8 @@ pub struct ConfigFile {
 }
 
 /// The config path: `explicit` → `$NXR_CONFIG` → XDG.
-/// An explicit path or `$NXR_CONFIG` must exist; the default one may be absent.
+/// An explicit path or `$NXR_CONFIG` must exist.
+/// The default one may be absent.
 pub fn config_path(explicit: Option<PathBuf>, no_config: bool) -> Result<Option<PathBuf>, Error> {
     if no_config {
         return Ok(None);
@@ -149,6 +153,15 @@ fn forbid_secrets(
 }
 
 /// Base URL normalization: http/https scheme, a host, trailing `/`, no query/fragment.
+///
+/// ```rust
+/// use nexus_raw_core::config::normalize_base;
+/// assert_eq!(
+///     normalize_base("https://host/repository/raw").unwrap(),
+///     "https://host/repository/raw/"
+/// );
+/// assert!(normalize_base("ftp://host/raw/").is_err());
+/// ```
 pub fn normalize_base(base: &str) -> Result<String, Error> {
     let err = || {
         Error::misuse(format!(

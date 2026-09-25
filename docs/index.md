@@ -25,12 +25,14 @@ An interrupted transfer is finished by repeating the same command — nothing is
 
 <div markdown>
 :shield-check: **Trustworthy completion**  
-Bytes plus a `<name>.sha256` marker, `sha256sum -c` format; divergent artifacts are never overwritten.
+Bytes plus a `<name>.sha256` marker, `sha256sum -c` format.
+Divergent artifacts are never overwritten.
 </div>
 
 <div markdown>
 :json: **Scriptable**  
-`--json` emits stable NDJSON events; exit codes split data problems from transport trouble.
+`--json` emits stable NDJSON events.
+Exit codes split data problems from transport trouble.
 </div>
 
 <div markdown>

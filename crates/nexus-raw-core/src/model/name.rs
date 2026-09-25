@@ -8,8 +8,8 @@ use crate::error::Error;
 /// Artifact name: a path relative to the version directory.
 ///
 /// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each,
-/// no empty/`.`/`..` segments, no leading/trailing `/`;
-/// reserved: `claim.json`, pointer names, the `.sha256` suffix.
+/// no empty/`.`/`..` segments, no leading/trailing `/`.
+/// Reserved: `claim.json`, pointer names, the `.sha256` suffix.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactName(String);
 
@@ -33,6 +33,16 @@ fn valid_segment(seg: &str) -> bool {
 }
 
 impl ArtifactName {
+    /// Parses and validates a name.
+    ///
+    /// ```rust
+    /// # use nexus_raw_core::ArtifactName;
+    /// let name = ArtifactName::parse("bom/linux-x86_64.json")?;
+    /// assert_eq!(name.sibling(), "bom/linux-x86_64.json.sha256");
+    /// assert_eq!(name.encoded(), "bom/linux-x86_64.json");
+    /// assert!(ArtifactName::parse("x.sha256").is_err()); // reserved suffix
+    /// # Ok::<(), nexus_raw_core::Error>(())
+    /// ```
     pub fn parse(name: &str) -> Result<Self, Error> {
         let err = |reason: &str| Error::UnsafeName {
             name: name.to_owned(),
@@ -75,7 +85,8 @@ impl ArtifactName {
         format!("{name}{SIBLING_SUFFIX}", name = self.0)
     }
 
-    /// Percent-encoding per segment; `/` stays the path separator (§3).
+    /// Percent-encoding per segment.
+    /// `/` stays the path separator (§3).
     pub fn encoded(&self) -> String {
         const HEX: &[u8; 16] = b"0123456789ABCDEF";
         let mut out = String::with_capacity(self.0.len());

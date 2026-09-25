@@ -35,7 +35,8 @@ impl Nxr {
         })
     }
 
-    /// The remote claim of a version: None on 404; a broken claim is [`Error::ClaimDrift`].
+    /// The remote claim of a version: None on 404.
+    /// A broken claim is [`Error::ClaimDrift`].
     pub async fn read_remote_claim(&self, version: &str) -> Result<Option<Claim>, Error> {
         name::validate_version(version)?;
         self.client.get_claim(version).await
@@ -139,7 +140,8 @@ impl Nxr {
 
     /// Publish a version: precheck → diff → claim (drift check) → PUT bytes+markers (§6.1).
     ///
-    /// `plan` is a precomputed diff (e.g. rerun after a break); `None` diffs inside.
+    /// `plan` is a precomputed diff (e.g. rerun after a break).
+    /// `None` diffs inside.
     pub async fn up(
         &self,
         dir: &Path,
@@ -179,7 +181,8 @@ impl Nxr {
 
     /// Download a version into a directory: diff → tmp+hash → rename → marker (§6.2).
     ///
-    /// `only` restricts the name set; `plan` is a precomputed diff, as in [`Nxr::up`].
+    /// `only` restricts the name set.
+    /// `plan` is a precomputed diff, as in [`Nxr::up`].
     pub async fn down(
         &self,
         dir: &Path,
@@ -242,7 +245,8 @@ impl Nxr {
         Ok(summary)
     }
 
-    /// PUT a pointer; `if_newer` is forward-only (§6.3).
+    /// PUT a pointer.
+    /// `if_newer` is forward-only (§6.3).
     pub async fn point(
         &self,
         pointer: &str,
@@ -252,7 +256,7 @@ impl Nxr {
         pointer::point(&self.client, pointer, version, if_newer).await
     }
 
-    /// Version list via REST search (experimental; endpoint depends on the Nexus release).
+    /// Version list via REST search (experimental — endpoint depends on the Nexus release).
     pub async fn ls_versions(&self) -> Result<Vec<String>, Error> {
         self.client.search_versions().await
     }

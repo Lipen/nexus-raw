@@ -3,7 +3,8 @@
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Up to 4 attempts per request; backoff 0.5s × 2ⁿ + jitter ≤ 250ms.
+/// Up to 4 attempts per request.
+/// Backoff 0.5s × 2ⁿ + jitter ≤ 250ms.
 #[derive(Debug, Clone)]
 pub struct RetryPolicy {
     /// Total attempts, including the first.
@@ -53,7 +54,8 @@ pub struct AttemptFailure {
     pub error: crate::error::Error,
 }
 
-/// Connect errors, timeouts, body breaks are retried; 4xx are not (protocol §7).
+/// Connect errors, timeouts, body breaks are retried.
+/// 4xx are not (protocol §7).
 /// Statuses are matched manually (error_for_status is never called), so
 /// `is_status` never shows up here.
 pub fn is_retryable(e: &reqwest::Error) -> bool {

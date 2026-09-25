@@ -16,8 +16,8 @@ use crate::transport::client::NexusClient;
 /// Publish the artifacts: the claim is already checked and stored
 /// (`put_claim_checked`).
 ///
-/// Per-name failures (after retries) are collected into `Summary.failed`;
-/// the Summary event goes out first, then [`Error::Incomplete`] is returned.
+/// Per-name failures (after retries) are collected into `Summary.failed`.
+/// The Summary event goes out first, then [`Error::Incomplete`] is returned.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
@@ -96,7 +96,8 @@ async fn upload_one(
     client
         .upload_file((name.as_str(), Dir::Up), &bytes_url, &bytes, size)
         .await?;
-    // The sibling was verified Complete by the diff; write the canonical line.
+    // The sibling was verified Complete by the diff.
+    // Write the canonical line.
     let sib_file = sibling_path(dir, name);
     let raw = tokio::fs::read_to_string(&sib_file)
         .await

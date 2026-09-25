@@ -4,8 +4,9 @@
 
 use std::fmt;
 
-/// nexus-raw errors. The variant set mirrors the §8 table; fields are public
-/// so wrappers can construct and match them.
+/// nexus-raw errors.
+/// The variant set mirrors the §8 table.
+/// Fields are public so wrappers can construct and match them.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {

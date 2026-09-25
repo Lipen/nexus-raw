@@ -9,7 +9,8 @@ use crate::Cli;
 
 pub(crate) async fn run(cli: &Cli, version: Option<&str>) -> Result<(), Error> {
     let cfg = build_config(cli, true)?;
-    // These calls emit no events; keep the receiver alive so sends never fail.
+    // These calls emit no events.
+    // Keep the receiver alive so sends never fail.
     let (tx, _rx) = cmd::event_channel();
     let nxr = Nxr::new(cfg, tx)?;
     match version {

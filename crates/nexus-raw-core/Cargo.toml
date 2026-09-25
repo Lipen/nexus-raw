@@ -3,6 +3,7 @@ name = "nexus-raw-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 description = "Protocol core for nexus-raw: claim, sha-siblings, symmetric diff, resumable up/down against Nexus raw storage"
 
 [dependencies]

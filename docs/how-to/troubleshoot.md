@@ -10,19 +10,20 @@ $ nxr up --profile main --dir dist/1.4.0
 error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 9f86…, remote 2c26…
 ```
 
-The first word is the error kind; the message names the artifact and both sides of the disagreement.
+The first word is the error kind.
+The message names the artifact and both sides of the disagreement.
 
 | Message | Exit | What it means | Fix |
 |:--------|:-----|:--------------|:----|
 | `mismatch: <name>: complete on both sides with different digests` | 1 | the same version holds two different artifacts | nobody overwrites: republish under a new version, or remove the server copy manually |
-| `incomplete: <names>` | 1 | a local build is not Complete: bytes without a marker, or a broken marker | rebuild; `nxr verify --dir …` lists the offenders |
+| `incomplete: <names>` | 1 | a local build is not Complete: bytes without a marker, or a broken marker | rebuild — `nxr verify --dir …` lists the offenders |
 | `claim drift: version <v>` | 1 | the remote claim differs from the local one | claims are immutable: publish under a new version |
-| `missing: <names>` | 1 | a claimed artifact exists nowhere | the version is broken on the server; fix or remove it manually |
+| `missing: <names>` | 1 | a claimed artifact exists nowhere | the version is broken on the server: fix or remove it manually |
 | `unsafe name: <name>` | 2 | a name collides with protocol objects or the grammar | rename the artifact |
 | `misuse: …` | 2 | bad flags, missing directory, config problem | fix the invocation |
 | `auth: <url>` | 3 | 401/403, or credentials missing where required | check `NXR_AUTH` / `NXR_<PROFILE>_AUTH` |
-| `transport: <url>: …` | 3 | network, TLS, timeouts — retries exhausted | repeat the command later; resume is free |
-| `http <status>: <url>` | 3 | an unexpected response | inspect the URL; usually a wrong base or a proxy |
+| `transport: <url>: …` | 3 | network, TLS, timeouts — retries exhausted | repeat the command later — resume is free |
+| `http <status>: <url>` | 3 | an unexpected response | inspect the URL, usually a wrong base or a proxy |
 
 ## Exit codes at a glance
 
@@ -63,7 +64,7 @@ tls_insecure = true
 ## Debugging aids
 
 - `-v` — transfer starts, retry attempts with reasons.
-- `--json` — every event as a line; pipe to `jq`.
+- `--json` — every event as a line, ready to pipe to `jq`.
 - The mock server replays failure modes deterministically:
 
 ```bash

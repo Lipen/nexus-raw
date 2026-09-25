@@ -21,7 +21,8 @@ pub enum Action {
         name: ArtifactName,
         size: u64,
     },
-    /// Fetch the remote bytes (down); the remote sibling digest when present.
+    /// Fetch the remote bytes (down).
+    /// The remote sibling digest when present.
     Download {
         name: ArtifactName,
         size: Option<u64>,
@@ -46,7 +47,8 @@ pub async fn local_statuses(dir: &Path, claim: &Claim) -> Vec<(ArtifactName, Loc
     .expect("local classification cannot panic")
 }
 
-/// Symmetric diff. A refusal is a [`Verdict`]: the first violation in claim order;
+/// Symmetric diff.
+/// A refusal is a [`Verdict`]: the first violation in claim order.
 /// `Missing` is collected across all names and fires only when no other refusal exists.
 ///
 /// The §5.2 gap "local Markerless, remote Absent" is treated as Missing:
@@ -122,7 +124,8 @@ pub fn classify(
             }
             // A sibling without bytes means the remote object is not complete.
             (_, RemoteStatus::Broken(detail)) => {
-                // §5.1: Broken is always refused; a foreign object is never overwritten.
+                // §5.1: Broken is always refused.
+                // A foreign object is never overwritten.
                 return Err(Verdict::Mismatch {
                     name: name.to_string(),
                     detail: format!("remote sibling is foreign/unparseable: {detail}"),

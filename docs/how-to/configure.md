@@ -26,14 +26,15 @@ Nothing else is allowed in a profile: typos are refused, and `auth` or `password
 | `--profile <name>` | selects the profile explicitly |
 | `default_profile` in the config | used when no flag is given |
 
-`--tls-insecure` ORs with the profile's `tls_insecure`; everything else is a plain override.
+`--tls-insecure` ORs with the profile's `tls_insecure`.
+Everything else is a plain override.
 
 ## Credentials
 
 Credentials resolve from the environment, in order, and stop at the first hit:
 
-1. `NXR_<PROFILE>_AUTH` — base64 `user:pass`, profile uppercased, `-` becomes `_`;
-2. `NXR_AUTH` — the same, for every profile;
+1. `NXR_<PROFILE>_AUTH` — base64 `user:pass`, profile uppercased, `-` becomes `_`.
+2. `NXR_AUTH` — the same, for every profile.
 3. `NXR_USERNAME` + `NXR_PASSWORD`.
 
 Generate the compact form once:
@@ -53,7 +54,8 @@ Setting exactly one of `NXR_USERNAME` / `NXR_PASSWORD` is a configuration error,
 !!! warning "Where credentials must never appear"
 
     Not in argv, not in logs, not in `--json` output, not in the TOML config.
-    `nxr` enforces this; keep shell history and CI logs honest by using env vars.
+    `nxr` enforces this.
+    Keep shell history and CI logs honest by using env vars.
 
 ## Skip the config entirely
 

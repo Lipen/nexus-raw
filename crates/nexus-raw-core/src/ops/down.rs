@@ -25,7 +25,8 @@ enum Failure {
 /// Download the artifacts: the claim is fetched and the diff is done.
 ///
 /// Per-name failures land in `Summary.failed` (digest mismatches become
-/// `Error::Mismatch`); the Summary event goes out before the error returns.
+/// `Error::Mismatch`).
+/// The Summary event goes out before the error returns.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
@@ -93,8 +94,8 @@ pub async fn execute(
             detail: "remote content diverges from its sha-sibling".to_owned(),
         });
     }
-    // Transport failures after retries surface as Transport (exit 3);
-    // the failed names are listed in the summary above.
+    // Transport failures after retries surface as Transport (exit 3).
+    // The failed names are listed in the summary above.
     if let Some(e) = first_error {
         return Err(e);
     }
@@ -174,7 +175,8 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
-/// On start, orphans of dead pids are cleaned; a live process's temps are untouched.
+/// On start, orphans of dead pids are cleaned.
+/// A live process's temps are untouched.
 pub fn cleanup_orphans(dir: &Path) -> Result<(), Error> {
     let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
     for entry in entries {

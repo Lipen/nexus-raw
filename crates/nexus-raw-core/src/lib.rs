@@ -1,8 +1,9 @@
 //! # nexus-raw-core
 //!
 //! The core of the nexus-raw protocol: reliable artifact delivery to and from
-//! a Sonatype Nexus raw repository. The entry point is the [`Nxr`] facade;
-//! the CLI and wrappers are thin and carry no protocol logic.
+//! a Sonatype Nexus raw repository.
+//! The entry point is the [`Nxr`] facade.
+//! The CLI and wrappers are thin and carry no protocol logic.
 //!
 //! ## The canonical protocol (summary)
 //!
@@ -20,17 +21,19 @@
 //! Local/remote states ([`LocalStatus`] / [`RemoteStatus`]): `Complete`,
 //! `Markerless` (bytes without a marker), `Broken` (marker mismatches or does
 //! not parse), `Absent`.
-//! The symmetric diff (§5.2 of the protocol) decides what to transfer;
+//! The symmetric diff (§5.2 of the protocol) decides what to transfer.
 //! `Mismatch`, `Missing` and local incompleteness refuse without overwriting.
 //!
 //! Write order (up): claim (drift check) → then per name, in parallel workers,
-//! `PUT <name>` → `PUT <name>.sha256`; the marker strictly follows the bytes of
-//! the same name. Down: GET claim → tmp+hash → rename → tmp marker → rename; a
-//! partially fetched name leaves neither bytes nor marker at the destination.
+//! `PUT <name>` → `PUT <name>.sha256`.
+//! The marker strictly follows the bytes of the same name.
+//! Down: GET claim → tmp+hash → rename → tmp marker → rename.
+//! A partially fetched name leaves neither bytes nor marker at the destination.
 //!
-//! Transport: GET/HEAD/PUT; Basic auth from env; TLS verified by default;
-//! up to 4 attempts per request with 0.5s×2ⁿ backoff + jitter ≤ 250ms;
-//! stall detection — no bytes for N seconds.
+//! Transport: GET/HEAD/PUT.
+//! Basic auth from env, TLS verified by default.
+//! Up to 4 attempts per request with 0.5s×2ⁿ backoff + jitter ≤ 250ms.
+//! Stall detection — no bytes for N seconds.
 //!
 //! Errors: [`Error`] with [`Error::exit_code`] — 0 ok, 1 data, 2 misuse, 3 transport.
 

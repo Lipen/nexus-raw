@@ -145,8 +145,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
 
 /// Decide how much of the body to read before the request is processed.
 ///
-/// Under `partial-put` the first PUT per path is cut short; consuming that
-/// "first attempt" happens here, before any bytes of the body are read.
+/// Under `partial-put` the first PUT per path is cut short.
+/// Consuming that "first attempt" happens here, before any bytes of the body are read.
 fn body_plan(shared: &Shared, method: &str, path: &str) -> BodyPlan {
     let cut = match (method, shared.partial_first_put) {
         ("PUT", Some(cut)) => cut,
@@ -169,8 +169,8 @@ fn drift_or_store(shared: &Shared, path: &str) -> Option<Vec<u8>> {
     lock(&shared.store).get(path).cloned()
 }
 
-/// Apply marker mutations for `.sha256` PUTs; `None` means "acknowledge with
-/// 201 but store nothing" (markerless).
+/// Apply marker mutations for `.sha256` PUTs.
+/// `None` means "acknowledge with 201 but store nothing" (markerless).
 fn transform_put(shared: &Shared, path: &str, body: &[u8]) -> Option<Vec<u8>> {
     if !path.ends_with(".sha256") {
         return Some(body.to_vec());
@@ -252,8 +252,9 @@ fn drift_claim(version: &str) -> Vec<u8> {
 }
 
 /// Replace the 64-char digest of the marker's first line with 64 zeros
-/// (simulating a sibling written for a foreign object). Everything else is
-/// stored verbatim; shorter payloads pass through unchanged.
+/// (simulating a sibling written for a foreign object).
+/// Everything else is stored verbatim.
+/// Shorter payloads pass through unchanged.
 fn zero_digest(marker: &[u8]) -> Vec<u8> {
     let line_end = marker
         .iter()

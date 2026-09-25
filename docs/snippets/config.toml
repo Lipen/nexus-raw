@@ -1,4 +1,5 @@
-# nexus-raw reads exactly these keys; anything else is refused.
+# nexus-raw reads exactly these keys.
+# Anything else is refused.
 # Credentials never go here: auth/password keys are a hard error.
 
 default_profile = "main"

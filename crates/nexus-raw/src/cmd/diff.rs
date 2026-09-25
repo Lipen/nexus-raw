@@ -1,4 +1,5 @@
-//! `nxr diff`: the symmetric plan against the server; nothing is written.
+//! `nxr diff`: the symmetric plan against the server.
+//! Nothing is written.
 
 use std::path::Path;
 

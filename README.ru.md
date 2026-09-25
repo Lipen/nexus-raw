@@ -10,8 +10,10 @@
 - `up`, `down`, локальный `verify`, план передачи `diff`, `ls`, обновление указателей (`point`).
 - Завершённость — байты плюс маркер `<name>.sha256` в формате `sha256sum -c`.
 - Параллельные передачи (8 воркеров по умолчанию), ретраи с backoff, детект остановки.
-- TLS проверяется по умолчанию; креды только из env.
-- `--json` NDJSON-вывод; стабильные exit-коды 0/1/2/3.
+- TLS проверяется по умолчанию.
+- Креды только из env.
+- `--json` NDJSON-вывод.
+- Стабильные exit-коды 0/1/2/3.
 
 ## Установка
 
@@ -68,14 +70,15 @@ nxr up --profile release --dir dist/1.4.0 --dry-run
 | Команда | Делает |
 |:--------|:-------|
 | `nxr up --dir <dir> [--names <файл>] [--dry-run]` | claim (drift-проверка) → дифф → PUT байтов + маркеров |
-| `nxr down --dir <dir> (--version <v> \| --pointer <latest\|nightly>) [--only <имя>]...` | GET claim → дифф → tmp+hash → rename → маркер; докачка всегда включена |
+| `nxr down --dir <dir> (--version <v> \| --pointer <latest\|nightly>) [--only <имя>]...` | GET claim → дифф → tmp+hash → rename → маркер (докачка всегда включена) |
 | `nxr verify --dir <dir>` | локально байты + маркер + digest, без сети |
 | `nxr diff --dir <dir>` | план против сервера, симметричен up и down |
 | `nxr ls [--version <v>]` | состояния имён на сервере, либо список версий (REST search, experimental) |
-| `nxr point <latest\|nightly> <version> [--if-newer]` | атомарный PUT указателя; `--if-newer` — только вперёд |
+| `nxr point <latest\|nightly> <version> [--if-newer]` | атомарный PUT указателя (`--if-newer` — только вперёд) |
 
 Exit-коды: 0 ок, 1 данные (mismatch, incomplete, claim drift, missing), 2 misuse, 3 транспорт (сеть, auth, TLS, 5xx).
-`--json` отдаёт NDJSON-события тех же структур, что ядро; piping в `jq` работает.
+`--json` отдаёт NDJSON-события тех же структур, что ядро.
+Piping в `jq` работает.
 
 ## Устройство
 
@@ -84,8 +87,8 @@ Exit-коды: 0 ок, 1 данные (mismatch, incomplete, claim drift, missin
 | `crates/nexus-raw-core/` | Rust-библиотека: фасад `Nxr`, типизированные ошибки, поток событий |
 | `crates/nexus-raw/` | бинарь `nxr`: только флаги и рендер, без протокольной логики |
 | `crates/mock-nexus/` | мок-сервер с таблицей отказов, конформанс-фикстура |
-| `docs/` + `mkdocs.yml` | сайт документации (zensical); `just docs` поднимает его |
-| `node/` | будущая npm-упаковка; пока не существует |
+| `docs/` + `mkdocs.yml` | сайт документации (zensical), который поднимает `just docs` |
+| `node/` | будущая npm-упаковка, которой пока не существует |
 
 ## Разработка
 

@@ -65,7 +65,8 @@ fn main() {
     let _ = std::io::stdout().flush();
 
     // Keep the handle alive (dropping it would stop the server) and serve
-    // forever; SIGTERM/SIGINT kill us.
+    // forever.
+    // SIGTERM/SIGINT kill us.
     loop {
         std::thread::park();
     }
@@ -97,7 +98,8 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
     }
 }
 
-/// Parse the flag list into `flags`; values come as `--flag value` pairs.
+/// Parse the flag list into `flags`.
+/// Values come as `--flag value` pairs.
 fn parse_flags(args: &[String], flags: &mut Flags) -> Result<(), String> {
     let mut i = 0;
     while i < args.len() {

@@ -25,8 +25,20 @@ struct RawClaim {
 }
 
 impl Claim {
-    /// Parse + sane check: `claim_version == 1`, version is a valid segment,
-    /// every name passes the §3 grammar.
+    /// Parses and validates a claim.
+    ///
+    /// The sane check: `claim_version` must be 1.
+    /// The version must pass the segment grammar.
+    /// Every artifact name must pass the §3 grammar.
+    ///
+    /// ```rust
+    /// # use nexus_raw_core::Claim;
+    /// let bytes = br#"{"claim_version":1,"version":"1.4.0","artifacts":["a.zip"]}"#;
+    /// let claim = Claim::from_slice(bytes)?;
+    /// assert_eq!(claim.to_bytes(), bytes.as_ref()); // deterministic bytes
+    /// assert!(Claim::from_slice(b"{\"claim_version\":2}").is_err());
+    /// # Ok::<(), nexus_raw_core::Error>(())
+    /// ```
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
         let raw: RawClaim =
             serde_json::from_slice(bytes).map_err(|e| Error::misuse(format!("claim.json: {e}")))?;

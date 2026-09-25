@@ -1,4 +1,5 @@
-//! `NexusClient`: GET/HEAD/PUT over reqwest; auth, TLS, retries, stall detection (protocol §7).
+//! `NexusClient`: GET/HEAD/PUT over reqwest.
+//! Auth, TLS, retries, stall detection (protocol §7).
 
 use std::future::Future;
 use std::path::Path;
@@ -413,7 +414,8 @@ impl NexusClient {
             .await
     }
 
-    /// Read the remote claim: None on 404; a broken claim is ClaimDrift (§4.1 sane check).
+    /// Read the remote claim: None on 404.
+    /// A broken claim is ClaimDrift (§4.1 sane check).
     pub async fn get_claim(
         &self,
         version: &str,
@@ -444,11 +446,11 @@ impl NexusClient {
         }
     }
 
-    /// Version list via REST search (experimental; endpoint depends on the Nexus release).
+    /// Version list via REST search (experimental — endpoint depends on the Nexus release).
     ///
     /// base `…/repository/<repo>/<group…>/` → search the assets of repository
-    /// `repo` with group `<group…>`; the version is the path segment right
-    /// after the group prefix.
+    /// `repo` with group `<group…>`.
+    /// The version is the path segment right after the group prefix.
     pub async fn search_versions(&self) -> Result<Vec<String>, Error> {
         let url =
             reqwest::Url::parse(&self.base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;

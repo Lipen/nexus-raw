@@ -8,7 +8,8 @@ use std::io::{self, BufRead, Read, Write};
 use std::thread;
 use std::time::Duration;
 
-/// Upper bound for the request head; anything larger is answered with 400.
+/// Upper bound for the request head.
+/// Anything larger is answered with 400.
 const HEAD_BOUND: usize = 64 * 1024;
 
 /// A parsed HTTP/1.1 request.
@@ -24,7 +25,8 @@ pub(crate) struct Request {
 }
 
 impl Request {
-    /// Case-insensitive header lookup; returns the first match.
+    /// Case-insensitive header lookup.
+    /// Returns the first match.
     pub(crate) fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
@@ -45,9 +47,11 @@ pub(crate) enum BodyPlan {
 /// Why a request body could not be read to completion.
 #[derive(Debug)]
 pub(crate) enum BodyError {
-    /// The framing itself was broken; the peer still gets a 400.
+    /// The framing itself was broken.
+    /// The peer still gets a 400.
     Malformed,
-    /// The peer aborted (or we cut) the body; `usize` is the byte count received.
+    /// The peer aborted (or we cut) the body.
+    /// `usize` is the byte count received.
     Aborted(usize),
 }
 
@@ -61,7 +65,8 @@ pub(crate) struct Resp {
     pub(crate) content_length: usize,
     /// Bytes to write on the wire (empty for HEAD).
     pub(crate) body: Vec<u8>,
-    /// Slow-drip parameters; `Some` only for the `slow` scenario.
+    /// Slow-drip parameters.
+    /// `Some` only for the `slow` scenario.
     pub(crate) drip: Option<Drip>,
 }
 
@@ -147,7 +152,8 @@ pub(crate) fn parse_head(head: &[u8]) -> io::Result<Request> {
 /// Read the request body into `req.body` according to `plan`.
 ///
 /// On `BodyError::Aborted` the body holds whatever bytes arrived before the
-/// connection broke; the request is never complete in that case.
+/// connection broke.
+/// The request is never complete in that case.
 pub(crate) fn read_body_into<R: BufRead>(
     r: &mut R,
     req: &mut Request,
@@ -185,8 +191,9 @@ pub(crate) fn read_body_into<R: BufRead>(
     }
 }
 
-/// Serialize and write one response. Always sends `Content-Length` and
-/// `Connection: close`; the caller drops the stream afterwards.
+/// Serialize and write one response.
+/// Always sends `Content-Length` and `Connection: close`.
+/// The caller drops the stream afterwards.
 pub(crate) fn write_response<W: Write>(w: &mut W, resp: &Resp) -> io::Result<()> {
     let mut head = format!(
         "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: close\r\n",
@@ -339,7 +346,8 @@ mod tests {
         let raw = b"GET / HTTP/1.1\r\nHost: x\r\n\r\nREST";
         let mut r: &[u8] = raw;
         let head = read_head_raw(&mut r).unwrap().unwrap();
-        // Head ends with the 3-byte terminator prefix; the final '\n' is pending.
+        // Head ends with the 3-byte terminator prefix.
+        // The final '\n' is pending.
         assert_eq!(head, b"GET / HTTP/1.1\r\nHost: x\r\n\r");
         let mut pending = Vec::new();
         r.read_to_end(&mut pending).unwrap();

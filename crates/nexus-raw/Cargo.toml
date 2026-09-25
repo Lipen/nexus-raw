@@ -3,6 +3,7 @@ name = "nexus-raw"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 description = "nxr: CLI for Nexus raw storage — claim, sha-siblings, symmetric diff, resume"
 
 [[bin]]

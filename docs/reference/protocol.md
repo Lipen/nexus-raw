@@ -34,7 +34,8 @@ There is no delete, no rename, no server-side computation.
 ```
 
 Written once, before the artifacts, and never rewritten.
-It names the version's artifacts; it does not carry digests — each artifact's marker does.
+It names the version's artifacts.
+It does not carry digests — each artifact's marker does.
 A reader refuses claims whose `claim_version` is not `1`, whose version fails the segment grammar, or that name artifacts failing the name grammar.
 
 ### sha-sibling
@@ -51,7 +52,8 @@ An artifact is **complete** when bytes and marker both exist and the digest matc
 ### pointer
 
 One line: `<version>\n`.
-The only mutable state besides version directories; writes are atomic PUTs.
+The only mutable state besides version directories.
+Writes are atomic PUTs.
 
 ## Names
 
@@ -67,7 +69,7 @@ The only mutable state besides version directories; writes are atomic PUTs.
 | `Complete` | yes | yes | digest matches |
 | `Markerless` | yes | no | under-uploaded or mid-publish |
 | `Broken` | yes/no | yes | digest mismatch, or the marker does not parse |
-| `Absent` | no | — | bytes decide; a stray marker is ignored |
+| `Absent` | no | — | bytes decide, and a stray marker is ignored |
 
 ## The diff
 
@@ -78,12 +80,12 @@ For every claim name, the local and remote states are compared symmetrically —
 | `Complete` | `Complete`, equal digests | skip |
 | `Complete` | `Complete`, different digests | **mismatch — refuse** |
 | `Complete` | `Absent` / `Markerless` | upload (up) |
-| `Markerless` | `Complete` | download; the remote marker is the truth |
+| `Markerless` | `Complete` | download — the remote marker is the truth |
 | `Markerless` | `Markerless` | **refuse** — nothing to verify against |
 | `Markerless` | `Absent` | **missing** — no complete copy anywhere |
 | `Broken` | anything | **mismatch — refuse, never overwrite** |
 | `Absent` | `Complete` | download |
-| `Absent` | `Markerless` | download; the local marker is computed from the received bytes |
+| `Absent` | `Markerless` | download — the local marker is computed from the received bytes |
 | `Absent` | `Absent` | **missing** — claimed but exists nowhere |
 
 Remote state costs two requests per name: `HEAD` on the bytes and `GET` on the sibling, overlapped by the worker pool.
@@ -104,14 +106,15 @@ Downloads mirror the order into the destination: bytes into a temp file (hashed 
 | Aspect | Behavior |
 |:-------|:---------|
 | auth | `Basic`, attached to every request when credentials resolve |
-| TLS | verified by default; `--tls-insecure` is the only off-switch |
-| retries | up to 4 attempts per request; connect errors, timeouts, body breaks, 5xx retry — 4xx never |
+| TLS | verified by default (`--tls-insecure` is the only off-switch) |
+| retries | up to 4 attempts per request, retrying connect errors, timeouts, body breaks and 5xx — never 4xx |
 | backoff | 0.5 s × 2ⁿ + jitter ≤ 250 ms |
 | stall | no bytes for `--stall-secs` aborts the attempt (default 30 s) |
-| timeouts | connect timeout only; no total-per-artifact timeout — a big artifact on a slow link is legitimate |
+| timeouts | connect timeout only, no total-per-artifact timeout — a big artifact on a slow link is legitimate |
 | parallelism | 8 workers by default, `--workers 1..=64` |
-| idempotency | PUTs are byte-exact repeats; a resumed transfer replays the same bytes |
+| idempotency | PUTs are byte-exact repeats, and a resumed transfer replays the same bytes |
 
 ## Errors
 
-The taxonomy mirrors these guarantees; the mapping from error to exit code has one home — see [errors and exit codes](errors.md).
+The taxonomy mirrors these guarantees.
+The mapping from error to exit code has one home — see [errors and exit codes](errors.md).

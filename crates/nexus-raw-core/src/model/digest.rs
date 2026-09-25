@@ -15,6 +15,15 @@ const HASH_BUF: usize = 256 * 1024;
 pub struct Digest(String);
 
 impl Digest {
+    /// Parses a digest string.
+    ///
+    /// ```rust
+    /// # use nexus_raw_core::Digest;
+    /// let digest = Digest::of_bytes(b"hello");
+    /// assert_eq!(digest.as_str(), "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    /// assert!(Digest::from_hex(digest.as_str()).is_ok());
+    /// assert!(Digest::from_hex("DEADBEEF").is_err()); // lowercase only
+    /// ```
     pub fn from_hex(s: &str) -> Result<Self, String> {
         if s.len() != HEX_LEN || !s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
             return Err(format!("expected {HEX_LEN} lowercase hex chars, got {s:?}"));

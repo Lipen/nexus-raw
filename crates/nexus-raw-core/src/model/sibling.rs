@@ -3,6 +3,16 @@
 use super::digest::Digest;
 
 /// Exactly one line `<hex>  <name>\n`: lowercase hex, two spaces, trailing `\n`.
+///
+/// ```rust
+/// use nexus_raw_core::model::sibling;
+/// use nexus_raw_core::Digest;
+/// let digest = Digest::of_bytes(b"payload");
+/// let line = sibling::format_line("a.zip", &digest);
+/// assert_eq!(line, format!("{digest}  a.zip\n"));
+/// assert_eq!(sibling::parse_line(&line)?.digest, digest);
+/// # Ok::<(), String>(())
+/// ```
 pub fn format_line(name: &str, digest: &Digest) -> String {
     format!("{}  {name}\n", digest.as_str())
 }

@@ -1,4 +1,5 @@
-//! `nxr verify`: local bytes, markers and digests; no network.
+//! `nxr verify`: local bytes, markers and digests.
+//! No network.
 
 use std::path::Path;
 

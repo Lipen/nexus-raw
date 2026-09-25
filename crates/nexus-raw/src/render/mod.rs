@@ -24,8 +24,8 @@ impl Mode {
 
 /// Owns the event channel and the task draining it.
 ///
-/// The sender is cloned into the core; dropping the session's own sender after
-/// the operation closes the channel and lets the renderer finish.
+/// The sender is cloned into the core.
+/// Dropping the session's own sender after the operation closes the channel and lets the renderer finish.
 pub(crate) struct Session {
     tx: UnboundedSender<Event>,
     renderer: tokio::task::JoinHandle<()>,
@@ -60,7 +60,8 @@ async fn run(mut rx: UnboundedReceiver<Event>, mode: Mode) {
 
 /// Human console rendering.
 ///
-/// `-q` keeps only the final summary; `-v` adds transfer starts and plan names.
+/// `-q` keeps only the final summary.
+/// `-v` adds transfer starts and plan names.
 /// Coalesced byte-progress events are not printed in human mode.
 fn human(ev: &Event, quiet: bool, verbose: bool) {
     match ev {

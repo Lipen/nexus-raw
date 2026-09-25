@@ -15,10 +15,12 @@ use clap::{Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(name = "nxr", version, about)]
 pub(crate) struct Cli {
-    /// Profile name from the config file; selects the url and credentials.
+    /// Profile name from the config file.
+    /// Selects the url and credentials.
     #[arg(long, global = true, value_name = "NAME")]
     pub(crate) profile: Option<String>,
-    /// Base URL of the raw repository; wins over the profile url.
+    /// Base URL of the raw repository.
+    /// Wins over the profile url.
     #[arg(long, global = true, value_name = "URL")]
     pub(crate) base: Option<String>,
     /// Parallel artifact transfers.
@@ -71,7 +73,8 @@ pub(crate) enum Cmd {
     },
     /// Download a version, or a subset of it, into a directory.
     Down {
-        /// Target directory; created when missing.
+        /// Target directory.
+        /// Created when missing.
         #[arg(long, value_name = "DIR")]
         dir: PathBuf,
         /// Version to download.
@@ -87,7 +90,8 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "FILE")]
         names: Option<PathBuf>,
     },
-    /// Check local bytes, markers and digests; no network.
+    /// Check local bytes, markers and digests.
+    /// No network.
     Verify {
         /// Directory holding claim.json, artifacts and .sha256 markers.
         #[arg(long, value_name = "DIR")]
@@ -96,7 +100,8 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "FILE")]
         names: Option<PathBuf>,
     },
-    /// Print the symmetric plan against the server; nothing is written.
+    /// Print the symmetric plan against the server.
+    /// Nothing is written.
     Diff {
         /// Directory holding claim.json, artifacts and .sha256 markers.
         #[arg(long, value_name = "DIR")]
@@ -107,7 +112,8 @@ pub(crate) enum Cmd {
     },
     /// Per-name remote states of a version, or the version list.
     Ls {
-        /// Version to inspect; without it the version list is printed.
+        /// Version to inspect.
+        /// Without it the version list is printed.
         #[arg(long, value_name = "V")]
         version: Option<String>,
     },

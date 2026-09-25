@@ -31,13 +31,14 @@ nxr up --profile main --dir dist/1.4.0 [--names claim-other.json] [--dry-run]
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--dir <dir>` | the version directory; must exist |
+| `--dir <dir>` | the version directory, which must exist |
 | `--names <file>` | claim file, default `<dir>/claim.json` |
-| `--dry-run` | diff and print the plan; write nothing |
+| `--dry-run` | diff and print the plan, writing nothing |
 
 ## nxr down
 
-Fetch a version, or a subset, into a directory; resume is always on.
+Fetch a version, or a subset, into a directory.
+Resume is always on.
 
 ```bash
 nxr down --profile main --dir vendor/ (--version 1.4.0 | --pointer latest) [--only NAME]... [--names claim.json]
@@ -45,9 +46,9 @@ nxr down --profile main --dir vendor/ (--version 1.4.0 | --pointer latest) [--on
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--dir <dir>` | target directory; created when missing |
+| `--dir <dir>` | target directory, created when missing |
 | `--version <v>` | exact version to fetch |
-| `--pointer <name>` | `latest` or `nightly`; resolves to a version |
+| `--pointer <name>` | `latest` or `nightly`, resolved to a version |
 | `--only <name>` | restrict to these claim artifacts, repeatable |
 | `--names <file>` | a claim file whose artifacts join the `--only` filter |
 
@@ -93,7 +94,8 @@ pinned.xml  markerless  7
 
 ## nxr point
 
-Atomically move a pointer to a version; `--if-newer` moves only forward in version order.
+Atomically move a pointer to a version.
+`--if-newer` moves only forward in version order.
 
 ```bash
 nxr point latest 1.4.0 [--if-newer] --profile main

@@ -34,7 +34,8 @@ pub struct Summary {
     pub failed: Vec<String>,
 }
 
-/// Events the core emits; the NDJSON shapes are fixed by golden tests.
+/// Events the core emits.
+/// The NDJSON shapes are fixed by golden tests.
 #[derive(Debug, Clone)]
 pub enum Event {
     /// Diff plan: name lists.
@@ -71,7 +72,15 @@ pub enum Event {
 }
 
 impl Event {
-    /// The event's JSON form; wrappers serialize it 1:1.
+    /// The event's JSON form.
+    /// Wrappers serialize it 1:1.
+    ///
+    /// ```rust
+    /// # use nexus_raw_core::{Event, Summary};
+    /// let event = Event::Summary(Summary::default());
+    /// let line = event.to_json().to_string();
+    /// assert!(line.contains(r#""event":"summary""#));
+    /// ```
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             Event::Plan {

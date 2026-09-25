@@ -25,16 +25,16 @@ error: mismatch: app.zip: complete on both sides with different digests: local 9
 
 - `error:` — every failure goes to stderr in this shape (or as NDJSON when `--json`).
 - `mismatch:` — the kind.
-- the rest — names, digests, URLs; the [protocol](protocol.md) guarantees the failed name is never silently overwritten.
+- the rest — names, digests, URLs, with the [protocol](protocol.md) guarantee that the failed name is never silently overwritten.
 
 ## Exit codes
 
 | Code | Class | A script should |
 |:-----|:------|:----------------|
 | `0` | converged | continue |
-| `1` | data | stop; a human decides whose content is right |
+| `1` | data | stop — a human decides whose content is right |
 | `2` | misuse | fix the invocation |
-| `3` | transport | retry the job later; resume is free |
+| `3` | transport | retry the job later — resume is free |
 
 Post-retry per-artifact failures are transport failures: the summary lists the names, and the process exits `3` so a scheduler can distinguish "the pipe is down" from "the data is wrong".
 
@@ -46,7 +46,8 @@ Failures appear in the summary's `failed` list:
 {"event":"summary","uploaded":0,"downloaded":0,"skipped":1,"failed":["app.zip"]}
 ```
 
-The human-readable error still goes to stderr; the process exit code carries the class.
+The human-readable error still goes to stderr.
+The process exit code carries the class.
 
 ## In the Rust API
 
