@@ -2,6 +2,13 @@
 
 <p align="center"><img src="docs/assets/img/hero-terminal.png" alt="Реальная сессия nxr: публикация, канал, потребление, верификация" width="720"></p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square" alt="rust 1.85+">
+  <img src="https://img.shields.io/badge/protocol-claim__version%201-3f7e6e?style=flat-square" alt="протокол claim_version 1">
+  <img src="https://img.shields.io/badge/config%20files-none-2ea44f?style=flat-square" alt="без конфиг-файлов">
+  <img src="https://img.shields.io/badge/exits-0%20%7C%201%20%7C%202%20%7C%203-blue?style=flat-square" alt="коды выхода 0/1/2/3">
+</p>
+
 `nxr` — это curl для raw-репозитория Sonatype Nexus.
 Примитивы уровня HTTP с ретраями, stall-детектом и TLS по умолчанию, поверх — проверенные переносы каталогов, ещё выше — канальные рефы и манифесты.
 Каждый вызов самодостаточен: URL в argv, креды через `-u` или окружение.

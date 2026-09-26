@@ -53,6 +53,34 @@ verify: 3 ok, FAILED: none
 Everything above is one binary and one URL per call.
 The [five-minute tour](get-started.md) runs it against a throwaway server on your machine, breakage included.
 
+## What you stop maintaining
+
+Every repository that speaks raw Nexus eventually grows the same shell script: a retry loop, a stall watchdog, a temp-file dance, a checksum step and a prayer.
+It breaks in a new way every quarter, and nobody owns it.
+
+```console
+# the script you keep rewriting, per repository, per language
+$ curl -f --connect-timeout 15 --speed-limit 1 --speed-time 30 -o "$tmp" "$url" \
+  && sha256sum -c <<< "$(curl -fsSL "$url.sha256")" \
+  && mv "$tmp" "$dst" \
+  || echo "which step failed, and did the partial survive?"
+```
+
+`nxr` is that script, minus the prayer:
+
+| Concern | The hand-rolled script | `nxr` |
+| :-- | :-- | :-- |
+| Retries with backoff | a loop someone wrote at 2 a.m. | built in, transport-level |
+| Stalled connections | `--speed-limit` folklore | per-connection stall timeout |
+| Partial artifacts | temp files, `mv`, crossed fingers | hidden part files, rename only after verify |
+| Digest check | a second fetch and `sha256sum -c` | checked against the remote marker while streaming |
+| Resume after a break | nothing, or `curl -C -` per URL | `--continue`, stable part files per name |
+| What failed | an exit code, if you are lucky | 1 data / 2 misuse / 3 transport, each with a `hint:` line |
+| Re-running | re-downloads everything | diffs first, transfers only what is missing |
+
+The script also has one bug class `nxr` refuses to inherit: it overwrites whatever is at the destination, including an artifact that diverged from the server.
+A divergence is a human decision — the transfer stops with exit 1 instead of picking a winner.
+
 ## Where to go
 
 | You want | Page |

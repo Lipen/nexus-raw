@@ -2,6 +2,13 @@
 
 <p align="center"><img src="docs/assets/img/hero-terminal.png" alt="A real nxr session: publish, name with a channel, consume, verify" width="720"></p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square" alt="rust 1.85+">
+  <img src="https://img.shields.io/badge/protocol-claim__version%201-3f7e6e?style=flat-square" alt="protocol claim_version 1">
+  <img src="https://img.shields.io/badge/config%20files-none-2ea44f?style=flat-square" alt="no config files">
+  <img src="https://img.shields.io/badge/exits-0%20%7C%201%20%7C%202%20%7C%203-blue?style=flat-square" alt="exit codes 0/1/2/3">
+</p>
+
 `nxr` is curl for a Sonatype Nexus raw repository.
 Primitives with retries, stall detection and TLS on.
 Verified directory transfers on top.
