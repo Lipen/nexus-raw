@@ -134,7 +134,11 @@ async fn download_one(
     let part = part_path(dir, name);
     // Resuming means the pre-existing part content joins the digest: a stale
     // part (the remote object changed between runs) would poison the check.
-    let resumed = !fresh
+    // Without a remote sibling there is nothing to verify against, so
+    // markerless names always download from zero (§5.1): the client itself
+    // must not resume, not just the self-heal branch below.
+    let resume = expected.is_some() && !fresh;
+    let resumed = resume
         && std::fs::metadata(&part)
             .map(|m| m.len() > 0)
             .unwrap_or(false);
@@ -143,7 +147,7 @@ async fn download_one(
             (name.as_str(), Dir::Down),
             &bytes_url,
             &part,
-            !fresh,
+            resume,
             size_hint,
         )
         .await;

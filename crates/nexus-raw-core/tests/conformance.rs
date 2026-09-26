@@ -435,7 +435,9 @@ async fn down_missing_name_is_data_error() {
 #[tokio::test]
 async fn down_markerless_remote_writes_computed_marker() {
     // Markerless remote: bytes without a marker. Down fetches them and
-    // computes the marker locally (§5.2).
+    // computes the marker locally (§5.2). Without a sibling there is nothing
+    // to verify a resume against, so an existing part is ignored entirely
+    // (§5.1): the name downloads from zero, however stale the part is.
     let mock = MockNexus::start(Scenario::Markerless).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
@@ -444,14 +446,22 @@ async fn down_markerless_remote_writes_computed_marker() {
     nxr.up(src.path(), None, false, None, None).await.unwrap(); // --no-sha
 
     let dst = TempDir::new().unwrap();
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let part = part_path(dst.path(), &name);
+    std::fs::write(&part, b"stale-bytes-that-must-never-survive").unwrap();
     nxr.down(
         dst.path(),
         Enumeration::Names(names(&["a.zip"])),
-        true,
+        false,
         None,
     )
     .await
     .unwrap();
+    assert_eq!(
+        std::fs::read(dst.path().join("a.zip")).unwrap(),
+        CONTENT,
+        "the stale part never hybridizes into the artifact"
+    );
     let marker = std::fs::read_to_string(dst.path().join("a.zip.sha256")).unwrap();
     assert_eq!(
         marker,
