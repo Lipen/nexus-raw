@@ -1,91 +1,238 @@
 # Errors and exit codes
 
-Every failure names its kind, the object and both sides of a disagreement — enough to act without re-running under a debugger.
-Every error also prints a `hint:` line on stderr telling you what to check next.
+Every failure names its kind, the object and both sides of a disagreement.
+Every error also prints one `hint:` line on stderr telling you what to check next.
+The taxonomy has nine variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 
 ## The taxonomy
 
-| Error | Meaning | Exit |
-|:------|:--------|:----:|
-| `Mismatch { name, detail }` | digest or marker disagreement on a completed artifact | 1 |
-| `Incomplete { names }` | local copies are not Complete (before publish, or at `verify`) | 1 |
-| `Missing { names }` | requested names exist neither locally nor remotely | 1 |
-| `Enumerate { url, reason }` | `down` has no enumeration source and the server has no `manifest.json` | 1 |
-| `UnsafeName { name, reason }` | a name failed the grammar or used the reserved `.sha256` suffix | 2 |
-| `Misuse` | bad flags, missing file or directory, half-set credentials | 2 |
-| `Auth { url, reason }` | 401/403, or credentials required but absent | 3 |
-| `Transport { url, detail }` | network, TLS, timeouts — retries exhausted | 3 |
-| `Http { status, url }` | any other unexpected status | 3 |
+The variant set mirrors the error enum, fields included.
+Wrappers can construct and match them, because the fields are public.
+The hint column quotes `Error::hint()` verbatim — the same string the CLI prints and JSON wrappers receive in the `hint` field.
 
-Exit code `1` is a data verdict, `2` a broken invocation, `3` a broken pipe.
-The mapping lives in exactly one place, `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+| Variant | Meaning | Exit | Hint (verbatim) | Typical cause | Fix |
+|:--------|:--------|:----:|:----------------|:--------------|:----|
+| `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | `the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object` | the same name was published twice with different content, or a sibling belongs to a foreign object | decide whose bytes are right, delete or fix one copy |
+| `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command; finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written | rerun the same command to finish, or repair the file and its marker |
+| `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides; check spelling and the manifest` | a typo, or a manifest entry for something never published | check spelling and the manifest |
+| `Enumerate { url, reason }` | `down` has no enumeration source | 1 | `pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API` | no `manifest.json` at the directory URL and no flag naming a source | pass `--manifest`, `--name` or `--ls` |
+| `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix | rename the file so every segment matches `[A-Za-z0-9._-]+` |
+| `Misuse(String)` | bad flags, missing file or directory, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch | fix the command line or the environment |
+| `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt | resolve credentials via `-u`, `NXR_AUTH` or `NXR_USERNAME`+`NXR_PASSWORD` |
+| `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body | check the network and rerun — resume is free |
+| `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published | check the URL and the published layout |
+| `Http { status, url }` | any other unexpected status | 3 | *(no hint — the status itself is the message)* | a proxy answered 429, or the path hit a non-artifact route | read the status, then check the URL and server state |
+
+Exit `1` is a data verdict, `2` a broken invocation, `3` a broken pipe.
+The same classes appear in the [CLI exit code table](cli.md#exit-codes) and in `Error::exit_code()` for API wrappers.
 
 ## Message anatomy
 
+All failures go to stderr in one shape: an `error:` line, then an optional `hint:` line.
+This refusal was captured live — a sibling that no longer matches its bytes stops the run before any byte moves.
+
 ```console
-$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: app.zip: complete on both sides with different digests: local 9f86…, remote 2c26…
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --dry-run
+error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 71bc3545992c561b978ae7ef8e18576d3e44fbd3f6036b1228f594aa5afe8a3f, actual 81f8008b6e871a243fc031945d045f1d6e700eac2a00ebbd055e9c23ace804e5
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+$ echo $?
+1
 ```
 
-- `error:` — every failure goes to stderr in this shape.
-- the kind — `mismatch`, `missing`, `cannot enumerate`, …
-- the rest — names, digests, URLs.
-- `hint:` — the next thing to check, one line, always present except for plain unexpected HTTP statuses.
+- `error:` — every failure starts with this prefix on stderr.
+- the kind — `mismatch`, `missing`, `cannot enumerate`, `unsafe name`, `transport`, …
+- the detail — names, digests, URLs, the server's own reason.
+- `hint:` — the next thing to check, one line.
 
-## Hints
+The only errors without a hint are `Http` statuses other than 404.
 
-| Error | Hint |
-|:------|:-----|
-| `Mismatch` | the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object |
-| `Incomplete` | rerun the same command; finished names are skipped and the rest is retried |
-| `Missing` | the name is absent on both sides; check spelling and the manifest |
-| `Enumerate` | pass `--manifest <file|url|->`, repeat `--name`, or use `--ls` when the server has the search API |
-| `UnsafeName` | names must be relative paths of `[A-Za-z0-9._-]` segments; the `.sha256` suffix is reserved |
-| `Auth` | pass `-u user:pass` or export `NXR_AUTH` (base64 `user:pass`) |
-| `Transport` | check the network; transfers are resumable, rerunning is safe |
-| `Http` 404 | check the URL path and that the version or object exists |
-| `Http` other | — |
-| `Misuse` | check the command line arguments |
+## Captured transcripts
 
-## Exit codes
+Each transcript below was produced by a real `nxr` run — most against a live Sonatype Nexus Repository, the connection-reset, stall and foreign-sibling scenarios against the deterministic failure mock.
+The hostnames are neutralized, the messages and exit codes are verbatim.
 
-| Code | Class | A script should |
-|:-----|:------|:----------------|
-| `0` | ok | continue |
-| `1` | data | stop — a human decides whose content is right |
-| `2` | misuse | fix the invocation |
-| `3` | transport | retry the job later — resume is free |
+### Auth failure — exit 3
 
-`doctor` maps local gaps to `2` (for example no credentials anywhere) and failed reachability to `3`.
+Wrong credentials against a repository that requires auth.
+The `Auth` variant's message already carries the remedy.
+
+```console
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -u ci-bot:wrong-pass -o app.zip
+error: auth: https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip: HTTP 401 Unauthorized; pass -u user:pass or export NXR_AUTH (base64 user:pass)
+hint: pass -u user:pass or export NXR_AUTH (base64 user:pass)
+$ echo $?
+3
+```
+
+Missing credentials fail identically, because anonymous access earns the same 401.
+
+### Not found — exit 3
+
+A 404 becomes `Http { status: 404 }` with its own hint.
+`head` is the exception: it reports any status as a result and exits 0.
+
+```console
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/no-such-object.bin -o x.bin
+error: http 404: https://nexus.example.com/repository/raw-main/1.4.0/no-such-object.bin
+hint: check the URL path and that the version or object exists
+$ echo $?
+3
+```
+
+### Enumeration refusal (exit 1)
+
+`down` refuses to guess what to fetch.
+Nexus raw has no guaranteed directory listing, so a missing source is a data refusal, not a network error.
+
+```console
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
+error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.4.0/: no manifest.json on the server and no --manifest/--name/--ls given
+hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
+$ echo $?
+1
+```
+
+### Misuse — exit 2
+
+Half-set environment credentials are an invocation error, never a silent anonymous call.
+
+```console
+$ NXR_USERNAME=ci-bot nxr head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
+error: misuse: NXR_USERNAME and NXR_PASSWORD must be set together
+hint: check the command line arguments
+$ echo $?
+2
+```
+
+The same class covers flag values and missing paths.
+
+```console
+$ nxr --workers 0 head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
+error: misuse: --workers must be in 1..=64, got 0
+hint: check the command line arguments
+$ echo $?
+2
+```
+
+### Missing name — exit 1
+
+A name that exists on neither side is collected and refused before any transfer.
+
+```console
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ --name no-such-file.bin
+error: missing: no-such-file.bin: exist nowhere
+hint: the name is absent on both sides; check spelling and the manifest
+$ echo $?
+1
+```
+
+### Unsafe name — exit 2
+
+The grammar rejects the file before anything is hashed or sent.
+
+```console
+$ nxr up dist-broken/ https://nexus.example.com/repository/raw-main/broken/
+error: unsafe name: bad name.zip: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
+hint: names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved
+$ echo $?
+2
+```
+
+### Transport — exit 3
+
+Two flavors from a connection that resets before answering and a body that stops mid-flight.
+
+```console
+$ nxr get https://mirror.example.com/reset/app.bin --retry 1
+error: transport: https://mirror.example.com/reset/app.bin: error sending request for url (https://mirror.example.com/reset/app.bin)
+hint: check the network; transfers are resumable, rerunning is safe
+$ echo $?
+3
+$ nxr get https://mirror.example.com/slow/app.bin --stall-secs 1 --retry 1 -o app.bin
+error: transport: https://mirror.example.com/slow/app.bin: stalled: no bytes for 1s
+hint: check the network; transfers are resumable, rerunning is safe
+$ echo $?
+3
+```
+
+### Foreign sibling — exit 1
+
+A remote sibling whose digest cannot belong to the bytes is never overwritten.
+The per-name failure is collected in the summary, then the run refuses.
+
+```console
+$ nxr down https://nexus.example.com/repository/raw-main/foreign/ out/ --name app.bin
+plan: 0 to upload, 1 to download, 0 up to date
+uploaded 0, downloaded 0, skipped 0
+failed: app.bin: downloaded digest 3b148ae2a01ddd4ad9c0f9d3f504fb15a9e242c42d6419ec11ad25b426b8de36, remote sibling 0000000000000000000000000000000000000000000000000000000000000000
+error: mismatch: app.bin: downloaded digest 3b148ae2a01ddd4ad9c0f9d3f504fb15a9e242c42d6419ec11ad25b426b8de36, remote sibling 0000000000000000000000000000000000000000000000000000000000000000: remote content diverges from its sha-sibling
+hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+$ echo $?
+1
+```
+
+### Incomplete at verify — exit 1
+
+`verify` is offline, so every data problem it finds is `Incomplete`.
+
+```console
+$ nxr verify dist/1.4.0/
+error: incomplete: pinned.xml
+hint: rerun the same command; finished names are skipped and the rest is retried
+$ echo $?
+1
+```
+
+## Exit-code matrix
+
+| Code | Class | Fires on | A script should |
+|:----:|:------|:---------|:----------------|
+| `0` | ok | the transfer converged, the check passed, or `head` reported a status | continue the pipeline |
+| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate` | stop and show stderr to a human |
+| `2` | misuse | bad flags, unsafe names, half-set credentials, missing local paths | fix the invocation and rerun |
+| `3` | transport | auth failures, connection resets, stalls, 5xx after retries, unexpected statuses | retry later — resume makes reruns cheap |
+
+`doctor` reuses the same classes: a local gap such as missing credentials exits `2`, a failed reachability probe exits `3`.
 
 ## The refusal rule
 
-`Mismatch`, `Incomplete` and `Missing` are refusals, not failures to try.
+`Mismatch`, `Incomplete` and `Missing` are refusals, not failed attempts.
 `nxr` never overwrites a diverging completed artifact, never shadows a remote-only name with `up`, and never writes bytes that failed their digest check.
 Recovery is always a decision — fix or delete a copy, republish under a new name — never a retry.
+The classification that produces these verdicts is specified in [the symmetric diff](protocol.md#the-symmetric-diff).
 
 ## In NDJSON
 
-Transfer failures appear in the summary's `failed` list:
+Transfer-level failures surface in the summary's `failed` list and in `retrying` events, not as separate error objects.
 
 ```json
-{"event":"summary","uploaded":0,"downloaded":0,"skipped":1,"failed":["app.zip"]}
+{"attempt":2,"event":"retrying","name":"app.zip","reason":"transport: …: HTTP 503"}
 ```
 
-The `error:` and `hint:` lines still go to stderr.
-The process exit code carries the class.
+```json
+{"event":"summary","uploaded":0,"downloaded":0,"skipped":0,"failed":["app.bin"]}
+```
+
+The `error:` and `hint:` lines still go to stderr, and the process exit code still carries the class.
 
 ## In the Rust API
 
-The same taxonomy is `nexus_raw_core::Error`:
+The taxonomy is `nexus_raw_core::Error`.
+`Error::exit_code()` is the single mapping from variant to class, and `Error::hint()` returns the hint string — wrappers call these instead of re-deriving either.
 
 ```rust
-match result {
+match nxr.up(dir, None, true, None).await {
+    Ok(summary) => info!("published: {summary:?}"),
     Err(e) if e.exit_code() == 3 => warn!("transport, retry later: {e}"),
-    Err(e) => error!("data or invocation problem: {e}"),
-    Ok(summary) => info!("{summary:?}"),
+    Err(e) => error!("data or invocation problem, hint: {:?}", e.hint()),
 }
 ```
 
-`Error::exit_code()` is the single mapping from error to exit code — wrappers call it instead of re-deriving one.
+The diff refusals are a separate type, `nexus_raw_core::Verdict`, which converts into `Error` with `From` — a refused plan and a refused transfer look identical to a caller.
+See [the Rust API page](api.md#errors) for the full picture.
+
+## Where to go next
+
+- Every flag and exit row per command: [CLI reference](cli.md#exit-codes).
+- Live-incident recipes: [when it breaks](../how-to/troubleshoot.md).
+- Why the wire looks this way: [the wire protocol](protocol.md).

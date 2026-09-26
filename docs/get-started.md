@@ -1,12 +1,12 @@
 # Get started
 
-A five-minute tour: publish a version directory, then consume it.
-Everything runs against a local mock, so no Nexus server is needed yet.
+One binary, five minutes, a throwaway server: prepare a version directory, publish it, name it, consume it, break it and recover.
+No Nexus installation is needed — the repository ships a mock server that speaks the same protocol.
 
 ## Prerequisites
 
-- Rust 1.85+ (`rustup`) — the only hard requirement.
-- `just` and `uv` — optional, they only wrap the recipes below.
+- Rust 1.85+ through `rustup` — the only hard requirement.
+- `just` — optional, it only wraps the recipes below.
 
 ## Install
 
@@ -14,22 +14,25 @@ Everything runs against a local mock, so no Nexus server is needed yet.
 
     ```bash
     cargo install --path crates/nexus-raw
-    nxr --version
     ```
 
 === "From the source tree (no install)"
 
     ```bash
-    just nxr -- --help
+    cargo run -p nexus-raw -- --version
     ```
+
+```console
+$ nxr --version
+nxr 0.1.0
+```
 
 ## Start a throwaway Nexus
 
-The repository ships a mock server with realistic Nexus behavior, including failure scenarios.
+The `mock-nexus` binary serves one failure scenario at a time.
+`atomic` is the honest one: every fully received request is stored and served.
 
 ```bash
-just mock atomic --port 8080
-# or, without just:
 cargo run -p mock-nexus -- atomic --port 8080
 ```
 
@@ -37,95 +40,149 @@ cargo run -p mock-nexus -- atomic --port 8080
 listening http://127.0.0.1:8080
 ```
 
+Everything below talks to that process.
+In a real deployment the URL is your repository, for example `https://nexus.example.com/repository/raw-main/`, and credentials travel per call (see [the CLI reference](reference/cli.md#credentials-and-urls)).
+
 ## Prepare a version directory
 
-Any directory works: every relative path in it becomes an artifact name.
+Any directory works: every relative path under it becomes an artifact name.
 
 ```text
 dist/1.4.0/
 ├── app-1.4.0.zip
-├── app-1.4.0.zip.sha256      # optional: up generates missing markers itself
+├── bom/
+│   └── linux-x86_64.json
+├── manifest.json             # (1)!
 └── pinned.xml
 ```
 
-Markers are one strict `sha256sum -c` line each — lowercase hex, two spaces, the artifact name.
-Ship them by hand if you like:
-
-```console
-$ cat app-1.4.0.zip.sha256
-9f86d081884c7d65...  app-1.4.0.zip
-```
-
-Or don't: `up` hashes the bytes and writes any missing sibling before uploading.
-
-## Publish
+1. The enumeration source for consumers.
+   Without it, `down` needs `--manifest`, `--name` or `--ls` — you will trigger that refusal later in this tour.
 
 ```bash
-nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
+nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/   # (1)!
 ```
 
-What happens:
-
-```mermaid
-flowchart LR
-  G["generate missing markers"] --> B["bytes + markers, parallel workers"]
-  B -->|"PUT bytes, then marker of the same name"| S(("Nexus"))
-```
+1. Source directory first, destination URL second.
+   No config file, no login step: the whole instruction is on one line.
 
 ```console
 $ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
-plan: 2 to upload, 0 to download, 0 up to date
-↑ app-1.4.0.zip ok
+plan: 4 to upload, 0 to download, 0 up to date
+↑ bom/linux-x86_64.json ok
 ↑ pinned.xml ok
-uploaded 2, downloaded 0, skipped 0
-up: 2 sent, 0 fetched, 0 skipped
+↑ manifest.json ok
+↑ app-1.4.0.zip ok
+up: 4 sent, 0 fetched, 0 skipped
+uploaded 4, downloaded 0, skipped 0
 ```
 
-Run it again — everything is already there, so nothing transfers:
+No marker step appears anywhere because `up` generated every `<name>.sha256` from the bytes before uploading.
+The markers are ordinary `sha256sum -c` lines, and `up` leaves a copy next to your files:
+
+```console
+$ cat dist/1.4.0/app-1.4.0.zip.sha256
+58e575b66d6c9388e63409246633bac6ecd070229fc1743b350b52436004a09a  app-1.4.0.zip
+```
+
+Run the same command again — the server already holds byte-identical copies with equal markers, so nothing transfers:
 
 ```console
 $ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
-plan: 0 to upload, 0 to download, 2 up to date
-up: 0 sent, 0 fetched, 2 skipped
-uploaded 0, downloaded 0, skipped 2
+plan: 0 to upload, 0 to download, 4 up to date
+up: 0 sent, 0 fetched, 4 skipped
+○ app-1.4.0.zip skipped
+○ bom/linux-x86_64.json skipped
+○ manifest.json skipped
+○ pinned.xml skipped
+uploaded 0, downloaded 0, skipped 4
 ```
 
-## Name it
+A publishing job can be retried blindly: finished names are skipped, missing ones transfer, diverging ones refuse.
 
-A channel is a token file with any name — `latest` is just the most common one.
+## Name the version
 
-```bash
-nxr channel set http://127.0.0.1:8080/latest 1.4.0 --if-forward
-nxr channel get http://127.0.0.1:8080/latest
+A channel is a token file at any URL — `latest` is just the most common name.
+`--if-forward` compares tokens in dotted-numeric version order, so an older token never replaces a newer one:
+
+```console
+$ nxr channel set http://127.0.0.1:8080/latest 1.4.0 --if-forward
+channel: set http://127.0.0.1:8080/latest → 1.4.0
+$ nxr channel set http://127.0.0.1:8080/latest 1.3.0 --if-forward
+channel: kept http://127.0.0.1:8080/latest at 1.4.0 (forward-only)
+$ nxr channel get http://127.0.0.1:8080/latest
+1.4.0
 ```
 
-`--if-forward` compares tokens in dotted-numeric version order, so an older token never replaces a newer one.
+## Consume the version
 
-## Consume
+Point `down` at the version URL.
+It reads `manifest.json`, fetches exactly the listed names, hashes each stream on the fly, checks the digest against the server marker, and only then renames the file into place:
 
-Give `down` an enumeration source — the usual one is a `manifest.json` in the version directory, which `up` published like any artifact:
-
-```bash
-echo '{"artifacts": ["app-1.4.0.zip", "pinned.xml"]}' > dist/1.4.0/manifest.json
-nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/     # re-run ships the manifest too
-nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/
+```console
+$ nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/
+plan: 0 to upload, 3 to download, 0 up to date
+↓ bom/linux-x86_64.json ok
+↓ pinned.xml ok
+↓ app-1.4.0.zip ok
+down: 0 sent, 3 fetched, 0 skipped
+uploaded 0, downloaded 3, skipped 0
 ```
 
-Every artifact is streamed into a part file, hashed while downloading, checked against the marker, then renamed into place — with its own local marker written alongside, so `nxr verify vendor/app/` passes offline.
+Each artifact arrives with its own `<name>.sha256` sibling, so the result verifies offline:
 
-Without an enumeration source (no server-side `manifest.json`, no `--manifest`, no `--name`, no `--ls`), `down` refuses with a hint instead of guessing.
+```console
+$ nxr verify vendor/app/
+verify: 3 ok, FAILED: none
+```
 
 ## Break it on purpose
 
-Kill the transfer mid-flight (`Ctrl-C` on a real server, or use the mock's failure scenarios) and repeat the command — `--continue` picks up each download's part file, and `up` re-runs are always free.
+Publish a version without a `manifest.json` and `down` refuses to guess instead of inventing a name list:
 
-```bash
-cargo run -p mock-nexus -- flaky --flaky 3 --port 8080
-nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/ --continue
+```console
+$ nxr down http://127.0.0.1:8080/1.3.0/ vendor/old/
+error: cannot enumerate: http://127.0.0.1:8080/1.3.0/: no manifest.json on the server and no --manifest/--name/--ls given
+hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
 ```
+
+Every failure prints this way: the kind, the facts, and a `hint:` line naming the next check.
+[When it breaks](how-to/troubleshoot.md) catalogues them all.
+
+Now interrupt a transfer mid-flight.
+Run a second mock in its `slow` scenario, which trickles bytes, and kill `down` three seconds in (`timeout` here stands in for `Ctrl-C`):
+
+```console
+$ cargo run -p mock-nexus -- slow --chunk-delay-ms 300 --chunk-size 65536 --port 8095 &
+listening http://127.0.0.1:8095
+$ nxr up dist/1.4.0/ http://127.0.0.1:8095/1.4.0/ >/dev/null
+$ timeout 3 nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
+plan: 0 to upload, 3 to download, 0 up to date
+↓ bom/linux-x86_64.json ok
+↓ pinned.xml ok
+killed, timeout exit=124
+$ ls -A vendor/resume/
+.nxr-part-ad2572febfb75df3  bom  pinned.xml  pinned.xml.sha256
+```
+
+Two names finished, and the third died as a hidden part file (`.nxr-part-<hash>`).
+A partially fetched name never reaches its final path, so the directory holds no half-truths.
+Repeat the command with `--continue` — the finished names are skipped and the part file is picked up through a `Range: bytes=N-` request:
+
+```console
+$ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/ --continue
+plan: 0 to upload, 1 to download, 2 up to date
+○ bom/linux-x86_64.json skipped
+○ pinned.xml skipped
+↓ app-1.4.0.zip ok
+down: 0 sent, 1 fetched, 2 skipped
+```
+
+The part file is gone, `app-1.4.0.zip` is complete, and `nxr verify vendor/resume/` passes.
 
 ## Next steps
 
-- Real servers: URLs and credentials per call — [the CLI reference](reference/cli.md#credentials-and-urls) covers `-u`, `NXR_AUTH` and friends.
-- Producers: [publish](how-to/publish.md) covers manifests, channels and the nightly pattern.
-- Scripts: [use in CI](how-to/ci.md) documents the NDJSON contract and exit codes.
+- Producers: [publish a version](how-to/publish.md) — markers, refusals, channels and a nightly pattern against a real server.
+- Consumers: [consume artifacts](how-to/consume.md) — enumeration sources, subsets and offline verification.
+- Pipelines: [use in CI](how-to/ci.md) — NDJSON events, exit codes and masked credentials.
+- Every flag of every command: [CLI reference](reference/cli.md).
