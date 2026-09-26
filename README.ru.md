@@ -11,7 +11,7 @@
 
 > `nxr` — это curl для raw-репозитория Sonatype Nexus.
 
-Один статический бинарь: примитивы уровня curl с ретраями, stall-детектом и TLS по умолчанию, поверх — проверенные переносы каталогов с маркерами-сиблингами, ещё выше — канальные рефы и манифесты.
+Один статический бинарь: примитивы уровня curl с ретраями, stall-детектом и TLS по умолчанию, затем проверенные переносы каталогов с маркерами-сиблингами, затем канальные рефы и манифесты.
 Каждый вызов самодостаточен: URL в argv, креды через `-u` или окружение, никакого конфиг-файла, никаких профилей, ноль серверных компонент.
 Крейт `nexus-raw-core` даёт те же операции как Rust-библиотека.
 
@@ -23,7 +23,7 @@ cargo install --path crates/nexus-raw    # бинарь nxr
 
 ## Быстрый старт
 
-Два сценария покрывают модель — опубликовать версию и назвать её, забрать и проверить офлайн:
+Два сценария покрывают модель. Опубликовать версию и назвать её, забрать и проверить офлайн:
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
@@ -40,12 +40,12 @@ nxr verify vendor/prebuilt
 ```
 
 Прерванная передача докачивается повтором той же команды: `up` пропускает завершённое, `down --continue` докачивает с part-файлов через `Range: bytes=N-`.
-Остальная модель — явное перечисление, dry-run планы, best-effort листинги — в [таблице команд](#команды) и [документации](https://gitcode.com/rri_opensource/nexus-raw/blob/master/docs/index.md).
+Остальная модель (явное перечисление, dry-run планы, best-effort листинги) в [таблице команд](#команды) и [документации](https://gitcode.com/rri_opensource/nexus-raw/blob/master/docs/index.md).
 
 ## Креды
 
 `-u user:pass` главный, затем окружение: `NXR_AUTH` (base64 `user:pass`) или `NXR_USERNAME` + `NXR_PASSWORD` (только вместе).
-Это весь список — алиасы и URL по умолчанию живут в вашем shell или CI, а не в конфиге.
+Это весь список: алиасы и URL по умолчанию живут в вашем shell или CI, а не в конфиге.
 
 ```bash
 printf 'ci-bot:%s' "$TOKEN" | base64
@@ -57,14 +57,14 @@ export NXR_AUTH="Y2ktYm90OnRva2Vu"
 
 ## Возможности
 
-- `get`, `put`, `head`, `sha` — примитивы уровня curl, digest считается на лету.
-- `up`, `down` — перенос каталогов с симметричным диффом, параллельными воркерами и Range-resume (`.part`-файлы, 206).
-- Маркеры-сиблинги в формате `sha256sum -c`: `up` пишет и генерирует их по умолчанию, `--no-sha` — осознанный отказ.
+- `get`, `put`, `head`, `sha`: примитивы уровня curl, digest считается на лету.
+- `up`, `down`: перенос каталогов с симметричным диффом, параллельными воркерами и Range-resume (`.part`-файлы, 206).
+- Маркеры-сиблинги в формате `sha256sum -c`: `up` пишет и генерирует их по умолчанию, `--no-sha` означает осознанный отказ.
 - `down` перечисление берёт явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
-- `channel get|set` — токен-файлы с любым именем, с guard'ом `--if-forward` (dotted-numeric).
-- `verify` — офлайн-проверка байтов, маркеров и digest'ов.
-- `doctor` — креды, TLS, достижимость.
-- TLS проверяется по умолчанию, `--tls-insecure` — единственный выключатель.
+- `channel get|set`: токен-файлы с любым именем, с guard'ом `--if-forward` (dotted-numeric).
+- `verify`: офлайн-проверка байтов, маркеров и digest'ов.
+- `doctor`: креды, TLS, достижимость.
+- TLS проверяется по умолчанию, и `--tls-insecure` остаётся единственным выключателем.
 - `--json`: один JSON-объект для простых команд, NDJSON-события для переносов.
 - Exit-коды 0/1/2/3, каждая ошибка печатает `hint:` на stderr.
 
@@ -73,14 +73,14 @@ export NXR_AUTH="Y2ktYm90OnRva2Vu"
 | Команда | Делает |
 |:--------|:-------|
 | `nxr get <URL> [-o FILE] [--continue]` | GET в файл (через `.part`, докачка через Range) или stdout |
-| `nxr put <URL> -f FILE [--sha]` | PUT байтов — `--sha` ещё и PUT `.sha256`-сиблинга |
+| `nxr put <URL> -f FILE [--sha]` | PUT байтов: `--sha` ещё и PUT `.sha256`-сиблинга |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | скан → дифф → PUT байтов + маркеров параллельно |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | перечисление → дифф → поток+hash → rename + локальный маркер |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (experimental) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена, `--if-forward` — только вперёд в dotted-numeric порядке |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена, `--if-forward` допускает сдвиг только вперёд в dotted-numeric порядке |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | креды, TLS, настройки, достижимость |
 

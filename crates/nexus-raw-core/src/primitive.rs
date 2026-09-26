@@ -32,7 +32,7 @@ pub struct GetOutcome {
 ///
 /// With `out`: stream into `<out>.part` (resuming from it when `cont`), verify
 /// nothing, then rename to `out`. Without `out`: stream to stdout in a single
-/// body attempt — a retry after the body started would duplicate bytes.
+/// body attempt, because a retry after the body started would duplicate bytes.
 pub async fn get(
     client: &NexusClient,
     url: &str,

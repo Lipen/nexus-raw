@@ -1,4 +1,4 @@
-//! `nxr` — curl for a Nexus raw repository.
+//! `nxr` is curl for a Nexus raw repository.
 //!
 //! This crate owns only flag parsing, event rendering and exit codes.
 //! All protocol logic lives in the core crate.
@@ -58,7 +58,7 @@ pub(crate) enum Cmd {
         /// Output file (stdout when omitted).
         #[arg(short = 'o', long, value_name = "FILE")]
         out: Option<PathBuf>,
-        /// Resume from an existing <out>.part through a Range request.
+        /// Resume from an existing `<out>`.part through a Range request.
         #[arg(long = "continue")]
         cont: bool,
     },
@@ -70,7 +70,7 @@ pub(crate) enum Cmd {
         /// The file to send.
         #[arg(short = 'f', long, value_name = "FILE")]
         file: PathBuf,
-        /// Also PUT <url>.sha256 with the sha256sum-style marker.
+        /// Also PUT `<url>`.sha256 with the sha256sum-style marker.
         #[arg(long)]
         sha: bool,
     },

@@ -1,7 +1,7 @@
 //! Hand-rolled standard base64 (RFC 4648) encoder.
 //!
 //! The only consumer is the `auth-401` scenario, which needs to build the
-//! expected `Authorization: Basic <b64(user:pass)>` token — a ~20-line
+//! expected `Authorization: Basic <b64(user:pass)>` token: a ~20-line
 //! implementation beats an external crate here.
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

@@ -1,7 +1,7 @@
 # Use in CI
 
 `nxr` is built for pipelines: stable exit codes, machine-readable events, free resume, credentials from the environment.
-This page wires a release job and a consumer job into GitLab CI — the shapes apply to any runner.
+This page wires a release job and a consumer job into GitLab CI. The shapes apply to any runner.
 
 ## Credentials
 
@@ -75,7 +75,7 @@ $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json
 {"downloaded":0,"event":"summary","failed":[],"skipped":0,"uploaded":4}
 ```
 
-The last line is all a job usually gates on — a re-run of the same job converges instead of transferring:
+The last line is all a job usually gates on, and a re-run of the same job converges instead of transferring:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json \
@@ -97,7 +97,7 @@ The event kinds:
 
 Artifact states: `uploading`, `downloading`, `done`, `skipped`.
 Byte progress is coalesced (at most one event per 200 ms per name), so a slow link does not flood the log.
-Retries surface as `retrying` events — here a server answered `503` twice before cooperating:
+Retries surface as `retrying` events. Here a server answered `503` twice before cooperating:
 
 ```console
 $ nxr down "$BASE/$V/" vendor/app/ --json | jq -c 'select(.event=="retrying")'
@@ -107,7 +107,7 @@ $ nxr down "$BASE/$V/" vendor/app/ --json | jq -c 'select(.event=="retrying")'
 
 An empty `"name"` means the retry happened during enumeration, before any artifact was named.
 
-Simple commands are different: `head`, `put`, `sha`, `get -o` and `channel get` print **one JSON object**, not a stream — see [the CLI reference](../reference/cli.md#output).
+Simple commands are different: `head`, `put`, `sha`, `get -o` and `channel get` print **one JSON object**, not a stream (see [the CLI reference](../reference/cli.md#output)).
 
 ## A release job, end to end
 
@@ -124,7 +124,7 @@ publish:
 ```
 
 No marker step exists because `up` generates and uploads the `.sha256` siblings itself.
-The `up` line is re-runnable as-is — a retried job uploads only what is missing.
+The `up` line is re-runnable as-is: a retried job uploads only what is missing.
 `--if-forward` makes the last line rollback-proof even when two pipelines race.
 
 ## A consumer job
@@ -141,7 +141,7 @@ fetch:
 ```
 
 `--continue` lets a retried job pick up the part files of the killed one instead of starting over.
-The offline `verify` is the gate before anything links against the download — no network, pure hashing.
+The offline `verify` is the gate before anything links against the download: no network, pure hashing.
 
 ## Check the setup before the run
 
@@ -169,7 +169,7 @@ doctor:
 1 check(s) failed
 ```
 
-Exit 2 with no runner time wasted on a doomed transfer — run it at the top of a pipeline.
+Exit 2 with no runner time wasted on a doomed transfer. Run it at the top of a pipeline.
 The exit code tells you which side to fix: `2` is your job definition, `3` is the server or the network.
 
 ## Next steps

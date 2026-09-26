@@ -8,19 +8,19 @@ The scenario behind every transcript here: your build needs the artifacts of ver
 
 - Reachable repository URL, for example `https://nexus.example.com/repository/raw-main/`.
 - Credentials that may read it (`export NXR_USERNAME=… NXR_PASSWORD=…`).
-- A target directory — created on demand.
+- A target directory, created on demand.
 
 ## Choosing an enumeration source
 
 `down` must know *which names* to fetch, and a Nexus raw repository has no guaranteed directory listing.
-Every `down` names its source — explicitly or through one convention:
+Every `down` names its source, explicitly or through one convention:
 
 | Source | Invocation | Reach for it when |
 |:-------|:-----------|:------------------|
-| `manifest.json` at the version URL | `nxr down <ver-url>/ vendor/app/` | the publisher shipped one — the usual case |
+| `manifest.json` at the version URL | `nxr down <ver-url>/ vendor/app/` | the publisher shipped one, the usual case |
 | a manifest file, URL or stdin | `nxr down <ver-url>/ vendor/app/ --manifest m.json` | you maintain your own name list or a subset of one |
 | explicit names, repeatable | `nxr down <ver-url>/ vendor/app/ --name app.zip` | a job needs one or two files from a large version |
-| server search API | `nxr down <ver-url>/ vendor/app/ --ls` | nothing else is available — best effort, experimental, needs a server with the search API and a repository-style URL |
+| server search API | `nxr down <ver-url>/ vendor/app/ --ls` | nothing else is available: best effort, experimental, needs a server with the search API and a repository-style URL |
 
 With no source and no server-side `manifest.json`, `down` refuses instead of guessing:
 
@@ -30,7 +30,7 @@ error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: n
 hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
 ```
 
-Every name a source lists must exist, locally or remotely — a typo stops the run with `missing` instead of silently fetching less.
+Every name a source lists must exist, locally or remotely. A typo stops the run with `missing` instead of silently fetching less.
 
 ## Resolve the version through a channel
 
@@ -60,7 +60,7 @@ Three names listed in `manifest.json`, three fetched.
 
 ### What the pipeline guarantees
 
-For every name, the same five steps run — in parallel across `--workers`:
+For every name, the same five steps run, in parallel across `--workers`:
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
@@ -79,12 +79,12 @@ flowchart LR
 
 Two consequences worth internalizing:
 
-- A name that dies mid-download leaves only a hidden part file (`.nxr-part-<hash>`) — the destination never holds partial bytes under a real name.
+- A name that dies mid-download leaves only a hidden part file (`.nxr-part-<hash>`): the destination never holds partial bytes under a real name.
 - The local marker is computed from the received bytes, so the result verifies offline even if the server had no marker.
 
 ## Re-runs diff instead of re-downloading
 
-Delete a file — or lose it to a crashed build — and run the same command again:
+Delete a file (or lose it to a crashed build) and run the same command again:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
@@ -96,15 +96,15 @@ uploaded 0, downloaded 1, skipped 2
 down: 0 sent, 1 fetched, 2 skipped
 ```
 
-Only the missing name transfers — names whose digest matches the server are skipped.
-A locally complete artifact whose digest *diverges* refuses the run instead of being overwritten — see [when it breaks](troubleshoot.md#divergent-objects-are-never-overwritten).
+Only the missing name transfers. Names whose digest matches the server are skipped.
+A locally complete artifact whose digest *diverges* refuses the run instead of being overwritten (see [when it breaks](troubleshoot.md#divergent-objects-are-never-overwritten)).
 
 An interrupted pull recovers the same way: repeat the command with `--continue` and the part files resume through `Range` requests.
 The full walkthrough with a real interruption: [break it on purpose](../get-started.md#break-it-on-purpose).
 
 ## Fetch a subset
 
-Large version, small job — name what you need, repeat `--name` as often as needed:
+Large version, small job. Name what you need and repeat `--name` as often as needed:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/subset/ --name app-1.4.0.zip
@@ -114,12 +114,12 @@ uploaded 0, downloaded 1, skipped 0
 down: 0 sent, 1 fetched, 0 skipped
 ```
 
-For longer lists, keep a manifest file in your own repository and point `--manifest` at it — a file, a URL, or `-` for stdin.
+For longer lists, keep a manifest file in your own repository and point `--manifest` at it (a file, a URL, or `-` for stdin).
 The publisher-side rules apply unchanged: every listed name must exist, ghosts refuse the run.
 
 ## Verify without the network
 
-Before building against the result — or after any manual fiddling — check every artifact against its marker, entirely offline:
+Before building against the result, or after any manual fiddling, check every artifact against its marker, entirely offline:
 
 ```console
 $ nxr verify vendor/app/
@@ -136,10 +136,10 @@ hint: rerun the same command; finished names are skipped and the rest is retried
 failed: bom/linux-x86_64.json
 ```
 
-`verify` checks a directory you own, so you have two honest repairs: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum` — whichever matches why the digest drifted.
+`verify` checks a directory you own, so you have two honest repairs: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum`, whichever matches why the digest drifted.
 Pass `--manifest` to check a subset instead of the whole directory.
 
-As the last gate of a consumer CI job, `verify` costs no network and catches every silent corruption upstream — see [a consumer job](ci.md#a-consumer-job).
+As the last gate of a consumer CI job, `verify` costs no network and catches every silent corruption upstream (see [a consumer job](ci.md#a-consumer-job)).
 
 ## Next steps
 

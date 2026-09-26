@@ -15,12 +15,12 @@ The canonical protocol text is kept outside this repository.
   A divergent complete artifact is never overwritten.
   `up` writes markers by default and generates missing local siblings.
   `--no-sha` is the explicit opt-out.
-- `down` requires an enumeration source — `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or `--ls` — and refuses with `cannot enumerate` otherwise.
+- `down` requires an enumeration source (`manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or `--ls`) and refuses with `cannot enumerate` otherwise.
 - The marker is always PUT after the bytes of the same name.
 - The order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
   Only the `.sha256` suffix is reserved.
-  `claim.json`, `latest` and `nightly` are ordinary names — no protocol meaning.
+  `claim.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
 - A channel is any token file.
   Dotted-numeric order is the only comparison the tool imposes (`--if-forward`).
 - Credentials come from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order.
@@ -68,7 +68,7 @@ New fields are additive.
 
 | Path | Role |
 |:-----|:-----|
-| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config` — no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
+| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
 | `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
 | `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |

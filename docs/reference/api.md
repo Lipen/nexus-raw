@@ -1,7 +1,7 @@
 # Rust API
 
 `nexus-raw-core` is the protocol without a UI: the operations of the CLI as a small async API around one facade.
-The crate is organized in layers, the CLI is a thin shell over the top layer, and every layer below it is public API — you can embed just the transport, just the transfer engine, or the whole facade.
+The crate is organized in layers, the CLI is a thin shell over the top layer, and every layer below it is public API: you can embed just the transport, just the transfer engine, or the whole facade.
 The exhaustive type-level documentation lives in the crate docs (`cargo doc -p nexus-raw-core --open`, or the crate's page on docs.rs once published).
 This page is the guided tour.
 
@@ -10,7 +10,7 @@ This page is the guided tour.
 | Layer | Modules | Content | Depends on |
 |:------|:--------|:--------|:-----------|
 | L0 · transport | `transport` | one client: retries, backoff, stall detection, TLS, auth, Range-resume | nothing above |
-| L0 · primitive | `primitive` | `get`/`put`/`head`/`sha` — curl-grade, no verification | transport |
+| L0 · primitive | `primitive` | `get`/`put`/`head`/`sha`: curl-grade, no verification | transport |
 | L1 · transfer | `sync` | directory up/down, the symmetric diff, sha-sibling markers, parallel workers | transport, primitive |
 | L2 · layout | `layout` | channels (token files with any name), manifests, search-based listings | transport |
 | facade | `nxr` | `Nxr`, the single entry point that threads everything together | all of the above |
@@ -49,7 +49,7 @@ nexus-raw-core = { path = "crates/nexus-raw-core" }   # inside this workspace
 ## The facade
 
 `Nxr` is the single entry point.
-It is built from a `Config` — one invocation's settings, no config file — and an event channel it emits progress into.
+It is built from a `Config` (one invocation's settings, no config file) and an event channel it emits progress into.
 
 ```rust
 use std::time::Duration;
@@ -79,11 +79,11 @@ let nxr = Nxr::new(
 ```
 
 `Config::base` is the directory URL this invocation works on, normalized to a trailing `/`.
-`auth` is the ready `Authorization` header value — build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does.
+`auth` is the ready `Authorization` header value. Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does.
 `creds::resolve` does this for you.
 `Config::validate` enforces the sane ranges the CLI flags map onto: workers in `1..=64`, positive timeouts.
 
-A complete, self-contained round trip — publish a directory against a scratch server and fetch it back — is `cargo run -p nexus-raw-core --example publish`.
+A complete, self-contained round trip (publish a directory against a scratch server and fetch it back) is `cargo run -p nexus-raw-core --example publish`.
 It starts its own mock server, so the example runs with zero setup, and its shape (build config → open channel → `up` → `down` → drop facade → join renderer) is the intended embedding pattern.
 
 ## Operations
@@ -94,12 +94,12 @@ Every method mirrors a CLI command one-to-one.
 |:--------|:--------|:--------|:---------|
 | `get(url, out, cont)` | `GetOutcome` | `nxr get` | stream a URL to a file or stdout, resume through `<out>.part` |
 | `put(url, src, sha)` | `(u64, Option<Digest>)` | `nxr put` | PUT a file, optionally with its sha-sibling |
-| `head(url)` | `HeadInfo` | `nxr head` | status and metadata — 404 is a normal result, not an error |
+| `head(url)` | `HeadInfo` | `nxr head` | status and metadata: 404 is a normal result, not an error |
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
-| `up(dir, names, gen_markers, plan)` | `Summary` | `nxr up` | verified upload — bytes, then the marker of the same name |
-| `down(dir, enum_src, cont, plan)` | `Summary` | `nxr down` | verified download — the enumeration source is mandatory |
+| `up(dir, names, gen_markers, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
+| `down(dir, enum_src, cont, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
@@ -112,12 +112,12 @@ Two parameters deserve their one-liners:
 
 - `names: Option<Vec<ArtifactName>>` restricts a transfer to a manifest's names.
 `None` scans the directory.
-- `plan: Option<Vec<Action>>` accepts a precomputed diff — print the plan, then execute exactly it.
+- `plan: Option<Vec<Action>>` accepts a precomputed diff: print the plan, then execute exactly it.
 
 Failures collect per name into `Summary.failed` while the rest of the transfer completes.
-Refusals (`Verdict`) abort before any byte moves and convert into `Error` — see [errors](#errors).
+Refusals (`Verdict`) abort before any byte moves and convert into `Error` (see [errors](#errors)).
 
-## L0 — transport and primitives
+## L0: transport and primitives
 
 The client owns every cross-cutting concern so that no other layer repeats them: retry policy with backoff and jitter, connect timeout, stall abort, TLS mode, the `Authorization` header, and the Range-resume download.
 
@@ -153,9 +153,9 @@ async fn local_digest(nxr: &Nxr, path: &str) -> Result<Digest, nexus_raw_core::E
 }
 ```
 
-`GetOutcome` carries `size`, the `digest` of the written file (stdout mode skips hashing and returns `None`), and `resumed_from` — the part offset the transfer continued from, `0` for a fresh download.
+`GetOutcome` carries `size`, the `digest` of the written file (stdout mode skips hashing and returns `None`), and `resumed_from`, the part offset the transfer continued from (`0` for a fresh download).
 
-## L1 — transfer
+## L1: transfer
 
 `sync` classifies, then executes.
 `scan` and `local_statuses` are pure filesystem work, `classify` is a pure function from local and remote states to a plan, and `up`/`down` execute a plan with the worker pool.
@@ -171,11 +171,11 @@ fn what_would_up_scan(nxr: &Nxr) -> Result<(), nexus_raw_core::Error> {
 }
 ```
 
-`Action` — one name's line of a plan — has exactly three shapes: `Upload { name, size, digest }`, `Download { name, size, digest }` and `Skip { name, digest }`.
+An `Action` is one name's line of a plan and has exactly three shapes: `Upload { name, size, digest }`, `Download { name, size, digest }` and `Skip { name, digest }`.
 `Mode::Up` and `Mode::Down` select which side wins a single-completed-copy name, per the [symmetric diff matrix](protocol.md#the-symmetric-diff).
-The digest inside an `Upload` action is present only when markers are enabled — knowing the digest and writing the marker are separate concerns.
+The digest inside an `Upload` action is present only when markers are enabled. Knowing the digest and writing the marker are separate concerns.
 
-## L2 — layout
+## L2: layout
 
 `layout` reads and writes the conventional objects: channel refs, manifests, and search-based listings.
 Manifest parsing is pure and offline:
@@ -192,31 +192,31 @@ fn parse_manifest(bytes: &[u8]) -> Result<(), nexus_raw_core::Error> {
 }
 ```
 
-`Manifest::from_slice` tolerates the claim-shaped fields (`claim_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name — the exact rules the [protocol page](protocol.md#manifest) documents.
+`Manifest::from_slice` tolerates the claim-shaped fields (`claim_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name, the exact rules the [protocol page](protocol.md#manifest) documents.
 `channel_set` returns `ChannelOutcome::Written { from }` or `ChannelOutcome::Skipped { current }`, where the forward-only guard compares tokens in dotted-numeric order.
 
 ## Enumeration
 
-`down` refuses to guess what to fetch, so the facade takes an explicit source — this is the API shape of the CLI's enumeration flags:
+`down` refuses to guess what to fetch, so the facade takes an explicit source. The variants mirror the CLI's enumeration flags:
 
 | Variant | CLI flag | Semantics |
 |:--------|:---------|:----------|
-| `Enumeration::Manifest(Manifest)` | `--manifest <file\|url|->` | exact — the parsed name list |
-| `Enumeration::Names(Vec<ArtifactName>)` | `--name` (repeatable) | exact — every name grammar-checked at parse time |
-| `Enumeration::Search` | `--ls` | best-effort — walks the server search API with continuation tokens |
+| `Enumeration::Manifest(Manifest)` | `--manifest <file\|url|->` | exact: the parsed name list |
+| `Enumeration::Names(Vec<ArtifactName>)` | `--name` (repeatable) | exact: every name grammar-checked at parse time |
+| `Enumeration::Search` | `--ls` | best-effort: walks the server search API with continuation tokens |
 
-An enumeration that produces zero names refuses with `Enumerate` — an empty plan is treated as a wrong URL, never as success.
+An enumeration that produces zero names refuses with `Enumerate`, because an empty plan is treated as a wrong URL rather than as success.
 
 ## Events
 
 `Event` is the progress stream, one channel the facade emits into.
-The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the single serializer — an embedding UI and the CLI output cannot diverge.
+The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the single serializer, so an embedding UI and the CLI output cannot diverge.
 
 | Variant | Fires | NDJSON shape |
 |:--------|:------|:-------------|
 | `Plan { upload, download, skip }` | once per transfer, before execution | `{"event":"plan","upload":["a.zip"],"download":[],"skip":[]}` |
 | `ArtifactStarted { name, dir, total }` | when a name begins moving | `{"event":"artifact","name":"a.zip","state":"uploading","done":0,"total":38}` |
-| `ArtifactBytes { name, dir, done, total }` | coalesced — at most one per 200 ms per name | `{"event":"artifact","name":"a.zip","state":"downloading","done":12,"total":38}` |
+| `ArtifactBytes { name, dir, done, total }` | coalesced: at most one per 200 ms per name | `{"event":"artifact","name":"a.zip","state":"downloading","done":12,"total":38}` |
 | `ArtifactDone { name, dir, skipped, done, total }` | when a name settles | `{"event":"artifact","name":"a.zip","state":"done","done":38,"total":38}` |
 | `Retrying { name, attempt, reason }` | before each replayed attempt | `{"event":"retrying","name":"a.zip","attempt":2,"reason":"transport: …: HTTP 503"}` |
 | `Summary(Summary)` | last event of every transfer | `{"event":"summary","uploaded":1,"downloaded":0,"skipped":2,"failed":[]}` |
@@ -241,11 +241,11 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 ## Errors
 
 `nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `Transport`, `Http`, `Misuse`.
-`Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint — both are covered variant by variant in [errors and exit codes](errors.md).
+`Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint. Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`, `LocalIncomplete`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 
 ## Guarantees
 
 - No protocol logic outside the crate: the CLI is flags and rendering only.
 - Credentials never appear in `Event`s, error messages or `Display` impls.
-- Markers, the write order, the classification and resume follow [the wire protocol](protocol.md) exactly — divergence is a bug.
+- Markers, the write order, the classification and resume follow [the wire protocol](protocol.md) exactly, and any divergence is a bug.

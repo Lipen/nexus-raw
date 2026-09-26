@@ -227,7 +227,7 @@ impl NexusClient {
 
     /// Remote state of a name: HEAD of bytes + GET of sibling (§5.2).
     ///
-    /// A sibling without bytes is ignored — the object is not complete.
+    /// A sibling without bytes is ignored: the object is not complete.
     pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
         let bytes_url = self.object_url(dir, name);
         let Some(size) = self.head(&bytes_url).await? else {
@@ -269,7 +269,7 @@ impl NexusClient {
     ///
     /// `cont == true` and an existing `part` continue from its size through
     /// `Range: bytes=N-`; a server that answers `200` (range ignored) restarts
-    /// from zero, and a `416` (range already satisfied) finalizes the part —
+    /// from zero, and a `416` (range already satisfied) finalizes the part,
     /// the died-between-download-end-and-rename edge.
     /// Verifying the finalized bytes is the caller's duty: `down` digest-checks
     /// against the sibling, the `get` primitive trusts the part.
@@ -332,7 +332,7 @@ impl NexusClient {
                 if status == 416 && prefix > 0 {
                     // The server refuses the range because it is already
                     // satisfied: the part holds the whole object. This is the
-                    // crash-between-download-end-and-rename edge — finalize
+                    // crash-between-download-end-and-rename edge: finalize
                     // the part and let the caller digest-check and rename.
                     let digest =
                         Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));

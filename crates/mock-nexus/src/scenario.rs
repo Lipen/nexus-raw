@@ -265,10 +265,8 @@ fn normalize_path(target: &str) -> String {
 }
 
 /// Parse a `Range` header for resumable GETs.
-/// Only the single open form `bytes=N-` (from byte `N` to the end) is
-/// recognized; anything else — another unit, multiple ranges, the closed
-/// `N-M` or suffix `-N` forms, malformed values — yields `None` and the
-/// response is served in full.
+/// Only the single open form `bytes=N-` (from byte `N` to the end) is recognized.
+/// Anything else, whether another unit, multiple ranges, the closed `N-M` or suffix `-N` forms, or malformed values, yields `None` and the response is served in full.
 fn range_start(header: Option<&str>) -> Option<usize> {
     let value = header?;
     let (unit, spec) = value.split_once('=')?;

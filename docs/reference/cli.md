@@ -1,11 +1,11 @@
 # CLI reference
 
 `nxr` is curl for a Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
-Every invocation is self-sufficient — the URL comes from the command line and credentials from `-u` or the environment.
+Every invocation is self-sufficient: the URL comes from the command line and credentials from `-u` or the environment.
 There is no config file, no profile and no state directory, on purpose: a tool that publishes software must be reproducible from its own command line, and any persistent setting would make two runs of "the same command" different.
 Shell aliases, wrapper scripts and CI variables are the supported way to shorten repeated invocations.
 
-All transcripts on this page are real output — captured against a live Sonatype Nexus Repository, with the deterministic failure mock standing in for scenarios a healthy server cannot produce on demand.
+All transcripts on this page are real output. They were captured against a live Sonatype Nexus Repository, with the deterministic failure mock standing in for scenarios a healthy server cannot produce on demand.
 Hostnames are neutralized.
 Exit codes are quoted as observed.
 
@@ -15,12 +15,12 @@ Three ways to authenticate, in precedence order:
 
 | Source | Form | Use it when |
 |:-------|:-----|:------------|
-| `-u user:pass` | plain `user:pass`, curl style | interactive one-offs — the argument is visible in `ps` |
+| `-u user:pass` | plain `user:pass`, curl style | interactive one-offs (the argument is visible in `ps`) |
 | `NXR_AUTH` | base64 of `user:pass` | CI, where argv must stay clean |
 | `NXR_USERNAME` + `NXR_PASSWORD` | the readable form | CI with masked variables |
 
 `-u` wins over the environment.
-`NXR_USERNAME` and `NXR_PASSWORD` must be set together — exactly one is a usage error, not a silent skip.
+`NXR_USERNAME` and `NXR_PASSWORD` must be set together. Exactly one alone is a usage error instead of a silent skip.
 Credential values never appear in output, logs or `--json` events.
 
 ```bash
@@ -45,7 +45,7 @@ $ echo $?
 
 The base URL is an ordinary argument of every call, normalized for you: `https://host/raw` and `https://host/raw/` are the same directory.
 Only `http`/`https` with a host are accepted.
-To shorten repeated invocations, wrap the whole command — a shell function keeps the URL composition in one place:
+To shorten repeated invocations, wrap the whole command in a shell function that keeps URL composition in one place:
 
 ```bash
 rel() { nxr up "dist/$1/" "https://nexus.example.com/repository/raw-main/$1/"; }
@@ -63,7 +63,7 @@ All flags are global: they may appear before or after the subcommand.
 
 | Flag | Default | Meaning |
 |:-----|:--------|:--------|
-| `-u, --user <USER:PASS>` | env | credentials for this call — beats `NXR_AUTH` and `NXR_USERNAME`/`NXR_PASSWORD` |
+| `-u, --user <USER:PASS>` | env | credentials for this call, takes precedence over `NXR_AUTH` and `NXR_USERNAME`/`NXR_PASSWORD` |
 | `--workers <N>` | `8` | parallel artifact transfers, accepted range `1..=64` |
 | `--retry <N>` | `4` | attempts per HTTP request |
 | `--connect-timeout-secs <N>` | `15` | TCP connect timeout |
@@ -80,12 +80,12 @@ All flags are global: they may appear before or after the subcommand.
 `nxr get <URL> [-o FILE] [--continue]`
 
 GET a URL to a file or stdout.
-Without `-o` the body goes to stdout untouched, in a single attempt — a retry after the body started would duplicate bytes.
+Without `-o` the body goes to stdout untouched, in a single attempt: a retry after the body started would duplicate bytes.
 With `-o` the bytes stream into `<FILE>.part` and are renamed only after the transfer, so a killed run never leaves a half-written file at the target path.
 
 | Flag | Meaning |
 |:-----|:--------|
-| `-o, --out <FILE>` | output file — stdout when omitted |
+| `-o, --out <FILE>` | output file, stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
 
 ```console
@@ -112,8 +112,8 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | body delivered |
-| `2` | misuse — a non-http URL |
-| `3` | 404, auth failure, transport exhaustion — see [errors](errors.md#captured-transcripts) |
+| `2` | misuse: a non-http URL |
+| `3` | 404, auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 Recipes:
 
@@ -125,8 +125,8 @@ nxr get https://nexus.example.com/repository/raw-main/1.4.0/bom/linux-x86_64.jso
 nxr get "$URL/app.zip" -o app.zip --continue
 ```
 
-`--json`: `{"bytes":38,"ok":true,"out":"app.zip","resumed_from":0,"sha256":"54e0bee9…","url":"…"}` — `sha256` is the digest of the written file, `resumed_from` the part offset.
-Without `-o` the stdout body is raw bytes — do not combine it with `--json`.
+`--json`: `{"bytes":38,"ok":true,"out":"app.zip","resumed_from":0,"sha256":"54e0bee9…","url":"…"}`, where `sha256` is the digest of the written file and `resumed_from` the part offset.
+Without `-o` the stdout body is raw bytes. Do not combine it with `--json`.
 
 ### nxr put
 
@@ -154,7 +154,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | bytes (and marker, when asked) stored |
-| `2` | misuse — missing input file |
+| `2` | misuse: missing input file |
 | `3` | auth failure, 5xx after retries, unexpected status |
 
 Recipes:
@@ -167,7 +167,7 @@ nxr put "$BASE/1.4.0/app.zip" -f fixed/app.zip --sha
 nxr put "$BASE/1.4.0/build.log" -f build.log
 ```
 
-`--json`: `{"bytes":15,"marker":"77ce85a7…","ok":true,"url":"…"}` — `marker` is `null` without `--sha`.
+`--json`: `{"bytes":15,"marker":"77ce85a7…","ok":true,"url":"…"}`, where `marker` is `null` without `--sha`.
 
 ### nxr head
 
@@ -189,8 +189,8 @@ $ echo $?
 
 | Exit | When |
 |:----:|:-----|
-| `0` | a status was received — any status, including 401 and 404 |
-| `2` | misuse — a non-http URL |
+| `0` | a status was received: any status, including 401 and 404 |
+| `2` | misuse: a non-http URL |
 | `3` | the connection itself failed |
 
 Recipes:
@@ -203,14 +203,14 @@ test "$(nxr head "$BASE/1.4.0/app.zip" | awk '{print $2}')" = 200
 nxr head "$BASE/1.4.0/app.zip"
 ```
 
-`--json`: `{"content_type":"application/zip","size":38,"status":200,"url":"…"}` — `size` and `content_type` are `null` on non-2xx.
+`--json`: `{"content_type":"application/zip","size":38,"status":200,"url":"…"}`, where `size` and `content_type` are `null` on non-2xx.
 
 ### nxr sha
 
 `nxr sha <FILE|URL>`
 
 The sha256 of a local file or a remote object, streamed.
-Local files never touch the network — the offline test of the digest pipeline.
+Local files never touch the network, which makes this the offline test of the digest pipeline.
 
 ```console
 $ nxr sha dist/1.4.0/app-1.4.0.zip
@@ -224,7 +224,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | digest printed |
-| `2` | misuse — missing local file |
+| `2` | misuse: missing local file |
 | `3` | transport failure on a URL source |
 
 Recipes:
@@ -251,8 +251,8 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|URL\|->` | restrict the transfer to these names — every name must exist locally |
-| `--no-sha` | skip marker generation and marker uploads — bytes only |
+| `--manifest <FILE\|URL\|->` | restrict the transfer to these names, all of which must exist locally |
+| `--no-sha` | skip marker generation and marker uploads, bytes only |
 | `--dry-run` | print the plan without transferring anything |
 
 Markers are on by default, in both directions:
@@ -273,7 +273,7 @@ $ echo $?
 0
 ```
 
-The event stream ends with an `uploaded/downloaded/skipped` line, and the command adds its own `up:` summary — their relative order is not fixed because the renderer is concurrent.
+The event stream ends with an `uploaded/downloaded/skipped` line, and the command adds its own `up:` summary. Their relative order is not fixed because the renderer is concurrent.
 Re-running converges: the plan empties and every name reports `skipped`.
 
 ```console
@@ -288,7 +288,7 @@ $ echo $?
 0
 ```
 
-A new file uploads alone, and `--dry-run` shows the plan of exactly that — every name appears, `skip` or `upload`:
+A new file uploads alone, and `--dry-run` shows the plan of exactly that, with every name marked `skip` or `upload`:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --dry-run
@@ -309,9 +309,9 @@ With `--json` the plan is one object per line:
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, remote converged |
-| `1` | data refusal — `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete` |
-| `2` | misuse — not a directory, empty directory, unsafe name |
-| `3` | transport or auth failure — the `failed:` list names what did not land |
+| `1` | data refusal: `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete` |
+| `2` | misuse: not a directory, empty directory, unsafe name |
+| `3` | transport or auth failure: the `failed:` list names what did not land |
 
 Recipes:
 
@@ -326,13 +326,13 @@ nxr up dist/1.4.0/ "$BASE/1.4.0/" --no-sha
 nxr up "dist/$VERSION/" "$BASE/$VERSION/" --dry-run
 ```
 
-`--json` prints the NDJSON stream: `plan`, `artifact`, optional `retrying`, then `summary` — see [output](#output).
+`--json` prints the NDJSON stream: `plan`, `artifact`, optional `retrying`, then `summary` (see [output](#output)).
 
 ### nxr down
 
 `nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--continue]`
 
-Download a remote directory into a local one — the mirror of `up`.
+Download a remote directory into a local one, the mirror of `up`.
 Every artifact is streamed into a stable part file, hashed on the fly, checked against the remote marker when one exists, then renamed into place and given a local sibling computed from the received bytes.
 
 | Flag | Meaning |
@@ -344,7 +344,7 @@ Every artifact is streamed into a stable part file, hashed on the fly, checked a
 
 `down` must know *what* to fetch, and Nexus raw has no guaranteed directory listing.
 Without flags it tries the recommended convention first: a `manifest.json` at the directory URL.
-If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the three explicit sources — see [the refusal transcript](errors.md#enumeration-refusal-exit-1).
+If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the three explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ \
@@ -387,8 +387,8 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, local copies complete |
-| `1` | data refusal — `cannot enumerate`, `missing`, `mismatch` with the remote sibling |
-| `2` | misuse — unsafe `--name`, unwritable target |
+| `1` | data refusal: `cannot enumerate`, `missing`, `mismatch` with the remote sibling |
+| `2` | misuse: unsafe `--name`, unwritable target |
 | `3` | transport or auth failure |
 
 Recipes:
@@ -413,13 +413,13 @@ A digest disagreement with the remote sibling refuses the download and deletes t
 `nxr ls <URL> [--assets]`
 
 List versions under a repository or group URL, or objects under a directory URL.
-Both go through the Nexus search API — **experimental**, and behavior depends on the server release.
+Both go through the Nexus search API. This path is **experimental**, and behavior depends on the server release.
 
 | Flag | Meaning |
 |:-----|:--------|
 | `--assets` | list the object names under a directory URL instead of versions |
 
-At a repository root the command lists the first path segment of every indexed asset — on a well-formed store that is the version directory.
+At a repository root the command lists the first path segment of every indexed asset, which on a well-formed store is the version directory.
 Loose files at the root appear as names too, which this live capture shows plainly:
 
 ```console
@@ -435,15 +435,15 @@ $ echo $?
 0
 ```
 
-Measured caveat from the same live server: for a *group* URL the search request filters by `group`, and on this Nexus release that parameter matches Maven coordinates, not raw path prefixes — so a group-scoped `ls` returns an empty list with exit 0.
-Treat `ls` as a convenience, never as the plan of record — `down` takes its names from manifests, not from listings.
+Measured caveat from the same live server: for a *group* URL the search request filters by `group`, and on this Nexus release that parameter matches Maven coordinates rather than raw path prefixes. A group-scoped `ls` therefore returns an empty list with exit 0.
+Treat `ls` as a convenience only. `down` takes its names from manifests instead of from listings.
 The exact enumeration guarantees live in [the protocol page](protocol.md#enumeration).
 
 | Exit | When |
 |:----:|:-----|
-| `0` | the search endpoint answered — including an empty result |
+| `0` | the search endpoint answered (including an empty result) |
 | `1` | the search endpoint answered 404 (`cannot enumerate`) |
-| `2` | misuse — a non-http URL |
+| `2` | misuse: a non-http URL |
 | `3` | transport or auth failure |
 
 Recipes:
@@ -464,7 +464,7 @@ nxr ls "$BASE/1.4.0/" --assets
 
 `nxr channel get <URL>`
 
-Print the token of a channel ref — a file at any name whose content is one version token.
+Print the token of a channel ref, a file at any name whose content is one version token.
 
 ```console
 $ nxr channel get https://nexus.example.com/repository/raw-main/stable
@@ -477,13 +477,13 @@ $ echo $?
 0
 ```
 
-The second call ran after `channel set` wrote `1.4.0` — the sequence continues in the next section.
-An unset channel is exit 0 with the word `unset` — absence is an answer, not a failure.
+The second call ran after `channel set` wrote `1.4.0`, and the sequence continues in the next section.
+An unset channel is exit 0 with the word `unset`: absence is an answer, not a failure.
 
 | Exit | When |
 |:----:|:-----|
 | `0` | token printed, or `unset` on 404 |
-| `2` | misuse — a non-http URL |
+| `2` | misuse: a non-http URL |
 | `3` | transport failure other than 404 |
 
 Recipes:
@@ -496,14 +496,14 @@ nxr channel get "$BASE/stable"
 test "$(nxr channel get "$BASE/stable")" != unset
 ```
 
-`--json`: `{"token":"1.10.1","url":"…"}` — `token` is `null` when unset, exit 0 either way.
+`--json`: `{"token":"1.10.1","url":"…"}`, with `token` `null` when unset and exit 0 either way.
 
 ### nxr channel set
 
 `nxr channel set <URL> <TOKEN> [--if-forward]`
 
 Write the token.
-`latest`, `nightly`, `stable`, `prod` — a channel is any name, `nxr` has no reserved list.
+A channel is any name, so `latest`, `nightly`, `stable` and `prod` all work, and `nxr` has no reserved list.
 
 | Flag | Meaning |
 |:-----|:--------|
@@ -523,12 +523,12 @@ $ echo $?
 ```
 
 A kept channel is exit 0: the guard did its job.
-The comparison is dotted-numeric, so `1.10.0` is forward of `1.9.9` and a release beats its own `rc1` — the full rules live in [the protocol page](protocol.md#channel-ref).
+The comparison is dotted-numeric, so `1.10.0` is forward of `1.9.9` and a release beats its own `rc1` (the full rules live in [the protocol page](protocol.md#channel-ref)).
 
 | Exit | When |
 |:----:|:-----|
 | `0` | written, or kept by the guard |
-| `2` | misuse — a token that is not one non-empty line |
+| `2` | misuse: a token that is not one non-empty line |
 | `3` | transport or auth failure |
 
 Recipes:
@@ -548,7 +548,7 @@ nxr channel set "$BASE/nightly" "$(date +%Y.%m.%d)"
 `nxr verify <DIR> [--manifest FILE|-]`
 
 Check local bytes, markers and digests.
-No network — the run is entirely offline.
+No network: the run is entirely offline.
 
 | Flag | Meaning |
 |:-----|:--------|
@@ -574,8 +574,8 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | every checked name is complete |
-| `1` | at least one name is `Incomplete` — the error line names them |
-| `2` | misuse — the directory does not exist, or the manifest is unreadable |
+| `1` | at least one name is `Incomplete`, and the error line names them |
+| `2` | misuse: the directory does not exist, or the manifest is unreadable |
 
 Recipes:
 
@@ -607,7 +607,7 @@ $ echo $?
 2
 ```
 
-A failed probe is transport, not misuse:
+A probe that cannot connect is a transport failure:
 
 ```console
 $ nxr doctor https://nexus.example.com/repository/raw-main/
@@ -627,7 +627,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | all checks passed |
-| `2` | a local gap — for example no credentials anywhere |
+| `2` | a local gap, for example no credentials anywhere |
 | `3` | the probe could not reach the server |
 
 Recipes:
@@ -647,9 +647,9 @@ Human output goes to stdout, errors and `hint:` lines to stderr.
 
 - primitives (`get` with `-o`, `put`, `head`, `sha`) and `channel` print **one JSON object**.
 - transfers (`up`, `down`) and `verify` print an **NDJSON event stream** (`plan`, `artifact`, `retrying`, `summary`).
-- the body of `get` without `-o` is raw bytes on stdout — do not mix it with `--json`.
+- the body of `get` without `-o` is raw bytes on stdout, so do not mix it with `--json`.
 
-The NDJSON shapes are fixed by golden tests in the core crate — the same `Event::to_json()` the Rust API emits, documented variant by variant in [the API page](api.md#events).
+The NDJSON shapes are fixed by golden tests in the core crate, and they are the same `Event::to_json()` output the Rust API emits, documented variant by variant in [the API page](api.md#events).
 A captured stream:
 
 ```json
@@ -680,7 +680,7 @@ uploaded 0, downloaded 0, skipped 4
 
 ## Exit codes
 
-Four codes cover every failure, and the mapping from error to code has one home — [`Error::exit_code`](errors.md#the-taxonomy).
+Four codes cover every failure, and the mapping from error to code has one home, [`Error::exit_code`](errors.md#the-taxonomy).
 
 | Code | Class | Representative causes | Commands that hit it |
 |:----:|:------|:----------------------|:---------------------|
@@ -690,7 +690,7 @@ Four codes cover every failure, and the mapping from error to code has one home 
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, 404 and other unexpected statuses | all except `verify` |
 
 `verify` is offline and cannot produce `3`.
-`head` reports statuses as results and exits `0` on any answer — only a dead connection gives `3`.
+`head` reports statuses as results and exits `0` on any answer. Only a dead connection gives `3`.
 Every error also prints a `hint:` line on stderr: the full [taxonomy with hints](errors.md) and the [incident playbook](../how-to/troubleshoot.md) cover what to do next.
 
 Where to go from here:

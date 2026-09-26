@@ -8,7 +8,7 @@ The taxonomy has nine variants and four exit codes, and the mapping between them
 
 The variant set mirrors the error enum, fields included.
 Wrappers can construct and match them, because the fields are public.
-The hint column quotes `Error::hint()` verbatim — the same string the CLI prints and JSON wrappers receive in the `hint` field.
+The hint column quotes `Error::hint()` verbatim, the same string the CLI prints and JSON wrappers receive in the `hint` field.
 
 | Variant | Meaning | Exit | Hint (verbatim) | Typical cause | Fix |
 |:--------|:--------|:----:|:----------------|:--------------|:----|
@@ -19,9 +19,9 @@ The hint column quotes `Error::hint()` verbatim — the same string the CLI prin
 | `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix | rename the file so every segment matches `[A-Za-z0-9._-]+` |
 | `Misuse(String)` | bad flags, missing file or directory, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch | fix the command line or the environment |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt | resolve credentials via `-u`, `NXR_AUTH` or `NXR_USERNAME`+`NXR_PASSWORD` |
-| `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body | check the network and rerun — resume is free |
+| `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body | check the network and rerun, because resume is free |
 | `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published | check the URL and the published layout |
-| `Http { status, url }` | any other unexpected status | 3 | *(no hint — the status itself is the message)* | a proxy answered 429, or the path hit a non-artifact route | read the status, then check the URL and server state |
+| `Http { status, url }` | any other unexpected status | 3 | *(no hint: the status itself is the message)* | a proxy answered 429, or the path hit a non-artifact route | read the status, then check the URL and server state |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken pipe.
 The same classes appear in the [CLI exit code table](cli.md#exit-codes) and in `Error::exit_code()` for API wrappers.
@@ -29,7 +29,7 @@ The same classes appear in the [CLI exit code table](cli.md#exit-codes) and in `
 ## Message anatomy
 
 All failures go to stderr in one shape: an `error:` line, then an optional `hint:` line.
-This refusal was captured live — a sibling that no longer matches its bytes stops the run before any byte moves.
+This refusal was captured live. A sibling that no longer matches its bytes stops the run before any byte moves.
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --dry-run
@@ -39,19 +39,19 @@ $ echo $?
 1
 ```
 
-- `error:` — every failure starts with this prefix on stderr.
-- the kind — `mismatch`, `missing`, `cannot enumerate`, `unsafe name`, `transport`, …
-- the detail — names, digests, URLs, the server's own reason.
-- `hint:` — the next thing to check, one line.
+- `error:`, the prefix every failure starts with on stderr.
+- the kind, one of `mismatch`, `missing`, `cannot enumerate`, `unsafe name`, `transport`, …
+- the detail, such as names, digests, URLs or the server's own reason.
+- `hint:`, the next thing to check, one line.
 
 The only errors without a hint are `Http` statuses other than 404.
 
 ## Captured transcripts
 
-Each transcript below was produced by a real `nxr` run — most against a live Sonatype Nexus Repository, the connection-reset, stall and foreign-sibling scenarios against the deterministic failure mock.
+Each transcript below was produced by a real `nxr` run: most against a live Sonatype Nexus Repository, and the connection-reset, stall and foreign-sibling scenarios against the deterministic failure mock.
 The hostnames are neutralized, the messages and exit codes are verbatim.
 
-### Auth failure — exit 3
+### Auth failure (exit 3)
 
 Wrong credentials against a repository that requires auth.
 The `Auth` variant's message already carries the remedy.
@@ -66,7 +66,7 @@ $ echo $?
 
 Missing credentials fail identically, because anonymous access earns the same 401.
 
-### Not found — exit 3
+### Not found (exit 3)
 
 A 404 becomes `Http { status: 404 }` with its own hint.
 `head` is the exception: it reports any status as a result and exits 0.
@@ -82,7 +82,7 @@ $ echo $?
 ### Enumeration refusal (exit 1)
 
 `down` refuses to guess what to fetch.
-Nexus raw has no guaranteed directory listing, so a missing source is a data refusal, not a network error.
+Nexus raw has no guaranteed directory listing, so a missing source is a data refusal instead of a network error.
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
@@ -92,7 +92,7 @@ $ echo $?
 1
 ```
 
-### Misuse — exit 2
+### Misuse (exit 2)
 
 Half-set environment credentials are an invocation error, never a silent anonymous call.
 
@@ -114,7 +114,7 @@ $ echo $?
 2
 ```
 
-### Missing name — exit 1
+### Missing name (exit 1)
 
 A name that exists on neither side is collected and refused before any transfer.
 
@@ -126,7 +126,7 @@ $ echo $?
 1
 ```
 
-### Unsafe name — exit 2
+### Unsafe name (exit 2)
 
 The grammar rejects the file before anything is hashed or sent.
 
@@ -138,7 +138,7 @@ $ echo $?
 2
 ```
 
-### Transport — exit 3
+### Transport (exit 3)
 
 Two flavors from a connection that resets before answering and a body that stops mid-flight.
 
@@ -155,7 +155,7 @@ $ echo $?
 3
 ```
 
-### Foreign sibling — exit 1
+### Foreign sibling (exit 1)
 
 A remote sibling whose digest cannot belong to the bytes is never overwritten.
 The per-name failure is collected in the summary, then the run refuses.
@@ -171,7 +171,7 @@ $ echo $?
 1
 ```
 
-### Incomplete at verify — exit 1
+### Incomplete at verify (exit 1)
 
 `verify` is offline, so every data problem it finds is `Incomplete`.
 
@@ -190,7 +190,7 @@ $ echo $?
 | `0` | ok | the transfer converged, the check passed, or `head` reported a status | continue the pipeline |
 | `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate` | stop and show stderr to a human |
 | `2` | misuse | bad flags, unsafe names, half-set credentials, missing local paths | fix the invocation and rerun |
-| `3` | transport | auth failures, connection resets, stalls, 5xx after retries, unexpected statuses | retry later — resume makes reruns cheap |
+| `3` | transport | auth failures, connection resets, stalls, 5xx after retries, unexpected statuses | retry later, because resume makes reruns cheap |
 
 `doctor` reuses the same classes: a local gap such as missing credentials exits `2`, a failed reachability probe exits `3`.
 
@@ -198,12 +198,12 @@ $ echo $?
 
 `Mismatch`, `Incomplete` and `Missing` are refusals, not failed attempts.
 `nxr` never overwrites a diverging completed artifact, never shadows a remote-only name with `up`, and never writes bytes that failed their digest check.
-Recovery is always a decision — fix or delete a copy, republish under a new name — never a retry.
+Recovery is always a decision (fix or delete a copy, or republish under a new name) and never a retry.
 The classification that produces these verdicts is specified in [the symmetric diff](protocol.md#the-symmetric-diff).
 
 ## In NDJSON
 
-Transfer-level failures surface in the summary's `failed` list and in `retrying` events, not as separate error objects.
+Transfer-level failures surface in the summary's `failed` list and in `retrying` events rather than as separate error objects.
 
 ```json
 {"attempt":2,"event":"retrying","name":"app.zip","reason":"transport: …: HTTP 503"}
@@ -218,7 +218,7 @@ The `error:` and `hint:` lines still go to stderr, and the process exit code sti
 ## In the Rust API
 
 The taxonomy is `nexus_raw_core::Error`.
-`Error::exit_code()` is the single mapping from variant to class, and `Error::hint()` returns the hint string — wrappers call these instead of re-deriving either.
+`Error::exit_code()` is the single mapping from variant to class, and `Error::hint()` returns the hint string. Wrappers call these instead of re-deriving either.
 
 ```rust
 match nxr.up(dir, None, true, None).await {
@@ -228,7 +228,7 @@ match nxr.up(dir, None, true, None).await {
 }
 ```
 
-The diff refusals are a separate type, `nexus_raw_core::Verdict`, which converts into `Error` with `From` — a refused plan and a refused transfer look identical to a caller.
+The diff refusals are a separate type, `nexus_raw_core::Verdict`, which converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 See [the Rust API page](api.md#errors) for the full picture.
 
 ## Where to go next

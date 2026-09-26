@@ -7,20 +7,20 @@
 //! ## Layers
 //!
 //! - **L0 transport + primitives**: [`transport`] (retries, stall, TLS, auth)
-//!   and [`primitive`] (`get`/`put`/`head`/`sha`) — curl-grade, no verification.
-//! - **L1 transfer**: [`sync`] — directory up/down with the symmetric diff,
+//!   and [`primitive`] (`get`/`put`/`head`/`sha`), curl-grade, no verification.
+//! - **L1 transfer**: [`sync`], directory up/down with the symmetric diff,
 //!   sha-sibling markers, parallel workers and Range-resume (`.part` files).
-//! - **L2 layout helpers**: [`layout`] — channels (token refs with any name),
+//! - **L2 layout helpers**: [`layout`], channels (token refs with any name),
 //!   manifests (the enumeration source for down), search-based listings.
 //! - **L3 UX** lives in the CLI: doctor, logs, hints, NDJSON.
 //!
 //! ## The shape of a store
 //!
 //! ```text
-//! <base>/<name>            — artifact bytes
-//! <base>/<name>.sha256     — sha-sibling: "<hex>  <name>\n" (sha256sum -c)
-//! <base>/manifest.json     — conventional name list (enumeration for down)
-//! <channel-url>            — a token file: "<token>\n", any name
+//! <base>/<name>             artifact bytes
+//! <base>/<name>.sha256      sha-sibling: "<hex>  <name>\n" (sha256sum -c)
+//! <base>/manifest.json      conventional name list (enumeration for down)
+//! <channel-url>             a token file: "<token>\n", any name
 //! ```
 //!
 //! A name is complete = bytes + sibling with a matching digest.
@@ -33,8 +33,8 @@
 //! `down` requires an enumeration source: a manifest, explicit names,
 //! or the best-effort search API.
 //!
-//! Errors: [`Error`] with [`Error::exit_code`] — 0 ok, 1 data, 2 misuse,
-//! 3 transport — and [`Error::hint`], the human hint the CLI renders.
+//! Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse,
+//! 3 transport) and [`Error::hint`], the human hint the CLI renders.
 
 pub mod config;
 pub mod creds;

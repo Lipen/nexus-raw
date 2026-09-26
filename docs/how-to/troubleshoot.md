@@ -1,7 +1,7 @@
 # When it breaks
 
 Every failure has a name, an exit code and a hint.
-Find yours in the tables, fix the cause, repeat the command — resume and re-runs are free by design.
+Find yours in the tables, fix the cause, repeat the command. Resume and re-runs are free by design.
 
 ## Anatomy of a failure
 
@@ -13,7 +13,7 @@ hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a d
 
 Three lines, three jobs.
 The `error:` line starts with the error *kind* and names the artifact and both sides of the disagreement.
-The `hint:` line names the next check — the same text travels in the `hint` field of `--json` output.
+The `hint:` line names the next check. The same text travels in the `hint` field of `--json` output.
 The process exit code separates data problems from transport trouble.
 
 ## Exit codes: cause and fix
@@ -22,20 +22,20 @@ The process exit code separates data problems from transport trouble.
 |:-----|:-----|:------|:----|
 | `0` | ok | transferred, converged or verified | carry on |
 | `1` | `mismatch` | two sides disagree about a name's content | nobody overwrites: rebuild, or republish under a new version directory |
-| `1` | `incomplete` | local copies unfinished at `verify` | rebuild — the list names the offenders |
+| `1` | `incomplete` | local copies unfinished at `verify` | rebuild (the list names the offenders) |
 | `1` | `missing` | a requested name exists nowhere | check spelling, the manifest and the version directory |
 | `1` | `cannot enumerate` | `down` has no name list | ship `manifest.json`, or pass `--manifest` / `--name` / `--ls` |
 | `2` | `unsafe name` | a name fails the grammar | rename the artifact |
 | `2` | `misuse` | bad flags, missing directory, half-set credentials | fix the invocation |
 | `3` | `auth` | 401/403 or missing credentials | check `NXR_AUTH` / `NXR_USERNAME` + `NXR_PASSWORD`, or pass `-u` |
-| `3` | `transport` | network, TLS, stall — retries exhausted | repeat the command later, resume is free |
+| `3` | `transport` | network, TLS or stall, with retries exhausted | repeat the command later, resume is free |
 | `3` | `http <status>` | an unexpected response | read the status: 404 is a wrong path, 429 is a rate limit |
 
 Full taxonomy with every field: [errors and exit codes](../reference/errors.md).
 
 ## The four states of an object
 
-Every name — local or on the server — is in exactly one of four states.
+Every name, local or on the server, is in exactly one of four states.
 `up` and `down` diff the two sides state by state, and the refusals fall out of the diff:
 
 ```mermaid
@@ -51,7 +51,7 @@ stateDiagram-v2
 ```
 
 `Complete` means bytes plus a sibling whose digest matches.
-`Markerless` means bytes only — normal mid-transfer, suspicious when a run finished.
+`Markerless` means bytes only, normal mid-transfer but suspicious when a run finished.
 `Broken` means bytes and marker disagree, and `nxr` will not "fix" it by overwriting: the next `up` or `down` refuses with `mismatch` until a human deletes or repairs one side.
 `Absent` means no bytes, and a marker without bytes reads as `Absent`.
 
@@ -67,7 +67,7 @@ error: mismatch: pinned.xml: local object is broken and must not be overwritten:
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
-The same name holds two different artifacts on the two sides — for example a rebuild published into a version directory that was already used:
+The same name holds two different artifacts on the two sides, for example a rebuild published into a version directory that was already used:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
@@ -89,7 +89,7 @@ $ timeout 4 nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.
 killed, timeout exit=124
 ```
 
-Nothing partial ever hides under the real name — everything fetched so far sits in `app.zip.part`.
+Nothing partial ever hides under the real name. Everything fetched so far sits in `app.zip.part`.
 Repeat the command with `--continue` and the transfer resumes through a `Range: bytes=N-` request instead of starting over:
 
 ```console
@@ -98,10 +98,10 @@ get: 3000000 bytes → app.zip (resumed from 917504)
 ```
 
 The `(resumed from …)` figure is the part-file size the server was asked to continue from.
-For a whole directory the same story runs through `down --continue` — see [the tour](../get-started.md#break-it-on-purpose) for the part-file anatomy.
+For a whole directory the same story runs through `down --continue` (see [the tour](../get-started.md#break-it-on-purpose) for the part-file anatomy).
 
 A killed `up` leaves the server with whatever completed: some names `Complete`, the name in flight `Markerless` or `Absent`.
-No repair mode exists because none is needed — repeat the same command and the diff re-sends exactly the unfinished names:
+No repair mode exists because none is needed. Repeat the same command and the diff re-sends exactly the unfinished names:
 
 ```console
 $ curl -T app-1.4.0.zip https://nexus.example.com/repository/raw-main/half/1.0.0/app-1.4.0.zip   # (1)!
@@ -117,7 +117,7 @@ up: 4 sent, 0 fetched, 0 skipped
 
 1. Someone crashed here earlier: the archive is on the server, its marker is not.
 
-The pre-existing bytes are not skipped as "good enough" — a `Markerless` remote name is re-sent complete with its marker, because an unverifiable object is not done.
+The pre-existing bytes are not skipped as "good enough": a `Markerless` remote name is re-sent complete with its marker, because an unverifiable object is not done.
 
 ## `down` refuses with "cannot enumerate"
 
@@ -131,7 +131,7 @@ hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server h
 
 Three ways out, in order of preference:
 
-1. publish a `manifest.json` into the version directory (see [publish](publish.md#ship-a-manifest-for-consumers)) — then plain `nxr down <ver-url>/ dst/` works.
+1. publish a `manifest.json` into the version directory (see [publish](publish.md#ship-a-manifest-for-consumers)), and plain `nxr down <ver-url>/ dst/` works.
 2. pass the names: `--manifest <file|url|->` or repeatable `--name`.
 3. `--ls` for a best-effort walk through the server search API, which depends on the server release.
 
@@ -150,7 +150,7 @@ error: auth: https://nexus.example.com/repository/raw-main/authchk/pinned.xml: H
 hint: pass -u user:pass or export NXR_AUTH (base64 user:pass)
 ```
 
-`nxr doctor <url>` separates *no credentials* from *rejected credentials* without printing secrets — see [check the setup before the run](ci.md#check-the-setup-before-the-run).
+`nxr doctor <url>` separates *no credentials* from *rejected credentials* without printing secrets (see [check the setup before the run](ci.md#check-the-setup-before-the-run)).
 
 ## Transport trouble
 
@@ -166,7 +166,7 @@ hint: check the network; transfers are resumable, rerunning is safe
 With the default `--retry 4` the same blips are absorbed and surface as `retrying` events under `--json`.
 Repeat the command when you see exit 3: finished names are skipped, part files resume, nothing starts from zero.
 
-A server-side rate limit looks like this — note the plan succeeded and the writes failed:
+A server-side rate limit looks like this. Note the plan succeeded and the writes failed:
 
 ```console
 $ nxr up dist/1.3.0/ https://nexus.example.com/repository/raw-main/1.3.0/
@@ -206,13 +206,13 @@ For a test server with a self-signed certificate, switch it off per call instead
 nxr --tls-insecure ls https://localhost:8443/repository/raw-dev/
 ```
 
-`nxr doctor` reports the switch loudly — verification OFF is a deliberate choice, fine for a local mock, dangerous beyond it.
+`nxr doctor` reports the switch loudly: verification OFF is a deliberate choice, fine for a local mock, dangerous beyond it.
 
 ## Debugging aids
 
-- `nxr doctor [URL]` — credentials, TLS, settings, reachability, without printing secrets.
-- `-v` — transfer starts, plan names, retry attempts with reasons.
-- `--json` — every event as NDJSON, ready to pipe to `jq`.
+- `nxr doctor [URL]`: credentials, TLS, settings, reachability, without printing secrets.
+- `-v`: transfer starts, plan names, retry attempts with reasons.
+- `--json`: every event as NDJSON, ready to pipe to `jq`.
 
 The repository ships a mock server that replays failure modes deterministically, so you can rehearse all of the above offline:
 

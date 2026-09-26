@@ -1,12 +1,12 @@
 # Get started
 
 One binary, five minutes, a throwaway server: prepare a version directory, publish it, name it, consume it, break it and recover.
-No Nexus installation is needed — the repository ships a mock server that speaks the same protocol.
+No Nexus installation is needed: the repository ships a mock server that speaks the same protocol.
 
 ## Prerequisites
 
-- Rust 1.85+ through `rustup` — the only hard requirement.
-- `just` — optional, it only wraps the recipes below.
+- Rust 1.85+ through `rustup`, the only hard requirement.
+- `just` is optional and only wraps the recipes below.
 
 ## Install
 
@@ -57,7 +57,7 @@ dist/1.4.0/
 ```
 
 1. The enumeration source for consumers.
-   Without it, `down` needs `--manifest`, `--name` or `--ls` — you will trigger that refusal later in this tour.
+   Without it, `down` needs `--manifest`, `--name` or `--ls`, a refusal you will trigger later in this tour.
 
 ```bash
 nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/   # (1)!
@@ -85,7 +85,7 @@ $ cat dist/1.4.0/app-1.4.0.zip.sha256
 58e575b66d6c9388e63409246633bac6ecd070229fc1743b350b52436004a09a  app-1.4.0.zip
 ```
 
-Run the same command again — the server already holds byte-identical copies with equal markers, so nothing transfers:
+Run the same command again and nothing transfers, because the server already holds byte-identical copies with equal markers:
 
 ```console
 $ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
@@ -102,7 +102,7 @@ A publishing job can be retried blindly: finished names are skipped, missing one
 
 ## Name the version
 
-A channel is a token file at any URL — `latest` is just the most common name.
+A channel is a token file at any URL. `latest` is just the most common name.
 `--if-forward` compares tokens in dotted-numeric version order, so an older token never replaces a newer one:
 
 ```console
@@ -167,7 +167,7 @@ $ ls -A vendor/resume/
 
 Two names finished, and the third died as a hidden part file (`.nxr-part-<hash>`).
 A partially fetched name never reaches its final path, so the directory holds no half-truths.
-Repeat the command with `--continue` — the finished names are skipped and the part file is picked up through a `Range: bytes=N-` request:
+Repeat the command with `--continue`. Finished names are skipped, and the part file is picked up through a `Range: bytes=N-` request:
 
 ```console
 $ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/ --continue
@@ -182,7 +182,7 @@ The part file is gone, `app-1.4.0.zip` is complete, and `nxr verify vendor/resum
 
 ## Next steps
 
-- Producers: [publish a version](how-to/publish.md) — markers, refusals, channels and a nightly pattern against a real server.
-- Consumers: [consume artifacts](how-to/consume.md) — enumeration sources, subsets and offline verification.
-- Pipelines: [use in CI](how-to/ci.md) — NDJSON events, exit codes and masked credentials.
+- For producers, [publish a version](how-to/publish.md) shows markers, refusals, channels and a nightly pattern against a real server.
+- For consumers, [consume artifacts](how-to/consume.md) covers enumeration sources, subsets and offline verification.
+- For pipelines, [use in CI](how-to/ci.md) shows NDJSON events, exit codes and masked credentials.
 - Every flag of every command: [CLI reference](reference/cli.md).

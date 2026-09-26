@@ -3,17 +3,17 @@
 <img src="assets/nxr.svg" width="120" align="right" alt="The nxr logo" />
 
 <p style="font-size:1.05em">
-<code>nxr</code> is curl for a Sonatype Nexus raw repository: HTTP-grade primitives with retries, stall detection and TLS on, verified directory transfers on top, channel refs and manifests above those — one static binary, zero config files.
+<code>nxr</code> is curl for a Sonatype Nexus raw repository: HTTP-grade primitives with retries, stall detection and TLS on, verified directory transfers on top, channel refs and manifests above those: one static binary, zero config files.
 </p>
 
 <div class="grid cards" markdown>
 
-- :material-curling: **Primitives** — `get`, `put`, `head`, `sha`: every call self-sufficient, URL in argv, credentials from `-u` or the environment.
-- :material-upload: **Publish** — `up` pushes a whole directory: markers generated and checked by default, bytes and siblings in parallel workers.
-- :material-download: **Consume** — `down` fetches exactly the enumerated names, hashes on the fly, resumes part files with `Range: bytes=N-`.
-- :material-shield-check: **Trustworthy completion** — an artifact counts as done only with its `<name>.sha256` marker in `sha256sum -c` format, and divergent artifacts are never overwritten.
-- :material-code-json: **Scriptable** — `--json` for one-object commands and NDJSON event streams, exit codes split data problems from transport trouble, and every error carries a `hint:`.
-- :material-language-rust: **Embeddable** — the `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
+- :material-curling: **Primitives**: `get`, `put`, `head`, `sha`. Every call is self-sufficient, with the URL in argv and credentials from `-u` or the environment.
+- :material-upload: **Publish**: `up` pushes a whole directory, markers generated and checked by default, bytes and siblings in parallel workers.
+- :material-download: **Consume**: `down` fetches exactly the enumerated names, hashes on the fly, and resumes part files with `Range: bytes=N-`.
+- :material-shield-check: **Trustworthy completion**: an artifact counts as done only with its `<name>.sha256` marker in `sha256sum -c` format, and divergent artifacts are never overwritten.
+- :material-code-json: **Scriptable**: `--json` for one-object commands and NDJSON event streams, exit codes that split data problems from transport trouble, and a `hint:` on every error.
+- :material-language-rust: **Embeddable**: the `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
 
 </div>
 
@@ -24,7 +24,7 @@
 ## The 30-second version
 
 The transcript above is real output, verbatim.
-Publish a version directory — markers included, re-runs free:
+Publish a version directory, markers included and re-runs free:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
@@ -67,7 +67,7 @@ $ curl -f --connect-timeout 15 --speed-limit 1 --speed-time 30 -o "$tmp" "$url" 
 ```
 
 `nxr` is that script, minus the prayer.
-The full concern-by-concern comparison lives in [the design essay](explanation/design.md#the-curl-model); the three lines that sell it:
+The full concern-by-concern comparison lives in [the design essay](explanation/design.md#the-curl-model). The three lines that sell it:
 
 | Concern | The hand-rolled script | `nxr` |
 | :-- | :-- | :-- |
@@ -76,7 +76,7 @@ The full concern-by-concern comparison lives in [the design essay](explanation/d
 | Re-running | re-downloads everything | diffs first, transfers only what is missing |
 
 The script also has one bug class `nxr` refuses to inherit: it overwrites whatever is at the destination, including an artifact that diverged from the server.
-A divergence is a human decision — the transfer stops with exit 1 instead of picking a winner.
+A divergence is a human decision: the transfer stops with exit 1 instead of picking a winner.
 
 ## Where to go
 

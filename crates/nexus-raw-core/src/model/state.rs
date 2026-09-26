@@ -30,7 +30,7 @@ pub enum RemoteStatus {
         size: Option<u64>,
     },
     Absent,
-    /// sibling present but unparseable — a foreign object (§5.1: always refused).
+    /// sibling present but unparseable, a foreign object (§5.1: always refused).
     Broken(String),
 }
 

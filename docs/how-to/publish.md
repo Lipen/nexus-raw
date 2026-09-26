@@ -1,6 +1,6 @@
 # Publish a version
 
-The producer side, end to end: take a build directory from *nothing on the server* to *published, named and re-runnable* — on a real Sonatype Nexus with authentication on.
+The producer side, end to end: take a build directory from *nothing on the server* to *published, named and re-runnable*, on a real Sonatype Nexus with authentication on.
 
 The scenario behind every transcript here: a release directory `1.4.0/` with an application archive, a bill of materials and a pin file, going to the `raw-main` repository.
 
@@ -32,7 +32,7 @@ dist/1.4.0/
 ```
 
 Every relative path under the directory is an artifact name.
-Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved — `latest`, `nightly` and `claim.json` are ordinary names if your convention uses them.
+Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved: `latest`, `nightly` and `claim.json` are ordinary names if your convention uses them.
 Before anything touches the network, every local file is classified against its sibling marker (see [the object states](troubleshoot.md#the-four-states-of-an-object)).
 
 ## Look before you leap: the dry run
@@ -47,7 +47,7 @@ upload manifest.json
 upload pinned.xml
 ```
 
-The plan lists artifact names, not marker uploads — each name carries its marker along automatically.
+The plan lists artifact names, not marker uploads, because each name carries its marker along automatically.
 
 ## Publish
 
@@ -85,7 +85,7 @@ sequenceDiagram
     note over W: markerless on the server? the next up fills exactly this gap
 ```
 
-A crash between the two PUTs leaves the object with bytes but no marker — obviously unfinished, and the next `up` repairs exactly that.
+A crash between the two PUTs leaves the object with bytes but no marker, obviously unfinished. The next `up` repairs exactly that.
 [When it breaks](troubleshoot.md#interrupted-transfers) shows the repair.
 
 Re-run the same command and the second transfer is free:
@@ -112,7 +112,7 @@ uploaded 0, downloaded 0, skipped 4
 | Use it for | anything a human or a pipeline will consume | scratch data nobody verifies |
 
 A hand-written marker is welcome: if the sibling exists locally, `up` checks it against the bytes and refuses on disagreement instead of quietly "fixing" it.
-On the server, the marker is an ordinary object — 80 bytes of `digest  name`, served as `text/plain`:
+On the server, the marker is an ordinary object, 80 bytes of `digest  name` served as `text/plain`:
 
 ```console
 $ nxr head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip.sha256
@@ -128,7 +128,7 @@ head: 200 80 text/plain
 
 Two situations stop the run before a single byte moves, because continuing would overwrite something:
 
-A local file disagrees with its own marker — the bytes drifted after the marker was written:
+A local file disagrees with its own marker because the bytes drifted after the marker was written:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
@@ -136,7 +136,7 @@ error: mismatch: pinned.xml: local object is broken and must not be overwritten:
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
-A local copy is complete and valid, but the server already holds a *different* complete object under the same name — a rebuild with different flags, published twice into one version:
+A local copy is complete and valid, but the server already holds a *different* complete object under the same name, for example a rebuild with different flags published twice into one version:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
@@ -145,7 +145,7 @@ hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a d
 ```
 
 Both refuse with exit 1.
-Fix the cause — rebuild, or republish under a new version directory — and run again.
+Fix the cause (rebuild, or republish under a new version directory) and run again.
 `nxr` never deletes and never overwrites a diverging object.
 
 ## Restrict the transfer with a manifest
@@ -157,7 +157,7 @@ echo '{"artifacts": ["app-1.4.0.zip", "pinned.xml"]}' \
   | nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --manifest -   # (1)!
 ```
 
-1. Everything listed must exist locally — one ghost name refuses the whole run:
+1. Everything listed must exist locally, and one ghost name refuses the whole run:
 
     ```console
     $ echo '{"artifacts": ["app-1.4.0.zip", "ghost.zip"]}' | nxr up … --manifest -
@@ -176,11 +176,11 @@ A `manifest.json` in the version directory is what lets consumers run `down` wit
 {"artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json", "pinned.xml"]}
 ```
 
-Keep the file in the version directory before uploading — `up` ships it like any artifact, marker included.
+Keep the file in the version directory before uploading. `up` ships it like any artifact, marker included.
 `down` reads it as the enumeration source and fetches the listed names.
 It does not pull `manifest.json` itself into the target directory.
 
-Without it, consumers must pass `--manifest`, `--name` or `--ls` — see the decision table in [consume artifacts](consume.md#choosing-an-enumeration-source).
+Without it, consumers must pass `--manifest`, `--name` or `--ls` (see the decision table in [consume artifacts](consume.md#choosing-an-enumeration-source)).
 
 ## Name the version with a channel
 
@@ -203,7 +203,7 @@ $ nxr channel get …/raw-main/latest
 ```
 
 The `kept` line is the rollback guard: a late CI job running an older branch cannot roll `latest` back.
-Drop `--if-forward` only when you really mean to force the token — the `nightly` channel is the usual place where that is true.
+Drop `--if-forward` only when you really mean to force the token. The `nightly` channel is the usual place where that is true.
 
 ## A nightly pattern
 
@@ -220,7 +220,7 @@ nxr channel set "$BASE/nightly" "$V"          # (2)!
 1. No marker step: `up` generates and uploads the `.sha256` siblings itself.
 2. No `--if-forward`: each nightly is a fresh directory, so the token always moves forward anyway.
 
-Every nightly is its own directory — version directories are never reused, which is exactly why re-runs, resume and forward-only channels stay cheap.
+Every nightly is its own directory. Version directories are never reused, which is exactly why re-runs, resume and forward-only channels stay cheap.
 
 !!! note "Deleting is out of scope"
 

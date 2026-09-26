@@ -342,7 +342,7 @@ mod tests {
             .unwrap_or(0);
         let mut body = buf[head_end + 4..].to_vec();
         while body.len() < content_length {
-            // Connection: close — EOF legitimately ends a bodyless (HEAD) response.
+            // With Connection: close, EOF legitimately ends a bodyless (HEAD) response.
             let n = stream.read(&mut chunk)?;
             if n == 0 {
                 break;
