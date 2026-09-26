@@ -99,7 +99,7 @@ down: 0 sent, 1 fetched, 2 skipped
 Only the missing name transfers. Names whose digest matches the server are skipped.
 A locally complete artifact whose digest *diverges* refuses the run instead of being overwritten (see [when it breaks](troubleshoot.md#divergent-objects-are-never-overwritten)).
 
-An interrupted pull recovers the same way: repeat the command with `--continue` and the part files resume through `Range` requests.
+An interrupted pull recovers the same way: rerunning the command resumes the part files through `Range` requests by default, and `--fresh` starts over from zero.
 The full walkthrough with a real interruption: [break it on purpose](../get-started.md#break-it-on-purpose).
 
 ## Fetch a subset

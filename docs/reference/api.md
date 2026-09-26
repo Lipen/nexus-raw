@@ -98,8 +98,8 @@ Every method mirrors a CLI command one-to-one.
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
-| `up(dir, names, gen_markers, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
-| `down(dir, enum_src, cont, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `up(dir, names, gen_markers, claim, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
+| `down(dst, enum_src, fresh, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
@@ -225,7 +225,7 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
 `total` is `null` when the server advertises no `Content-Length`.
 
-A real stream, captured by `down --name app.zip --continue --json`:
+A real stream, captured by `down --name app.zip --json`:
 
 ```json
 {"download":["app.zip"],"event":"plan","skip":[],"upload":[]}

@@ -36,11 +36,11 @@ nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
 # fetch it elsewhere: the channel names the version, the manifest lists the files
 V=$(nxr channel get "$BASE/latest")
-nxr down "$BASE/$V/" vendor/prebuilt --continue
+nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down --continue` resumes from part files through `Range: bytes=N-`.
+An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down` resumes from part files through `Range: bytes=N-` by default, and `--fresh` starts over.
 The rest of the model (explicit enumeration, dry-run plans, best-effort listings) is in the [command table](#commands) and the [docs](https://gitcode.com/rri_opensource/nexus-raw/blob/master/docs/index.md).
 
 ## Credentials
@@ -64,8 +64,8 @@ Not sure which source resolved? `nxr doctor` names it without printing values.
 ## Features
 
 - `get`, `put`, `head`, `sha`: curl-grade primitives, digest computed on the fly.
-- `up`, `down`: directory transfers with the symmetric diff, parallel workers and Range-resume (`.part` files, 206).
-- sha-sibling markers: every uploaded object gets a `<name>.sha256` sidecar in `sha256sum -c` format; `up` writes and generates them by default, `--no-sha` opts out.
+- `up`, `down`: directory transfers with the symmetric diff, parallel workers and Range-resume on by default (`.part` files, 206), `--fresh` starts over.
+- sha-sibling markers: every uploaded object gets a `<name>.sha256` sidecar in `sha256sum -c` format, `up` writes and generates them by default, `--no-sha` opts out.
 - `down` enumerates explicitly: `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 - `channel get|set`: token files at any name, with a dotted-numeric `--if-forward` guard.
 - `verify`: offline check of bytes, markers and digests.
@@ -82,8 +82,8 @@ Not sure which source resolved? `nxr doctor` names it without printing values.
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | scan → diff → PUT bytes + markers in parallel workers; `--manifest F` restricts the run to the names listed in F |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers, `--manifest F` restricts the run to the names listed in F |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print a channel token (`unset` when empty) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token, forward-only in dotted-numeric order on guard |

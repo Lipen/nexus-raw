@@ -243,7 +243,7 @@ test "$(nxr sha app.zip)" = "$(nxr get "$URL/app.zip.sha256" | cut -d' ' -f1)"
 
 ### nxr up
 
-`nxr up <SRC_DIR> <DST_URL> [--manifest FILE|URL|-] [--no-sha] [--dry-run]`
+`nxr up <SRC_DIR> <DST_URL> [--manifest FILE|URL|-] [--no-sha] [--dry-run] [--claim-first <NAME>]`
 
 Upload a local directory, verified and parallel.
 The directory is scanned, every file becomes an artifact whose relative path is its name, and the [symmetric diff](protocol.md#the-symmetric-diff) against the server decides what moves.
@@ -254,6 +254,9 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 | `--manifest <FILE\|URL\|->` | restrict the transfer to these names, all of which must exist locally |
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
 | `--dry-run` | print the plan without transferring anything |
+| `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
+
+`--claim-first <NAME>` uploads the named file first and alone: a failed claim aborts the run with nothing else sent, and a claim name outside the scanned directory is misuse (exit 2).
 
 Markers are on by default, in both directions:
 
@@ -310,7 +313,7 @@ With `--json` the plan is one object per line:
 |:----:|:-----|
 | `0` | plan executed, remote converged |
 | `1` | data refusal: `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete` |
-| `2` | misuse: not a directory, empty directory, unsafe name |
+| `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
 Recipes:
@@ -330,7 +333,7 @@ nxr up "dist/$VERSION/" "$BASE/$VERSION/" --dry-run
 
 ### nxr down
 
-`nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--continue]`
+`nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh]`
 
 Download a remote directory into a local one, the mirror of `up`.
 Every artifact is streamed into a stable part file, hashed on the fly, checked against the remote marker when one exists, then renamed into place and given a local sibling computed from the received bytes.
@@ -340,8 +343,9 @@ Every artifact is streamed into a stable part file, hashed on the fly, checked a
 | `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
-| `--continue` | resume interrupted downloads from their part files |
+| `--fresh` | ignore existing part files, every name downloads from zero |
 
+Resuming is the default: a rerun of the same command picks up the part files of a killed run through `Range` requests, so no flag is needed.
 `down` must know *what* to fetch, and Nexus raw has no guaranteed directory listing.
 Without flags it tries the recommended convention first: a `manifest.json` at the directory URL.
 If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the three explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
@@ -397,16 +401,17 @@ Recipes:
 # Pin a deployment: fetch exactly the manifest the publisher signed off.
 nxr down "$BASE/1.4.0/" deploy/ --manifest https://nexus.example.com/repository/raw-main/1.4.0/manifest.json
 
-# Resume a CI cache restore that died mid-run.
-nxr down "$BASE/1.4.0/" cache/ --manifest cache-manifest.json --continue
+# Finish a CI cache restore that died mid-run: the rerun resumes its part files.
+nxr down "$BASE/1.4.0/" cache/ --manifest cache-manifest.json
 
 # Pull one config file without enumerating anything.
 nxr down "$BASE/1.4.0/" . --name pinned.xml
 ```
 
-Part files are named `.nxr-part-<hash>` and are stable per artifact name, so `--continue` picks up exactly where the killed run stopped.
-Without `--continue` the transfer starts over.
-A digest disagreement with the remote sibling refuses the download and deletes the part file, so nothing divergent is ever written.
+Part files are named `.nxr-part-<hash>` and are stable per artifact name, so a rerun picks up exactly where the killed run stopped.
+`--fresh` ignores the parts and downloads every name from zero.
+A resumed part that belongs to an older remote version fails the digest check and is discarded once: the name restarts from zero under the same digest check.
+A fresh download that still diverges refuses the run (exit 1), so nothing divergent is ever written.
 
 ### nxr ls (experimental)
 

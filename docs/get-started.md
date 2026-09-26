@@ -167,10 +167,11 @@ $ ls -A vendor/resume/
 
 Two names finished, and the third died as a hidden part file (`.nxr-part-<hash>`).
 A partially fetched name never reaches its final path, so the directory holds no half-truths.
-Repeat the command with `--continue`. Finished names are skipped, and the part file is picked up through a `Range: bytes=N-` request:
+Repeat the same command: resume is the default, so no flag is needed.
+Finished names are skipped, and the part file is picked up through a `Range: bytes=N-` request:
 
 ```console
-$ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/ --continue
+$ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
 plan: 0 to upload, 1 to download, 2 up to date
 ○ bom/linux-x86_64.json skipped
 ○ pinned.xml skipped

@@ -19,7 +19,7 @@ The comparison, concern by concern:
 | Partial artifacts | temp files and `mv`, or the partial survives a crash | hidden part files, rename only after verify |
 | Digest check | a second fetch piped to `sha256sum -c` | checked against the remote marker while streaming |
 | Markers | written by hand, or forgotten | generated from the bytes, written after them |
-| Resume after a break | `curl -C -`, one URL at a time, digest unchecked | `--continue`, stable part files per name, digest re-checked |
+| Resume after a break | `curl -C -`, one URL at a time, digest unchecked | Range-resume by default, stable part files per name, digest re-checked |
 | What failed | an exit code, if you are lucky | 1 data / 2 misuse / 3 transport, each with a `hint:` line |
 | Re-running | re-downloads everything | diffs first, transfers only what is missing |
 
@@ -118,14 +118,17 @@ That is why uploads need no resume protocol (no offsets, no sessions, no server 
 Correctness never depends on the transport remembering anything.
 
 Downloads can and do resume, because HTTP Range is already there.
-`down --continue` keeps each name's bytes in a stable part file (`.nxr-part-<hash>`), sends `Range: bytes=N-` when the part holds N bytes, appends on `206`, and restarts from zero on a `200`, the answer of a server that ignored the range.
+`down` keeps each name's bytes in a stable part file (`.nxr-part-<hash>`) by default, sends `Range: bytes=N-` when the part holds N bytes, appends on `206`, and restarts from zero on a `200`, the answer of a server that ignored the range.
+A resumed part that belongs to an older remote version fails the digest check and is discarded once, and the name restarts from zero under the same check, so a rerun self-heals after a remote update instead of refusing.
+`--fresh` starts every name over, and only a fresh download that still diverges refuses with exit 1.
 The interesting signal is `416`.
+The asymmetry that remains is deliberate: the `get` primitive resumes only under `--continue`, because a primitive trusts the caller to know its part files, while `down` resumes by default, because a rerun of a directory transfer should simply converge.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
 sequenceDiagram
     autonumber
-    participant nxr as nxr down --continue
+    participant nxr as nxr down
     participant srv as Nexus raw
 
     nxr->>srv: HEAD 1.0.0/a.zip

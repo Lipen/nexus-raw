@@ -190,6 +190,12 @@ Download mirrors the order locally:
 Every successful download writes its local sibling, so a directory `down` has touched verifies offline even when the server never had a marker.
 `--no-sha` opts out of steps 1 and 3 on the upload side on purpose: the result is `Markerless` objects the server never certifies.
 
+### Claim first
+
+`up --claim-first <NAME>` changes only the order: the named file uploads first and alone, before any other name starts.
+The intended claim is the entry file a consumer reads first, such as a `manifest.json` or an index.
+A failed claim aborts the run with nothing else sent, so the server is never left with new bytes behind an old entry file, and a claim name outside the scanned directory is misuse (exit 2).
+
 ### Part files
 
 | Surface | Part file | On failure | On success |
@@ -242,7 +248,9 @@ HTTP/1.1 416 Range Not Satisfiable
     This is a server-side quirk that `nxr` cannot influence.
     It only matters when resuming onto a zero-byte object, because a fresh download never sends a Range header.
 
-`down --continue` resumes each name's part file the same way.
+`down` resumes each name's part file the same way by default, and `--fresh` ignores the parts to start every name from zero.
+A resumed part that belongs to an older remote version fails the digest check: `nxr` discards that part once and restarts the name from zero under the same digest check, so a rerun after a remote update self-heals instead of refusing.
+Only a fresh download that still diverges from the sibling refuses the run with exit 1.
 Uploads cannot resume: a PUT is byte-exact and replayed whole, which is safe because PUTs are idempotent.
 A server-side cut of the first PUT attempt demonstrates the replay. The retry sends the object from byte zero, and the stored content is complete:
 

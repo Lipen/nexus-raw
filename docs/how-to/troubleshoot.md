@@ -1,7 +1,7 @@
 # When it breaks
 
 Every failure has a name, an exit code and a hint.
-Find yours in the tables, fix the cause, repeat the command: `up` skips finished names and `down --continue` resumes from part files.
+Find yours in the tables, fix the cause, repeat the command: `up` skips finished names and `down` resumes from part files by default.
 
 ## Anatomy of a failure
 
@@ -98,7 +98,7 @@ get: 3000000 bytes → app.zip (resumed from 917504)
 ```
 
 The `(resumed from …)` figure is the part-file size the server was asked to continue from.
-For a whole directory the same story runs through `down --continue` (see [the tour](../get-started.md#break-it-on-purpose) for the part-file anatomy).
+For a whole directory the same story runs through `down`: rerunning the command resumes its part files by default (see [the tour](../get-started.md#break-it-on-purpose) for the part-file anatomy).
 
 A killed `up` leaves the server with whatever completed: some names `Complete`, the name in flight `Markerless` or `Absent`.
 No repair mode exists because none is needed. Repeat the same command and the diff re-sends exactly the unfinished names:

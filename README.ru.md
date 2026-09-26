@@ -36,11 +36,11 @@ nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
 # забрать в другое место: канал называет версию, манифест перечисляет файлы
 V=$(nxr channel get "$BASE/latest")
-nxr down "$BASE/$V/" vendor/prebuilt --continue
+nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-Прерванная передача докачивается повтором той же команды: `up` пропускает завершённое, `down --continue` докачивает с part-файлов через `Range: bytes=N-`.
+Прерванная передача докачивается повтором той же команды: `up` пропускает завершённое, `down` докачивает с part-файлов через `Range: bytes=N-` по умолчанию, а `--fresh` начинает с нуля.
 Остальная модель (явное перечисление, dry-run планы, best-effort листинги) в [таблице команд](#команды) и [документации](https://gitcode.com/rri_opensource/nexus-raw/blob/master/docs/index.md).
 
 ## Креды
@@ -64,8 +64,8 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Возможности
 
 - `get`, `put`, `head`, `sha`: примитивы уровня curl, digest считается на лету.
-- `up`, `down`: перенос каталогов с симметричным диффом, параллельными воркерами и Range-resume (`.part`-файлы, 206).
-- Маркеры-сиблинги: у каждого загруженного объекта появляется `<name>.sha256` в формате `sha256sum -c`; `up` пишет и генерирует их по умолчанию, `--no-sha` означает осознанный отказ.
+- `up`, `down`: перенос каталогов с симметричным диффом, параллельными воркерами и Range-resume по умолчанию (`.part`-файлы, 206), `--fresh` начинает с нуля.
+- Маркеры-сиблинги: у каждого загруженного объекта появляется `<name>.sha256` в формате `sha256sum -c`, `up` пишет и генерирует их по умолчанию, `--no-sha` означает осознанный отказ.
 - `down` перечисление берёт явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 - `channel get|set`: токен-файлы с любым именем, с guard'ом `--if-forward` (dotted-numeric).
 - `verify`: офлайн-проверка байтов, маркеров и digest'ов.
@@ -82,8 +82,8 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов: `--sha` ещё и PUT `.sha256`-сиблинга |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | скан → дифф → PUT байтов + маркеров параллельно; `--manifest F` ограничивает прогон именами из F |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | перечисление → дифф → поток+hash → rename + локальный маркер |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельно, `--manifest F` ограничивает прогон именами из F |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → поток+hash → rename + локальный маркер |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (experimental) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена, `--if-forward` допускает сдвиг только вперёд в dotted-numeric порядке |

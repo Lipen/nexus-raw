@@ -136,11 +136,11 @@ fetch:
     - export NXR_USERNAME=ci-bot NXR_PASSWORD="$SECRET_TOKEN"
     - BASE=https://nexus.example.com/repository/raw-main
     - V=$(nxr channel get "$BASE/latest")
-    - nxr down "$BASE/$V/" vendor/app/ --continue --json | jq -e 'select(.event=="summary") | .failed == []'
+    - nxr down "$BASE/$V/" vendor/app/ --json | jq -e 'select(.event=="summary") | .failed == []'
     - nxr verify vendor/app/
 ```
 
-`--continue` lets a retried job pick up the part files of the killed one instead of starting over.
+A retried job picks up the part files of the killed one by default and resumes them through `Range` requests, so the retry needs no flag.
 The offline `verify` is the gate before anything links against the download: no network, pure hashing.
 
 ## Check the setup before the run
