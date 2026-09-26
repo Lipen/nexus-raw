@@ -1,7 +1,8 @@
 # Wire protocol
 
 What `nxr` actually says to the server: the store layout, objects, the classification that drives transfers, and the write order.
-The implementation treats this text as the contract — a divergence is a bug.
+This page documents implemented behavior.
+The normative protocol text is maintained by the project outside the public docs, and a divergence between code and that text is a bug in the code.
 
 ## The shape of a store
 
