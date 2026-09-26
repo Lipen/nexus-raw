@@ -280,7 +280,7 @@ impl NexusClient {
         subject: (&str, Dir),
         url: &str,
         part: &Path,
-        cont: bool,
+        resume: bool,
         total_hint: Option<u64>,
     ) -> Result<(u64, Digest), Error> {
         let stall = self.stall;
@@ -294,7 +294,7 @@ impl NexusClient {
                 // The prefix: existing part content when resuming.
                 let mut prefix: u64 = 0;
                 let mut hasher = Sha256::new();
-                if cont {
+                if resume {
                     match tokio::fs::File::open(&part).await {
                         Ok(mut f) => {
                             let mut buf = [0u8; 64 * 1024];

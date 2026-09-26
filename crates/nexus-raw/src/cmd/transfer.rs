@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{Enumeration, Error};
+use nexus_raw_core::{ArtifactName, Enumeration, Error};
 
 use crate::cmd::{finish, load_manifest, make_ctx, parse_names, Ctx};
 use crate::Cli;
@@ -13,6 +13,7 @@ pub(crate) async fn up(
     src: &Path,
     dst: &str,
     manifest: Option<&str>,
+    claim: Option<ArtifactName>,
     no_sha: bool,
     dry_run: bool,
 ) -> Result<(), Error> {
@@ -51,7 +52,7 @@ pub(crate) async fn up(
         finish(ctx).await;
         return Ok(());
     }
-    let summary = ctx.nxr.up(src, names, !no_sha, None).await?;
+    let summary = ctx.nxr.up(src, names, !no_sha, claim, None).await?;
     report_summary(&ctx, &summary, "up");
     finish(ctx).await;
     Ok(())
@@ -64,7 +65,7 @@ pub(crate) async fn down(
     manifest: Option<&str>,
     names: &[String],
     ls: bool,
-    cont: bool,
+    fresh: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
     let enum_src = if ls {
@@ -86,7 +87,7 @@ pub(crate) async fn down(
             }
         }
     };
-    let summary = ctx.nxr.down(dst, enum_src, cont, None).await?;
+    let summary = ctx.nxr.down(dst, enum_src, fresh, None).await?;
     report_summary(&ctx, &summary, "down");
     finish(ctx).await;
     Ok(())

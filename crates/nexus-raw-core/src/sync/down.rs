@@ -15,7 +15,7 @@ use crate::sync::diff::Action;
 use crate::transport::client::NexusClient;
 
 /// The stable part-file prefix: `<prefix><fnv64hex>` per artifact name.
-/// A part survives an interrupted run so `--continue` can resume it.
+/// A part survives an interrupted run so a rerun resumes it.
 const PART_PREFIX: &str = ".nxr-part-";
 /// Legacy temp prefix from pre-resume versions; cleaned up when dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
@@ -39,12 +39,13 @@ pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
 /// Per-name failures land in `Summary.failed` (digest mismatches become
 /// `Error::Mismatch`).
 /// The Summary event goes out before the error returns.
+/// Part files resume by default; `fresh` starts every name from zero.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
     dir_url: String,
     actions: Vec<Action>,
-    cont: bool,
+    fresh: bool,
     workers: Arc<Semaphore>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
@@ -70,7 +71,7 @@ pub async fn execute(
                 let dir_url = dir_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    match download_one(&client, &dir, &dir_url, &name, size, digest, cont).await {
+                    match download_one(&client, &dir, &dir_url, &name, size, digest, fresh).await {
                         Ok(()) => Ok(name),
                         Err((name, failure)) => Err((name, failure)),
                     }
@@ -127,16 +128,22 @@ async fn download_one(
     name: &ArtifactName,
     size_hint: Option<u64>,
     expected: Option<Digest>,
-    cont: bool,
+    fresh: bool,
 ) -> Result<(), (ArtifactName, Failure)> {
     let bytes_url = client.object_url(dir_url, name);
     let part = part_path(dir, name);
+    // Resuming means the pre-existing part content joins the digest: a stale
+    // part (the remote object changed between runs) would poison the check.
+    let resumed = !fresh
+        && std::fs::metadata(&part)
+            .map(|m| m.len() > 0)
+            .unwrap_or(false);
     let fetched = client
         .download_resumable(
             (name.as_str(), Dir::Down),
             &bytes_url,
             &part,
-            cont,
+            !fresh,
             size_hint,
         )
         .await;
@@ -148,6 +155,16 @@ async fn download_one(
         if &actual != expected {
             // The part content diverges from the marker: never resume it later.
             let _ = tokio::fs::remove_file(&part).await;
+            if resumed {
+                // A stale part, not a diverging server: one clean restart
+                // decides. The fresh attempt is digest-guarded as usual.
+                log::warn!("{}: part file was stale, restarting from zero", name);
+                let expected = Some(expected.clone());
+                return Box::pin(download_one(
+                    client, dir, dir_url, name, size_hint, expected, true,
+                ))
+                .await;
+            }
             return Err((
                 name.clone(),
                 Failure::Mismatch(format!(
@@ -190,7 +207,7 @@ fn fnv64(bytes: &[u8]) -> u64 {
 
 /// On start, orphans of dead pids from the pre-resume temp scheme are cleaned.
 /// Live process temps are untouched. Part files never clean here: they are
-/// the resume fuel of `--continue`.
+/// the resume fuel of a rerun.
 pub fn cleanup_orphans(dir: &Path) -> Result<(), Error> {
     let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
     for entry in entries {

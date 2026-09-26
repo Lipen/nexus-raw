@@ -97,6 +97,9 @@ pub(crate) enum Cmd {
         /// Restrict the transfer to these names.
         #[arg(long, value_name = "FILE|URL|-")]
         manifest: Option<String>,
+        /// Upload this file first, alone, before any other name (claim-first).
+        #[arg(long, value_name = "NAME")]
+        claim_first: Option<String>,
         /// Skip marker generation and marker uploads.
         #[arg(long = "no-sha")]
         no_sha: bool,
@@ -121,9 +124,9 @@ pub(crate) enum Cmd {
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Resume interrupted downloads from their part files.
-        #[arg(long = "continue")]
-        cont: bool,
+        /// Ignore existing part files: every name downloads from zero.
+        #[arg(long)]
+        fresh: bool,
     },
     /// List versions or the objects of a version directory (experimental).
     Ls {

@@ -7,6 +7,7 @@ use tokio::sync::Semaphore;
 
 use crate::error::Error;
 use crate::events::{Dir, Summary};
+use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::bytes_path;
 use crate::sync::diff::Action;
@@ -22,11 +23,40 @@ pub async fn execute(
     dir: PathBuf,
     dir_url: String,
     actions: Vec<Action>,
+    claim: Option<ArtifactName>,
     workers: Arc<Semaphore>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
+    let mut claim_uploaded = 0usize;
+    // Claim-first (§2): the named claim uploads alone, before any other name
+    // starts. A failed or refused claim aborts the run so consumers never see
+    // a version whose list disagrees with its bytes.
+    let mut claim_action: Option<Action> = None;
+    let mut rest: Vec<Action> = Vec::new();
     for action in actions {
+        let is_claim = claim
+            .as_ref()
+            .is_some_and(|c| matches!(&action, Action::Upload { name, .. } if name == c));
+        if is_claim {
+            claim_action = Some(action);
+        } else {
+            rest.push(action);
+        }
+    }
+    if let Some(Action::Upload { name, size, digest }) = claim_action {
+        // Inline, not spawned: the claim must finish before anything starts.
+        if let Err(e) = upload_one(&client, &dir, &dir_url, &name, size, digest).await {
+            client.progress().summary(&Summary {
+                uploaded: 0,
+                failed: vec![name.to_string()],
+                ..Summary::default()
+            });
+            return Err(e);
+        }
+        claim_uploaded += 1;
+    }
+    for action in rest {
         match action {
             Action::Skip { name, .. } => {
                 skipped += 1;
@@ -62,6 +92,7 @@ pub async fn execute(
     }
     let mut summary = Summary {
         skipped,
+        uploaded: claim_uploaded,
         ..Summary::default()
     };
     let mut failed: Vec<String> = Vec::new();

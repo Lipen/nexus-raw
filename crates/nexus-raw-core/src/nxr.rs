@@ -117,11 +117,15 @@ impl Nxr {
     /// `names` restricts the transfer (manifest mode); `None` scans the directory.
     /// Markers are written by default; `gen_markers == false` (`--no-sha`)
     /// uploads bytes only.
+    /// `claim` names the file that must land before any other byte does
+    /// (claim-first publishing, §2): it uploads alone, and a failed claim
+    /// aborts the run without starting the rest.
     pub async fn up(
         &self,
         dir: &Path,
         names: Option<Vec<ArtifactName>>,
         gen_markers: bool,
+        claim: Option<ArtifactName>,
         plan: Option<Vec<Action>>,
     ) -> Result<Summary, Error> {
         if !dir.is_dir() {
@@ -156,6 +160,16 @@ impl Nxr {
         if gen_markers {
             generate_markers(dir, &mut locals).await?;
         }
+        if let Some(claim) = &claim {
+            let known = locals.iter().any(|(n, _)| n == claim);
+            if !known {
+                return Err(Error::misuse(format!(
+                    "claim-first: {} is not among the scanned names of {}",
+                    claim,
+                    dir.display()
+                )));
+            }
+        }
         let actions = match plan {
             Some(p) => p,
             None => {
@@ -176,6 +190,7 @@ impl Nxr {
             dir.to_owned(),
             self.base.clone(),
             actions,
+            claim,
             self.workers.clone(),
         )
         .await
@@ -184,11 +199,14 @@ impl Nxr {
     /// Download into a local directory (§5.2, §5.2.1).
     ///
     /// The enumeration source is mandatory: without one the call refuses.
+    /// Part files resume by default; a stale part (digest mismatch against
+    /// the sibling) is discarded once and the name restarts from zero.
+    /// `fresh` skips every existing part file.
     pub async fn down(
         &self,
         dir: &Path,
         enum_src: Enumeration,
-        cont: bool,
+        fresh: bool,
         plan: Option<Vec<Action>>,
     ) -> Result<Summary, Error> {
         tokio::fs::create_dir_all(dir)
@@ -226,7 +244,7 @@ impl Nxr {
             dir.to_owned(),
             self.base.clone(),
             actions,
-            cont,
+            fresh,
             self.workers.clone(),
         )
         .await

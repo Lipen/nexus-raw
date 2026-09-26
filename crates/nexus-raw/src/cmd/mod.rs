@@ -23,17 +23,24 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             src,
             dst,
             manifest,
+            claim_first,
             no_sha,
             dry_run,
-        } => transfer::up(cli, src, dst, manifest.as_deref(), *no_sha, *dry_run).await,
+        } => {
+            let claim = match claim_first {
+                Some(raw) => Some(ArtifactName::parse(raw)?),
+                None => None,
+            };
+            transfer::up(cli, src, dst, manifest.as_deref(), claim, *no_sha, *dry_run).await
+        }
         Cmd::Down {
             src,
             dst,
             manifest,
             name,
             ls,
-            cont,
-        } => transfer::down(cli, src, dst, manifest.as_deref(), name, *ls, *cont).await,
+            fresh,
+        } => transfer::down(cli, src, dst, manifest.as_deref(), name, *ls, *fresh).await,
         Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
         Cmd::Channel { op } => match op {
             ChannelOp::Get { url } => layout::channel_get(cli, url).await,

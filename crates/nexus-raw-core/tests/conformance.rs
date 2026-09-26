@@ -79,7 +79,7 @@ async fn two_phase_up_recovers_after_partial_put() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
     // A single call retries past the cut and finishes the upload.
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(
         mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
         vec![0xa; 4096]
@@ -110,7 +110,7 @@ async fn up_generates_markers_by_default() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     let stored = mock.store_get(&format!("{VERSION}/a.zip")).unwrap();
     assert_eq!(stored, CONTENT);
     let marker = mock.store_get(&format!("{VERSION}/a.zip.sha256")).unwrap();
@@ -129,7 +129,7 @@ async fn up_no_sha_skips_markers() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    nxr.up(local.path(), None, false, None).await.unwrap();
+    nxr.up(local.path(), None, false, None, None).await.unwrap();
     assert!(mock.store_get(&format!("{VERSION}/a.zip")).is_some());
     assert!(mock.store_get(&format!("{VERSION}/a.zip.sha256")).is_none());
     assert!(!local.path().join("a.zip.sha256").exists());
@@ -143,13 +143,13 @@ async fn markerless_remote_is_re_uploaded() {
     let (tx, mut rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(mock.put_count(&format!("{VERSION}/a.zip")), 1);
     // The marker was accepted by the server but silently dropped.
     assert!(mock.store_get(&format!("{VERSION}/a.zip.sha256")).is_none());
 
     // The second up re-sends: the remote copy is not provably complete.
-    let summary = nxr.up(local.path(), None, true, None).await.unwrap();
+    let summary = nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(summary.uploaded, 1);
     assert_eq!(mock.put_count(&format!("{VERSION}/a.zip")), 2);
     let events = collect_events(&mut rx);
@@ -165,9 +165,9 @@ async fn second_up_is_all_skip() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     let puts = mock.put_count(&format!("{VERSION}/a.zip"));
-    let summary = nxr.up(local.path(), None, true, None).await.unwrap();
+    let summary = nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(summary.uploaded, 0);
     assert_eq!(summary.skipped, 1);
     assert_eq!(mock.put_count(&format!("{VERSION}/a.zip")), puts);
@@ -184,7 +184,10 @@ async fn broken_local_marker_refuses_up() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let err = nxr.up(local.path(), None, true, None).await.unwrap_err();
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::Mismatch { .. }), "got {err:?}");
     assert_eq!(err.exit_code(), 1);
     // Nothing was written remotely.
@@ -203,7 +206,7 @@ async fn up_manifest_missing_local_name_is_data_error() {
         names: names(&["a.zip", "ghost.bin"]),
     };
     let err = nxr
-        .up(local.path(), Some(manifest.names), true, None)
+        .up(local.path(), Some(manifest.names), true, None, None)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Missing { .. }), "got {err:?}");
@@ -218,7 +221,7 @@ async fn single_call_recovers_through_flaky_and_dropped_connections() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(
         mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
         CONTENT
@@ -231,7 +234,10 @@ async fn empty_dir_refuses_up() {
     let local = TempDir::new().unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
-    let err = nxr.up(local.path(), None, true, None).await.unwrap_err();
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::Misuse(_)));
     assert_eq!(err.exit_code(), 2);
 }
@@ -246,14 +252,14 @@ async fn down_fetches_and_writes_local_marker() {
     // Seed the remote directly: put a dir up.
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     let dst = TempDir::new().unwrap();
     let summary = nxr
         .down(
             dst.path(),
             Enumeration::Names(names(&["a.zip"])),
-            false,
+            true,
             None,
         )
         .await
@@ -274,7 +280,7 @@ async fn down_resumes_from_part_with_range() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     // Pre-seed the part file with the first bytes, as an interrupted run left it.
     let dst = TempDir::new().unwrap();
@@ -286,7 +292,7 @@ async fn down_resumes_from_part_with_range() {
         .down(
             dst.path(),
             Enumeration::Names(names(&["a.zip"])),
-            true,
+            false,
             None,
         )
         .await
@@ -315,7 +321,7 @@ async fn down_resume_of_complete_part_finalizes_without_refetch() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     // The crash edge: the process died after the download finished but
     // before the rename, so the part already holds the whole object.
@@ -328,7 +334,7 @@ async fn down_resume_of_complete_part_finalizes_without_refetch() {
         .down(
             dst.path(),
             Enumeration::Names(names(&["a.zip"])),
-            true,
+            false,
             None,
         )
         .await
@@ -365,7 +371,7 @@ async fn down_auto_enumerates_through_manifest_convention() {
         br#"{"artifacts":["a.zip","manifest.json"]}"#,
     )
     .unwrap();
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
     assert_eq!(manifest.names.len(), 2);
@@ -385,14 +391,14 @@ async fn down_digest_mismatch_refuses_and_drops_part() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     let dst = TempDir::new().unwrap();
     let err = nxr
         .down(
             dst.path(),
             Enumeration::Names(names(&["a.zip"])),
-            false,
+            true,
             None,
         )
         .await
@@ -418,7 +424,7 @@ async fn down_missing_name_is_data_error() {
         .down(
             dst.path(),
             Enumeration::Names(names(&["ghost.bin"])),
-            false,
+            true,
             None,
         )
         .await
@@ -435,13 +441,13 @@ async fn down_markerless_remote_writes_computed_marker() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, false, None).await.unwrap(); // --no-sha
+    nxr.up(src.path(), None, false, None, None).await.unwrap(); // --no-sha
 
     let dst = TempDir::new().unwrap();
     nxr.down(
         dst.path(),
         Enumeration::Names(names(&["a.zip"])),
-        false,
+        true,
         None,
     )
     .await
@@ -468,7 +474,10 @@ async fn auth_gates_every_request() {
 
     // Without credentials: Auth, exit 3, nothing stored.
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
-    let err = nxr.up(local.path(), None, true, None).await.unwrap_err();
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::Auth { .. }), "got {err:?}");
     assert_eq!(err.exit_code(), 3);
     assert!(mock.store_get(&format!("{VERSION}/a.zip")).is_none());
@@ -486,7 +495,7 @@ async fn auth_gates_every_request() {
         tx,
     )
     .unwrap();
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     assert_eq!(
         mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
         CONTENT
@@ -511,14 +520,14 @@ async fn stalled_download_retries_then_refuses() {
     .unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
 
     let dst = TempDir::new().unwrap();
     let err = nxr
         .down(
             dst.path(),
             Enumeration::Names(names(&["a.zip"])),
-            false,
+            true,
             None,
         )
         .await
@@ -592,7 +601,7 @@ async fn diff_plan_is_deterministic_and_events_carry_lists() {
     assert_eq!(kinds, ["upload a.zip", "upload sub/b.txt"]);
 
     // The same plan through up, observed as a plan event.
-    nxr.up(local.path(), None, true, None).await.unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
     let events = collect_events(&mut rx);
     assert!(events
         .iter()
@@ -640,7 +649,7 @@ async fn get_primitive_resumes_with_range() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    nxr.up(src.path(), None, true, None).await.unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
     let url = format!("{}a.zip", dir_url(&mock));
 
     let out = TempDir::new().unwrap();
@@ -659,4 +668,102 @@ async fn get_primitive_resumes_with_range() {
             && matches!(r.outcome, Outcome::Status(206))
     });
     assert!(hit, "expected a 206 range response");
+}
+
+#[tokio::test]
+async fn down_stale_part_self_heals_without_a_flag() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
+
+    // The part holds bytes of an object that no longer matches the sibling:
+    // an interrupted download of an older remote version.
+    let dst = TempDir::new().unwrap();
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let part = part_path(dst.path(), &name);
+    std::fs::write(&part, b"stale-prefix-of-an-old-object").unwrap();
+
+    let summary = nxr
+        .down(
+            dst.path(),
+            Enumeration::Names(names(&["a.zip"])),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+    assert!(!part.exists());
+    // The restart went from zero: two fetches, the last one a clean 200.
+    // The first may answer 416 (stale prefix longer than the object) or 206.
+    let log = mock.requests();
+    let gets: Vec<_> = log
+        .iter()
+        .filter(|r| r.method == "GET" && r.path == format!("{VERSION}/a.zip"))
+        .collect();
+    assert_eq!(gets.len(), 2, "restart means two fetches: {gets:?}");
+    assert!(
+        matches!(gets[1].outcome, Outcome::Status(200)),
+        "the clean restart ends in a full 200: {gets:?}"
+    );
+}
+
+#[tokio::test]
+async fn up_claim_first_puts_the_claim_before_any_payload() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "b.zip", CONTENT);
+    seed_complete(src.path(), "a.zip", CONTENT);
+    seed_complete(
+        src.path(),
+        "manifest.json",
+        b"{\"artifacts\": [\"a.zip\", \"b.zip\"]}",
+    );
+
+    let claim = ArtifactName::parse("manifest.json").unwrap();
+    nxr.up(src.path(), None, true, Some(claim), None)
+        .await
+        .unwrap();
+
+    let log = mock.requests();
+    let puts: Vec<String> = log
+        .iter()
+        .filter(|r| r.method == "PUT")
+        .map(|r| r.path.clone())
+        .collect();
+    assert_eq!(
+        puts.first().map(String::as_str),
+        Some(format!("{VERSION}/manifest.json").as_str()),
+        "the claim lands first: {puts:?}"
+    );
+    // The claim's marker follows the claim bytes, still ahead of payload.
+    assert_eq!(
+        puts.get(1).map(String::as_str),
+        Some(format!("{VERSION}/manifest.json.sha256").as_str()),
+        "the claim marker precedes other names: {puts:?}"
+    );
+}
+
+#[tokio::test]
+async fn up_claim_first_refuses_a_name_outside_the_scan() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+
+    let claim = ArtifactName::parse("ghost.json").unwrap();
+    let err = nxr
+        .up(src.path(), None, true, Some(claim), None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 2, "unknown claim name is misuse: {err}");
+    let log = mock.requests();
+    assert_eq!(log.iter().filter(|r| r.method == "PUT").count(), 0);
 }
