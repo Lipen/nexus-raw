@@ -269,7 +269,11 @@ impl NexusClient {
     ///
     /// `cont == true` and an existing `part` continue from its size through
     /// `Range: bytes=N-`; a server that answers `200` (range ignored) restarts
-    /// from zero. The digest covers the whole file, prefix included.
+    /// from zero, and a `416` (range already satisfied) finalizes the part —
+    /// the died-between-download-end-and-rename edge.
+    /// Verifying the finalized bytes is the caller's duty: `down` digest-checks
+    /// against the sibling, the `get` primitive trusts the part.
+    /// The digest covers the whole file, prefix included.
     /// Returns the final file size and digest.
     pub async fn download_resumable(
         &self,
