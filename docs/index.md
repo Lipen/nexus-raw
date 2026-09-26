@@ -66,16 +66,13 @@ $ curl -f --connect-timeout 15 --speed-limit 1 --speed-time 30 -o "$tmp" "$url" 
   || echo "which step failed, and did the partial survive?"
 ```
 
-`nxr` is that script, minus the prayer:
+`nxr` is that script, minus the prayer.
+The full concern-by-concern comparison lives in [the design essay](explanation/design.md#the-curl-model); the three lines that sell it:
 
 | Concern | The hand-rolled script | `nxr` |
 | :-- | :-- | :-- |
-| Retries with backoff | a loop someone wrote at 2 a.m. | built in, transport-level |
-| Stalled connections | `--speed-limit` folklore | per-connection stall timeout |
-| Partial artifacts | temp files, `mv`, crossed fingers | hidden part files, rename only after verify |
-| Digest check | a second fetch and `sha256sum -c` | checked against the remote marker while streaming |
-| Resume after a break | nothing, or `curl -C -` per URL | `--continue`, stable part files per name |
-| What failed | an exit code, if you are lucky | 1 data / 2 misuse / 3 transport, each with a `hint:` line |
+| Partial artifacts | temp files and `mv`, or the partial survives a crash | hidden part files, rename only after verify |
+| Digest check | a second fetch piped to `sha256sum -c` | checked against the remote marker while streaming |
 | Re-running | re-downloads everything | diffs first, transfers only what is missing |
 
 The script also has one bug class `nxr` refuses to inherit: it overwrites whatever is at the destination, including an artifact that diverged from the server.

@@ -10,6 +10,19 @@ Scripted artifact flows grow hand-rolled curl snippets: retries, stall detection
 `nxr` replaces those snippets with one static binary whose every invocation is self-sufficient: URL in argv, credentials from `-u` or the environment, nothing else.
 No config file, no profiles, no home server.
 
+The comparison, concern by concern:
+
+| Concern | The hand-rolled script | `nxr` |
+| :-- | :-- | :-- |
+| Retries with backoff | a loop someone wrote at 2 a.m. | built in, transport-level |
+| Stalled connections | `--speed-limit` and `--speed-time`, official flags, set by hand, forgotten in half the scripts | per-connection stall timeout, on by default |
+| Partial artifacts | temp files and `mv`, or the partial survives a crash | hidden part files, rename only after verify |
+| Digest check | a second fetch piped to `sha256sum -c` | checked against the remote marker while streaming |
+| Markers | written by hand, or forgotten | generated from the bytes, written after them |
+| Resume after a break | `curl -C -`, one URL at a time, digest unchecked | `--continue`, stable part files per name, digest re-checked |
+| What failed | an exit code, if you are lucky | 1 data / 2 misuse / 3 transport, each with a `hint:` line |
+| Re-running | re-downloads everything | diffs first, transfers only what is missing |
+
 Config files were rejected on purpose, and the reason is transferability.
 A pipeline must be able to reproduce any call from any machine that has the binary and the environment.
 An rc-file quietly breaks that property, because the call now depends on a state the URL does not carry.
