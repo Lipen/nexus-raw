@@ -6,7 +6,7 @@
  * native 1.2rem svg. The "Gitcode" text node is hidden with font-size 0.
  */
 
-.md-header__source .md-source__icon {
+.md-source__icon {
   display: inline-block;
   width: 2rem;
   height: 2.4rem;
@@ -18,25 +18,25 @@
   mask-size: 1.2rem;
 }
 
-.md-header__source .md-source__icon svg {
+.md-source__icon svg {
   display: none;
 }
 
-.md-header__source .md-source__repository {
+.md-source__repository {
   display: inline-block;
   vertical-align: middle;
   font-size: 0;
   line-height: 1.25;
 }
 
-.md-header__source .md-source__repository::before {
+.md-source__repository::before {
   content: "GitCode";
   display: block;
   font-size: 0.66rem;
   font-weight: 700;
 }
 
-.md-header__source .md-source__repository::after {
+.md-source__repository::after {
   content: "rri_opensource/nexus-raw";
   display: block;
   font-size: 0.56rem;
