@@ -244,6 +244,24 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 `Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint. Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`, `LocalIncomplete`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 
+## Node bindings
+
+The same surface ships to Node as promises: the `nexus-raw-napi` crate wraps the `Nxr` facade one-to-one, and the npm package name is `nexus-raw`.
+Every command is one self-sufficient call — the URL in argv, credentials in the `auth` option or the environment, no config file — and each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
+An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.
+
+```js
+import { up, down } from 'nexus-raw'
+
+const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw-main/1.4.0/', {
+  claimFirst: 'claim.json',
+  onEvent: (event) => console.log(event),
+})
+```
+
+The crate is built on napi-rs 3: async exports run on its built-in tokio runtime, the build scripts come from the `@napi-rs/cli`, and `linux-x86_64-gnu` is the wired prebuilt target.
+The typed declarations live in `crates/nexus-raw-napi/index.d.ts`, and `crates/nexus-raw-napi/smoke.mjs` is the runnable offline check of the built addon.
+
 ## Guarantees
 
 - No protocol logic outside the crate: the CLI is flags and rendering only.

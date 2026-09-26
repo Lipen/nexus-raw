@@ -10,7 +10,7 @@ The canonical protocol text is kept outside this repository.
 
 - The protocol is the contract.
   A divergence between code and the protocol text is a bug in the code.
-  A protocol change is one PR: update the contract text, then every implementation (core, CLI, the future napi wrapper) in the same commit range.
+  A protocol change is one PR: update the contract text, then every implementation (core, CLI, the napi wrapper) in the same commit range.
 - Completion is bytes plus the sha-sibling, digest matching.
   A divergent complete artifact is never overwritten.
   `up` writes markers by default and generates missing local siblings.
@@ -72,7 +72,7 @@ New fields are additive.
 | `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
 | `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
-| `node/` | future home of the npm packaging, which does not exist yet |
+| `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 
 ## Commits
 
