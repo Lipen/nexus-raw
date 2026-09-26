@@ -42,3 +42,71 @@
   font-size: 0.56rem;
   opacity: 0.72;
 }
+
+/*
+ * Cards: visible at rest, alive on hover.
+ * Material's defaults are border-invisible at rest and border-transparent on
+ * hover; these rules restore contrast in both schemes and add a lift.
+ */
+
+.md-typeset .grid.cards > ol > li,
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border-radius: 0.45rem;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+}
+
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ol > li,
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li,
+[data-md-color-scheme="default"] .md-typeset .grid > .card {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li,
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li,
+[data-md-color-scheme="slate"] .md-typeset .grid > .card {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.md-typeset .grid.cards > ol > li:hover,
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid > .card:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--md-accent-fg-color);
+  transform: translateY(-2px);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li:hover,
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover,
+[data-md-color-scheme="slate"] .md-typeset .grid > .card:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--md-accent-fg-color), 0 0 22px rgba(255, 191, 0, 0.28);
+}
+
+/*
+ * Images: framed and rounded (the terminal hero, page screenshots).
+ */
+
+.md-typeset img {
+  border-radius: 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+[data-md-color-scheme="slate"] .md-typeset img {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Tables: rows answer the pointer.
+ */
+
+.md-typeset table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.md-typeset table tbody tr:hover {
+  background-color: color-mix(in srgb, var(--md-accent-fg-color) 8%, transparent);
+}
