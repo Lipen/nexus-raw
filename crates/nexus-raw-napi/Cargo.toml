@@ -1,0 +1,21 @@
+[package]
+name = "nexus-raw-napi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+description = "Node bindings for nexus-raw: the nxr surface as promises, on top of nexus-raw-core"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nexus-raw-core = { path = "../nexus-raw-core" }
+napi = { workspace = true }
+napi-derive = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }

@@ -4,6 +4,7 @@ members = [
     "crates/nexus-raw-core",
     "crates/nexus-raw",
     "crates/mock-nexus",
+    "crates/nexus-raw-napi",
 ]
 
 [workspace.package]
@@ -25,6 +26,9 @@ base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 log = "0.4"
 tempfile = "3"
+napi = { version = "3", default-features = false, features = ["napi4", "async", "serde-json"] }
+napi-derive = "3"
+napi-build = "2"
 
 [profile.release]
 strip = true
