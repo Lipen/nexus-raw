@@ -37,6 +37,12 @@ impl Default for Flags {
 
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
+    // Machine-readable scenario table for external conformance suites (§5c):
+    // `mock-nexus --print-scenarios` prints the names, one JSON array.
+    if argv.as_slice() == ["--print-scenarios"] {
+        print_scenarios(std::io::stdout().lock()).expect("stdout write");
+        return;
+    }
     let Some(name) = argv.first() else {
         fail_usage();
     };
@@ -133,19 +139,39 @@ fn parse_num<T: std::str::FromStr>(flag: &str, value: &str) -> Result<T, String>
         .map_err(|_| format!("invalid value for {flag}: '{value}'"))
 }
 
+/// Print the shared scenario table as JSON for external conformance suites.
+fn print_scenarios<W: std::io::Write>(mut out: W) -> std::io::Result<()> {
+    writeln!(
+        out,
+        "{}",
+        serde_json::to_string_pretty(mock_nexus::SCENARIOS)
+            .expect("scenario names are a static string table")
+    )
+}
+
 fn fail_usage() -> ! {
     eprintln!(
         "usage: mock-nexus <scenario> [--port N] [--chunk-delay-ms N] [--chunk-size N] \
          [--partial-bytes N] [--flaky K] [--auth user:pass]"
     );
+    eprintln!("       mock-nexus --print-scenarios");
     eprintln!("scenarios: {}", mock_nexus::SCENARIOS.join(", "));
     std::process::exit(2);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_scenario, parse_flags, Flags};
+    use super::{build_scenario, parse_flags, print_scenarios, Flags};
     use mock_nexus::Scenario;
+
+    #[test]
+    fn print_scenarios_lists_the_shared_table() {
+        let mut buf = Vec::new();
+        print_scenarios(&mut buf).unwrap();
+        let parsed: Vec<String> = serde_json::from_slice(&buf).unwrap();
+        assert_eq!(parsed, mock_nexus::SCENARIOS);
+        assert!(parsed.contains(&"atomic".to_owned()));
+    }
 
     fn args(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| s.to_string()).collect()
