@@ -325,6 +325,15 @@ impl NexusClient {
                 }
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status().as_u16();
+                if status == 416 && prefix > 0 {
+                    // The server refuses the range because it is already
+                    // satisfied: the part holds the whole object. This is the
+                    // crash-between-download-end-and-rename edge — finalize
+                    // the part and let the caller digest-check and rename.
+                    let digest =
+                        Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
+                    return Ok((prefix, digest));
+                }
                 if !(200..300).contains(&status) {
                     return Err(this.status_failure(url, resp.status()));
                 }

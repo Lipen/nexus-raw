@@ -309,6 +309,46 @@ async fn down_resumes_from_part_with_range() {
 }
 
 #[tokio::test]
+async fn down_resume_of_complete_part_finalizes_without_refetch() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    // The crash edge: the process died after the download finished but
+    // before the rename, so the part already holds the whole object.
+    let dst = TempDir::new().unwrap();
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let part = part_path(dst.path(), &name);
+    std::fs::write(&part, CONTENT).unwrap();
+
+    let summary = nxr
+        .down(
+            dst.path(),
+            Enumeration::Names(names(&["a.zip"])),
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+    assert!(!part.exists());
+    // The server answered 416 (range already satisfied), never 206.
+    let resumed_206 = mock.requests().iter().any(|r| {
+        r.method == "GET"
+            && r.path == format!("{VERSION}/a.zip")
+            && matches!(r.outcome, Outcome::Status(206))
+    });
+    assert!(
+        !resumed_206,
+        "a complete part must not trigger a range fetch"
+    );
+}
+
+#[tokio::test]
 async fn down_auto_enumerates_through_manifest_convention() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
