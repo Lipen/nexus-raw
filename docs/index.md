@@ -3,41 +3,41 @@
 <img src="assets/nxr.svg" width="120" align="right" alt="The nxr logo" />
 
 <p style="font-size:1.05em">
-<code>nxr</code> uploads and downloads version directories to a Sonatype Nexus raw repository, verifies sha256 sibling markers and resumes interrupted transfers by diffing local and remote state.
+<code>nxr</code> is curl for a Sonatype Nexus raw repository: HTTP-grade primitives with retries, stall detection and TLS on, verified directory transfers on top, channel refs and manifests above those — one static binary, zero config files.
 </p>
 
 <div class="grid cards" markdown>
 
 <div markdown>
+:material-curling: **Primitives**  
+`get`, `put`, `head`, `sha` — every call self-sufficient: URL in argv, credentials from `-u` or the environment.
+</div>
+
+<div markdown>
 :material-upload: **Publish**  
-`up` pushes a version directory: claim first, then bytes and markers in parallel workers.
+`up` pushes a whole directory: markers generated and verified by default, bytes and siblings in parallel workers.
 </div>
 
 <div markdown>
 :material-download: **Consume**  
-`down` resolves `latest` or a version, fetches only what is missing, verifies every digest.
-</div>
-
-<div markdown>
-:currency-usd: **Free resume**  
-An interrupted transfer is finished by repeating the same command — nothing is re-uploaded.
+`down` fetches exactly the enumerated names, hashes on the fly, resumes from part files with `Range: bytes=N-`.
 </div>
 
 <div markdown>
 :shield-check: **Trustworthy completion**  
-Bytes plus a `<name>.sha256` marker, `sha256sum -c` format.
+Bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
 Divergent artifacts are never overwritten.
 </div>
 
 <div markdown>
 :json: **Scriptable**  
-`--json` emits stable NDJSON events.
-Exit codes split data problems from transport trouble.
+`--json` for one-object commands and NDJSON event streams.
+Exit codes split data problems from transport trouble, and every error carries a `hint:`.
 </div>
 
 <div markdown>
 :language-rust: **Embeddable**  
-The `nexus-raw-core` crate exposes the same operations as a small async Rust API.
+The `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
 </div>
 
 </div>
@@ -48,9 +48,9 @@ The `nexus-raw-core` crate exposes the same operations as a small async Rust API
 
 ```bash
 cargo install --path crates/nexus-raw
-just mock atomic --port 8080          # a throwaway Nexus on localhost
-nxr --base http://127.0.0.1:8080/ up --dir dist/1.4.0
-nxr --base http://127.0.0.1:8080/ down --pointer latest --dir vendor/
+just mock atomic --port 8080                                        # a throwaway Nexus on localhost
+nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/                     # markers included
+nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/ --name app.zip
 ```
 
 ## Where to go
@@ -58,12 +58,11 @@ nxr --base http://127.0.0.1:8080/ down --pointer latest --dir vendor/
 | You want | Page |
 | :-- | :-- |
 | a working end-to-end tour in five minutes | [get started](get-started.md) |
-| publish a version, tame pointers and CI | [publish](how-to/publish.md) |
+| publish a version and name it with a channel | [publish](how-to/publish.md) |
 | fetch artifacts, verify, subset a version | [consume](how-to/consume.md) |
-| profiles, config files, credentials | [configure](how-to/configure.md) |
 | pipelines: NDJSON events and exit codes | [use in CI](how-to/ci.md) |
 | decode a failure and recover | [when it breaks](how-to/troubleshoot.md) |
-| every flag of every command | [CLI reference](reference/cli.md) |
+| every flag of every command, credentials and URLs | [CLI reference](reference/cli.md) |
 | the wire protocol in full | [protocol](reference/protocol.md) |
 | the Rust API of `nexus-raw-core` | [Rust API](reference/api.md) |
 | why it is shaped this way | [design](explanation/design.md) |

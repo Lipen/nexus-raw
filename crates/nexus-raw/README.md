@@ -1,7 +1,7 @@
 # nxr
 
-A general-purpose CLI for a Sonatype Nexus raw repository.
-It uploads and downloads version directories described by a `claim.json`, verifies sha256 sibling markers and resumes interrupted transfers by diffing local and remote state.
+curl for a Sonatype Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
+Every call is self-sufficient — URL in argv, credentials from `-u` or the environment.
 
 ## Install
 
@@ -12,26 +12,36 @@ cargo install --path crates/nexus-raw
 ## Quickstart
 
 ```bash
-# publish a version directory (claim.json + artifacts + .sha256 markers)
-nxr up --profile main --dir dist/1.4.0
+BASE=https://nexus.example.com/repository/raw-main
 
-# name it
-nxr point latest 1.4.0 --if-newer --profile main
+# publish a version directory: markers are generated and uploaded by default
+nxr up dist/1.4.0/ "$BASE/1.4.0/"
 
-# fetch it elsewhere
-nxr down --profile main --pointer latest --dir vendor/
+# name it with a channel (any name works)
+nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
-# check a local build offline
-nxr verify --dir dist/1.4.0
+# fetch it elsewhere; manifest.json in the version directory drives the enumeration
+nxr down "$BASE/1.4.0/" vendor/ --continue
+
+# plain primitives
+nxr put "$BASE/1.4.0/notes.txt" -f notes.txt --sha
+nxr get "$BASE/1.4.0/notes.txt" -o notes.txt
+nxr head "$BASE/1.4.0/notes.txt"
+nxr sha notes.txt
+
+# offline check of a local directory
+nxr verify dist/1.4.0/
 ```
 
-An interrupted transfer resumes by repeating the same command.
+An interrupted transfer finishes by repeating the same command.
+`down` without an enumeration source refuses with a hint instead of guessing names.
 
 ## Scripts
 
-- `--json` emits NDJSON events (`plan`, `artifact`, `retrying`, `summary`).
-- Exit codes: `0` converged, `1` data problem, `2` misuse, `3` transport.
-- Credentials come from env only: `NXR_<PROFILE>_AUTH`, `NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`.
+- Credentials: `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD` — `-u` wins.
+- `--json` emits machine output: one JSON object for `head`/`put`/`sha`/`get -o`/`channel get`, NDJSON events (`plan`, `artifact`, `retrying`, `summary`) for transfers.
+- Exit codes: `0` ok, `1` data problem, `2` misuse, `3` transport.
+- Every error prints a `hint:` line on stderr.
 
 ## More
 

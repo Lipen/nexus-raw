@@ -1,6 +1,7 @@
 # Working in nexus-raw
 
 This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, and the `mock-nexus` failure-scenario server that the conformance tests run against.
+`nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, no config file, no profiles.
 [README.md](README.md) is the user-facing entry.
 The protocol summary lives in the `crates/nexus-raw-core/src/lib.rs` crate docs.
 The canonical protocol text is kept outside this repository.
@@ -12,13 +13,23 @@ The canonical protocol text is kept outside this repository.
   A protocol change is one PR: update the contract text, then every implementation (core, CLI, the future napi wrapper) in the same commit range.
 - Completion is bytes plus the sha-sibling, digest matching.
   A divergent complete artifact is never overwritten.
-  A claim is written once and never rewritten.
+  `up` writes markers by default and generates missing local siblings.
+  `--no-sha` is the explicit opt-out.
+- `down` requires an enumeration source — `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or `--ls` — and refuses with `cannot enumerate` otherwise.
 - The marker is always PUT after the bytes of the same name.
 - The order between names is free.
-- Credentials live only in env vars and memory: never argv, never logs, never `--json` output, never temp files in artifact directories, never the TOML config.
+- Names are relative paths of `[A-Za-z0-9._-]` segments.
+  Only the `.sha256` suffix is reserved.
+  `claim.json`, `latest` and `nightly` are ordinary names — no protocol meaning.
+- A channel is any token file.
+  Dotted-numeric order is the only comparison the tool imposes (`--if-forward`).
+- Credentials come from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order.
+  `-u` is a deliberate argv exposure (doctor flags it).
+  Values never appear in logs, `--json` output or error messages.
 - TLS verification is on by default, and `--tls-insecure` is the only way off.
 - Exit codes have one home: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
   0 ok, 1 data, 2 misuse, 3 transport.
+  Every error carries a `hint:` line (`Error::hint`).
 - The failure-scenario list is the conformance contract.
   It lives in `crates/mock-nexus/src/lib.rs` (`SCENARIOS`).
   A scenario added for one client implementation lands in the same PR as its test.
@@ -30,11 +41,11 @@ The canonical protocol text is kept outside this repository.
 
 | Changing | Read |
 |:---------|:-----|
-| the wire protocol, layouts, errors, forbiddances | `crates/nexus-raw-core/src/lib.rs` crate docs |
-| the core API (facade `Nxr`, events, actions) | `crates/nexus-raw-core/src/lib.rs` |
-| CLI flags, config, credentials order, output examples | [README.md](README.md) |
+| the wire protocol, store shape, errors, forbiddances | `crates/nexus-raw-core/src/lib.rs` crate docs |
+| the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
+| CLI flags, credentials order, output examples | [README.md](README.md) |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/lib.rs` doc comment on `Scenario` |
-| exit codes | `crates/nexus-raw-core/src/error.rs` |
+| exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
 
 ## Verify before reporting done
@@ -46,7 +57,8 @@ just test         # unit and conformance suites alone
 just nxr -- --help
 ```
 
-The conformance tests drive `nexus-raw-core` and the `nxr` binary against `mock-nexus` scenarios.
+The conformance tests drive `nexus-raw-core` (21 tests) and the `nxr` binary (18 tests) against `mock-nexus` scenarios.
+The workspace also carries 30 unit tests in the core library and 6 doctests.
 The scenario list in `mock-nexus` is the single source.
 Do not fork it.
 `--json` output shapes are fixed by golden tests in `crates/nexus-raw/tests/`.
@@ -56,9 +68,9 @@ New fields are additive.
 
 | Path | Role |
 |:-----|:-----|
-| `crates/nexus-raw-core/` | the protocol: names, digest, sibling, claim, state, diff, remote (reqwest), retry, up, down, pointer, creds, config, events, errors, with the `Nxr` facade as the single entry |
-| `crates/nexus-raw/` | the `nxr` binary: clap parsing, human and NDJSON rendering |
-| `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the nine failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
+| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config` — no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
+| `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
+| `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `node/` | future home of the npm packaging, which does not exist yet |
 

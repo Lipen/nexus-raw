@@ -1,19 +1,26 @@
 # nexus-raw
 
-A general-purpose client for a Sonatype Nexus raw repository.
-`nxr` uploads and downloads version directories described by a `claim.json`, verifies sha256 sibling markers, and resumes interrupted transfers by diffing local and remote state.
+`nxr` is curl for a Sonatype Nexus raw repository.
+Primitives with retries, stall detection and TLS on.
+Verified directory transfers on top.
+Channel refs and manifests above those.
+Every call is self-sufficient: URL in argv, credentials from `-u` or the environment.
+No config file, no profiles.
 The `nexus-raw-core` crate exposes the same operations as a Rust library.
 Zero server-side components.
 
 Features:
 
-- `up`, `down`, local `verify`, transfer `diff`, `ls`, pointer updates (`point`).
-- Completion is bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
-- Parallel transfers (8 workers by default), retries with backoff, stall detection.
-- TLS verification on by default.
-- Credentials only from env vars.
-- `--json` NDJSON output.
-- Stable exit codes 0/1/2/3.
+- `get`, `put`, `head`, `sha` — curl-grade primitives, digest computed on the fly.
+- `up`, `down` — directory transfers with the symmetric diff, parallel workers and Range-resume (`.part` files, 206).
+- sha-sibling markers in `sha256sum -c` format: `up` writes and generates them by default, `--no-sha` opts out.
+- `down` enumerates explicitly: `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+- `channel get|set` — token files at any name, with a dotted-numeric `--if-forward` guard.
+- `verify` — offline check of bytes, markers and digests.
+- `doctor` — credentials, TLS, reachability.
+- TLS verification on by default, `--tls-insecure` is the only off-switch.
+- `--json`: one JSON object for simple commands, NDJSON events for transfers.
+- Exit codes 0/1/2/3, and every error prints a `hint:` line on stderr.
 
 ## Install
 
@@ -21,71 +28,69 @@ Features:
 cargo install --path crates/nexus-raw    # the nxr binary
 ```
 
-## Setup
+## Credentials
 
-The config holds only URLs, at `~/.config/nxr/config.toml` (override with `$NXR_CONFIG`):
+`-u user:pass` wins, then the environment: `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD` (set together or not at all).
+That is the whole list — the alias and the default URL live in your shell or CI, not in a config file.
 
-```toml
-default_profile = "release"
-
-[release]
-url = "https://nexus.example.com/repository/raw-main/"
-
-[dev]
-url = "http://localhost:8080/repository/raw-dev/"
-tls_insecure = true
+```bash
+printf 'ci-bot:%s' "$TOKEN" | base64
+export NXR_AUTH="Y2ktYm90OnRva2Vu"
 ```
 
-Credentials resolve from env, in order:
-
-1. `NXR_<PROFILE>_AUTH` — base64 `user:pass`, uppercased profile name, `-` becomes `_`.
-2. `NXR_AUTH` — the same, for every profile.
-3. `NXR_USERNAME` + `NXR_PASSWORD`.
-
-Passwords in the TOML config are refused.
-Use `--base <url>` instead of `--profile` to skip the config entirely.
+`-u` is visible in `ps`.
+The env paths are the CI choice.
+`nxr doctor` reports which source resolved, without printing values.
 
 ## Quickstart
 
 ```bash
-# publish a version directory that contains claim.json + artifacts + .sha256 markers
-nxr up --profile release --dir dist/1.4.0
-nxr point latest 1.4.0 --if-newer --profile release
+BASE=https://nexus.example.com/repository/raw-main
 
-# fetch a version through a pointer
-nxr down --profile release --pointer latest --dir vendor/prebuilt
+# publish a version directory: markers are generated, verified and uploaded by default
+nxr up dist/1.4.0/ "$BASE/1.4.0/"
 
-# check a local build without touching the network
-nxr verify --dir dist/1.4.0
+# name it — a channel is a token file at any name
+nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
-# plan against the server, nothing written
-nxr diff --profile release --dir dist/1.4.0
-nxr up --profile release --dir dist/1.4.0 --dry-run
+# fetch it elsewhere; manifest.json in the version directory drives the enumeration
+nxr down "$BASE/1.4.0/" vendor/prebuilt --continue
+
+# no manifest? name what you need
+nxr down "$BASE/1.4.0/" vendor/prebuilt --name app.zip
+
+# check a local directory offline; plan before transferring
+nxr verify vendor/prebuilt
+nxr up --dry-run dist/1.5.0/ "$BASE/1.5.0/"
 ```
 
-An interrupted transfer is resumed by repeating the same command.
+An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down --continue` resumes from part files through `Range: bytes=N-`.
 
 ## Commands
 
 | Command | Does |
 |:--------|:-----|
-| `nxr up --dir <dir> [--names <file>] [--dry-run]` | claim (drift check) → diff → PUT bytes + markers |
-| `nxr down --dir <dir> (--version <v> \| --pointer <latest\|nightly>) [--only <name>]...` | GET claim → diff → tmp+hash → rename → marker (resume is always on) |
-| `nxr verify --dir <dir>` | local bytes + marker + digest only, no network |
-| `nxr diff --dir <dir>` | the plan against the server, symmetric for up and down |
-| `nxr ls [--version <v>]` | per-name remote states, or the version list (REST search, experimental) |
-| `nxr point <latest\|nightly> <version> [--if-newer]` | atomic pointer PUT (`--if-newer` is forward-only) |
+| `nxr get <URL> [-o FILE] [--continue]` | GET to a file (via `.part`, resume through Range) or stdout |
+| `nxr put <URL> -f FILE [--sha]` | PUT bytes — `--sha` also PUTs the `.sha256` sibling |
+| `nxr head <URL>` | status, size, content type |
+| `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | scan → diff → PUT bytes + markers in parallel workers |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
+| `nxr channel get <URL>` | print a channel token (`unset` when empty) |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token, forward-only in dotted-numeric order on guard |
+| `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
+| `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 
-Exit codes: 0 ok, 1 data (mismatch, incomplete, claim drift, missing), 2 misuse, 3 transport (network, auth, TLS, 5xx).
-`--json` emits NDJSON events of the same structs the core uses.
-Pipe it to `jq`.
+Exit codes: 0 ok, 1 data (`mismatch`, `incomplete`, `missing`, `cannot enumerate`), 2 misuse, 3 transport (network, auth, TLS, 5xx).
+A divergent complete artifact is refused, never overwritten.
 
 ## Layout
 
 | Path | For |
 |:-----|:----|
-| `crates/nexus-raw-core/` | the Rust library: the `Nxr` facade, typed errors, event stream |
-| `crates/nexus-raw/` | the `nxr` binary: flags and rendering only, no protocol logic |
+| `crates/nexus-raw-core/` | the Rust library, in four layers: `transport` + `primitive`, `sync`, `layout`, and the `Nxr` facade |
+| `crates/nexus-raw/` | the `nxr` binary: flags, rendering and exit codes only, no protocol logic |
 | `crates/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
 | `docs/` + `mkdocs.yml` | the documentation site (zensical), served by `just docs` |
 | `node/` | future home of the npm packaging, which does not exist yet |
@@ -96,7 +101,7 @@ Pipe it to `jq`.
 just check        # fmt + clippy + prek + tests
 just test         # unit and conformance suites
 just mock atomic --port 8080
-just nxr -- up --base http://127.0.0.1:8080/ --dir dist/1.4.0
+just nxr -- up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
 ```
 
 User documentation lives in [docs/](docs/index.md) and renders as a site:

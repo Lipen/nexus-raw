@@ -2,58 +2,75 @@
 
 The consumer side: fetch a version (or part of it) into a directory you can build against.
 
-## Resolve and fetch
+## The enumeration rule
 
-=== "By pointer"
+`down` must know *which names* to fetch, and a Nexus raw repository has no guaranteed directory listing.
+So every `down` names its enumeration source, explicitly or through one convention:
 
-    ```bash
-    nxr down --profile main --pointer latest --dir vendor/panda
-    ```
+| Source | Invocation |
+|:-------|:-----------|
+| `manifest.json` at the version URL (the recommended publisher convention) | `nxr down <ver-url>/ vendor/app/` |
+| a manifest file, URL or stdin | `nxr down <ver-url>/ vendor/app/ --manifest manifest.json` |
+| explicit names | `nxr down <ver-url>/ vendor/app/ --name app.zip --name pinned.xml` |
+| server search API (best-effort, experimental) | `nxr down <ver-url>/ vendor/app/ --ls` |
 
-    The pointer file is read, its version token is resolved, and that version's claim drives the download.
+Without any source and without a server-side `manifest.json`, the run refuses with `cannot enumerate` and a hint — it never guesses names.
 
-=== "By version"
+## Resolve through a channel
 
-    ```bash
-    nxr down --profile main --version 1.4.0 --dir vendor/app
-    ```
+A channel is any token file naming a version.
+Resolve it yourself, then `down` the directory it points at:
 
-Both create the target directory if needed.
+```bash
+V=$(nxr channel get https://nexus.example.com/repository/raw-main/latest)
+nxr down "https://nexus.example.com/repository/raw-main/$V/" vendor/app/
+```
+
+The second call needs no extra flags when the version directory carries a `manifest.json` — the publisher shipped one with `up`.
 
 ## What lands where
 
-The version directory is mirrored under `--dir`, including subdirectories and markers:
+The version directory is mirrored under the target, including subdirectories:
 
 ```text
-vendor/panda/
-├── claim.json
+vendor/app/
 ├── app-1.4.0.zip
 ├── app-1.4.0.zip.sha256
-└── bom/
-    └── linux-x86_64.json
-    └── linux-x86_64.json.sha256
+├── bom/
+│   └── linux-x86_64.json
+│   └── linux-x86_64.json.sha256
+└── pinned.xml
 ```
 
-Downloads stream into a dot-prefixed temp file in the destination directory, hash on the fly, and are compared against the remote marker **before** the final rename.
-A killed transfer leaves no half-written artifact behind.
+Downloads stream into a stable part file (`.nxr-part-<hash>`) in the destination directory, hash on the fly, and are checked against the remote marker before the final rename.
+The local `<name>.sha256` sibling is always written, computed from the received bytes, so the result verifies offline even when the server had no marker.
+A killed transfer leaves only part files — and `--continue` picks them up:
+
+```bash
+nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ --continue
+```
 
 ## Fetch a subset
 
 ```bash
-nxr down --profile main --version 1.4.0 --only app-1.4.0.zip --only pinned.xml --dir vendor/app
+nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ \
+    --name app-1.4.0.zip --name pinned.xml
 ```
 
-`--only` restricts the transfer to the named claim artifacts — useful for large versions where a job needs one file.
+`--name` (repeatable) fetches exactly the listed names — useful for large versions where a job needs one file.
+A name that exists neither remotely nor locally is a data error, not a warning.
 
 ## Verify without the network
 
-After any manual manipulation, or before publishing your own copy:
+After any manual manipulation, or before building against the result:
 
 ```bash
-nxr verify --dir vendor/app
+nxr verify vendor/app/
 ```
 
-`verify` re-hashes every claim artifact against its marker, entirely offline — a good first gate in a consumer's CI.
+`verify` re-hashes every artifact against its marker, entirely offline — a good first gate in a consumer's CI.
+Pass `--manifest` to check a subset.
+A failure exit 1 lists the names that are incomplete, broken or missing.
 
 ## Re-runs are free
 

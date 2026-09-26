@@ -1,5 +1,5 @@
 site_name: nexus-raw
-site_description: A general-purpose client for Sonatype Nexus raw repositories — claim, sha-sibling markers, symmetric diff, resume.
+site_description: nxr is curl for a Sonatype Nexus raw repository — primitives with retries and TLS, verified directory transfers, channel refs and manifests.
 repo_url: https://gitcode.com/rri_opensource/nexus-raw
 
 theme:
@@ -42,12 +42,10 @@ nav:
   - How-to:
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
-      - Configure profiles: how-to/configure.md
       - Use in CI: how-to/ci.md
       - When it breaks: how-to/troubleshoot.md
   - Reference:
       - reference/cli.md
-      - Config and credentials: reference/config.md
       - Wire protocol: reference/protocol.md
       - Errors and exit codes: reference/errors.md
       - Rust API: reference/api.md
