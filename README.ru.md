@@ -4,9 +4,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square" alt="rust 1.85+">
-  <img src="https://img.shields.io/badge/protocol-claim__version%201-3f7e6e?style=flat-square" alt="протокол claim_version 1">
-  <img src="https://img.shields.io/badge/config%20files-none-2ea44f?style=flat-square" alt="без конфиг-файлов">
-  <img src="https://img.shields.io/badge/exits-0%20%7C%201%20%7C%202%20%7C%203-blue?style=flat-square" alt="коды выхода 0/1/2/3">
 </p>
 
 > `nxr` — это curl для raw-репозитория Sonatype Nexus.
@@ -28,14 +25,18 @@ cargo install --path crates/nexus-raw    # бинарь nxr
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
+# перечисляем, что можно забирать: down без этого файла в каталоге версии откажется
+printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
+
 # публикация каталога версии: маркеры генерируются, проверяются и загружаются сами
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 
 # назвать — канал это токен-файл с любым именем
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
-# забрать в другое место и проверить офлайн
-nxr down "$BASE/1.4.0/" vendor/prebuilt --continue
+# забрать в другое место: канал называет версию, манифест перечисляет файлы
+V=$(nxr channel get "$BASE/latest")
+nxr down "$BASE/$V/" vendor/prebuilt --continue
 nxr verify vendor/prebuilt
 ```
 
@@ -44,22 +45,27 @@ nxr verify vendor/prebuilt
 
 ## Креды
 
-`-u user:pass` главный, затем окружение: `NXR_AUTH` (base64 `user:pass`) или `NXR_USERNAME` + `NXR_PASSWORD` (только вместе).
+Три источника в порядке приоритета: `-u user:pass`, затем `NXR_AUTH`, затем `NXR_USERNAME` + `NXR_PASSWORD`.
 Это весь список: алиасы и URL по умолчанию живут в вашем shell или CI, а не в конфиге.
 
 ```bash
-printf 'ci-bot:%s' "$TOKEN" | base64
-export NXR_AUTH="Y2ktYm90OnRva2Vu"
+# простой путь: две переменные, ничего кодировать не надо
+export NXR_USERNAME="my-login"
+export NXR_PASSWORD="my-password"
+
+# путь для CI: одно значение вместо двух, удобно для маскируемой переменной
+export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
+# base64 от "my-login:my-password": bXktbG9naW46bXktcGFzc3dvcmQ=
 ```
 
-`-u` виден в `ps`, env-пути — выбор для CI.
-`nxr doctor` сообщает, какой источник сработал, не печатая значений.
+`-u` быстрее всего для разового вызова и виден в `ps`.
+Какой источник сработал, назовёт `nxr doctor`, не печатая значений.
 
 ## Возможности
 
 - `get`, `put`, `head`, `sha`: примитивы уровня curl, digest считается на лету.
 - `up`, `down`: перенос каталогов с симметричным диффом, параллельными воркерами и Range-resume (`.part`-файлы, 206).
-- Маркеры-сиблинги в формате `sha256sum -c`: `up` пишет и генерирует их по умолчанию, `--no-sha` означает осознанный отказ.
+- Маркеры-сиблинги: у каждого загруженного объекта появляется `<name>.sha256` в формате `sha256sum -c`; `up` пишет и генерирует их по умолчанию, `--no-sha` означает осознанный отказ.
 - `down` перечисление берёт явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 - `channel get|set`: токен-файлы с любым именем, с guard'ом `--if-forward` (dotted-numeric).
 - `verify`: офлайн-проверка байтов, маркеров и digest'ов.
@@ -76,7 +82,7 @@ export NXR_AUTH="Y2ktYm90OnRva2Vu"
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов: `--sha` ещё и PUT `.sha256`-сиблинга |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | скан → дифф → PUT байтов + маркеров параллельно |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | скан → дифф → PUT байтов + маркеров параллельно; `--manifest F` ограничивает прогон именами из F |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | перечисление → дифф → поток+hash → rename + локальный маркер |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (experimental) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |

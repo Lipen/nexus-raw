@@ -4,9 +4,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square" alt="rust 1.85+">
-  <img src="https://img.shields.io/badge/protocol-claim__version%201-3f7e6e?style=flat-square" alt="protocol claim_version 1">
-  <img src="https://img.shields.io/badge/config%20files-none-2ea44f?style=flat-square" alt="no config files">
-  <img src="https://img.shields.io/badge/exits-0%20%7C%201%20%7C%202%20%7C%203-blue?style=flat-square" alt="exit codes 0/1/2/3">
 </p>
 
 > `nxr` is curl for a Sonatype Nexus raw repository.
@@ -28,14 +25,18 @@ Two flows cover the model. Publish a version and name it, then fetch it back and
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
+# list what consumers may fetch: down refuses a version without this file
+printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
+
 # publish a version directory: markers are generated, verified and uploaded by default
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 
 # name it — a channel is a token file at any name
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 
-# fetch it elsewhere and check it offline
-nxr down "$BASE/1.4.0/" vendor/prebuilt --continue
+# fetch it elsewhere: the channel names the version, the manifest lists the files
+V=$(nxr channel get "$BASE/latest")
+nxr down "$BASE/$V/" vendor/prebuilt --continue
 nxr verify vendor/prebuilt
 ```
 
@@ -44,23 +45,27 @@ The rest of the model (explicit enumeration, dry-run plans, best-effort listings
 
 ## Credentials
 
-`-u user:pass` wins, then the environment: `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD` (set together or not at all).
+Three sources, tried in this order: `-u user:pass`, then `NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`.
 That is the whole list: the alias and the default URL live in your shell or CI instead of a config file.
 
 ```bash
-printf 'ci-bot:%s' "$TOKEN" | base64
-export NXR_AUTH="Y2ktYm90OnRva2Vu"
+# the simple way: two variables, nothing encoded
+export NXR_USERNAME="my-login"
+export NXR_PASSWORD="my-password"
+
+# the CI way: one value instead of two, handy for a masked variable
+export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
+# NXR_AUTH holds base64 of "my-login:my-password", here: bXktbG9naW46bXktcGFzc3dvcmQ=
 ```
 
-`-u` is visible in `ps`.
-The env paths are the CI choice.
-`nxr doctor` reports which source resolved, without printing values.
+`-u` is the fastest for a one-off and is visible in `ps`.
+Not sure which source resolved? `nxr doctor` names it without printing values.
 
 ## Features
 
 - `get`, `put`, `head`, `sha`: curl-grade primitives, digest computed on the fly.
 - `up`, `down`: directory transfers with the symmetric diff, parallel workers and Range-resume (`.part` files, 206).
-- sha-sibling markers in `sha256sum -c` format: `up` writes and generates them by default, `--no-sha` opts out.
+- sha-sibling markers: every uploaded object gets a `<name>.sha256` sidecar in `sha256sum -c` format; `up` writes and generates them by default, `--no-sha` opts out.
 - `down` enumerates explicitly: `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 - `channel get|set`: token files at any name, with a dotted-numeric `--if-forward` guard.
 - `verify`: offline check of bytes, markers and digests.
@@ -77,7 +82,7 @@ The env paths are the CI choice.
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | scan → diff → PUT bytes + markers in parallel workers |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run]` | scan → diff → PUT bytes + markers in parallel workers; `--manifest F` restricts the run to the names listed in F |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--continue]` | enumerate → diff → stream+hash → rename + local marker |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print a channel token (`unset` when empty) |

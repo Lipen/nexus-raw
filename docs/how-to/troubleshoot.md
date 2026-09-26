@@ -1,7 +1,7 @@
 # When it breaks
 
 Every failure has a name, an exit code and a hint.
-Find yours in the tables, fix the cause, repeat the command. Resume and re-runs are free by design.
+Find yours in the tables, fix the cause, repeat the command: `up` skips finished names and `down --continue` resumes from part files.
 
 ## Anatomy of a failure
 
