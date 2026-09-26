@@ -11,12 +11,15 @@ use crate::transport::client::NexusClient;
 
 /// Versions under a repository/group base: the path segment right after the
 /// group prefix of every asset, collected and sorted.
+///
+/// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any
+/// number of group segments, including none.
 pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
-    let parts = split_base(base)?;
-    let paths = paginate(client, base, &parts.repo, &parts.group).await?;
+    let (repo, group) = split_prefix(base)?;
+    let paths = paginate(client, base, &repo, &group).await?;
     let mut versions = std::collections::BTreeSet::new();
     for path in paths {
-        let rel = drop_segments(&path, parts.group.len());
+        let rel = drop_segments(&path, group.len());
         if let Some(seg) = rel.split('/').next() {
             if !seg.is_empty() && validate_version(seg).is_ok() {
                 versions.insert(seg.to_owned());
@@ -54,6 +57,27 @@ struct BaseParts {
     repo: String,
     group: Vec<String>,
     version: String,
+}
+
+/// `<…>/repository/<repo>/<group…>/` as a prefix: the group is everything
+/// after the repo, and there is no version segment requirement.
+fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
+    let err = || {
+        Error::misuse(format!(
+            "URL {base:?} must point inside /repository/<name>/<group…>/"
+        ))
+    };
+    let url = reqwest::Url::parse(base).map_err(|_| err())?;
+    let segs: Vec<String> = url
+        .path()
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(percent_decode)
+        .collect();
+    if segs.len() < 2 || segs[0] != "repository" {
+        return Err(err());
+    }
+    Ok((segs[1].clone(), segs[2..].to_vec()))
 }
 
 /// `<scheme>://host/repository/<repo>/<group…>/<version>/` → parts.
