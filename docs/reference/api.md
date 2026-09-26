@@ -20,7 +20,7 @@ The rule is one-directional: layers never import upward.
 The facade and the layering, as the crate itself draws it:
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#e8f2f0", "primaryTextColor": "#16302c", "primaryBorderColor": "#3d6b64", "lineColor": "#3d6b64", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "fontFamily": "inherit"}}}%%
 flowchart BT
     T["L0 transport<br/>retries · TLS · auth · stall"]
     P["L0 primitive<br/>get · put · head · sha"]

@@ -42,10 +42,9 @@ The `nexus-raw-core` crate exposes four public layers, from raw transport to the
 
 </div>
 
----
+![A real nxr session: publish, name with a channel, consume, verify](assets/img/hero-terminal.png)
 
-## The 30-second version
-
+The transcript above is real output, verbatim.
 Publish a version directory — markers included, re-runs free:
 
 ```console

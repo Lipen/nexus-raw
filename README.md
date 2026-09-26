@@ -1,5 +1,7 @@
 # nexus-raw
 
+<p align="center"><img src="docs/assets/img/hero-terminal.png" alt="A real nxr session: publish, name with a channel, consume, verify" width="720"></p>
+
 `nxr` is curl for a Sonatype Nexus raw repository.
 Primitives with retries, stall detection and TLS on.
 Verified directory transfers on top.

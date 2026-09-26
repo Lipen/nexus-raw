@@ -21,7 +21,7 @@ The crate is deliberately embeddable at four depths.
 Dependencies point one way, from UX down to transport, and no layer ever imports upward.
 
 ```mermaid
-%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "fontFamily": "inherit"}}}%%
 flowchart TB
     L3["<b>L3 — UX (the CLI)</b><br/>doctor · hints · NDJSON · exit codes<br/><i>may not speak HTTP</i>"]
     L2["<b>L2 — layout helpers</b><br/>channels · manifests · search listings<br/><i>may not know the CLI exists</i>"]
@@ -63,26 +63,31 @@ States are per side, and the decision is about the pair.
 The full table is in the [protocol reference](../reference/protocol.md).
 
 ```mermaid
-%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
 stateDiagram-v2
-    direction TB
+    direction LR
+    classDef good fill:#e2efe6,stroke:#2e7d54,color:#1b3a29
+    classDef refuse fill:#f6e3df,stroke:#b3402f,color:#571f15
 
-    Absent: Absent — no bytes on this side
-    Markerless: Markerless — bytes present, no marker
-    Broken: Broken — marker present but wrong
-    Complete: Complete — bytes and marker, digest matches
+    Absent: Absent<br/>no bytes on this side
+    Markerless: Markerless<br/>bytes, no marker yet
+    Broken: Broken<br/>marker disagrees
+    Complete: Complete<br/>digest matches
 
     [*] --> Absent
+    Absent --> Markerless: bytes landed
+    Markerless --> Complete: marker follows
+    Absent --> Complete: clean transfer
+    Complete --> Broken: tampering, bitrot
+    Markerless --> Broken: foreign marker
+    Broken --> Broken: transfer refused, exit 1
+    Complete --> Complete: divergent refused, exit 1
 
-    Absent --> Markerless: bytes landed, marker write still ahead — the crash window
-    Markerless --> Complete: marker follows bytes — a finished transfer, or a repair by re-upload
-    Absent --> Complete: a transfer with no crash in between
-    Complete --> Broken: tampering, bitrot, or a foreign stale marker
-    Markerless --> Broken: a marker appeared but never matched these bytes
-
-    Broken --> Broken: any transfer refused — never overwritten, exit 1
-    Complete --> Complete: divergent digest refused — no winner is picked, exit 1
+    class Broken refuse
+    class Complete good
 ```
+
+The gap between `Absent` and `Markerless` is the crash window: the bytes landed, the marker write is still ahead.
 
 The table is conservative in a direction that surprises people once: divergent objects are never overwritten.
 A local Complete and a remote Complete with different digests is a mismatch — the transfer refuses and escalates the decision to a human with exit 1.
@@ -104,7 +109,7 @@ Downloads can and do resume, because HTTP Range is already there.
 The interesting signal is `416`.
 
 ```mermaid
-%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
 sequenceDiagram
     autonumber
     participant nxr as nxr down --continue
@@ -114,19 +119,19 @@ sequenceDiagram
     srv-->>nxr: 200 OK, Content-Length
     nxr->>srv: GET 1.0.0/a.zip.sha256
     srv-->>nxr: 200 OK, digest line
-    note over nxr: part .nxr-part-star holds N bytes
-    alt N is the whole object — the previous run died before the rename
-        nxr->>srv: GET 1.0.0/a.zip, Range: bytes=N-
+    note over nxr: part file holds N bytes
+    alt the part holds the whole object
+        nxr->>srv: GET …, Range: bytes=N-
         srv-->>nxr: 416 Range Not Satisfiable
-        note over nxr: finalize the part — no bytes re-fetched
-    else N is a partial prefix
-        nxr->>srv: GET 1.0.0/a.zip, Range: bytes=N-
+        note over nxr: finalize — no bytes re-fetched
+    else a partial prefix
+        nxr->>srv: GET …, Range: bytes=N-
         srv-->>nxr: 206 Partial Content
-        note over nxr: append from byte N — the hash covers the prefix too
+        note over nxr: append from byte N
     end
-    note over nxr: digest of the part vs the remote sibling
+    note over nxr: part digest vs remote sibling
     alt digests match
-        note over nxr: rename the part into place, write the local marker
+        note over nxr: rename into place, write the marker
     else digest differs
         note over nxr: delete the part, refuse with exit 1
     end
