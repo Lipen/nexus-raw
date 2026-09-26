@@ -53,6 +53,9 @@ nav:
       - Design: explanation/design.md
       - Conformance: explanation/conformance.md
 
+extra_css:
+  - stylesheets/site.css
+
 markdown_extensions:
   - admonition
   - attr_list
