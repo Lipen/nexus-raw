@@ -5,22 +5,16 @@ use std::ops::Deref;
 
 use crate::error::Error;
 
-/// Artifact name: a path relative to the version directory.
+/// Artifact name: a path relative to the directory being transferred.
 ///
 /// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each,
 /// no empty/`.`/`..` segments, no leading/trailing `/`.
-/// Reserved: `claim.json`, pointer names, the `.sha256` suffix.
+/// Reserved: the `.sha256` suffix (marker collision).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactName(String);
 
 const MAX_SEGMENT_BYTES: usize = 255;
 const SIBLING_SUFFIX: &str = ".sha256";
-pub const CLAIM_FILE: &str = "claim.json";
-pub const POINTERS: [&str; 2] = ["latest", "nightly"];
-
-pub fn is_pointer_name(name: &str) -> bool {
-    POINTERS.contains(&name)
-}
 
 fn valid_segment(seg: &str) -> bool {
     !seg.is_empty()
@@ -59,12 +53,6 @@ impl ArtifactName {
         }
         if name.ends_with(SIBLING_SUFFIX) {
             return Err(err("reserved suffix .sha256 (artifact/marker collision)"));
-        }
-        if name == CLAIM_FILE {
-            return Err(err("reserved name claim.json"));
-        }
-        if is_pointer_name(name) {
-            return Err(err("reserved pointer name"));
         }
         for seg in name.split('/') {
             if !valid_segment(seg) {
@@ -161,9 +149,12 @@ mod tests {
         assert!(!unsafe_reason("a//b").is_empty());
         assert!(!unsafe_reason("x/").is_empty());
         assert!(!unsafe_reason("x.sha256").is_empty());
-        assert!(!unsafe_reason("latest").is_empty());
-        assert!(!unsafe_reason("nightly").is_empty());
-        assert!(!unsafe_reason("claim.json").is_empty());
+        // v0.3: no reserved names beyond the .sha256 suffix.
+        // `latest`/`nightly`/`claim.json` are ordinary artifact names now:
+        // channels and manifests are generic files, not protocol.
+        for name in ["latest", "nightly", "claim.json"] {
+            ArtifactName::parse(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+        }
         assert!(!unsafe_reason("~x").is_empty());
         assert!(!unsafe_reason("a/../b").is_empty());
         assert!(!unsafe_reason("a/./b").is_empty());

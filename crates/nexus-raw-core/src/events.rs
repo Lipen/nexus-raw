@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::diff::Action;
+use crate::sync::diff::Action;
 
 /// Transfer direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -3,9 +3,11 @@
 //! Implements just enough HTTP/1.1 (std only) to exercise the nexus-raw
 //! transport contract: `GET`/`HEAD`/`PUT` with `Content-Length` or chunked
 //! bodies, percent-encoded paths stored verbatim, one request per connection,
-//! `Connection: close` on every response. A [`Scenario`] selects a failure
-//! mode (partial PUT bodies, connection resets, slow links, drifted claims,
-//! flaky 503s, Basic-auth gating).
+//! `Connection: close` on every response. GET honors resumable downloads: a
+//! single open `Range: bytes=N-` is answered with `206` and `Content-Range`
+//! (out-of-range starts get `416`); any other `Range` form is ignored.
+//! A [`Scenario`] selects a failure mode (partial PUT bodies, connection
+//! resets, slow links, drifted claims, flaky 503s, Basic-auth gating).
 //!
 //! Rust conformance tests use the library API directly.
 //! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:
@@ -656,5 +658,58 @@ mod tests {
         assert_eq!(status, 200);
         assert_eq!(header_value(&headers, "content-length"), Some("20"));
         assert_eq!(got, body);
+    }
+
+    #[test]
+    fn get_range_serves_suffix_body_and_rejects_out_of_bounds() {
+        let server = MockNexus::start(Scenario::Atomic).unwrap();
+
+        // Store the object through the wire, as a resuming client would.
+        let (status, _, _) =
+            exchange(server.addr(), "PUT", "/1.14.0/blob.bin", b"0123456789", &[]).unwrap();
+        assert_eq!(status, 201);
+
+        // Resume from byte 5: 206 with a Content-Range and the suffix body.
+        let (status, headers, body) = exchange(
+            server.addr(),
+            "GET",
+            "/1.14.0/blob.bin",
+            b"",
+            &[("Range", "bytes=5-")],
+        )
+        .unwrap();
+        assert_eq!(status, 206);
+        assert_eq!(
+            header_value(&headers, "content-range"),
+            Some("bytes 5-9/10")
+        );
+        assert_eq!(header_value(&headers, "content-length"), Some("5"));
+        assert_eq!(body, b"56789");
+        // The range hit is recorded as 206.
+        assert_eq!(server.requests()[1].outcome, Outcome::Status(206));
+
+        // Start at the end: nothing to serve, 416 with the object total.
+        let (status, headers, _) = exchange(
+            server.addr(),
+            "GET",
+            "/1.14.0/blob.bin",
+            b"",
+            &[("Range", "bytes=10-")],
+        )
+        .unwrap();
+        assert_eq!(status, 416);
+        assert_eq!(header_value(&headers, "content-range"), Some("bytes */10"));
+
+        // A range on a missing object is still a plain 404.
+        let (status, _, body) = exchange(
+            server.addr(),
+            "GET",
+            "/1.14.0/missing",
+            b"",
+            &[("Range", "bytes=5-")],
+        )
+        .unwrap();
+        assert_eq!(status, 404);
+        assert_eq!(body, b"not found\n");
     }
 }

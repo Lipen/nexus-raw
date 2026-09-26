@@ -1,6 +1,5 @@
-//! Protocol data model: names, digests, siblings, claims, per-name state, pointers.
+//! Data model: names, digests, siblings, per-name state, pointer tokens.
 
-pub mod claim;
 pub mod digest;
 pub mod name;
 pub mod pointer;

@@ -1,60 +1,62 @@
 //! # nexus-raw-core
 //!
-//! The core of the nexus-raw protocol: reliable artifact delivery to and from
-//! a Sonatype Nexus raw repository.
+//! The core of nexus-raw: curl for a Sonatype Nexus raw repository.
 //! The entry point is the [`Nxr`] facade.
 //! The CLI and wrappers are thin and carry no protocol logic.
 //!
-//! ## The canonical protocol (summary)
+//! ## Layers
 //!
-//! Layout inside the base URL (`<base>/` is the repository directory, without
-//! the version name):
+//! - **L0 transport + primitives**: [`transport`] (retries, stall, TLS, auth)
+//!   and [`primitive`] (`get`/`put`/`head`/`sha`) — curl-grade, no verification.
+//! - **L1 transfer**: [`sync`] — directory up/down with the symmetric diff,
+//!   sha-sibling markers, parallel workers and Range-resume (`.part` files).
+//! - **L2 layout helpers**: [`layout`] — channels (token refs with any name),
+//!   manifests (the enumeration source for down), search-based listings.
+//! - **L3 UX** lives in the CLI: doctor, logs, hints, NDJSON.
+//!
+//! ## The shape of a store
 //!
 //! ```text
-//! <base>/<version>/claim.json          — the version's name list, immutable
-//! <base>/<version>/<name>              — artifact bytes
-//! <base>/<version>/<name>.sha256       — sha-sibling: "<hex>  <name>\n" (sha256sum -c)
-//! <base>/<pointer>                     — pointer: "<token>\n" (latest, nightly)
+//! <base>/<name>            — artifact bytes
+//! <base>/<name>.sha256     — sha-sibling: "<hex>  <name>\n" (sha256sum -c)
+//! <base>/manifest.json     — conventional name list (enumeration for down)
+//! <channel-url>            — a token file: "<token>\n", any name
 //! ```
 //!
 //! A name is complete = bytes + sibling with a matching digest.
-//! Local/remote states ([`LocalStatus`] / [`RemoteStatus`]): `Complete`,
-//! `Markerless` (bytes without a marker), `Broken` (marker mismatches or does
-//! not parse), `Absent`.
-//! The symmetric diff (§5.2 of the protocol) decides what to transfer.
-//! `Mismatch`, `Missing` and local incompleteness refuse without overwriting.
+//! Local/remote states: `Complete`, `Markerless` (bytes without a marker),
+//! `Broken` (marker mismatches or does not parse), `Absent`.
+//! The symmetric diff decides what to transfer.
+//! `Mismatch` and `Missing` refuse without overwriting.
 //!
-//! Write order (up): claim (drift check) → then per name, in parallel workers,
-//! `PUT <name>` → `PUT <name>.sha256`.
-//! The marker strictly follows the bytes of the same name.
-//! Down: GET claim → tmp+hash → rename → tmp marker → rename.
-//! A partially fetched name leaves neither bytes nor marker at the destination.
+//! `up` writes markers by default; `--no-sha` opts out.
+//! `down` requires an enumeration source: a manifest, explicit names,
+//! or the best-effort search API.
 //!
-//! Transport: GET/HEAD/PUT.
-//! Basic auth from env, TLS verified by default.
-//! Up to 4 attempts per request with 0.5s×2ⁿ backoff + jitter ≤ 250ms.
-//! Stall detection — no bytes for N seconds.
-//!
-//! Errors: [`Error`] with [`Error::exit_code`] — 0 ok, 1 data, 2 misuse, 3 transport.
+//! Errors: [`Error`] with [`Error::exit_code`] — 0 ok, 1 data, 2 misuse,
+//! 3 transport — and [`Error::hint`], the human hint the CLI renders.
 
 pub mod config;
 pub mod creds;
-pub mod diff;
 pub mod error;
 pub mod events;
+pub mod layout;
 pub mod model;
 pub mod nxr;
-pub mod ops;
+pub mod primitive;
+pub mod sync;
 pub mod transport;
 
 // The flat public surface: wrappers import from the crate root.
 pub use crate::config::Config;
-pub use crate::diff::Action;
 pub use crate::error::{Error, Verdict};
 pub use crate::events::{Dir, Event, Progress, Summary};
-pub use crate::model::claim::Claim;
+pub use crate::layout::{ChannelOutcome, Manifest};
 pub use crate::model::digest::Digest;
 pub use crate::model::name::ArtifactName;
 pub use crate::model::state::{LocalStatus, RemoteStatus};
-pub use crate::nxr::Nxr;
-pub use crate::ops::PointOutcome;
+pub use crate::nxr::{Enumeration, Nxr};
+pub use crate::primitive::{GetOutcome, ShaSource};
+pub use crate::sync::{Action, Mode};
+pub use crate::transport::client::HeadInfo;
+pub use crate::transport::client::NexusClient;

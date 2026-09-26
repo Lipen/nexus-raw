@@ -1,28 +1,25 @@
-//! `nxr` — thin CLI over the `nexus-raw-core` facade.
+//! `nxr` — curl for a Nexus raw repository.
 //!
 //! This crate owns only flag parsing, event rendering and exit codes.
 //! All protocol logic lives in the core crate.
 
 mod cmd;
-mod config_setup;
 mod render;
-
-use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-/// Publish and fetch artifacts from a Nexus raw repository.
+use std::path::PathBuf;
+
+/// curl for a Nexus raw repository: primitives with retries and TLS on,
+/// verified directory transfers, channel refs and manifests.
 #[derive(Debug, Parser)]
 #[command(name = "nxr", version, about)]
 pub(crate) struct Cli {
-    /// Profile name from the config file.
-    /// Selects the url and credentials.
-    #[arg(long, global = true, value_name = "NAME")]
-    pub(crate) profile: Option<String>,
-    /// Base URL of the raw repository.
-    /// Wins over the profile url.
-    #[arg(long, global = true, value_name = "URL")]
-    pub(crate) base: Option<String>,
+    /// Credentials as user:pass, curl style.
+    /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or
+    /// NXR_USERNAME + NXR_PASSWORD.
+    #[arg(short = 'u', long, value_name = "USER:PASS", global = true)]
+    pub(crate) user: Option<String>,
     /// Parallel artifact transfers.
     #[arg(long, global = true, value_name = "N", default_value_t = 8)]
     pub(crate) workers: usize,
@@ -38,12 +35,6 @@ pub(crate) struct Cli {
     /// Skip TLS certificate verification.
     #[arg(long, global = true)]
     pub(crate) tls_insecure: bool,
-    /// Path to config.toml (default: $NXR_CONFIG, then ~/.config/nxr/config.toml).
-    #[arg(long, global = true, value_name = "PATH")]
-    pub(crate) config: Option<PathBuf>,
-    /// Ignore the config file entirely.
-    #[arg(long, global = true)]
-    pub(crate) no_config: bool,
     /// Emit one NDJSON event per line on stdout.
     #[arg(long, global = true)]
     pub(crate) json: bool,
@@ -59,75 +50,131 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Cmd {
-    /// Publish a version from a local directory.
+    /// GET a URL to a file or stdout.
+    Get {
+        /// The object URL.
+        #[arg(value_name = "URL")]
+        url: String,
+        /// Output file (stdout when omitted).
+        #[arg(short = 'o', long, value_name = "FILE")]
+        out: Option<PathBuf>,
+        /// Resume from an existing <out>.part through a Range request.
+        #[arg(long = "continue")]
+        cont: bool,
+    },
+    /// PUT a file, optionally with its sha-sibling marker.
+    Put {
+        /// The object URL.
+        #[arg(value_name = "URL")]
+        url: String,
+        /// The file to send.
+        #[arg(short = 'f', long, value_name = "FILE")]
+        file: PathBuf,
+        /// Also PUT <url>.sha256 with the sha256sum-style marker.
+        #[arg(long)]
+        sha: bool,
+    },
+    /// HEAD a URL: status, size, content type.
+    Head {
+        /// The object URL.
+        #[arg(value_name = "URL")]
+        url: String,
+    },
+    /// The sha256 of a file or URL.
+    Sha {
+        /// A local path or an http(s) URL.
+        #[arg(value_name = "FILE|URL")]
+        target: String,
+    },
+    /// Upload a local directory: verified, parallel, marker-perfect (§5.2).
     Up {
-        /// Directory holding claim.json, artifacts and .sha256 markers.
-        #[arg(long, value_name = "DIR")]
-        dir: PathBuf,
-        /// Claim file to use instead of <dir>/claim.json.
-        #[arg(long, value_name = "FILE")]
-        names: Option<PathBuf>,
+        /// The source directory.
+        #[arg(value_name = "SRC_DIR")]
+        src: PathBuf,
+        /// The remote directory URL.
+        #[arg(value_name = "DST_URL")]
+        dst: String,
+        /// Restrict the transfer to these names.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// Skip marker generation and marker uploads.
+        #[arg(long = "no-sha")]
+        no_sha: bool,
         /// Print the plan without transferring anything.
         #[arg(long)]
         dry_run: bool,
     },
-    /// Download a version, or a subset of it, into a directory.
+    /// Download a remote directory into a local one (§5.2, §5.2.1).
     Down {
-        /// Target directory.
-        /// Created when missing.
-        #[arg(long, value_name = "DIR")]
-        dir: PathBuf,
-        /// Version to download.
-        #[arg(long, value_name = "V")]
-        version: Option<String>,
-        /// Pointer to resolve: latest or nightly.
-        #[arg(long, value_name = "POINTER")]
-        pointer: Option<String>,
-        /// Restrict the transfer to these artifact names.
+        /// The remote directory URL.
+        #[arg(value_name = "SRC_URL")]
+        src: String,
+        /// The target directory.
+        #[arg(value_name = "DST_DIR")]
+        dst: PathBuf,
+        /// Enumeration source: a manifest file, URL or `-` for stdin.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// One explicit name; repeat as needed.
         #[arg(long, value_name = "NAME")]
-        only: Vec<String>,
-        /// Claim file whose artifacts join the --only filter.
-        #[arg(long, value_name = "FILE")]
-        names: Option<PathBuf>,
-    },
-    /// Check local bytes, markers and digests.
-    /// No network.
-    Verify {
-        /// Directory holding claim.json, artifacts and .sha256 markers.
-        #[arg(long, value_name = "DIR")]
-        dir: PathBuf,
-        /// Claim file to use instead of <dir>/claim.json.
-        #[arg(long, value_name = "FILE")]
-        names: Option<PathBuf>,
-    },
-    /// Print the symmetric plan against the server.
-    /// Nothing is written.
-    Diff {
-        /// Directory holding claim.json, artifacts and .sha256 markers.
-        #[arg(long, value_name = "DIR")]
-        dir: PathBuf,
-        /// Claim file to use instead of <dir>/claim.json.
-        #[arg(long, value_name = "FILE")]
-        names: Option<PathBuf>,
-    },
-    /// Per-name remote states of a version, or the version list.
-    Ls {
-        /// Version to inspect.
-        /// Without it the version list is printed.
-        #[arg(long, value_name = "V")]
-        version: Option<String>,
-    },
-    /// Atomically move a pointer (latest, nightly) to a version.
-    Point {
-        /// Pointer name: latest or nightly.
-        #[arg(value_name = "POINTER")]
-        pointer: String,
-        /// Version the pointer should name.
-        #[arg(value_name = "V")]
-        version: String,
-        /// Move the pointer only forward in version order.
+        name: Vec<String>,
+        /// Best-effort enumeration through the server search API.
         #[arg(long)]
-        if_newer: bool,
+        ls: bool,
+        /// Resume interrupted downloads from their part files.
+        #[arg(long = "continue")]
+        cont: bool,
+    },
+    /// List versions or the objects of a version directory (experimental).
+    Ls {
+        /// A repository/group URL (versions) or a directory URL (--assets).
+        #[arg(value_name = "URL")]
+        url: String,
+        /// List the object names under a directory URL.
+        #[arg(long)]
+        assets: bool,
+    },
+    /// Read or write a channel ref: a token file with any name.
+    Channel {
+        #[command(subcommand)]
+        op: ChannelOp,
+    },
+    /// Check local bytes, markers and digests. No network.
+    Verify {
+        /// The directory to check.
+        #[arg(value_name = "DIR")]
+        dir: PathBuf,
+        /// Check exactly these names.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+    },
+    /// Diagnose credentials, TLS and reachability.
+    Doctor {
+        /// A base URL to probe; checks without it stay local.
+        #[arg(value_name = "URL")]
+        url: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum ChannelOp {
+    /// Print the current token, or nothing when the channel is unset.
+    Get {
+        /// The channel file URL.
+        #[arg(value_name = "URL")]
+        url: String,
+    },
+    /// Write the token, optionally only forward in version order.
+    Set {
+        /// The channel file URL.
+        #[arg(value_name = "URL")]
+        url: String,
+        /// The new token.
+        #[arg(value_name = "TOKEN")]
+        token: String,
+        /// Keep the current token when it already compares >= the new one.
+        #[arg(long)]
+        if_forward: bool,
     },
 }
 
@@ -141,6 +188,9 @@ fn main() -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
+            if let Some(hint) = e.hint() {
+                eprintln!("hint: {hint}");
+            }
             std::process::ExitCode::from(e.exit_code())
         }
     }

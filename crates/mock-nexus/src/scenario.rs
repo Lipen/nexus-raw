@@ -97,16 +97,46 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
 
     match req.method.as_str() {
         "GET" => match drift_or_store(shared, path) {
-            Some(body) => {
-                log_request(shared, &req.method, path, Outcome::Status(200));
-                let resp = Resp {
-                    status: 200,
-                    extra_headers: Vec::new(),
-                    content_length: body.len(),
-                    body,
-                    drip: shared.drip,
-                };
-                let _ = server::write_response(stream, &resp);
+            Some(payload) => {
+                let total = payload.len();
+                match range_start(req.header("Range")) {
+                    // Start at or past the end: nothing to resume from.
+                    Some(start) if start >= total => {
+                        log_request(shared, &req.method, path, Outcome::Status(416));
+                        let mut resp = plain(416, b"range not satisfiable\n", shared.drip);
+                        resp.extra_headers
+                            .push(("Content-Range", format!("bytes */{total}")));
+                        let _ = server::write_response(stream, &resp);
+                    }
+                    // Single open range: serve the suffix as Partial Content.
+                    Some(start) => {
+                        let body = payload[start..].to_vec();
+                        log_request(shared, &req.method, path, Outcome::Status(206));
+                        let resp = Resp {
+                            status: 206,
+                            extra_headers: vec![(
+                                "Content-Range",
+                                format!("bytes {start}-{}/{total}", total - 1),
+                            )],
+                            content_length: body.len(),
+                            body,
+                            drip: shared.drip,
+                        };
+                        let _ = server::write_response(stream, &resp);
+                    }
+                    // No (recognized) Range: the whole object.
+                    None => {
+                        log_request(shared, &req.method, path, Outcome::Status(200));
+                        let resp = Resp {
+                            status: 200,
+                            extra_headers: Vec::new(),
+                            content_length: total,
+                            body: payload,
+                            drip: shared.drip,
+                        };
+                        let _ = server::write_response(stream, &resp);
+                    }
+                }
             }
             None => {
                 log_request(shared, &req.method, path, Outcome::Status(404));
@@ -234,6 +264,27 @@ fn normalize_path(target: &str) -> String {
     no_query.strip_prefix('/').unwrap_or(no_query).to_owned()
 }
 
+/// Parse a `Range` header for resumable GETs.
+/// Only the single open form `bytes=N-` (from byte `N` to the end) is
+/// recognized; anything else — another unit, multiple ranges, the closed
+/// `N-M` or suffix `-N` forms, malformed values — yields `None` and the
+/// response is served in full.
+fn range_start(header: Option<&str>) -> Option<usize> {
+    let value = header?;
+    let (unit, spec) = value.split_once('=')?;
+    if !unit.trim().eq_ignore_ascii_case("bytes") {
+        return None;
+    }
+    if spec.contains(',') {
+        return None;
+    }
+    let (start, end) = spec.split_once('-')?;
+    if !end.trim().is_empty() {
+        return None;
+    }
+    start.trim().parse().ok()
+}
+
 /// True when the path designates a claim document (`<version>/claim.json`).
 fn is_claim_path(path: &str) -> bool {
     path.ends_with("/claim.json")
@@ -279,7 +330,8 @@ fn auth_decision(header: Option<&str>, expected_b64: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        auth_decision, drift_claim, first_segment, is_claim_path, normalize_path, zero_digest,
+        auth_decision, drift_claim, first_segment, is_claim_path, normalize_path, range_start,
+        zero_digest,
     };
 
     #[test]
@@ -328,5 +380,21 @@ mod tests {
         assert!(!auth_decision(Some("Bearer Y2k6c2VjcmV0"), "Y2k6c2VjcmV0"));
         assert!(!auth_decision(Some("Basic d3Jvbmc="), "Y2k6c2VjcmV0"));
         assert!(!auth_decision(Some("Basic"), "Y2k6c2VjcmV0"));
+    }
+
+    #[test]
+    fn range_start_accepts_only_single_open_bytes_range() {
+        assert_eq!(range_start(Some("bytes=5-")), Some(5));
+        assert_eq!(range_start(Some("bytes=0-")), Some(0));
+        // Unit comparison is case-insensitive.
+        assert_eq!(range_start(Some("Bytes=12-")), Some(12));
+        // Closed, suffix and multi-range forms are not supported.
+        assert_eq!(range_start(Some("bytes=0-4")), None);
+        assert_eq!(range_start(Some("bytes=-5")), None);
+        assert_eq!(range_start(Some("bytes=0-4,10-")), None);
+        assert_eq!(range_start(Some("items=5-")), None);
+        assert_eq!(range_start(Some("bytes=")), None);
+        assert_eq!(range_start(Some("bytes=q-")), None);
+        assert_eq!(range_start(None), None);
     }
 }

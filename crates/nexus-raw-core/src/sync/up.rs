@@ -1,27 +1,26 @@
-//! The upload executor: PUT bytes → PUT marker, worker semaphore (protocol §6.1).
+//! The upload executor: PUT bytes → PUT canonical marker, worker semaphore (§5.2).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::Semaphore;
 
-use crate::diff::Action;
 use crate::error::Error;
 use crate::events::{Dir, Summary};
-use crate::model::name::ArtifactName;
 use crate::model::sibling;
-use crate::model::state::{bytes_path, sibling_path};
+use crate::model::state::bytes_path;
+use crate::sync::diff::Action;
 use crate::transport::client::NexusClient;
 
-/// Publish the artifacts: the claim is already checked and stored
-/// (`put_claim_checked`).
+/// Upload the artifacts: bytes first, then the marker of the same name.
 ///
+/// `dir_url` is the normalized remote directory.
 /// Per-name failures (after retries) are collected into `Summary.failed`.
 /// The Summary event goes out first, then [`Error::Incomplete`] is returned.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
-    version: String,
+    dir_url: String,
     actions: Vec<Action>,
     workers: Arc<Semaphore>,
 ) -> Result<Summary, Error> {
@@ -36,7 +35,7 @@ pub async fn execute(
                     .done(name.as_str(), Dir::Up, true, 0, None)
                     .await;
             }
-            Action::Upload { name, size } => {
+            Action::Upload { name, size, digest } => {
                 let permit = workers
                     .clone()
                     .acquire_owned()
@@ -44,17 +43,17 @@ pub async fn execute(
                     .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
                 let client = client.clone();
                 let dir = dir.clone();
-                let version = version.clone();
+                let dir_url = dir_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    match upload_one(&client, &dir, &version, &name, size).await {
+                    match upload_one(&client, &dir, &dir_url, &name, size, digest).await {
                         Ok(()) => Ok(name),
                         Err(e) => Err((name.to_string(), e)),
                     }
                 });
             }
+            // A Download never appears in an up plan: classify refuses those shapes.
             Action::Download { name, .. } => {
-                // A Download never appears in an up plan: the precheck requires Complete locally.
                 return Err(Error::misuse(format!(
                     "internal: Download action {name} in an up plan"
                 )));
@@ -66,53 +65,65 @@ pub async fn execute(
         ..Summary::default()
     };
     let mut failed: Vec<String> = Vec::new();
+    let mut first_error: Option<Error> = None;
     while let Some(res) = set.join_next().await {
         match res {
             Ok(Ok(_)) => summary.uploaded += 1,
             Ok(Err((name, e))) => {
                 failed.push(name);
                 log::error!("up failed: {e}");
+                if first_error.is_none()
+                    && matches!(
+                        e,
+                        Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. }
+                    )
+                {
+                    first_error = Some(e);
+                }
             }
             Err(e) => return Err(Error::misuse(format!("task panicked: {e}"))),
         }
     }
+    summary.failed = failed;
     client.progress().summary(&summary);
-    if !failed.is_empty() {
-        return Err(Error::Incomplete { names: failed });
+    // Transport-level failures surface as their own error (exit 3),
+    // the failed names stay visible in the summary.
+    if let Some(e) = first_error {
+        return Err(e);
+    }
+    if !summary.failed.is_empty() {
+        return Err(Error::Incomplete {
+            names: summary.failed.clone(),
+        });
     }
     Ok(summary)
 }
 
-/// PUT the bytes, then the canonical marker of the same name (§6.1.2).
+/// PUT the bytes, then the canonical marker of the same name (§5.2).
+/// The marker strictly follows the bytes: a crash in between leaves a
+/// Markerless object, which every reader refuses to trust.
 async fn upload_one(
     client: &NexusClient,
-    dir: &Path,
-    version: &str,
-    name: &ArtifactName,
+    dir: &std::path::Path,
+    dir_url: &str,
+    name: &crate::model::name::ArtifactName,
     size: u64,
+    digest: Option<crate::model::digest::Digest>,
 ) -> Result<(), Error> {
-    let bytes_url = client.object_url(version, name);
-    let bytes = bytes_path(dir, name);
+    let bytes_url = client.object_url(dir_url, name);
+    let src = bytes_path(dir, name);
     client
-        .upload_file((name.as_str(), Dir::Up), &bytes_url, &bytes, size)
+        .upload_file((name.as_str(), Dir::Up), &bytes_url, &src, size)
         .await?;
-    // The sibling was verified Complete by the diff.
-    // Write the canonical line.
-    let sib_file = sibling_path(dir, name);
-    let raw = tokio::fs::read_to_string(&sib_file)
-        .await
-        .map_err(|e| Error::io(&sib_file, e))?;
-    let parsed = sibling::parse_line(&raw).map_err(|e| Error::Mismatch {
-        name: name.to_string(),
-        detail: format!("local sibling turned unparseable before upload: {e}"),
-    })?;
-    let sib_url = format!("{bytes_url}.sha256");
-    client
-        .put_small(
-            &sib_url,
-            sibling::format_line(name.as_str(), &parsed.digest).into_bytes(),
-        )
-        .await?;
+    if let Some(d) = digest {
+        let marker_url = client.sibling_url(dir_url, name);
+        client
+            .put_small(
+                &marker_url,
+                sibling::format_line(name.as_str(), &d).into_bytes(),
+            )
+            .await?;
+    }
     client
         .progress()
         .done(name.as_str(), Dir::Up, false, size, Some(size))

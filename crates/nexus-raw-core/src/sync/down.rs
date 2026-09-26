@@ -1,19 +1,23 @@
-//! The download executor: tmp+hash → rename → tmp marker → rename, orphans by pid (protocol §6.2).
+//! The download executor: resumable part file → verify → rename → local marker (§5.2).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::sync::Semaphore;
 
-use crate::diff::Action;
 use crate::error::Error;
 use crate::events::{Dir, Summary};
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path};
+use crate::sync::diff::Action;
 use crate::transport::client::NexusClient;
 
+/// The stable part-file prefix: `<prefix><fnv64hex>` per artifact name.
+/// A part survives an interrupted run so `--continue` can resume it.
+const PART_PREFIX: &str = ".nxr-part-";
+/// Legacy temp prefix from pre-resume versions; cleaned up when dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
 
 enum Failure {
@@ -22,7 +26,15 @@ enum Failure {
     Failed(Error),
 }
 
-/// Download the artifacts: the claim is fetched and the diff is done.
+/// The stable part-file path for a name inside `dir`.
+pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
+    dir.join(format!(
+        "{PART_PREFIX}{:016x}",
+        fnv64(name.encoded().as_bytes())
+    ))
+}
+
+/// Download the artifacts.
 ///
 /// Per-name failures land in `Summary.failed` (digest mismatches become
 /// `Error::Mismatch`).
@@ -30,15 +42,16 @@ enum Failure {
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
-    version: String,
+    dir_url: String,
     actions: Vec<Action>,
+    cont: bool,
     workers: Arc<Semaphore>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
     for action in actions {
         match action {
-            // Already Complete locally (or the local copy is the only one): nothing to do.
+            // Already complete locally: nothing to fetch.
             Action::Skip { name, .. } | Action::Upload { name, .. } => {
                 skipped += 1;
                 client
@@ -54,10 +67,10 @@ pub async fn execute(
                     .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
                 let client = client.clone();
                 let dir = dir.clone();
-                let version = version.clone();
+                let dir_url = dir_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    match download_one(&client, &dir, &version, &name, size, digest).await {
+                    match download_one(&client, &dir, &dir_url, &name, size, digest, cont).await {
                         Ok(()) => Ok(name),
                         Err((name, failure)) => Err((name, failure)),
                     }
@@ -102,22 +115,30 @@ pub async fn execute(
     Ok(summary)
 }
 
-/// GET the bytes into a temp file (hash on the fly) → compare with the sibling →
-/// rename → marker into a temp file → rename (§6.2.2).
+/// GET the bytes into the stable part file (hash on the fly, Range resume) →
+/// compare with the sibling → rename → write the local marker (§5.2).
 ///
-/// A partially fetched name leaves neither bytes nor marker at the destination (§6.2.3).
+/// A refused or failed name leaves only the part file: the bytes and the
+/// marker never appear at the destination until the digest checked out.
 async fn download_one(
     client: &NexusClient,
     dir: &Path,
-    version: &str,
+    dir_url: &str,
     name: &ArtifactName,
     size_hint: Option<u64>,
     expected: Option<Digest>,
+    cont: bool,
 ) -> Result<(), (ArtifactName, Failure)> {
-    let bytes_url = client.object_url(version, name);
-    let tmp = tmp_path(dir, name.as_str(), "bytes");
+    let bytes_url = client.object_url(dir_url, name);
+    let part = part_path(dir, name);
     let fetched = client
-        .download_to_file((name.as_str(), Dir::Down), &bytes_url, &tmp, size_hint)
+        .download_resumable(
+            (name.as_str(), Dir::Down),
+            &bytes_url,
+            &part,
+            cont,
+            size_hint,
+        )
         .await;
     let (done, actual) = match fetched {
         Ok(v) => v,
@@ -125,7 +146,8 @@ async fn download_one(
     };
     if let Some(expected) = &expected {
         if &actual != expected {
-            let _ = tokio::fs::remove_file(&tmp).await;
+            // The part content diverges from the marker: never resume it later.
+            let _ = tokio::fs::remove_file(&part).await;
             return Err((
                 name.clone(),
                 Failure::Mismatch(format!(
@@ -135,19 +157,19 @@ async fn download_one(
         }
     }
     let final_bytes = bytes_path(dir, name);
-    if let Err(e) = tokio::fs::rename(&tmp, &final_bytes).await {
-        let _ = tokio::fs::remove_file(&tmp).await;
+    if let Some(parent) = final_bytes.parent() {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            let _ = tokio::fs::remove_file(&part).await;
+            return Err((name.clone(), Failure::Failed(Error::io(parent, e))));
+        }
+    }
+    if let Err(e) = tokio::fs::rename(&part, &final_bytes).await {
+        let _ = tokio::fs::remove_file(&part).await;
         return Err((name.clone(), Failure::Failed(Error::io(&final_bytes, e))));
     }
     let marker = sibling::format_line(name.as_str(), &actual);
     let sib_final = sibling_path(dir, name);
-    let sib_tmp = tmp_path(dir, &name.sibling(), "marker");
-    let write = async {
-        tokio::fs::write(&sib_tmp, marker).await?;
-        tokio::fs::rename(&sib_tmp, &sib_final).await
-    };
-    if let Err(e) = write.await {
-        let _ = tokio::fs::remove_file(&sib_tmp).await;
+    if let Err(e) = tokio::fs::write(&sib_final, marker).await {
         return Err((name.clone(), Failure::Failed(Error::io(&sib_final, e))));
     }
     client
@@ -155,15 +177,6 @@ async fn download_one(
         .done(name.as_str(), Dir::Down, false, done, size_hint)
         .await;
     Ok(())
-}
-
-/// A temp file inside the destination directory: dot prefix + pid + name hash (§6.2.4).
-fn tmp_path(dir: &Path, name: &str, kind: &str) -> PathBuf {
-    dir.join(format!(
-        "{ORPHAN_PREFIX}{}-{:016x}.{kind}",
-        std::process::id(),
-        fnv64(name.as_bytes())
-    ))
 }
 
 fn fnv64(bytes: &[u8]) -> u64 {
@@ -175,8 +188,9 @@ fn fnv64(bytes: &[u8]) -> u64 {
     h
 }
 
-/// On start, orphans of dead pids are cleaned.
-/// A live process's temps are untouched.
+/// On start, orphans of dead pids from the pre-resume temp scheme are cleaned.
+/// Live process temps are untouched. Part files never clean here: they are
+/// the resume fuel of `--continue`.
 pub fn cleanup_orphans(dir: &Path) -> Result<(), Error> {
     let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
     for entry in entries {
@@ -220,23 +234,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tmp_names_are_flat_and_prefixed() {
-        let dir = Path::new("/tmp");
-        let t = tmp_path(dir, "deep/dir/a.zip", "bytes");
-        assert!(t.starts_with(dir));
-        assert!(t
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .starts_with(ORPHAN_PREFIX));
-        assert!(t.to_str().unwrap().ends_with(".bytes"));
+    fn part_paths_are_stable_per_name() {
+        let dir = Path::new("/tmp/x");
+        let a = ArtifactName::parse("bom/x.json").unwrap();
+        assert_eq!(part_path(dir, &a), part_path(dir, &a));
+        let b = ArtifactName::parse("bom/y.json").unwrap();
+        assert_ne!(part_path(dir, &a), part_path(dir, &b));
+        let part = part_path(dir, &a);
+        let name = part.file_name().unwrap().to_str().unwrap();
+        assert!(name.starts_with(PART_PREFIX));
+        assert!(!name.contains(std::process::id().to_string().as_str()));
     }
 
     #[test]
-    fn orphan_pid_parsing() {
-        assert_eq!(orphan_pid(".nxr-tmp-42-0abc.bytes"), Some(42));
-        assert_eq!(orphan_pid("regular.zip"), None);
-        assert_eq!(orphan_pid(".nxr-tmp-x-0.bytes"), None);
+    fn orphan_pid_parses_legacy_temps() {
+        assert_eq!(
+            orphan_pid(".nxr-tmp-1234-abcdef0123456789.bytes"),
+            Some(1234)
+        );
+        assert_eq!(orphan_pid(".nxr-part-0123456789abcdef"), None);
     }
 }

@@ -1,38 +1,53 @@
-//! CLI conformance: the exit-code matrix, the NDJSON shapes and the
-//! credentials hygiene, driven through the `nxr` binary against the mock.
+//! CLI conformance: the v0.3 command surface driven through the `nxr`
+//! binary against `mock-nexus`.
+//!
+//! Covers: up/down happy path and skip detection, marker generation
+//! (default, `--no-sha`), enumeration sources (`--name`, `--manifest`,
+//! none), Range resume, the put/get/sha/head primitives, channel refs,
+//! offline verify, auth gating, NDJSON events and the exit-code matrix.
 
+use std::path::Path;
 use std::process::{Command, Output};
 
-use mock_nexus::{MockNexus, Scenario};
-use nexus_raw_core::model::sibling;
+use mock_nexus::{MockNexus, Outcome, ReqLog, Scenario};
+use sha2::{Digest as _, Sha256};
 use tempfile::TempDir;
 
 const NXR: &str = env!("CARGO_BIN_EXE_nxr");
 
-struct Env {
-    vars: Vec<(String, String)>,
+// ---- fixtures -------------------------------------------------------------
+
+/// Two distinct artifact payloads shared by most tests.
+const ALPHA: &[u8] = b"alpha payload: the quick brown fox\n";
+const BETA: &[u8] = b"beta payload: 0123456789\n";
+
+fn server(scenario: Scenario) -> MockNexus {
+    MockNexus::start(scenario).expect("mock nexus starts")
 }
 
-impl Env {
-    fn new() -> Self {
-        Self { vars: Vec::new() }
-    }
-
-    fn set(mut self, key: &str, value: &str) -> Self {
-        self.vars.push((key.into(), value.into()));
-        self
-    }
+/// The version-directory URL every transfer test works on.
+fn dir_url(srv: &MockNexus) -> String {
+    format!("{}1.14.0/", srv.base_url())
 }
 
-fn nxr(args: &[&str], env: &Env) -> Output {
-    let mut cmd = Command::new(NXR);
-    cmd.args(args)
-        .env_clear()
-        .current_dir(env!("CARGO_MANIFEST_DIR"));
-    for (k, v) in &env.vars {
-        cmd.env(k, v);
-    }
-    cmd.output().expect("nxr runs")
+fn root_url(srv: &MockNexus) -> String {
+    srv.base_url()
+}
+
+/// Run `nxr` with a hermetic environment: ambient NXR_* credentials must
+/// never leak into a test; pass `-u` explicitly instead.
+fn nxr(args: &[&str]) -> Output {
+    Command::new(NXR)
+        .args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .output()
+        .expect("nxr binary runs")
+}
+
+fn code(out: &Output) -> i32 {
+    out.status.code().unwrap_or(-1)
 }
 
 fn stdout(out: &Output) -> String {
@@ -43,419 +58,574 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// Isolated config/env: no user config, no ambient credentials.
-fn base_env() -> (Env, TempDir) {
-    let tmp = TempDir::new().unwrap();
-    let env = Env::new()
-        .set("HOME", tmp.path().to_str().unwrap())
-        .set("XDG_CONFIG_HOME", tmp.path().to_str().unwrap());
-    (env, tmp)
+/// Assert the exit code, dumping both streams on mismatch.
+fn expect_exit(out: &Output, want: i32, what: &str) {
+    assert_eq!(
+        code(out),
+        want,
+        "{what}: exit mismatch\nstdout:\n{}\nstderr:\n{}",
+        stdout(out),
+        stderr(out)
+    );
 }
 
-fn seed_complete(dir: &std::path::Path, name: &str, content: &[u8]) {
-    std::fs::write(dir.join(name), content).unwrap();
-    let marker = sibling::format_line(name, &nexus_raw_core::Digest::of_bytes(content));
-    std::fs::write(dir.join(format!("{name}.sha256")), marker).unwrap();
+fn write_file(dir: &Path, name: &str, bytes: &[u8]) {
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).expect("fixture write");
 }
 
-fn write_claim(dir: &std::path::Path, version: &str, names: &[&str]) {
-    let artifacts: Vec<String> = names.iter().map(|n| format!("\"{n}\"")).collect();
-    std::fs::write(
-        dir.join("claim.json"),
-        format!(
-            "{{\"claim_version\":1,\"version\":\"{version}\",\"artifacts\":[{}]}}",
-            artifacts.join(",")
-        ),
-    )
-    .unwrap();
+fn read_file(dir: &Path, name: &str) -> Vec<u8> {
+    std::fs::read(dir.join(name)).expect("fixture read")
 }
 
+/// Lowercase hex sha256 of `bytes`: the digest oracle for markers.
+fn hex_digest(bytes: &[u8]) -> String {
+    let sum = Sha256::digest(bytes);
+    let mut hex = String::with_capacity(64);
+    for b in sum {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    hex
+}
+
+/// The canonical sha-sibling line: `<hex>  <name>\n`.
+fn marker_line(name: &str, bytes: &[u8]) -> String {
+    format!("{}  {name}\n", hex_digest(bytes))
+}
+
+/// Every PUT the mock has served so far.
+fn put_requests(srv: &MockNexus) -> Vec<ReqLog> {
+    srv.requests()
+        .into_iter()
+        .filter(|r| r.method == "PUT")
+        .collect()
+}
+
+/// Parse every stdout line as a JSON object; nothing else may be printed.
+fn ndjson(out: &Output) -> Vec<serde_json::Value> {
+    stdout(out)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("line {l:?} is not JSON: {e}")))
+        .collect()
+}
+
+// ---- transfers ------------------------------------------------------------
+
+/// 1. up then down round trip against Atomic: bytes and markers on the
+///    server, bytes and markers on disk, exit 0 everywhere.
 #[test]
-fn json_flow_is_golden_and_parsable() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"golden");
+fn up_down_roundtrip_atomic() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(&srv);
 
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "--json",
-            "up",
-            "--dir",
-            dir.to_str().unwrap(),
-        ],
-        &env,
+    let up = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "up happy path");
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert_eq!(srv.store_get("1.14.0/b.bin").as_deref(), Some(BETA));
+    assert_eq!(
+        srv.store_get("1.14.0/a.zip.sha256").as_deref(),
+        Some(marker_line("a.zip", ALPHA).as_bytes()),
     );
-    assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
+    assert_eq!(
+        srv.store_get("1.14.0/b.bin.sha256").as_deref(),
+        Some(marker_line("b.bin", BETA).as_bytes()),
+    );
 
-    let lines: Vec<String> = stdout(&out).lines().map(str::to_owned).collect();
-    let parsed: Vec<serde_json::Value> = lines
-        .iter()
-        .map(|l| serde_json::from_str(l).expect("every line is valid JSON"))
-        .collect();
-
-    assert_eq!(parsed[0]["event"], "plan");
-    assert_eq!(parsed[0]["upload"], serde_json::json!(["a.zip"]));
-    assert_eq!(parsed[0]["download"], serde_json::json!([]));
-    assert_eq!(parsed[0]["skip"], serde_json::json!([]));
-    assert_eq!(parsed[1]["event"], "artifact");
-    assert_eq!(parsed[1]["name"], "a.zip");
-    assert_eq!(parsed[1]["state"], "uploading");
-    assert_eq!(parsed.last().unwrap()["event"], "summary");
-    assert_eq!(parsed.last().unwrap()["uploaded"], 1);
-
-    // The exact byte shape is part of the contract: one golden line pinned.
-    let summary_line = lines.last().unwrap();
-    assert!(
-        summary_line.contains("\"event\":\"summary\"")
-            && summary_line.contains("\"uploaded\":1")
-            && summary_line.contains("\"downloaded\":0")
-            && summary_line.contains("\"skipped\":0")
-            && summary_line.contains("\"failed\":[]"),
-        "summary shape drifted: {summary_line}"
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+    ]);
+    expect_exit(&down, 0, "down happy path");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert_eq!(read_file(dst.path(), "b.bin"), BETA);
+    // down fetches the marker too: the local copy is sha256sum-complete.
+    assert_eq!(
+        read_file(dst.path(), "a.zip.sha256"),
+        marker_line("a.zip", ALPHA).into_bytes()
     );
 }
 
+/// 2. up generates sha-siblings: the local dir starts without any marker,
+///    yet the server ends up with one (and the local dir gains it).
+#[test]
+fn up_generates_markers_by_default() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    assert!(!src.path().join("a.zip.sha256").exists());
+
+    let up = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&up, 0, "up with markerless dir");
+    assert_eq!(
+        srv.store_get("1.14.0/a.zip.sha256").as_deref(),
+        Some(marker_line("a.zip", ALPHA).as_bytes()),
+        "the core must generate and upload the marker itself"
+    );
+    assert_eq!(
+        read_file(src.path(), "a.zip.sha256"),
+        marker_line("a.zip", ALPHA).into_bytes(),
+        "the generated marker lands next to the bytes"
+    );
+}
+
+/// 3. up --no-sha: bytes go up, no marker is generated or stored.
+#[test]
+fn up_no_sha_skips_markers() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    let up = nxr(&[
+        "up",
+        "--no-sha",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+    ]);
+    expect_exit(&up, 0, "up --no-sha");
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(
+        srv.store_get("1.14.0/a.zip.sha256").is_none(),
+        "--no-sha must not store a marker"
+    );
+    assert!(!src.path().join("a.zip.sha256").exists());
+}
+
+/// 4. the second up skips everything: no new PUTs, summary all-skipped.
 #[test]
 fn second_up_is_a_pure_skip() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"skip-me");
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(&srv);
 
-    let args = [
-        "--base",
-        &mock.base_url(),
-        "--json",
-        "up",
-        "--dir",
-        dir.to_str().unwrap(),
-    ];
-    assert_eq!(nxr(&args, &env).status.code(), Some(0));
-    let out = nxr(&args, &env);
-    assert_eq!(out.status.code(), Some(0));
-    let lines: Vec<serde_json::Value> = stdout(&out)
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect();
-    let summary = lines.last().unwrap();
-    assert_eq!(summary["uploaded"], 0);
-    assert_eq!(summary["skipped"], 1);
-    assert!(lines.iter().any(|v| v["state"] == "skipped"));
-}
-
-#[test]
-fn mismatch_exit_1_without_rewriting_remote() {
-    let mock = MockNexus::start(Scenario::ForeignMarker).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"payload");
-    let args = [
-        "--base",
-        &mock.base_url(),
-        "up",
-        "--dir",
-        dir.to_str().unwrap(),
-    ];
-    assert_eq!(nxr(&args, &env).status.code(), Some(0));
-    let puts_before = mock.put_count("1.0.0/a.zip");
-
-    let out = nxr(&args, &env);
-    assert_eq!(out.status.code(), Some(1));
-    assert!(stderr(&out).contains("mismatch"));
-    assert_eq!(mock.put_count("1.0.0/a.zip"), puts_before);
-}
-
-#[test]
-fn unsafe_name_exit_2() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("target");
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "down",
-            "--dir",
-            dir.to_str().unwrap(),
-            "--version",
-            "1.0.0",
-            "--only",
-            "../evil",
-        ],
-        &env,
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "first up",
     );
-    assert_eq!(out.status.code(), Some(2));
-    assert!(stderr(&out).contains("unsafe name"));
+    let puts_after_first = put_requests(&srv).len();
+
+    let second = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&second, 0, "second up");
+    assert_eq!(
+        put_requests(&srv).len(),
+        puts_after_first,
+        "a fully-current up must not PUT anything"
+    );
+    assert!(
+        stdout(&second).contains("2 skipped"),
+        "both artifacts must be reported skipped, got: {}",
+        stdout(&second)
+    );
 }
 
+/// 16. up --dry-run prints the plan and transfers nothing.
 #[test]
-fn password_in_config_is_misuse_exit_2() {
-    let (mut env, tmp) = base_env();
-    let cfg = tmp.path().join("config.toml");
-    std::fs::write(
-        &cfg,
-        "[dev]\nurl = \"http://127.0.0.1:1/\"\npassword = \"oops\"\n",
-    )
-    .unwrap();
-    env = env.set("NXR_CONFIG", cfg.to_str().unwrap());
-    let out = nxr(&["down", "--dir", "x", "--version", "1.0.0"], &env);
-    assert_eq!(out.status.code(), Some(2));
-    assert!(stderr(&out).contains("forbidden"));
+fn dry_run_prints_plan_without_uploading() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    let dry = nxr(&[
+        "up",
+        "--dry-run",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+    ]);
+    expect_exit(&dry, 0, "up --dry-run");
+    let out = stdout(&dry);
+    assert!(out.contains("upload a.zip"), "plan line missing: {out}");
+    assert!(put_requests(&srv).is_empty(), "dry-run must not PUT");
 }
 
+// ---- enumeration ----------------------------------------------------------
+
+/// 5. down with no enumeration flags and no server manifest: exit 1 with
+///    a hint about enumeration.
 #[test]
-fn missing_auth_exit_3_without_retries() {
-    let mock = MockNexus::start(Scenario::Auth401 {
-        user: "ci".into(),
+fn down_without_enumeration_needs_a_source() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&["down", &dir_url(&srv), dst.path().to_str().unwrap()]);
+    expect_exit(&down, 1, "down without enumeration source");
+    let err = stderr(&down);
+    assert!(err.contains("hint:"), "a hint line is required: {err}");
+    assert!(
+        err.contains("enumerat"),
+        "the error names enumeration: {err}"
+    );
+    assert!(!dst.path().join("a.zip").exists());
+}
+
+/// 6. down --name fetches exactly the named artifact.
+#[test]
+fn down_explicit_name() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "down --name");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+}
+
+/// 7. down --manifest with a local manifest file.
+#[test]
+fn down_manifest_from_local_file() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let manifest = TempDir::new().unwrap();
+    let manifest_path = manifest.path().join("manifest.json");
+    std::fs::write(&manifest_path, r#"{"artifacts":["a.zip"]}"#).unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--manifest",
+        manifest_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 0, "down --manifest <file>");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+}
+
+/// 8. resume: a pre-seeded part file continues through a Range request;
+///    the mock answers 206 and the assembled file is byte-perfect.
+#[test]
+fn get_resumes_from_part_with_range() {
+    let srv = server(Scenario::Atomic);
+    let content: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("big.bin");
+    let part = out.path().join("big.bin.part");
+    let prefix = &content[..100_000];
+    std::fs::write(&part, prefix).unwrap();
+
+    let got = nxr(&[
+        "get",
+        "--continue",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&got, 0, "resumed get");
+    assert!(
+        stdout(&got).contains("resumed from 100000"),
+        "the resume must be reported: {}",
+        stdout(&got)
+    );
+    assert_eq!(std::fs::read(&target).unwrap(), content, "byte-perfect");
+    assert!(!part.exists(), "the part file is renamed away");
+    // The Range header went out and was honored with 206.
+    assert!(
+        srv.requests()
+            .iter()
+            .any(|r| r.method == "GET" && r.path == "big.bin" && r.outcome == Outcome::Status(206)),
+        "resume must send Range and get a 206: {:?}",
+        srv.requests()
+    );
+}
+
+// ---- primitives -----------------------------------------------------------
+
+/// 9. put → get roundtrip, put --sha stores the sibling, sha prints the
+///    digest of the remote bytes.
+#[test]
+fn put_get_roundtrip_with_sha_sibling() {
+    let srv = server(Scenario::Atomic);
+    let file = TempDir::new().unwrap();
+    write_file(file.path(), "blob.bin", ALPHA);
+    let file_path = file.path().join("blob.bin");
+    let root = root_url(&srv);
+
+    let plain_url = format!("{root}pub/plain.bin");
+    let put = nxr(&["put", &plain_url, "-f", file_path.to_str().unwrap()]);
+    expect_exit(&put, 0, "plain put");
+    assert_eq!(srv.store_get("pub/plain.bin").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("pub/plain.bin.sha256").is_none());
+
+    let got = TempDir::new().unwrap();
+    let out_path = got.path().join("roundtrip.bin");
+    let get = nxr(&["get", &plain_url, "-o", out_path.to_str().unwrap()]);
+    expect_exit(&get, 0, "get after put");
+    assert_eq!(std::fs::read(&out_path).unwrap(), ALPHA);
+
+    let marked_url = format!("{root}pub/marked.bin");
+    let put_sha = nxr(&[
+        "put",
+        "--sha",
+        &marked_url,
+        "-f",
+        file_path.to_str().unwrap(),
+    ]);
+    expect_exit(&put_sha, 0, "put --sha");
+    assert_eq!(
+        srv.store_get("pub/marked.bin.sha256").as_deref(),
+        Some(marker_line("marked.bin", ALPHA).as_bytes()),
+    );
+
+    let sha = nxr(&["sha", &marked_url]);
+    expect_exit(&sha, 0, "sha of remote object");
+    assert_eq!(stdout(&sha).trim(), hex_digest(ALPHA));
+    let hex = stdout(&sha).trim().to_owned();
+    assert_eq!(hex.len(), 64, "64 hex chars");
+    assert!(
+        hex.bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
+        "lowercase hex only: {hex}"
+    );
+}
+
+/// 10. head reports the status; JSON mode carries status and size.
+#[test]
+fn head_reports_status() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("headme.bin", BETA);
+    let url = format!("{}headme.bin", root_url(&srv));
+
+    let human = nxr(&["head", &url]);
+    expect_exit(&human, 0, "head human");
+    assert!(stdout(&human).contains("200"), "status in output");
+
+    let json = nxr(&["--json", "head", &url]);
+    expect_exit(&json, 0, "head --json");
+    let lines = ndjson(&json);
+    assert_eq!(lines.len(), 1, "head prints exactly one JSON object");
+    assert_eq!(lines[0]["status"], 200);
+    assert_eq!(lines[0]["size"], BETA.len() as u64);
+    assert!(lines[0].get("url").is_some());
+    assert!(lines[0].get("content_type").is_some());
+}
+
+// ---- channel --------------------------------------------------------------
+
+/// 11. channel set/get roundtrip; --if-forward keeps the current token
+///     when the new one is older.
+#[test]
+fn channel_set_get_and_if_forward() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}channels/latest", root_url(&srv));
+
+    let set = nxr(&["channel", "set", &url, "1.2.3"]);
+    expect_exit(&set, 0, "channel set");
+    assert_eq!(
+        srv.store_get("channels/latest").as_deref(),
+        Some(b"1.2.3\n" as &[u8])
+    );
+
+    let get = nxr(&["channel", "get", &url]);
+    expect_exit(&get, 0, "channel get");
+    assert_eq!(stdout(&get).trim(), "1.2.3");
+
+    let older = nxr(&["channel", "set", "--if-forward", &url, "1.0.0"]);
+    expect_exit(&older, 0, "if-forward with an older token still exits 0");
+    assert_eq!(
+        srv.store_get("channels/latest").as_deref(),
+        Some(b"1.2.3\n" as &[u8]),
+        "the current token must be kept"
+    );
+    assert!(stdout(&older).contains("1.2.3"), "reports the kept token");
+
+    let newer = nxr(&["channel", "set", "--if-forward", &url, "2.0.0"]);
+    expect_exit(&newer, 0, "if-forward with a newer token writes");
+    assert_eq!(
+        srv.store_get("channels/latest").as_deref(),
+        Some(b"2.0.0\n" as &[u8])
+    );
+}
+
+// ---- verify ---------------------------------------------------------------
+
+/// 12. verify accepts a complete dir and rejects tampered bytes.
+#[test]
+fn verify_accepts_then_rejects_tampering() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+    // up generates the local marker, making the dir verifiable.
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let ok = nxr(&["verify", src.path().to_str().unwrap()]);
+    expect_exit(&ok, 0, "verify of a complete dir");
+
+    let mut tampered = ALPHA.to_vec();
+    tampered[0] ^= 0xff;
+    std::fs::write(src.path().join("a.zip"), &tampered).unwrap();
+
+    let bad = nxr(&["verify", src.path().to_str().unwrap()]);
+    expect_exit(&bad, 1, "verify of tampered bytes");
+}
+
+// ---- exit-code matrix -----------------------------------------------------
+
+/// 13. Auth401: anonymous is exit 3, correct -u credentials exit 0.
+///     (`head` reports a 401 as a normal status; the gate fires on fetch.)
+#[test]
+fn auth401_exit_codes() {
+    let srv = server(Scenario::Auth401 {
+        user: "nexus".into(),
         pass: "secret".into(),
-    })
-    .unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"auth-case");
+    });
+    srv.insert("file.bin", BETA);
+    let url = format!("{}file.bin", root_url(&srv));
 
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "--json",
-            "up",
-            "--dir",
-            dir.to_str().unwrap(),
-        ],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(3));
-    assert!(stderr(&out).contains("auth"));
-    // 401 must not be retried: the mock saw exactly one probe per request.
-    let probes = mock
-        .requests()
-        .iter()
-        .filter(|r| r.path == "1.0.0/a.zip" && r.method == "HEAD")
-        .count();
-    assert_eq!(probes, 1);
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("file.bin");
+    let anon = nxr(&["get", "--retry", "1", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&anon, 3, "401 without credentials is an auth error");
+    assert!(!target.exists());
+
+    let authed = nxr(&[
+        "-u",
+        "nexus:secret",
+        "get",
+        "--retry",
+        "1",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&authed, 0, "401 scenario with the right credentials");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
 }
 
+/// 17. a name outside the grammar is misuse: exit 2.
+#[test]
+fn unsafe_name_is_misuse_exit_2() {
+    let srv = server(Scenario::Atomic);
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "bad!name",
+    ]);
+    expect_exit(&down, 2, "unsafe name is misuse");
+    assert!(stderr(&down).contains("hint:"));
+}
+
+/// 18. a dead base (connection refused) is a transport error: exit 3.
 #[test]
 fn dead_base_exit_3() {
-    let (env, _tmp) = base_env();
-    let out = nxr(
-        &[
-            "--base",
-            "http://127.0.0.1:9/",
-            "--retry",
-            "1",
-            "ls",
-            "--version",
-            "1.0.0",
-        ],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(3));
-    assert!(stderr(&out).contains("transport"));
+    // A bound-then-dropped listener: the port is closed for certain.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("x.bin");
+    let get = nxr(&[
+        "get",
+        &format!("http://127.0.0.1:{port}/x.bin"),
+        "-o",
+        target.to_str().unwrap(),
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&get, 3, "connection refused is transport");
 }
 
+// ---- NDJSON ---------------------------------------------------------------
+
+/// 14. --json on up and down: stdout is pure NDJSON with plan, artifact
+///     and a final summary carrying the counters.
 #[test]
-fn credentials_never_reach_output() {
-    let mock = MockNexus::start(Scenario::Auth401 {
-        user: "ci".into(),
-        pass: "secret".into(),
-    })
-    .unwrap();
-    let (mut env, tmp) = base_env();
-    env = env
-        .set("NXR_USERNAME", "ci")
-        .set("NXR_PASSWORD", "s3cret-value");
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"creds-case");
+fn ndjson_events_parse_and_summarize() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(&srv);
 
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "--json",
-            "up",
-            "--dir",
-            dir.to_str().unwrap(),
-        ],
-        &env,
-    );
-    // The upload itself fails (wrong password vs the mock), that is fine here:
-    // nothing in any stream or in the mock's store may contain the secret.
-    let all = format!("{}{}", stdout(&out), stderr(&out));
-    assert!(!all.contains("s3cret-value"), "password leaked: {all}");
-    assert!(!all.contains("Basic"), "header value leaked: {all}");
-}
-
-#[test]
-fn dry_run_prints_plan_and_writes_nothing() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"dry-run");
-
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "--json",
-            "up",
-            "--dir",
-            dir.to_str().unwrap(),
-            "--dry-run",
-        ],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(0));
-    let lines: Vec<serde_json::Value> = stdout(&out)
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect();
-    assert_eq!(lines[0]["event"], "plan");
-    assert!(lines.last().unwrap()["event"] != "summary" || true);
+    let up = nxr(&["--json", "up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "up --json");
+    let events = ndjson(&up);
     assert!(
-        mock.store_get("1.0.0/claim.json").is_none(),
-        "dry-run must not PUT"
+        events.iter().any(|e| e["event"] == "plan"),
+        "a plan event is required: {events:?}"
     );
-    assert!(mock.store_get("1.0.0/a.zip").is_none());
+    assert!(
+        events
+            .iter()
+            .any(|e| e["event"] == "artifact" && e["state"] == "uploading"),
+        "artifact events are required: {events:?}"
+    );
+    let summary = events.last().expect("at least the summary line");
+    assert_eq!(summary["event"], "summary", "summary comes last");
+    assert_eq!(summary["uploaded"], 2);
+    assert_eq!(summary["downloaded"], 0);
+    assert_eq!(summary["skipped"], 0);
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "--json",
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "down --json");
+    let events = ndjson(&down);
+    let summary = events.last().expect("at least the summary line");
+    assert_eq!(summary["event"], "summary");
+    assert_eq!(summary["downloaded"], 1);
+    assert_eq!(summary["uploaded"], 0);
+    assert!(summary.get("skipped").is_some());
 }
 
+// ---- doctor ---------------------------------------------------------------
+
+/// 15. doctor: without credentials the credentials check fails (exit 2);
+///     with -u and no URL everything passes (exit 0).
 #[test]
-fn down_resolves_pointer_and_verifies_marker() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
+fn doctor_exit_codes() {
+    let bare = nxr(&["doctor"]);
+    expect_exit(&bare, 2, "doctor without credentials flags the gap");
+    assert!(stderr(&bare).contains("hint:"));
 
-    // Seed the server side directly: claim, bytes, marker, pointer.
-    let content = b"through-the-pointer";
-    mock.insert(
-        "1.2.0/claim.json",
-        b"{\"claim_version\":1,\"version\":\"1.2.0\",\"artifacts\":[\"a.zip\"]}",
+    let ok = nxr(&["-u", "someone:hunter2", "doctor"]);
+    expect_exit(&ok, 0, "doctor with explicit credentials passes");
+    assert!(
+        stdout(&ok).contains("all checks passed"),
+        "got: {}",
+        stdout(&ok)
     );
-    mock.insert("1.2.0/a.zip", content);
-    let marker = sibling::format_line("a.zip", &nexus_raw_core::Digest::of_bytes(content));
-    mock.insert("1.2.0/a.zip.sha256", marker.as_bytes());
-    mock.insert("latest", b"1.2.0\n");
-
-    let target = tmp.path().join("vendor");
-    let out = nxr(
-        &[
-            "--base",
-            &mock.base_url(),
-            "down",
-            "--dir",
-            target.to_str().unwrap(),
-            "--pointer",
-            "latest",
-        ],
-        &env,
+    assert!(
+        !stdout(&ok).contains("hunter2"),
+        "secrets never reach output"
     );
-    assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
-    assert_eq!(
-        std::fs::read(target.join("a.zip")).unwrap(),
-        content.to_vec()
-    );
-    assert!(target.join("a.zip.sha256").is_file());
-}
-
-#[test]
-fn verify_offline_exit_codes() {
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("build");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "9.9.9", &["ok.zip", "bad.zip"]);
-    seed_complete(&dir, "ok.zip", b"good");
-    std::fs::write(dir.join("bad.zip"), b"bad").unwrap();
-    std::fs::write(
-        dir.join("bad.zip.sha256"),
-        sibling::format_line("bad.zip", &nexus_raw_core::Digest::of_bytes(b"mismatched")),
-    )
-    .unwrap();
-
-    let out = nxr(&["verify", "--dir", dir.to_str().unwrap()], &env);
-    assert_eq!(out.status.code(), Some(1));
-    assert!(stderr(&out).contains("incomplete"));
-    assert!(stdout(&out).contains("failed: bad.zip"));
-
-    // Only the good name: exit 0.
-    let good = tmp.path().join("build-ok");
-    std::fs::create_dir_all(&good).unwrap();
-    write_claim(&good, "9.9.9", &["ok.zip"]);
-    std::fs::copy(dir.join("ok.zip"), good.join("ok.zip")).unwrap();
-    std::fs::copy(dir.join("ok.zip.sha256"), good.join("ok.zip.sha256")).unwrap();
-    let out = nxr(&["verify", "--dir", good.to_str().unwrap()], &env);
-    assert_eq!(out.status.code(), Some(0));
-}
-
-#[test]
-fn point_moves_forward_only_with_if_newer() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, _tmp) = base_env();
-    let base = mock.base_url();
-
-    let out = nxr(&["--base", &base, "point", "latest", "1.4.0"], &env);
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(mock.store_get("latest").unwrap(), b"1.4.0\n".to_vec());
-
-    let out = nxr(
-        &["--base", &base, "point", "latest", "1.5.0", "--if-newer"],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(0));
-
-    let out = nxr(
-        &["--base", &base, "point", "latest", "1.4.9", "--if-newer"],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(mock.store_get("latest").unwrap(), b"1.5.0\n".to_vec());
-    assert!(stdout(&out).contains("skip"));
-}
-
-#[test]
-fn ls_lists_remote_states() {
-    let mock = MockNexus::start(Scenario::Atomic).unwrap();
-    let (env, tmp) = base_env();
-    let dir = tmp.path().join("dist");
-    std::fs::create_dir_all(&dir).unwrap();
-    write_claim(&dir, "1.0.0", &["a.zip"]);
-    seed_complete(&dir, "a.zip", b"ls-me");
-    assert_eq!(
-        nxr(
-            &[
-                "--base",
-                &mock.base_url(),
-                "up",
-                "--dir",
-                dir.to_str().unwrap()
-            ],
-            &env
-        )
-        .status
-        .code(),
-        Some(0)
-    );
-
-    let out = nxr(
-        &["--base", &mock.base_url(), "ls", "--version", "1.0.0"],
-        &env,
-    );
-    assert_eq!(out.status.code(), Some(0));
-    let out_text = stdout(&out);
-    assert!(out_text.contains("a.zip"));
-    assert!(out_text.to_lowercase().contains("complete"));
 }

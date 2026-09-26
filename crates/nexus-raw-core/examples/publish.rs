@@ -7,71 +7,66 @@
 //! cargo run -p nexus-raw-core --example publish
 //! ```
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use nexus_raw_core::config::Config;
-use nexus_raw_core::model::claim::Claim;
-use nexus_raw_core::model::digest::Digest;
-use nexus_raw_core::model::name::ArtifactName;
-use nexus_raw_core::model::sibling;
-use nexus_raw_core::{Event, Nxr};
-use tokio::sync::mpsc;
+use mock_nexus::{MockNexus, Scenario};
+use nexus_raw_core::{ArtifactName, Config, Enumeration, Event, Nxr};
 
 #[tokio::main]
-async fn main() -> Result<(), nexus_raw_core::Error> {
-    // A throwaway server with the default (correct) behavior.
-    let mock = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic).expect("mock starts");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The mock: a tiny std-only Nexus with a failure-scenario table.
+    let mock = Arc::new(MockNexus::start(Scenario::Atomic)?);
+    let base = format!("http://{}/1.4.0/", mock.addr());
 
-    // Stage a version directory: claim + bytes + marker.
-    let dir = tempfile::tempdir().expect("temp dir");
-    let content = b"example artifact";
-    std::fs::write(dir.path().join("artifact.bin"), content).expect("write bytes");
-    let marker = sibling::format_line("artifact.bin", &Digest::of_bytes(content));
-    std::fs::write(dir.path().join("artifact.bin.sha256"), marker).expect("write marker");
-    std::fs::write(
-        dir.path().join("claim.json"),
-        Claim {
-            claim_version: 1,
-            version: "1.0.0".into(),
-            artifacts: vec![ArtifactName::parse("artifact.bin").expect("valid name")],
-        }
-        .to_bytes(),
-    )
-    .expect("write claim");
+    // A local version directory: up generates the marker for it by default.
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("artifact.bin"), b"payload-bytes-16")?;
 
-    // The event channel: one line per progress event, here just printed.
-    let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
+    // The facade: NDJSON events flow through the channel.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
     let printer = tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
             println!("{}", event.to_json());
         }
     });
+    let nxr = nxr_for(&base, tx)?;
 
-    let nxr = Nxr::new(
-        Config {
-            base: mock.base_url(),
-            workers: 4,
-            retry_attempts: 4,
-            connect_timeout: Duration::from_secs(5),
-            stall_timeout: Duration::from_secs(30),
-            tls_insecure: false,
-            auth: None,
-        },
-        tx,
-    )?;
-
-    // Publish: claim first (drift check), then bytes and marker per name.
-    let claim = Claim::from_slice(&std::fs::read(dir.path().join("claim.json")).expect("claim"))?;
-    let summary = nxr.up(dir.path(), &claim, None).await?;
+    // Up: markers are written by default, so the remote copy is complete.
+    let summary = nxr.up(dir.path(), None, true, None).await?;
     println!("published: {summary:?}");
 
-    // Consume into a fresh directory; the second run would transfer nothing.
-    let target = tempfile::tempdir().expect("temp dir");
-    let summary = nxr.down(target.path(), &claim, None, None).await?;
+    // Down into a second directory; enumeration comes from explicit names.
+    let out = tempfile::tempdir()?;
+    let summary = nxr
+        .down(
+            out.path(),
+            Enumeration::Names(vec![ArtifactName::parse("artifact.bin")?]),
+            false,
+            None,
+        )
+        .await?;
     println!("fetched: {summary:?}");
 
     // Dropping the facade closes the event channel, so the printer finishes.
     drop(nxr);
+    drop(mock);
     printer.await.expect("printer joins");
     Ok(())
+}
+
+fn nxr_for(
+    base: &str,
+    tx: tokio::sync::mpsc::UnboundedSender<Event>,
+) -> Result<Nxr, nexus_raw_core::Error> {
+    let cfg = Config {
+        base: base.to_owned(),
+        tls_insecure: false,
+        workers: 4,
+        retry_attempts: 4,
+        connect_timeout: Duration::from_secs(5),
+        stall_timeout: Duration::from_secs(5),
+        auth: None,
+    };
+    Nxr::new(cfg, tx)
 }

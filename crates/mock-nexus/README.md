@@ -16,7 +16,7 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 
 | Scenario | Behavior |
 |:---------|:---------|
-| `atomic` | the correct server: PUT/GET/HEAD, 404 on unknown paths |
+| `atomic` | the correct server: PUT/GET/HEAD, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
 | `partial-put` | cuts the first PUT body short and closes the connection |
 | `drop-connection` | resets the first request per path after reading its headers |
 | `slow` | writes response bodies in small delayed chunks |

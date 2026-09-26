@@ -1,120 +1,129 @@
-//! Command handlers and the small helpers they share.
+//! Command handlers and the helpers they share.
 
-mod diff;
-mod down;
-mod ls;
-mod point;
-mod up;
-mod verify;
+mod doctor;
+mod layout;
+mod primitives;
+mod transfer;
 
 use std::path::Path;
+use std::time::Duration;
 
-use nexus_raw_core::{Action, ArtifactName, Claim, Error, Event};
-use tokio::sync::mpsc::UnboundedSender;
+use nexus_raw_core::{creds, ArtifactName, Config, Error, Manifest, Nxr};
 
-use crate::Cmd;
+use crate::render::{Mode, Session};
+use crate::{ChannelOp, Cli, Cmd};
 
-pub(crate) async fn dispatch(cli: &crate::Cli) -> Result<(), Error> {
+pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
     match &cli.command {
+        Cmd::Get { url, out, cont } => primitives::get(cli, url, out.as_deref(), *cont).await,
+        Cmd::Put { url, file, sha } => primitives::put(cli, url, file, *sha).await,
+        Cmd::Head { url } => primitives::head(cli, url).await,
+        Cmd::Sha { target } => primitives::sha(cli, target).await,
         Cmd::Up {
-            dir,
-            names,
+            src,
+            dst,
+            manifest,
+            no_sha,
             dry_run,
-        } => up::run(cli, dir, *dry_run, names.as_deref()).await,
+        } => transfer::up(cli, src, dst, manifest.as_deref(), *no_sha, *dry_run).await,
         Cmd::Down {
-            dir,
-            version,
-            pointer,
-            only,
-            names,
-        } => {
-            down::run(
-                cli,
-                dir,
-                version.as_deref(),
-                pointer.as_deref(),
-                only,
-                names.as_deref(),
-            )
-            .await
-        }
-        Cmd::Verify { dir, names } => verify::run(cli, dir, names.as_deref()).await,
-        Cmd::Diff { dir, names } => diff::run(cli, dir, names.as_deref()).await,
-        Cmd::Ls { version } => ls::run(cli, version.as_deref()).await,
-        Cmd::Point {
-            pointer,
-            version,
-            if_newer,
-        } => point::run(cli, pointer, version, *if_newer).await,
+            src,
+            dst,
+            manifest,
+            name,
+            ls,
+            cont,
+        } => transfer::down(cli, src, dst, manifest.as_deref(), name, *ls, *cont).await,
+        Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
+        Cmd::Channel { op } => match op {
+            ChannelOp::Get { url } => layout::channel_get(cli, url).await,
+            ChannelOp::Set {
+                url,
+                token,
+                if_forward,
+            } => layout::channel_set(cli, url, token, *if_forward).await,
+        },
+        Cmd::Verify { dir, manifest } => layout::verify(cli, dir, manifest.as_deref()).await,
+        Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
     }
 }
 
-/// Read the claim from `names` or, by default, from `<dir>/claim.json`.
-pub(crate) fn load_claim(dir: &Path, names: Option<&Path>) -> Result<Claim, Error> {
-    match names {
-        Some(file) => Claim::read(file),
-        None => Claim::read(&Claim::path_in(dir)),
-    }
+/// A running invocation: the facade plus the event renderer.
+pub(crate) struct Ctx {
+    pub(crate) nxr: Nxr,
+    pub(crate) session: Session,
+    pub(crate) json: bool,
 }
 
-/// Refuse a missing working directory up front with a misuse error.
-pub(crate) fn require_dir(dir: &Path) -> Result<(), Error> {
-    if dir.is_dir() {
-        Ok(())
-    } else {
-        Err(Error::Misuse(format!("not a directory: {}", dir.display())))
-    }
-}
-
-/// Union of `--only` values and the artifacts of the `--names` claim file.
-///
-/// `Ok(None)` means no restriction.
-/// Every parsed name goes through [`ArtifactName::parse`] so unsafe names fail with exit code 2.
-pub(crate) fn only_filter(
-    only: &[String],
-    names_claim: Option<Result<Claim, Error>>,
-) -> Result<Option<Vec<ArtifactName>>, Error> {
-    if only.is_empty() && names_claim.is_none() {
-        return Ok(None);
-    }
-    let mut filter: Vec<ArtifactName> = only
-        .iter()
-        .map(|s| ArtifactName::parse(s))
-        .collect::<Result<_, _>>()?;
-    if let Some(claim) = names_claim {
-        filter.extend(claim?.artifacts);
-    }
-    Ok(Some(filter))
-}
-
-/// Partition actions into upload/download/skip name lists and emit a plan event.
-///
-/// Used by `diff` and `up --dry-run`, where the core computes the plan but does
-/// not emit the event itself.
-pub(crate) fn send_plan(tx: &UnboundedSender<Event>, actions: &[Action]) -> Result<(), Error> {
-    let mut upload = Vec::new();
-    let mut download = Vec::new();
-    let mut skip = Vec::new();
-    for action in actions {
-        match action {
-            Action::Upload { name, .. } => upload.push(name.as_str().to_owned()),
-            Action::Download { name, .. } => download.push(name.as_str().to_owned()),
-            Action::Skip { name, .. } => skip.push(name.as_str().to_owned()),
-        }
-    }
-    tx.send(Event::Plan {
-        upload,
-        download,
-        skip,
+/// Build the facade for `base`: creds from `-u` or env, renderer attached.
+pub(crate) fn make_ctx(cli: &Cli, base: &str) -> Result<Ctx, Error> {
+    let auth = match split_user(cli.user.as_deref())? {
+        Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
+        None => creds::resolve(None)?.map(|c| c.header),
+    };
+    let cfg = Config {
+        base: base.to_owned(),
+        tls_insecure: cli.tls_insecure,
+        workers: cli.workers,
+        retry_attempts: cli.retry,
+        connect_timeout: Duration::from_secs(cli.connect_timeout_secs),
+        stall_timeout: Duration::from_secs(cli.stall_secs),
+        auth,
+    };
+    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let nxr = Nxr::new(cfg, session.sender())?;
+    Ok(Ctx {
+        nxr,
+        session,
+        json: cli.json,
     })
-    .map_err(|_| Error::Misuse("event channel closed".into()))
 }
 
-/// Convenience for commands whose core calls emit no events: keep the receiver
-/// alive so the channel never looks closed.
-pub(crate) fn event_channel() -> (
-    UnboundedSender<Event>,
-    tokio::sync::mpsc::UnboundedReceiver<Event>,
-) {
-    tokio::sync::mpsc::unbounded_channel()
+/// Close the event channel and wait for the renderer to drain.
+///
+/// The facade must die first: it holds a sender clone through the client's
+/// `Progress`, and the renderer only finishes when the channel closes.
+pub(crate) async fn finish(ctx: Ctx) {
+    let Ctx {
+        nxr,
+        session,
+        json: _,
+    } = ctx;
+    drop(nxr);
+    session.finish().await;
+}
+
+/// `user:pass` split on the first `:`.
+fn split_user(user: Option<&str>) -> Result<Option<(&str, &str)>, Error> {
+    let Some(u) = user else { return Ok(None) };
+    let Some((user, pass)) = u.split_once(':') else {
+        return Err(Error::Misuse(format!(
+            "-u expects user:pass, got {u:?} without ':'"
+        )));
+    };
+    Ok(Some((user, pass)))
+}
+
+/// Parse explicit `--name` values through the grammar (exit 2 on bad names).
+pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> {
+    names.iter().map(|s| ArtifactName::parse(s)).collect()
+}
+
+/// Resolve a `--manifest` spec: `-` for stdin, http(s) URLs through the
+/// server, everything else as a local file.
+pub(crate) async fn load_manifest(nxr: &Nxr, spec: &str) -> Result<Manifest, Error> {
+    match spec {
+        "-" => Manifest::from_stdin(),
+        u if u.starts_with("http://") || u.starts_with("https://") => nxr.manifest_from(u).await,
+        p => Manifest::from_file(Path::new(p)),
+    }
+}
+
+/// One JSON line for the simple (non-event) results.
+pub(crate) fn print_line(json: bool, human: String, value: serde_json::Value) {
+    if json {
+        println!("{value}");
+    } else {
+        println!("{human}");
+    }
 }

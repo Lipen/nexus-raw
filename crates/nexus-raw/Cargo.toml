@@ -20,3 +20,4 @@ log = { workspace = true }
 [dev-dependencies]
 mock-nexus = { path = "../mock-nexus" }
 tempfile = { workspace = true }
+sha2 = { workspace = true }

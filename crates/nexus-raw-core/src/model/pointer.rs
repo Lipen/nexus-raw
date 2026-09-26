@@ -20,6 +20,20 @@ pub fn format_token(version: &str) -> String {
     format!("{version}\n")
 }
 
+/// A token must be exactly one non-empty line, no CR.
+pub fn validate_token(token: &str) -> Result<(), String> {
+    if token.is_empty() {
+        return Err("empty token".into());
+    }
+    if token.contains('\n') {
+        return Err("expected exactly one line".into());
+    }
+    if token.contains('\r') {
+        return Err("CR found: CRLF is not allowed".into());
+    }
+    Ok(())
+}
+
 /// `a >= b`, dotted-numeric: numeric chunks as numbers, the rest lexicographically.
 ///
 /// A segment is (numeric prefix, suffix): a release is newer than its own

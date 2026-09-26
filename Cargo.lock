@@ -689,6 +689,7 @@ dependencies = [
  "mock-nexus",
  "nexus-raw-core",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
 ]

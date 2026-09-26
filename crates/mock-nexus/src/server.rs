@@ -229,7 +229,9 @@ fn reason(code: u16) -> &'static str {
     match code {
         200 => "OK",
         201 => "Created",
+        206 => "Partial Content",
         400 => "Bad Request",
+        416 => "Range Not Satisfiable",
         401 => "Unauthorized",
         404 => "Not Found",
         405 => "Method Not Allowed",

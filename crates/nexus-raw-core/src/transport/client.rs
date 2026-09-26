@@ -1,8 +1,8 @@
 //! `NexusClient`: GET/HEAD/PUT over reqwest.
-//! Auth, TLS, retries, stall detection (protocol §7).
+//! Auth, TLS, retries, stall detection, Range resume (spec §5.1).
 
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,8 +16,7 @@ use crate::config::Config;
 use crate::error::Error;
 use crate::events::{Dir, Event, Progress};
 use crate::model::digest::Digest;
-use crate::model::name::{self, ArtifactName};
-use crate::model::pointer;
+use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::RemoteStatus;
 use crate::transport::retry::{is_retryable, AttemptFailure, RetryPolicy};
@@ -30,9 +29,17 @@ const UPLOAD_CHANNEL: usize = 4;
 
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + Send + 'a>>;
 
+/// What a HEAD saw: the status and the advertised metadata.
+/// A 404 is a normal result, not an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadInfo {
+    pub status: u16,
+    pub size: Option<u64>,
+    pub content_type: Option<String>,
+}
+
 pub struct NexusClient {
     http: reqwest::Client,
-    base: String,
     retry: RetryPolicy,
     stall: Duration,
     auth: Option<String>,
@@ -54,7 +61,6 @@ impl NexusClient {
             .map_err(|e| Error::misuse(format!("http client: {e}")))?;
         Ok(Self {
             http,
-            base: Config::normalized_base(&cfg.base)?,
             retry: RetryPolicy {
                 attempts: cfg.retry_attempts,
                 ..RetryPolicy::default()
@@ -74,16 +80,12 @@ impl NexusClient {
         &self.events
     }
 
-    pub fn object_url(&self, version: &str, name: &ArtifactName) -> String {
-        format!("{base}{version}/{}", name.encoded(), base = self.base)
+    pub fn object_url(&self, dir: &str, name: &ArtifactName) -> String {
+        format!("{dir}{}", name.encoded())
     }
 
-    pub fn claim_url(&self, version: &str) -> String {
-        format!("{base}{version}/claim.json", base = self.base)
-    }
-
-    pub fn pointer_url(&self, pointer: &str) -> String {
-        format!("{base}{pointer}", base = self.base)
+    pub fn sibling_url(&self, dir: &str, name: &ArtifactName) -> String {
+        format!("{dir}{}.sha256", name.encoded())
     }
 
     fn authorize(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -135,7 +137,7 @@ impl NexusClient {
             401 | 403 => Error::Auth {
                 url: url.to_owned(),
                 reason: format!(
-                    "HTTP {status}; set NXR_AUTH or NXR_<PROFILE>_AUTH (base64 user:pass)"
+                    "HTTP {status}; pass -u user:pass or export NXR_AUTH (base64 user:pass)"
                 ),
             },
             s if retryable => Error::transport(url, format!("HTTP {s}")),
@@ -152,29 +154,39 @@ impl NexusClient {
     /// The size comes from the raw header: hyper reports a zero body size hint
     /// for HEAD responses regardless of Content-Length.
     pub async fn head(&self, url: &str) -> Result<Option<u64>, Error> {
+        Ok(self.head_info(url).await?.size_filter_ok())
+    }
+
+    /// HEAD with full metadata; 404 is `HeadInfo { status: 404, .. }`.
+    pub async fn head_info(&self, url: &str) -> Result<HeadInfo, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
                 let req = this.authorize(this.http.head(url));
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
-                let status = resp.status();
-                match status {
-                    s if s.is_success() => {
-                        let size = resp
-                            .headers()
-                            .get(reqwest::header::CONTENT_LENGTH)
-                            .and_then(|v| v.to_str().ok())
-                            .and_then(|v| v.parse::<u64>().ok());
-                        Ok(size)
-                    }
-                    s if s.as_u16() == 404 => Ok(None),
-                    s => Err(this.status_failure(url, s)),
+                let status = resp.status().as_u16();
+                let mut info = HeadInfo {
+                    status,
+                    size: None,
+                    content_type: resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_owned),
+                };
+                if (200..300).contains(&status) {
+                    info.size = resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_LENGTH)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.parse::<u64>().ok());
                 }
+                Ok(info)
             })
         })
         .await
     }
 
-    /// GET a small object (sibling, claim, pointer): None on 404.
+    /// GET a small object (sibling, manifest, channel): None on 404.
     pub async fn get_small(&self, url: &str) -> Result<Option<Vec<u8>>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -216,12 +228,12 @@ impl NexusClient {
     /// Remote state of a name: HEAD of bytes + GET of sibling (§5.2).
     ///
     /// A sibling without bytes is ignored — the object is not complete.
-    pub async fn probe(&self, version: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
-        let bytes_url = self.object_url(version, name);
+    pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
+        let bytes_url = self.object_url(dir, name);
         let Some(size) = self.head(&bytes_url).await? else {
             return Ok(RemoteStatus::Absent);
         };
-        let sib_url = format!("{bytes_url}.sha256");
+        let sib_url = self.sibling_url(dir, name);
         match self.get_small(&sib_url).await? {
             None => Ok(RemoteStatus::Markerless { size: Some(size) }),
             Some(raw) => match sibling::parse_line(&String::from_utf8_lossy(&raw)) {
@@ -234,41 +246,108 @@ impl NexusClient {
         }
     }
 
-    /// GET bytes into a temp file: hash on the fly, per-chunk stall detection,
-    /// retries restart the attempt from scratch. Returns (bytes read, digest).
-    pub async fn download_to_file(
+    /// GET a body as a stream of chunks, hashing nothing, deciding nothing.
+    ///
+    /// The single-attempt body stream for stdout mode: once the body started
+    /// arriving, a retry would duplicate bytes, so breaks surface as errors.
+    pub async fn get_stream(&self, url: &str) -> Result<reqwest::Response, Error> {
+        self.with_retries(None, url, |this: &Self, url: &str| {
+            Box::pin(async move {
+                let req = this.authorize(this.http.get(url));
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status();
+                match status {
+                    s if s.is_success() => Ok(resp),
+                    s => Err(this.status_failure(url, s)),
+                }
+            })
+        })
+        .await
+    }
+
+    /// GET into a part file with Range resume (§5.2).
+    ///
+    /// `cont == true` and an existing `part` continue from its size through
+    /// `Range: bytes=N-`; a server that answers `200` (range ignored) restarts
+    /// from zero. The digest covers the whole file, prefix included.
+    /// Returns the final file size and digest.
+    pub async fn download_resumable(
         &self,
         subject: (&str, Dir),
         url: &str,
-        dest: &Path,
+        part: &Path,
+        cont: bool,
         total_hint: Option<u64>,
     ) -> Result<(u64, Digest), Error> {
         let stall = self.stall;
         let progress = self.events.clone();
         let subject_name = subject.0.to_owned();
         self.with_retries(Some(subject), url, |this: &Self, url: &str| {
-            let dest = dest.to_owned();
+            let part: PathBuf = part.to_owned();
             let progress = progress.clone();
             let subject_name = subject_name.clone();
             Box::pin(async move {
-                let req = this.authorize(this.http.get(url));
-                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
-                let status = resp.status();
-                if !status.is_success() {
-                    return Err(this.status_failure(url, status));
+                // The prefix: existing part content when resuming.
+                let mut prefix: u64 = 0;
+                let mut hasher = Sha256::new();
+                if cont {
+                    match tokio::fs::File::open(&part).await {
+                        Ok(mut f) => {
+                            let mut buf = [0u8; 64 * 1024];
+                            loop {
+                                match f.read(&mut buf).await {
+                                    Ok(0) => break,
+                                    Ok(n) => {
+                                        hasher.update(&buf[..n]);
+                                        prefix += n as u64;
+                                    }
+                                    Err(e) => {
+                                        return Err(AttemptFailure {
+                                            retryable: false,
+                                            error: Error::io(&part, e),
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => {
+                            return Err(AttemptFailure {
+                                retryable: false,
+                                error: Error::io(&part, e),
+                            })
+                        }
+                    }
                 }
-                let total = resp.content_length().or(total_hint);
+                let mut req = this.authorize(this.http.get(url));
+                if prefix > 0 {
+                    req = req.header(reqwest::header::RANGE, format!("bytes={prefix}-"));
+                }
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status().as_u16();
+                if !(200..300).contains(&status) {
+                    return Err(this.status_failure(url, resp.status()));
+                }
+                // 206 = the range was honored, append from `prefix`.
+                // 200 = full body, restart from zero.
+                let append = status == 206 && prefix > 0;
+                if !append {
+                    prefix = 0;
+                    hasher = Sha256::new();
+                }
+                let total = resp.content_length().map(|n| n + prefix).or(total_hint);
                 progress.started(&subject_name, Dir::Down, total).await;
                 let mut body = resp.bytes_stream();
-                let mut file =
-                    tokio::fs::File::create(&dest)
-                        .await
-                        .map_err(|e| AttemptFailure {
-                            retryable: false,
-                            error: Error::io(&dest, e),
-                        })?;
-                let mut hasher = Sha256::new();
-                let mut done: u64 = 0;
+                let mut file = if append {
+                    tokio::fs::OpenOptions::new().append(true).open(&part).await
+                } else {
+                    tokio::fs::File::create(&part).await
+                }
+                .map_err(|e| AttemptFailure {
+                    retryable: false,
+                    error: Error::io(&part, e),
+                })?;
+                let mut done: u64 = prefix;
                 loop {
                     let chunk = tokio::time::timeout(stall, body.next()).await;
                     let chunk = match chunk {
@@ -286,14 +365,14 @@ impl NexusClient {
                     hasher.update(&chunk);
                     file.write_all(&chunk).await.map_err(|e| AttemptFailure {
                         retryable: false,
-                        error: Error::io(&dest, e),
+                        error: Error::io(&part, e),
                     })?;
                     done += chunk.len() as u64;
                     progress.bytes(&subject_name, Dir::Down, done, total).await;
                 }
                 file.flush().await.map_err(|e| AttemptFailure {
                     retryable: false,
-                    error: Error::io(&dest, e),
+                    error: Error::io(&part, e),
                 })?;
                 let digest = Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
                 Ok((done, digest))
@@ -398,133 +477,14 @@ impl NexusClient {
         })
         .await
     }
-
-    /// Read a pointer: None on 404, raw bytes otherwise.
-    pub async fn get_pointer(&self, pointer_name: &str) -> Result<Option<String>, Error> {
-        let url = self.pointer_url(pointer_name);
-        self.get_small(&url)
-            .await
-            .map(|opt| opt.map(|b| String::from_utf8_lossy(&b).into_owned()))
-    }
-
-    /// Atomic pointer PUT: `<token>\n`.
-    pub async fn put_pointer(&self, pointer_name: &str, token: &str) -> Result<(), Error> {
-        let url = self.pointer_url(pointer_name);
-        self.put_small(&url, pointer::format_token(token).into_bytes())
-            .await
-    }
-
-    /// Read the remote claim: None on 404.
-    /// A broken claim is ClaimDrift (§4.1 sane check).
-    pub async fn get_claim(
-        &self,
-        version: &str,
-    ) -> Result<Option<crate::model::claim::Claim>, Error> {
-        let url = self.claim_url(version);
-        match self.get_small(&url).await? {
-            None => Ok(None),
-            Some(raw) => crate::model::claim::Claim::from_slice(&raw)
-                .map(Some)
-                .map_err(|e| Error::ClaimDrift {
-                    version: version.to_owned(),
-                    detail: format!("remote claim.json does not parse: {e}"),
-                }),
-        }
-    }
-
-    /// PUT the claim with a drift check: present and byte-equal — ok, different — refuse (§6.1).
-    pub async fn put_claim_checked(&self, version: &str, claim_bytes: &[u8]) -> Result<(), Error> {
-        let url = self.claim_url(version);
-        match self.get_small(&url).await? {
-            Some(existing) if existing == claim_bytes => Ok(()),
-            Some(_) => Err(Error::ClaimDrift {
-                version: version.to_owned(),
-                detail: "remote claim.json differs from the local one; claims are immutable"
-                    .to_owned(),
-            }),
-            None => self.put_small(&url, claim_bytes.to_owned()).await,
-        }
-    }
-
-    /// Version list via REST search (experimental — endpoint depends on the Nexus release).
-    ///
-    /// base `…/repository/<repo>/<group…>/` → search the assets of repository
-    /// `repo` with group `<group…>`.
-    /// The version is the path segment right after the group prefix.
-    pub async fn search_versions(&self) -> Result<Vec<String>, Error> {
-        let url =
-            reqwest::Url::parse(&self.base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;
-        let mut segments = url.path().split('/').filter(|s| !s.is_empty());
-        let repo = match segments.next() {
-            Some("repository") => segments.next(),
-            _ => None,
-        };
-        let Some(repo) = repo else {
-            return Err(Error::misuse(
-                "base URL must point inside /repository/<name>/ for ls without --version",
-            ));
-        };
-        let group: Vec<&str> = segments.collect();
-        let mut origin = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
-        if let Some(port) = url.port() {
-            origin.push_str(&format!(":{port}"));
-        }
-        let mut endpoint = reqwest::Url::parse(&format!("{origin}/service/rest/v1/search/assets"))
-            .map_err(|e| Error::misuse(format!("search endpoint: {e}")))?;
-        endpoint.query_pairs_mut().append_pair("repository", repo);
-        if !group.is_empty() {
-            endpoint
-                .query_pairs_mut()
-                .append_pair("group", &group.join("/"));
-        }
-        let mut versions = std::collections::BTreeSet::new();
-        let mut next: Option<String> = None;
-        loop {
-            let mut page = endpoint.clone();
-            if let Some(token) = &next {
-                page.query_pairs_mut()
-                    .append_pair("continuationToken", token);
-            }
-            let page_url = page.to_string();
-            let bytes = self
-                .get_small(&page_url)
-                .await?
-                .ok_or_else(|| Error::Http {
-                    status: 404,
-                    url: page_url.clone(),
-                })?;
-            let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
-                Error::transport(&page_url, format!("search response is not JSON: {e}"))
-            })?;
-            if let Some(items) = value.get("items").and_then(|i| i.as_array()) {
-                for item in items {
-                    let Some(path) = item.get("path").and_then(|p| p.as_str()) else {
-                        continue;
-                    };
-                    let rel = strip_group_prefix(path, &group);
-                    if let Some(vseg) = rel.split('/').next() {
-                        if name::validate_version(vseg).is_ok() {
-                            versions.insert(vseg.to_owned());
-                        }
-                    }
-                }
-            }
-            next = value
-                .get("continuationToken")
-                .and_then(|t| t.as_str())
-                .map(str::to_owned);
-            if next.is_none() {
-                break;
-            }
-        }
-        Ok(versions.into_iter().collect())
-    }
 }
 
-fn strip_group_prefix<'a>(path: &'a str, group: &[&str]) -> &'a str {
-    if group.is_empty() {
-        return path;
+impl HeadInfo {
+    fn size_filter_ok(self) -> Option<u64> {
+        if (200..300).contains(&self.status) {
+            self.size
+        } else {
+            None
+        }
     }
-    let prefix = format!("{}/", group.join("/"));
-    path.strip_prefix(&prefix).unwrap_or(path)
 }
