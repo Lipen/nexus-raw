@@ -75,7 +75,9 @@ impl Error {
             Error::Http { status: 404, .. } => {
                 Some("check the URL path and that the version or object exists".into())
             }
-            Error::Http { .. } => None,
+            Error::Http { status, .. } => Some(
+                format!("the server answered {status}; check the URL path and the server health"),
+            ),
             Error::Misuse(_) => Some("check the command line arguments".into()),
         }
     }
@@ -120,6 +122,57 @@ impl From<Verdict> for Error {
             Verdict::Mismatch { name, detail } => Error::Mismatch { name, detail },
             Verdict::Missing { names } => Error::Missing { names },
             Verdict::LocalIncomplete { names } => Error::Incomplete { names },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The crate docs promise a hint for every error: pin it for all variants.
+    #[test]
+    fn every_error_class_carries_a_hint() {
+        let classes = [
+            Error::Mismatch {
+                name: "a.zip".into(),
+                detail: "digest".into(),
+            },
+            Error::Incomplete {
+                names: vec!["a.zip".into()],
+            },
+            Error::UnsafeName {
+                name: "/abs".into(),
+                reason: "absolute".into(),
+            },
+            Error::Missing {
+                names: vec!["a.zip".into()],
+            },
+            Error::Enumerate {
+                url: "http://x/".into(),
+                reason: "no manifest".into(),
+            },
+            Error::Auth {
+                url: "http://x/".into(),
+                reason: "401".into(),
+            },
+            Error::Transport {
+                url: "http://x/".into(),
+                detail: "reset".into(),
+            },
+            Error::Http {
+                status: 404,
+                url: "http://x/".into(),
+            },
+            Error::Http {
+                status: 503,
+                url: "http://x/".into(),
+            },
+            Error::Misuse("bad flag".into()),
+        ];
+        for e in &classes {
+            let hint = e.hint().unwrap_or_else(|| panic!("no hint for {e}"));
+            assert!(!hint.trim().is_empty(), "empty hint for {e}");
         }
     }
 }
