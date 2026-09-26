@@ -8,41 +8,20 @@
 
 <div class="grid cards" markdown>
 
-<div markdown>
-:material-curling: **Primitives**  
-`get`, `put`, `head`, `sha` — every call self-sufficient: URL in argv, credentials from `-u` or the environment.
-</div>
-
-<div markdown>
-:material-upload: **Publish**  
-`up` pushes a whole directory: markers generated and checked by default, bytes and siblings in parallel workers.
-</div>
-
-<div markdown>
-:material-download: **Consume**  
-`down` fetches exactly the enumerated names, hashes on the fly, resumes part files with `Range: bytes=N-`.
-</div>
-
-<div markdown>
-:material-shield-check: **Trustworthy completion**  
-An artifact counts as done only with its `<name>.sha256` marker in `sha256sum -c` format.
-Divergent artifacts are never overwritten.
-</div>
-
-<div markdown>
-:material-code-json: **Scriptable**  
-`--json` for one-object commands and NDJSON event streams.
-Exit codes split data problems from transport trouble, and every error carries a `hint:`.
-</div>
-
-<div markdown>
-:material-language-rust: **Embeddable**  
-The `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
-</div>
+- :material-curling: **Primitives** — `get`, `put`, `head`, `sha`: every call self-sufficient, URL in argv, credentials from `-u` or the environment.
+- :material-upload: **Publish** — `up` pushes a whole directory: markers generated and checked by default, bytes and siblings in parallel workers.
+- :material-download: **Consume** — `down` fetches exactly the enumerated names, hashes on the fly, resumes part files with `Range: bytes=N-`.
+- :material-shield-check: **Trustworthy completion** — an artifact counts as done only with its `<name>.sha256` marker in `sha256sum -c` format, and divergent artifacts are never overwritten.
+- :material-code-json: **Scriptable** — `--json` for one-object commands and NDJSON event streams, exit codes split data problems from transport trouble, and every error carries a `hint:`.
+- :material-language-rust: **Embeddable** — the `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
 
 </div>
 
 ![A real nxr session: publish, name with a channel, consume, verify](assets/img/hero-terminal.png)
+
+---
+
+## The 30-second version
 
 The transcript above is real output, verbatim.
 Publish a version directory — markers included, re-runs free:
