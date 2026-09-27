@@ -1,6 +1,6 @@
 /*
  * Site tweaks: card contrast, hover states, framed images, table rows.
- * The header source widget uses the theme's native rendering.
+ * The header source widget comes from docs_overrides/partials/source.html.
  */
 
 /*
@@ -57,6 +57,30 @@
 [data-md-color-scheme="slate"] .md-typeset img {
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Source widget: the platform caption stacked above the repo slug
+ * (the override in docs_overrides/partials/source.html provides the markup).
+ * Renders in both the header and the mobile drawer.
+ */
+
+.md-source__repository {
+  line-height: 1.25;
+}
+
+.md-source__platform {
+  display: block;
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.64;
+}
+
+.md-source__repo {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 /*

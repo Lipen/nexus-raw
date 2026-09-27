@@ -1,5 +1,6 @@
 site_name: nexus-raw
 site_description: nxr is curl for a Sonatype Nexus raw repository — primitives with retries and TLS, verified directory transfers, channel refs and manifests.
+repo_name: Lipen/nexus-raw
 repo_url: https://github.com/Lipen/nexus-raw
 site_url: https://lipen.github.io/nexus-raw/
 
@@ -7,6 +8,9 @@ theme:
   name: material
   logo: assets/nxr.svg
   favicon: assets/nxr.svg
+  icon:
+    repo: fontawesome/brands/github
+  custom_dir: docs_overrides
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
