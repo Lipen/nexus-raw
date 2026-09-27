@@ -32,7 +32,7 @@ dist/1.4.0/
 ```
 
 Every relative path under the directory is an artifact name.
-Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved: `latest`, `nightly` and `claim.json` are ordinary names if your convention uses them.
+Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved: `latest`, `nightly` and `version.json` are ordinary names if your convention uses them.
 Before anything touches the network, every local file is classified against its sibling marker (see [the object states](troubleshoot.md#the-four-states-of-an-object)).
 
 ## Look before you leap: the dry run

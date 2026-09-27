@@ -1,5 +1,5 @@
 //! Per-scenario behavior: connection handling, per-path state machines and
-//! the pure transforms (marker zeroing, claim drift, auth decision).
+//! the pure transforms (marker zeroing, document drift, auth decision).
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read};
@@ -190,11 +190,11 @@ fn body_plan(shared: &Shared, method: &str, path: &str) -> BodyPlan {
     }
 }
 
-/// GET payload: the synthesized drifting claim once drift is enabled,
+/// GET payload: the synthesized drifting version document once drift is enabled,
 /// otherwise whatever is in the store.
 fn drift_or_store(shared: &Shared, path: &str) -> Option<Vec<u8>> {
-    if shared.drift.load(Relaxed) && is_claim_path(path) {
-        return Some(drift_claim(first_segment(path)));
+    if shared.drift.load(Relaxed) && is_version_path(path) {
+        return Some(drift_doc(first_segment(path)));
     }
     lock(&shared.store).get(path).cloned()
 }
@@ -283,9 +283,9 @@ fn range_start(header: Option<&str>) -> Option<usize> {
     start.trim().parse().ok()
 }
 
-/// True when the path designates a claim document (`<version>/claim.json`).
-fn is_claim_path(path: &str) -> bool {
-    path.ends_with("/claim.json")
+/// True when the path designates a version document (`<version>/version.json`).
+fn is_version_path(path: &str) -> bool {
+    path.ends_with("/version.json")
 }
 
 /// First `/`-separated segment of a store path (the version directory).
@@ -293,10 +293,10 @@ fn first_segment(path: &str) -> &str {
     path.split('/').next().unwrap_or_default()
 }
 
-/// Synthesized drifting claim, same shape as protocol §4.1 but listing a
-/// ghost artifact instead of the real ones.
-fn drift_claim(version: &str) -> Vec<u8> {
-    format!("{{\"claim_version\":1,\"version\":\"{version}\",\"artifacts\":[\"ghost.zip\"]}}")
+/// Synthesized drifting version document, same shape as protocol §4.1 but
+/// listing a ghost artifact instead of the real ones.
+fn drift_doc(version: &str) -> Vec<u8> {
+    format!("{{\"schema_version\":1,\"version\":\"{version}\",\"artifacts\":[\"ghost.zip\"]}}")
         .into_bytes()
 }
 
@@ -328,7 +328,7 @@ fn auth_decision(header: Option<&str>, expected_b64: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        auth_decision, drift_claim, first_segment, is_claim_path, normalize_path, range_start,
+        auth_decision, drift_doc, first_segment, is_version_path, normalize_path, range_start,
         zero_digest,
     };
 
@@ -348,19 +348,19 @@ mod tests {
     }
 
     #[test]
-    fn drift_claim_has_foreign_artifact_and_path_version() {
+    fn drift_doc_has_foreign_artifact_and_path_version() {
         assert_eq!(
-            drift_claim("1.14.0"),
-            br#"{"claim_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
+            drift_doc("1.14.0"),
+            br#"{"schema_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
         );
     }
 
     #[test]
-    fn claim_paths_and_segments() {
-        assert!(is_claim_path("1.14.0/claim.json"));
-        assert!(!is_claim_path("1.14.0/claim.json.sha256"));
-        assert!(!is_claim_path("claim.json"));
-        assert_eq!(first_segment("1.14.0/claim.json"), "1.14.0");
+    fn version_paths_and_segments() {
+        assert!(is_version_path("1.14.0/version.json"));
+        assert!(!is_version_path("1.14.0/version.json.sha256"));
+        assert!(!is_version_path("version.json"));
+        assert_eq!(first_segment("1.14.0/version.json"), "1.14.0");
     }
 
     #[test]

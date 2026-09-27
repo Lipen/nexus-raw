@@ -15,21 +15,21 @@ pub struct Manifest {
 impl Manifest {
     /// Parse a manifest: `{"artifacts": ["<name>", …]}`.
     ///
-    /// The claim-shaped fields are tolerated: `claim_version` must be 1 when
-    /// present, `version` is ignored. Every name passes the grammar.
+    /// The version-document fields are tolerated: `schema_version` must be 1
+    /// when present, `version` is ignored. Every name passes the grammar.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
         let value: serde_json::Value = serde_json::from_slice(bytes)
             .map_err(|e| Error::misuse(format!("manifest is not JSON: {e}")))?;
         let obj = value
             .as_object()
             .ok_or_else(|| Error::misuse("manifest must be a JSON object"))?;
-        if let Some(v) = obj.get("claim_version") {
+        if let Some(v) = obj.get("schema_version") {
             let n = v
                 .as_u64()
-                .ok_or_else(|| Error::misuse("manifest claim_version must be a number"))?;
+                .ok_or_else(|| Error::misuse("manifest schema_version must be a number"))?;
             if n != 1 {
                 return Err(Error::misuse(format!(
-                    "manifest claim_version {n} is not supported"
+                    "manifest schema_version {n} is not supported"
                 )));
             }
         }
@@ -82,11 +82,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_plain_and_claim_shapes() {
+    fn parses_plain_and_version_shapes() {
         let m = Manifest::from_slice(br#"{"artifacts":["a.zip","sub/b.json"]}"#).unwrap();
         assert_eq!(m.names.len(), 2);
         let m2 = Manifest::from_slice(
-            br#"{"claim_version":1,"version":"1.4.0","artifacts":["a.zip","a.zip"]}"#,
+            br#"{"schema_version":1,"version":"1.4.0","artifacts":["a.zip","a.zip"]}"#,
         )
         .unwrap();
         assert_eq!(m2.names.len(), 1);
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn rejects_bad_version_and_bad_names() {
-        assert!(Manifest::from_slice(br#"{"claim_version":2,"artifacts":[]}"#).is_err());
+        assert!(Manifest::from_slice(br#"{"schema_version":2,"artifacts":[]}"#).is_err());
         assert!(Manifest::from_slice(br#"{"artifacts":["x.sha256"]}"#).is_err());
         assert!(Manifest::from_slice(br#"{"names":[]}"#).is_err());
     }

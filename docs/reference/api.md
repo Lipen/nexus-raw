@@ -192,7 +192,7 @@ fn parse_manifest(bytes: &[u8]) -> Result<(), nexus_raw_core::Error> {
 }
 ```
 
-`Manifest::from_slice` tolerates the claim-shaped fields (`claim_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name, the exact rules the [protocol page](protocol.md#manifest) documents.
+`Manifest::from_slice` tolerates the version-document fields (`schema_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name, the exact rules the [protocol page](protocol.md#manifest) documents.
 `channel_set` returns `ChannelOutcome::Written { from }` or `ChannelOutcome::Skipped { current }`, where the forward-only guard compares tokens in dotted-numeric order.
 
 ## Enumeration
@@ -254,7 +254,7 @@ An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objec
 import { up, down } from 'nexus-raw'
 
 const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw-main/1.4.0/', {
-  claimFirst: 'claim.json',
+  claimFirst: 'version.json',
   onEvent: (event) => console.log(event),
 })
 ```

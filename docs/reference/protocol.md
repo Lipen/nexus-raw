@@ -43,7 +43,7 @@ PUT https://nexus.example.com/repository/raw-main/1.4.0/bom/linux-x86_64.json.sh
 - A segment matches `[A-Za-z0-9._-]+` and is 1 to 255 bytes.
 - Forbidden: empty segments, `.`/`..` segments, leading or trailing `/`.
 - Reserved: the `.sha256` suffix and nothing else.
-- `claim.json`, `latest`, `nightly` are ordinary names: upload them, download them, point a channel at them.
+- `version.json`, `latest`, `nightly` are ordinary names: upload them, download them, point a channel at them.
 
 What a name *means* is the publisher's convention, not the protocol's.
 The grammar lives in `ArtifactName` and is enforced before any byte moves.
@@ -95,11 +95,11 @@ It carries no digests. Each artifact's sibling does.
 | `artifacts` | required array of strings, every entry passes the name grammar |
 | order | free: names may appear in any order |
 | duplicates | dropped, first occurrence wins |
-| `claim_version` | tolerated, must be `1` when present |
+| `schema_version` | tolerated, must be `1` when present |
 | `version` | tolerated and ignored |
 
 A `manifest.json` sitting in a published directory is just a file that `up` uploads like any artifact.
-Claim-shaped fields are tolerated so a claim manifest and an enumeration manifest can be the same file.
+Version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
 
 ### channel ref
 

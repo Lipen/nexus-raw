@@ -24,7 +24,7 @@ Every scenario, the invariant it pins, and the tests that pin it.
 | `foreign-marker` | stored markers carry a foreign digest | a remote `Broken` object is never overwritten: the digest check refuses and the part is dropped | core: `down_digest_mismatch_refuses_and_drops_part` · mock: `foreign_marker_zeroes_stored_digest` |
 | `markerless` | markers are acknowledged with `201` but silently dropped | a Markerless remote is re-uploaded by `up`, and `down` writes the marker it computed from the received bytes | core: `markerless_remote_is_re_uploaded`, `down_markerless_remote_writes_computed_marker` · mock: `markerless_loses_marker_keeps_bytes` |
 | `auth-401` | `401` without valid Basic credentials | auth failures fail fast with no retries and name the URL | core: `auth_gates_every_request` · CLI: `auth401_exit_codes` · mock: `auth_401_gate` |
-| `claim-drift` | after `enable_drift`, every GET of `*/claim.json` serves a synthesized claim with a ghost artifact | `claim.json` is an ordinary name: a legacy fixture kept as a trap for future special-casing and as a target for external harnesses | mock: `claim_drift_synthesizes_between_enable_and_disable` |
+| `doc-drift` | after `enable_drift`, every GET of `*/version.json` serves a synthesized version document with a ghost artifact | `version.json` is an ordinary name: a legacy fixture kept as a trap for future special-casing and as a target for external harnesses | mock: `doc_drift_synthesizes_between_enable_and_disable` |
 | `flaky` | the first K requests per path answer `503` | one invocation recovers through retries | core: `single_call_recovers_through_flaky_and_dropped_connections` · mock: `flaky_serves_503_for_first_k_requests` |
 
 ## The suites

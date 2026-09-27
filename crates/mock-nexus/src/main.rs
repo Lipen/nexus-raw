@@ -96,7 +96,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
             user: flags.user.clone(),
             pass: flags.pass.clone(),
         }),
-        "claim-drift" => Some(Scenario::ClaimDrift),
+        "doc-drift" => Some(Scenario::DocDrift),
         "flaky" => Some(Scenario::Flaky {
             first_failures: flags.flaky,
         }),

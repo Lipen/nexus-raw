@@ -20,7 +20,7 @@ The canonical protocol text is kept outside this repository.
 - The order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
   Only the `.sha256` suffix is reserved.
-  `claim.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
+  `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
 - A channel is any token file.
   Dotted-numeric order is the only comparison the tool imposes (`--if-forward`).
 - Credentials come from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order.

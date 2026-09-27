@@ -23,7 +23,7 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 | `foreign-marker` | stores markers with a foreign digest |
 | `markerless` | accepts markers but silently drops them |
 | `auth-401` | requires `Authorization: Basic <base64 user:pass>` |
-| `claim-drift` | diverges `GET claim.json` once drift is enabled by the test |
+| `doc-drift` | diverges `GET version.json` once drift is enabled by the test |
 | `flaky` | answers 503 for the first K requests per path |
 
 Scenario-specific flags: `--partial-bytes N`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--auth user:pass` (default `ci:secret`).

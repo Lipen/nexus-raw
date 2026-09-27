@@ -7,14 +7,14 @@
 //! single open `Range: bytes=N-` is answered with `206` and `Content-Range`
 //! (out-of-range starts get `416`); any other `Range` form is ignored.
 //! A [`Scenario`] selects a failure mode (partial PUT bodies, connection
-//! resets, slow links, drifted claims, flaky 503s, Basic-auth gating).
+//! resets, slow links, drifted documents, flaky 503s, Basic-auth gating).
 //!
 //! Rust conformance tests use the library API directly.
 //! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:
 //!
 //! ```text
 //! let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic)?;
-//! let url = format!("{}1.14.0/claim.json", server.base_url());
+//! let url = format!("{}1.14.0/version.json", server.base_url());
 //! ```
 
 mod base64;
@@ -37,7 +37,7 @@ pub const SCENARIOS: &[&str] = &[
     "foreign-marker",
     "markerless",
     "auth-401",
-    "claim-drift",
+    "doc-drift",
     "flaky",
 ];
 
@@ -71,10 +71,10 @@ pub enum Scenario {
     /// Valid credentials behave like [`Scenario::Atomic`].
     Auth401 { user: String, pass: String },
     /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`].
-    /// Afterwards every GET of a `*/claim.json` path serves a synthesized
-    /// claim with a ghost artifact.
+    /// Afterwards every GET of a `*/version.json` path serves a synthesized
+    /// version document with a ghost artifact.
     /// PUTs keep storing verbatim, and [`MockNexus::disable_drift`] restores store-backed responses.
-    ClaimDrift,
+    DocDrift,
     /// The first `first_failures` requests per path (any method) get
     /// 503 Service Unavailable.
     /// Later requests are served normally.
@@ -203,7 +203,7 @@ impl MockNexus {
         format!("http://{}/", self.addr)
     }
 
-    /// Stored bytes for `path` (no leading `/`, e.g. `1.14.0/claim.json`).
+    /// Stored bytes for `path` (no leading `/`, e.g. `1.14.0/version.json`).
     pub fn store_get(&self, path: &str) -> Option<Vec<u8>> {
         lock(&self.shared.store).get(path).cloned()
     }
@@ -230,12 +230,12 @@ impl MockNexus {
             .count()
     }
 
-    /// Start serving synthesized (drifted) claims for `*/claim.json` GETs.
+    /// Start serving synthesized (drifted) documents for `*/version.json` GETs.
     pub fn enable_drift(&self) {
         self.shared.drift.store(true, Ordering::Relaxed);
     }
 
-    /// Return to store-backed claim responses.
+    /// Return to store-backed document responses.
     pub fn disable_drift(&self) {
         self.shared.drift.store(false, Ordering::Relaxed);
     }
@@ -463,11 +463,11 @@ mod tests {
     #[test]
     fn drop_connection_resets_first_request_per_path() {
         let server = MockNexus::start(Scenario::DropConnection).unwrap();
-        server.insert("1.14.0/claim.json", b"{}");
+        server.insert("1.14.0/version.json", b"{}");
 
         let mut stream = send(
             server.addr(),
-            &request_bytes("GET", "/1.14.0/claim.json", b"", &[]),
+            &request_bytes("GET", "/1.14.0/version.json", b"", &[]),
         )
         .unwrap();
         let mut buf = [0u8; 64];
@@ -480,7 +480,7 @@ mod tests {
 
         // Later requests on the same path are served normally.
         let (status, _, body) =
-            exchange(server.addr(), "GET", "/1.14.0/claim.json", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, b"{}");
         assert_eq!(server.requests().len(), 2);
@@ -572,31 +572,31 @@ mod tests {
     }
 
     #[test]
-    fn claim_drift_synthesizes_between_enable_and_disable() {
-        let server = MockNexus::start(Scenario::ClaimDrift).unwrap();
-        let stored = br#"{"claim_version":1,"version":"1.14.0","artifacts":["real.zip"]}"#;
-        server.insert("1.14.0/claim.json", stored);
+    fn doc_drift_synthesizes_between_enable_and_disable() {
+        let server = MockNexus::start(Scenario::DocDrift).unwrap();
+        let stored = br#"{"schema_version":1,"version":"1.14.0","artifacts":["real.zip"]}"#;
+        server.insert("1.14.0/version.json", stored);
 
         // Before enable_drift: the store is served.
         let (status, _, body) =
-            exchange(server.addr(), "GET", "/1.14.0/claim.json", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, stored.to_vec());
 
-        // After enable_drift: synthesized claim with the version from the path.
+        // After enable_drift: synthesized document with the version from the path.
         server.enable_drift();
         let (status, _, body) =
-            exchange(server.addr(), "GET", "/1.14.0/claim.json", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(
             body,
-            br#"{"claim_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
+            br#"{"schema_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
         );
 
         // After disable_drift: back to the store.
         server.disable_drift();
         let (status, _, body) =
-            exchange(server.addr(), "GET", "/1.14.0/claim.json", b"", &[]).unwrap();
+            exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, stored.to_vec());
     }
