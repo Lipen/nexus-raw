@@ -26,7 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # Strict: a broken link or a bad anchor fails the deploy.
+      # --strict: warnings (a broken link, a bad anchor) fail the build,
+      # so a red deploy always means a docs regression, never a silent one.
       - run: uvx zensical build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
