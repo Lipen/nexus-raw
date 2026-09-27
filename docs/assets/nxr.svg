@@ -1,15 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    The nxr mark: a verified artifact.
+    The cube is the artifact; its amber face is the sha-sibling marker that
+    turns bytes into a complete object. Teal/amber stay in the site palette.
+  -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#00bfa5"/>
-      <stop offset="1" stop-color="#00897b"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13b8a6"/>
+      <stop offset="1" stop-color="#0c756b"/>
     </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fcd34d"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.28" cy="0.2" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#g)"/>
-  <rect x="66" y="34" width="38" height="60" rx="6" fill="#ffffff" opacity="0.92"/>
-  <rect x="74" y="46" width="22" height="4" rx="2" fill="#00897b"/>
-  <rect x="74" y="56" width="22" height="4" rx="2" fill="#00897b" opacity="0.7"/>
-  <rect x="74" y="66" width="14" height="4" rx="2" fill="#00897b" opacity="0.5"/>
-  <path d="M28 64h26m0 0-10-10m10 10-10 10" stroke="#ffc107" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <path d="M30 42h14M30 86h14" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.85"/>
+
+  <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+  <rect width="512" height="512" rx="116" fill="url(#sheen)"/>
+
+  <!-- the artifact: an isometric cube -->
+  <g>
+    <!-- top face -->
+    <polygon points="256,92 384,162 256,232 128,162" fill="#ffffff"/>
+    <!-- left face -->
+    <polygon points="128,162 256,232 256,384 128,318" fill="#ffffff" opacity="0.62"/>
+    <!-- right face: the marker -->
+    <polygon points="256,232 384,162 384,318 256,384" fill="url(#amber)"/>
+    <!-- glass edge -->
+    <polygon points="256,92 384,162 384,318 256,384 128,318 128,162" fill="none"
+             stroke="#ffffff" stroke-opacity="0.25" stroke-width="4" stroke-linejoin="round"/>
+  </g>
 </svg>
