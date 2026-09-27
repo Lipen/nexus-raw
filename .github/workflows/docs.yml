@@ -1,4 +1,4 @@
-name: deploy-docs
+name: Docs
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      - ".github/workflows/deploy-docs.yml"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 # Pages deployment: the artifact is built here and served by GitHub Pages.
