@@ -1,0 +1,12 @@
+{
+  "name": "nexus-raw-example-node",
+  "private": true,
+  "type": "module",
+  "description": "An external npm consumer of nexus-raw via a file: dependency",
+  "scripts": {
+    "start": "node publish-and-consume.mjs"
+  },
+  "dependencies": {
+    "nexus-raw": "file:../../crates/nexus-raw-napi"
+  }
+}

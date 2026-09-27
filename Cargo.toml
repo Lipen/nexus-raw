@@ -6,6 +6,7 @@ members = [
     "crates/mock-nexus",
     "crates/nexus-raw-napi",
 ]
+exclude = ["examples"]
 
 [workspace.package]
 version = "0.1.0"

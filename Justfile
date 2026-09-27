@@ -64,6 +64,19 @@ build *args:
 release:
     {{cargo}} build --release -p nexus-raw
 
+[doc('Run the Node example: file: dependency, claim-first up, channel, down, verify.')]
+[group('examples')]
+example-node:
+    cargo build -q -p mock-nexus
+    cargo build -q -p nexus-raw-napi
+    cd examples/node && npm install --silent && node publish-and-consume.mjs
+
+[doc('Run the Rust example: standalone crate on a path dependency.')]
+[group('examples')]
+example-rust:
+    cargo build -q -p mock-nexus
+    cargo run --manifest-path examples/rust/Cargo.toml
+
 # The whole site, written in docs/ (zensical, Material stack).
 # Live reload included: edit a page, the browser refreshes itself.
 [doc('Serve the docs site with live reload (http://localhost:8000).')]
