@@ -11,6 +11,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
+repository = "https://github.com/lipen00/nexus-raw"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "fs", "io-util", "io-std"] }

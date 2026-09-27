@@ -127,8 +127,13 @@ mod tests {
     use super::*;
     use nexus_raw_core::Summary;
 
+    /// build_config reads the process env for credentials: tests that touch it
+    /// hold this lock so parallel tests never see each other's variables.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn defaults_match_the_cli() {
+        let _env = ENV_LOCK.lock().unwrap();
         let cfg = build_config("http://host/repo/", &CommonOpts::default()).unwrap();
         assert_eq!(cfg.workers, 8);
         assert_eq!(cfg.retry_attempts, 4);
@@ -140,6 +145,7 @@ mod tests {
 
     #[test]
     fn explicit_opts_override_defaults() {
+        let _env = ENV_LOCK.lock().unwrap();
         let common = CommonOpts {
             workers: Some(16),
             retry: Some(1),
@@ -159,6 +165,7 @@ mod tests {
 
     #[test]
     fn explicit_auth_wins_over_env() {
+        let _env = ENV_LOCK.lock().unwrap();
         std::env::set_var("NXR_AUTH", "envB64");
         let common = CommonOpts {
             auth_user: Some("user".into()),
@@ -172,6 +179,7 @@ mod tests {
 
     #[test]
     fn env_fallback_applies_without_explicit_auth() {
+        let _env = ENV_LOCK.lock().unwrap();
         std::env::set_var("NXR_USERNAME", "user");
         std::env::set_var("NXR_PASSWORD", "pass");
         let cfg = build_config("http://host/", &CommonOpts::default()).unwrap();
@@ -182,6 +190,7 @@ mod tests {
 
     #[test]
     fn half_auth_is_misuse() {
+        let _env = ENV_LOCK.lock().unwrap();
         let common = CommonOpts {
             auth_user: Some("user".into()),
             auth_pass: None,

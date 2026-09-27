@@ -1,7 +1,7 @@
 # Use in CI
 
 `nxr` is built for pipelines: stable exit codes, machine-readable events, free resume, credentials from the environment.
-This page wires a release job and a consumer job into GitLab CI. The shapes apply to any runner.
+This page wires a release job and a consumer job into GitHub Actions. The shapes apply to any CI.
 
 ## Credentials
 

@@ -41,7 +41,7 @@ nxr verify vendor/prebuilt
 ```
 
 An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down` resumes from part files through `Range: bytes=N-` by default, and `--fresh` starts over.
-The rest of the model (explicit enumeration, dry-run plans, best-effort listings) is in the [command table](#commands) and the [docs](https://gitcode.com/rri_opensource/nexus-raw/blob/master/docs/index.md).
+The rest of the model (explicit enumeration, dry-run plans, best-effort listings) is in the [command table](#commands) and the [docs](docs/index.md).
 
 ## Credentials
 

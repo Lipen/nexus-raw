@@ -1,13 +1,11 @@
 site_name: nexus-raw
 site_description: nxr is curl for a Sonatype Nexus raw repository — primitives with retries and TLS, verified directory transfers, channel refs and manifests.
-repo_url: https://gitcode.com/rri_opensource/nexus-raw
+repo_url: https://github.com/lipen00/nexus-raw
 
 theme:
   name: material
   logo: assets/nxr.svg
   favicon: assets/nxr.svg
-  icon:
-    repo: fontawesome/brands/git-alt
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
