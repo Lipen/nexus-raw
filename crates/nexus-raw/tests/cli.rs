@@ -610,10 +610,10 @@ fn ndjson_events_parse_and_summarize() {
 // ---- doctor ---------------------------------------------------------------
 
 /// A failing `up --json` still drains the event channel: stdout stays
-/// complete NDJSON with the plan event in it, and the failure itself goes
-/// to stderr with its hint. Regression: the error paths used to `?` past
-/// the renderer drain, so the tail of the event stream raced the process
-/// exit and lines were lost nondeterministically.
+/// complete NDJSON with the plan event in it, and the last line is the
+/// Summary event naming both failures. The loss used to be a per-run race,
+/// so the invocation repeats: five green runs in a row make the regression
+/// reliably red on the old `?`-before-drain code.
 #[test]
 fn failing_up_still_flushes_ndjson_events() {
     let srv = server(Scenario::Auth401 {
@@ -624,25 +624,46 @@ fn failing_up_still_flushes_ndjson_events() {
     write_file(src.path(), "a.zip", ALPHA);
     write_file(src.path(), "b.bin", BETA);
 
-    let up = nxr(&[
-        "--json",
-        "up",
-        src.path().to_str().unwrap(),
-        &dir_url(&srv),
-        "--retry",
-        "1",
-    ]);
-    expect_exit(&up, 3, "unauthorized up is an auth failure");
-    assert!(
-        stderr(&up).contains("hint:"),
-        "a hint accompanies the failure: {}",
-        stderr(&up)
-    );
-    let events = ndjson(&up);
-    assert!(
-        events.iter().any(|e| e["event"] == "plan"),
-        "the plan event must survive the failure: {events:?}"
-    );
+    for _ in 0..5 {
+        let up = nxr(&[
+            "--json",
+            "up",
+            src.path().to_str().unwrap(),
+            &dir_url(&srv),
+            "--retry",
+            "1",
+        ]);
+        expect_exit(&up, 3, "unauthorized up is an auth failure");
+        assert!(
+            stderr(&up).contains("hint:"),
+            "a hint accompanies the failure: {}",
+            stderr(&up)
+        );
+        let events = ndjson(&up);
+        assert!(
+            events.iter().any(|e| e["event"] == "plan"),
+            "the plan event must survive the failure: {events:?}"
+        );
+        // The Summary event goes out just before the error surfaces; on the
+        // old code it was the line lost most often.
+        let summary = events.last().expect("at least the summary line");
+        assert_eq!(
+            summary["event"], "summary",
+            "summary comes last: {events:?}"
+        );
+        let mut failed: Vec<&str> = summary["failed"]
+            .as_array()
+            .expect("failed is a list")
+            .iter()
+            .map(|v| v.as_str().expect("a name string"))
+            .collect();
+        failed.sort_unstable();
+        assert_eq!(
+            failed,
+            ["a.zip", "b.bin"],
+            "both names reported: {events:?}"
+        );
+    }
 }
 
 /// 15. doctor: without credentials the credentials check fails (exit 2);
