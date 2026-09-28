@@ -350,7 +350,10 @@ fn spawn_pump(
     on_event: Option<EventCallback>,
 ) -> Option<tokio::task::JoinHandle<()>> {
     on_event.map(|tsfn| {
-        napi::bindgen_prelude::spawn(async move {
+        // tokio::spawn, not the napi re-export: the re-export disappears
+        // under the noop feature that unit tests need for linking, and the
+        // async work runs on the same ambient tokio runtime either way.
+        tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
                 tsfn.call(
                     mapping::event_to_json(&event),
@@ -371,6 +374,16 @@ async fn finish_pump(pump: Option<tokio::task::JoinHandle<()>>) -> Result<()> {
     }
 }
 
+/// Drain the event pump, then map `error` for JS: the caller must see the
+/// events that led to the failure before the promise rejects.
+async fn finish_pump_err(
+    pump: Option<tokio::task::JoinHandle<()>>,
+    error: nexus_raw_core::Error,
+) -> Error {
+    let _ = finish_pump(pump).await;
+    js_error(error)
+}
+
 /// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the
 /// server, everything else as a local file — the CLI rules.
 async fn load_manifest(
@@ -388,7 +401,13 @@ async fn load_manifest(
 fn parse_names(names: Option<Vec<String>>) -> Result<Option<Vec<ArtifactName>>> {
     match names {
         None => Ok(None),
-        Some(v) if v.is_empty() => Ok(None),
+        // An explicit empty list restricts nothing: that is a caller bug,
+        // not a whole-catalog request.
+        Some(v) if v.is_empty() => Err(js_error(nexus_raw_core::Error::Misuse(
+            "names: an empty list would transfer the whole catalog; omit the \
+             option for that, or name at least one artifact"
+                .to_owned(),
+        ))),
         Some(v) => v
             .iter()
             .map(|s| ArtifactName::parse(s).map_err(js_error))
@@ -420,7 +439,10 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
         .get(&url, o.out.map(PathBuf::from), o.cont.unwrap_or(false))
         .await;
     drop(nxr);
-    let outcome: GetOutcome = outcome.map_err(js_error)?;
+    let outcome: GetOutcome = match outcome {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(NxrGetResult {
         size: outcome.size as f64,
@@ -470,7 +492,10 @@ pub async fn put(
     };
     let uploaded = nxr.put(&url, &path, o.sha.unwrap_or(false)).await;
     drop(nxr);
-    let (size, digest) = uploaded.map_err(js_error)?;
+    let (size, digest) = match uploaded {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(NxrPutResult {
         size: size as f64,
@@ -497,7 +522,10 @@ pub async fn head(url: String, opts: Option<NxrCommonOpts>) -> Result<NxrHeadRes
     let pump = spawn_pump(rx, on_event);
     let info = nxr.head(&url).await;
     drop(nxr);
-    let info = info.map_err(js_error)?;
+    let info = match info {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(NxrHeadResult {
         status: u32::from(info.status),
@@ -537,7 +565,10 @@ pub async fn sha(target: String, opts: Option<NxrCommonOpts>) -> Result<String> 
     let pump = spawn_pump(rx, on_event);
     let d = nxr.sha(ShaSource::Url(target.clone())).await;
     drop(nxr);
-    let d = d.map_err(js_error)?;
+    let d = match d {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(d.as_str().to_owned())
 }
@@ -594,7 +625,10 @@ pub async fn up(
         .up(Path::new(&src_dir), names, gen_markers, claim, None)
         .await;
     drop(nxr);
-    let summary = summary.map_err(js_error)?;
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(Either::A(NxrSummary::from(&summary)))
 }
@@ -652,7 +686,10 @@ pub async fn down(
         )
         .await;
     drop(nxr);
-    let summary = summary.map_err(js_error)?;
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(NxrSummary::from(&summary))
 }
@@ -681,7 +718,10 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
     let pump = spawn_pump(rx, on_event);
     let summary = nxr.verify(Path::new(&dir), names).await;
     drop(nxr);
-    let summary = summary.map_err(js_error)?;
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(NxrSummary::from(&summary))
 }
@@ -707,7 +747,10 @@ pub async fn channel_get(url: String, opts: Option<NxrCommonOpts>) -> Result<Opt
     let pump = spawn_pump(rx, on_event);
     let token = nxr.channel_get(&url).await;
     drop(nxr);
-    let token = token.map_err(js_error)?;
+    let token = match token {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(token)
 }
@@ -736,7 +779,10 @@ pub async fn channel_set(
     let pump = spawn_pump(rx, on_event);
     let outcome = nxr.channel_set(&url, &token, if_forward).await;
     drop(nxr);
-    let outcome = outcome.map_err(js_error)?;
+    let outcome = match outcome {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
     finish_pump(pump).await?;
     Ok(match outcome {
         ChannelOutcome::Written { from } => NxrChannelSetResult {
@@ -750,4 +796,22 @@ pub async fn channel_set(
             current: Some(current),
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_names;
+
+    #[test]
+    fn empty_names_list_is_misuse_not_whole_catalog() {
+        assert!(parse_names(Some(vec![])).is_err());
+        assert!(parse_names(None).unwrap().is_none());
+        assert_eq!(
+            parse_names(Some(vec!["a.zip".into()]))
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
 }

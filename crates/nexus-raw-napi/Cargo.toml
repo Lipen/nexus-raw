@@ -19,3 +19,7 @@ tempfile = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }
+
+# Unit tests link without a Node process: napi symbols become no-ops.
+[dev-dependencies]
+napi = { workspace = true, features = ["noop"] }
