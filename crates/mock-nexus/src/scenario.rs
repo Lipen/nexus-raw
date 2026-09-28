@@ -131,6 +131,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
                             content_length: body.len(),
                             body,
                             drip: shared.drip,
+                            hide_length: false,
                         };
                         let _ = server::write_response(stream, &resp);
                     }
@@ -143,6 +144,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
                             content_length: total,
                             body: payload,
                             drip: shared.drip,
+                            hide_length: shared.sizeless,
                         };
                         let _ = server::write_response(stream, &resp);
                     }
@@ -166,6 +168,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
                 content_length,
                 body: Vec::new(),
                 drip: shared.drip,
+                hide_length: shared.sizeless && status == 200,
             };
             let _ = server::write_response(stream, &resp);
         }
@@ -229,6 +232,7 @@ fn plain(status: u16, body: &[u8], drip: Option<Drip>) -> Resp {
         content_length: body.len(),
         body: body.to_vec(),
         drip,
+        hide_length: false,
     }
 }
 
@@ -239,6 +243,7 @@ fn unauthorized() -> Resp {
         content_length: b"auth required\n".len(),
         body: b"auth required\n".to_vec(),
         drip: None,
+        hide_length: false,
     }
 }
 

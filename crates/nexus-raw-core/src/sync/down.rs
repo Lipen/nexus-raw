@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Semaphore;
 
 use crate::error::Error;
@@ -190,7 +191,14 @@ async fn download_one(
     }
     let marker = sibling::format_line(name.as_str(), &actual);
     let sib_final = sibling_path(dir, name);
-    if let Err(e) = tokio::fs::write(&sib_final, marker).await {
+    let marker_write = async {
+        let mut f = crate::transport::client::write_options(false)
+            .open(&sib_final)
+            .await?;
+        f.write_all(marker.as_bytes()).await?;
+        f.flush().await
+    };
+    if let Err(e) = marker_write.await {
         return Err((name.clone(), Failure::Failed(Error::io(&sib_final, e))));
     }
     client

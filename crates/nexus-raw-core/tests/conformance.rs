@@ -139,6 +139,181 @@ async fn stalled_upload_fails_within_the_stall_window() {
 }
 
 #[tokio::test]
+async fn divergent_complete_refusal_is_wire_covered() {
+    // The never-overwrite invariant, driven through the wire: a complete
+    // remote artifact with a different digest refuses the whole up and the
+    // remote bytes stay untouched. Regression net: a revert to overwrite
+    // would pass the rest of the suite green — only unit tests covered the
+    // verdict before this test.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let remote = b"remote bytes";
+    mock.insert(&format!("{VERSION}/a.zip"), remote);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(remote)).as_bytes(),
+    );
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", b"local bytes");
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "divergence is a data error, got {err}");
+    assert_eq!(
+        mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        remote,
+        "the remote bytes must survive the refused up"
+    );
+}
+
+#[tokio::test]
+async fn sizeless_head_refuses_instead_of_overwriting() {
+    // The proxy case: a 200 without Content-Length used to classify as
+    // Absent, so the upload skipped the digest comparison and overwrote.
+    // The object is present but unverifiable: refusal, not overwrite.
+    let mock = MockNexus::start(Scenario::Sizeless).unwrap();
+    let remote = b"remote bytes";
+    mock.insert(&format!("{VERSION}/a.zip"), remote);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(remote)).as_bytes(),
+    );
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", b"local bytes");
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "unverifiable remote refuses, got {err}");
+    assert_eq!(
+        mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        remote,
+        "the remote bytes must survive the refused up"
+    );
+    assert!(
+        mock.put_count(&format!("{VERSION}/a.zip")) == 0,
+        "nothing may be PUT behind a sizeless HEAD"
+    );
+}
+
+#[tokio::test]
+async fn drop_connection_is_retried_through_the_client() {
+    // DropConnection resets the first request per path. Driven through the
+    // core client (it used to run only against the mock's own unit tests):
+    // the first request is reset on the wire, the retry succeeds, the
+    // artifact lands complete.
+    let mock = MockNexus::start(Scenario::DropConnection).unwrap();
+    mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let summary = nxr
+        .down(
+            local.path(),
+            Enumeration::Names(names(&["a.zip"])),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(local.path().join("a.zip")).unwrap(), CONTENT);
+    assert!(local.path().join("a.zip.sha256").is_file());
+    assert!(
+        matches!(
+            mock.requests().first().map(|r| &r.outcome),
+            Some(Outcome::Reset)
+        ),
+        "the first request on the first path must have been reset"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_part_is_never_followed_on_resume() {
+    // NXR-02: the part name is derived from the server-controlled object
+    // name, so a pre-placed symlink at the part path must fail the write
+    // (O_NOFOLLOW), never become a write gadget into the decoy.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let local = TempDir::new().unwrap();
+    let decoy = local.path().join("decoy.txt");
+    std::fs::write(&decoy, b"decoy bytes").unwrap();
+    let a = names(&["a.zip"]).remove(0);
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&decoy, part_path(local.path(), &a)).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .down(local.path(), Enumeration::Names(vec![a]), false, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "the refused write is a data error");
+    assert_eq!(
+        std::fs::read(&decoy).unwrap(),
+        b"decoy bytes",
+        "the decoy must survive untouched"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_marker_is_never_followed_on_write() {
+    // Same class as the part case, one stage later: bytes land fine, the
+    // local marker write must refuse to follow a symlink (NXR-02).
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let local = TempDir::new().unwrap();
+    let decoy = local.path().join("decoy.txt");
+    std::fs::write(&decoy, b"decoy bytes").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&decoy, local.path().join("a.zip.sha256")).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .down(
+            local.path(),
+            Enumeration::Names(names(&["a.zip"])),
+            false,
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "the refused write is a data error");
+    assert_eq!(
+        std::fs::read(&decoy).unwrap(),
+        b"decoy bytes",
+        "the decoy must survive untouched"
+    );
+    assert_eq!(
+        std::fs::read(local.path().join("a.zip")).unwrap(),
+        CONTENT,
+        "the verified bytes still land"
+    );
+}
+
+#[tokio::test]
 async fn up_generates_markers_by_default() {
     // The plain-mode regression: a directory without any .sha256 file still
     // produces Complete remote objects (§5.2 markers-on-by-default).
@@ -252,7 +427,7 @@ async fn up_manifest_missing_local_name_is_data_error() {
 }
 
 #[tokio::test]
-async fn single_call_recovers_through_flaky_and_dropped_connections() {
+async fn single_call_recovers_through_flaky() {
     let mock = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
     let local = TempDir::new().unwrap();
     seed_complete(local.path(), "a.zip", CONTENT);

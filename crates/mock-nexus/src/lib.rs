@@ -34,6 +34,7 @@ pub const SCENARIOS: &[&str] = &[
     "partial-put",
     "drop-connection",
     "freeze-upload",
+    "sizeless",
     "slow",
     "foreign-marker",
     "markerless",
@@ -58,6 +59,11 @@ pub enum Scenario {
     /// read and no response is ever written, so the write side must detect
     /// the stall. GET/HEAD behave like [`Scenario::Atomic`].
     FreezeUpload,
+    /// GET/HEAD answers for present objects carry no `Content-Length`:
+    /// the proxy case. A client must refuse to treat such objects as
+    /// absent (the digest comparison would be skipped). PUTs behave like
+    /// [`Scenario::Atomic`].
+    Sizeless,
     /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping
     /// `chunk_delay_ms` between pieces. PUT bodies are read normally.
     Slow {
@@ -127,6 +133,8 @@ pub(crate) struct Shared {
     pub(crate) auth_b64: Option<String>,
     /// Slow-drip parameters for GET/HEAD bodies.
     pub(crate) drip: Option<Drip>,
+    /// Success GET/HEAD answers hide `Content-Length` (the proxy case).
+    pub(crate) sizeless: bool,
     /// Bytes served of the first PUT per path before cutting it (partial-put).
     pub(crate) partial_first_put: Option<usize>,
     /// Number of initial 503s per path (flaky).
@@ -170,6 +178,7 @@ impl MockNexus {
             }),
             _ => None,
         };
+        let sizeless = matches!(&scenario, Scenario::Sizeless);
         let (partial_first_put, flaky_first) = match &scenario {
             Scenario::PartialPut {
                 first_attempt_bytes,
@@ -187,6 +196,7 @@ impl MockNexus {
             drift: AtomicBool::new(false),
             auth_b64,
             drip,
+            sizeless,
             partial_first_put,
             flaky_first,
         });

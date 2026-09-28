@@ -68,6 +68,9 @@ pub(crate) struct Resp {
     /// Slow-drip parameters.
     /// `Some` only for the `slow` scenario.
     pub(crate) drip: Option<Drip>,
+    /// Omit the `Content-Length` header (the sizeless scenario): the client
+    /// frames the body by connection close.
+    pub(crate) hide_length: bool,
 }
 
 /// Slow-drip parameters simulating a low-bandwidth link.
@@ -195,11 +198,16 @@ pub(crate) fn read_body_into<R: BufRead>(
 /// Always sends `Content-Length` and `Connection: close`.
 /// The caller drops the stream afterwards.
 pub(crate) fn write_response<W: Write>(w: &mut W, resp: &Resp) -> io::Result<()> {
+    let length_line = if resp.hide_length {
+        String::new()
+    } else {
+        format!("Content-Length: {}\r\n", resp.content_length)
+    };
     let mut head = format!(
-        "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        "HTTP/1.1 {} {}\r\n{}Connection: close\r\n",
         resp.status,
         reason(resp.status),
-        resp.content_length
+        length_line
     );
     for (name, value) in &resp.extra_headers {
         head.push_str(name);
@@ -392,6 +400,7 @@ mod tests {
             content_length: 3,
             body: b"abc".to_vec(),
             drip: None,
+            hide_length: false,
         };
         let mut out = Vec::new();
         write_response(&mut out, &resp).unwrap();

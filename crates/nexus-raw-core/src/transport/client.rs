@@ -29,6 +29,26 @@ const UPLOAD_CHANNEL: usize = 4;
 
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + Send + 'a>>;
 
+/// Open options for files nxr writes under a server-name-derived path
+/// (`.part` files, local `.sha256` markers): create/truncate as asked, but
+/// never follow a symlink (NXR-02) — a predictable name must not become a
+/// write gadget into some other file.
+pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create(true);
+    if append {
+        options.append(true);
+    } else {
+        options.truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        // tokio::fs::OpenOptions mirrors the unix extension natively.
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options
+}
+
 /// What a HEAD saw: the status and the advertised metadata.
 /// A 404 is a normal result, not an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,15 +169,9 @@ impl NexusClient {
         AttemptFailure { retryable, error }
     }
 
-    /// HEAD an object: Some(content-length), or None on 404.
-    ///
+    /// HEAD with full metadata; 404 is `HeadInfo { status: 404, .. }`.
     /// The size comes from the raw header: hyper reports a zero body size hint
     /// for HEAD responses regardless of Content-Length.
-    pub async fn head(&self, url: &str) -> Result<Option<u64>, Error> {
-        Ok(self.head_info(url).await?.size_filter_ok())
-    }
-
-    /// HEAD with full metadata; 404 is `HeadInfo { status: 404, .. }`.
     pub async fn head_info(&self, url: &str) -> Result<HeadInfo, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -228,18 +242,68 @@ impl NexusClient {
     /// Remote state of a name: HEAD of bytes + GET of sibling (§5.2).
     ///
     /// A sibling without bytes is ignored: the object is not complete.
+    /// Classification of the HEAD: 404 is [`RemoteStatus::Absent`];
+    /// 401/403 surface as [`Error::Auth`]; a 2xx without `Content-Length`
+    /// (and any other answered-but-unverifiable status) is
+    /// [`RemoteStatus::Broken`] — never [`RemoteStatus::Absent`], or a
+    /// proxy could skip the digest comparison and the never-overwrite rule.
+    /// Transient statuses (5xx, connection breaks) ride the shared retry
+    /// loop like any other request.
     pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
         let bytes_url = self.object_url(dir, name);
-        let Some(size) = self.head(&bytes_url).await? else {
+        let info = self
+            .with_retries(
+                Some((name.as_str(), Dir::Down)),
+                &bytes_url,
+                |this: &Self, url: &str| {
+                    Box::pin(async move {
+                        let info = this.head_info(url).await.map_err(|e| AttemptFailure {
+                            retryable: false,
+                            error: e,
+                        })?;
+                        match info.status {
+                            s if (200..300).contains(&s) => Ok(Some(info)),
+                            404 => Ok(None),
+                            s @ (401 | 403) => {
+                                Err(this
+                                    .status_failure(url, reqwest::StatusCode::from_u16(s).unwrap()))
+                            }
+                            s if (500..600).contains(&s) => Err(AttemptFailure {
+                                retryable: true,
+                                error: Error::transport(url, format!("HTTP {s}")),
+                            }),
+                            s => Err(AttemptFailure {
+                                retryable: false,
+                                error: Error::Http {
+                                    status: s,
+                                    url: url.to_owned(),
+                                },
+                            }),
+                        }
+                    })
+                },
+            )
+            .await?;
+        let Some(info) = info else {
             return Ok(RemoteStatus::Absent);
+        };
+        let size = match info.size_filter_ok() {
+            Some(size) => Some(size),
+            None => {
+                return Ok(RemoteStatus::Broken(
+                    "HEAD answered 2xx without Content-Length; the object is \
+                     present but unverifiable"
+                        .to_owned(),
+                ))
+            }
         };
         let sib_url = self.sibling_url(dir, name);
         match self.get_small(&sib_url).await? {
-            None => Ok(RemoteStatus::Markerless { size: Some(size) }),
+            None => Ok(RemoteStatus::Markerless { size }),
             Some(raw) => match sibling::parse_line(&String::from_utf8_lossy(&raw)) {
                 Ok(s) => Ok(RemoteStatus::Complete {
                     digest: s.digest,
-                    size: Some(size),
+                    size,
                 }),
                 Err(e) => Ok(RemoteStatus::Broken(e)),
             },
@@ -351,15 +415,14 @@ impl NexusClient {
                 let total = resp.content_length().map(|n| n + prefix).or(total_hint);
                 progress.started(&subject_name, Dir::Down, total).await;
                 let mut body = resp.bytes_stream();
-                let mut file = if append {
-                    tokio::fs::OpenOptions::new().append(true).open(&part).await
-                } else {
-                    tokio::fs::File::create(&part).await
-                }
-                .map_err(|e| AttemptFailure {
-                    retryable: false,
-                    error: Error::io(&part, e),
-                })?;
+                let mut file =
+                    write_options(append)
+                        .open(&part)
+                        .await
+                        .map_err(|e| AttemptFailure {
+                            retryable: false,
+                            error: Error::io(&part, e),
+                        })?;
                 let mut done: u64 = prefix;
                 loop {
                     let chunk = tokio::time::timeout(stall, body.next()).await;

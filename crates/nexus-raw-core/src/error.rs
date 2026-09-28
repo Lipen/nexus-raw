@@ -39,6 +39,10 @@ pub enum Error {
     /// Bad flags, missing file or directory.
     #[error("misuse: {0}")]
     Misuse(String),
+    /// A local filesystem failure (part files, markers, rename).
+    /// Not misuse: the command line may be perfect and the disk full.
+    #[error("io: {path}: {detail}")]
+    Io { path: String, detail: String },
 }
 
 impl Error {
@@ -51,6 +55,7 @@ impl Error {
             | Error::Enumerate { .. } => 1,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
             Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. } => 3,
+            Error::Io { .. } => 1,
         }
     }
 
@@ -79,6 +84,9 @@ impl Error {
                 format!("the server answered {status}; check the URL path and the server health"),
             ),
             Error::Misuse(_) => Some("check the command line arguments".into()),
+            Error::Io { .. } => {
+                Some("check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe".into())
+            }
         }
     }
 
@@ -94,7 +102,10 @@ impl Error {
     }
 
     pub(crate) fn io(path: &std::path::Path, source: std::io::Error) -> Self {
-        Error::Misuse(format!("{}: {source}", path.display()))
+        Error::Io {
+            path: path.display().to_string(),
+            detail: source.to_string(),
+        }
     }
 }
 

@@ -87,6 +87,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         }),
         "drop-connection" => Some(Scenario::DropConnection),
         "freeze-upload" => Some(Scenario::FreezeUpload),
+        "sizeless" => Some(Scenario::Sizeless),
         "slow" => Some(Scenario::Slow {
             chunk_delay_ms: flags.chunk_delay_ms,
             chunk_size: flags.chunk_size,

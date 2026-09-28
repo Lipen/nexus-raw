@@ -76,6 +76,9 @@ pub async fn get(
         None => {
             let resp = client.get_stream(url).await?;
             let total = resp.content_length();
+            // The contract: Started precedes the body it announces, even in
+            // stdout mode where nothing else is written.
+            client.progress().started("", Dir::Down, total).await;
             let mut body = resp.bytes_stream();
             let mut stdout = tokio::io::stdout();
             let mut size: u64 = 0;
@@ -91,7 +94,6 @@ pub async fn get(
                 .flush()
                 .await
                 .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
-            client.progress().started("", Dir::Down, total).await;
             Ok(GetOutcome {
                 size,
                 digest: None,

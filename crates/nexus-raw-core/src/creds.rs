@@ -47,6 +47,8 @@ pub fn basic(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // One env at a time: these tests mutate NXR_AUTH and run in parallel.
+    static ENV_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 
     #[test]
     fn basic_encoding() {
@@ -55,6 +57,7 @@ mod tests {
 
     #[test]
     fn explicit_wins() {
+        let _env = ENV_LOCK.lock();
         std::env::set_var("NXR_AUTH", "envB64");
         let creds = resolve(Some(("user", "pass"))).unwrap().unwrap();
         assert_eq!(creds.header, "Basic dXNlcjpwYXNz");
