@@ -351,8 +351,10 @@ fn spawn_pump(
 ) -> Option<tokio::task::JoinHandle<()>> {
     on_event.map(|tsfn| {
         // tokio::spawn, not the napi re-export: the re-export disappears
-        // under the noop feature that unit tests need for linking, and the
-        // async work runs on the same ambient tokio runtime either way.
+        // under the noop feature that unit tests need for linking. Inside a
+        // napi async fn the current runtime is napi's own tokio RT, so both
+        // calls land on the same workers (napi-3.13 tokio_runtime.rs:
+        // `spawn` is `RT.spawn`).
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
                 tsfn.call(
