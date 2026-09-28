@@ -18,11 +18,23 @@ pub(crate) async fn up(
     dry_run: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
+    // The renderer drains on every path: the events the run already emitted
+    // must reach the output before the failure is reported.
+    let result = run_up(&ctx, src, manifest, claim, no_sha, dry_run).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_up(
+    ctx: &Ctx,
+    src: &Path,
+    manifest: Option<&str>,
+    claim: Option<ArtifactName>,
+    no_sha: bool,
+    dry_run: bool,
+) -> Result<(), Error> {
     let names = match manifest {
-        Some(spec) => {
-            let m = load_manifest(&ctx.nxr, spec).await?;
-            Some(m.names)
-        }
+        Some(spec) => Some(load_manifest(&ctx.nxr, spec).await?.names),
         None => None,
     };
     if dry_run {
@@ -30,7 +42,7 @@ pub(crate) async fn up(
             Some(n) => Some(n),
             None => Some(ctx.nxr.scan(src)?),
         };
-        let actions = match ctx
+        let actions = ctx
             .nxr
             .diff(
                 src,
@@ -38,23 +50,15 @@ pub(crate) async fn up(
                 nexus_raw_core::Mode::Up,
                 !no_sha,
             )
-            .await
-        {
-            Ok(a) => a,
-            Err(e) => {
-                finish(ctx).await;
-                return Err(e);
-            }
-        };
+            .await?;
         for a in &actions {
             crate::cmd::print_line(ctx.json, plan_line(a), action_json(a));
         }
-        finish(ctx).await;
         return Ok(());
     }
-    let summary = ctx.nxr.up(src, names, !no_sha, claim, None).await?;
-    report_summary(&ctx, &summary, "up");
-    finish(ctx).await;
+    // The Summary event is the single source for totals; the renderer prints
+    // it in both modes. Printing a second copy here raced the renderer.
+    ctx.nxr.up(src, names, !no_sha, claim, None).await?;
     Ok(())
 }
 
@@ -68,6 +72,19 @@ pub(crate) async fn down(
     fresh: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
+    let result = run_down(&ctx, dst, manifest, names, ls, fresh).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_down(
+    ctx: &Ctx,
+    dst: &Path,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    fresh: bool,
+) -> Result<(), Error> {
     let enum_src = if ls {
         Enumeration::Search
     } else if let Some(spec) = manifest {
@@ -87,24 +104,8 @@ pub(crate) async fn down(
             }
         }
     };
-    let summary = ctx.nxr.down(dst, enum_src, fresh, None).await?;
-    report_summary(&ctx, &summary, "down");
-    finish(ctx).await;
+    ctx.nxr.down(dst, enum_src, fresh, None).await?;
     Ok(())
-}
-
-fn report_summary(ctx: &Ctx, summary: &nexus_raw_core::Summary, what: &str) {
-    if ctx.json {
-        return; // The Summary event already went out as NDJSON.
-    }
-    let mut line = format!(
-        "{what}: {} sent, {} fetched, {} skipped",
-        summary.uploaded, summary.downloaded, summary.skipped
-    );
-    if !summary.failed.is_empty() {
-        line.push_str(&format!(", FAILED: {}", summary.failed.join(", ")));
-    }
-    println!("{line}");
 }
 
 fn plan_line(a: &nexus_raw_core::Action) -> String {

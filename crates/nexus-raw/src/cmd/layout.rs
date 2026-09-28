@@ -4,11 +4,19 @@ use std::path::Path;
 
 use nexus_raw_core::{Error, Manifest};
 
-use crate::cmd::{finish, make_ctx, print_line};
+use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
 
 pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
+    // The renderer drains on every path: the events the run already emitted
+    // must reach the output before the failure is reported.
+    let result = run_ls(&ctx, assets).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
     if assets {
         let names = ctx.nxr.ls_assets().await?;
         for n in &names {
@@ -24,12 +32,17 @@ pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> 
             print_line(ctx.json, v.clone(), serde_json::json!({"version": v}));
         }
     }
-    finish(ctx).await;
     Ok(())
 }
 
 pub(crate) async fn channel_get(cli: &Cli, url: &str) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
+    let result = run_channel_get(&ctx, url).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_channel_get(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let token = ctx.nxr.channel_get(url).await?;
     match token {
         Some(t) => print_line(
@@ -43,7 +56,6 @@ pub(crate) async fn channel_get(cli: &Cli, url: &str) -> Result<(), Error> {
             serde_json::json!({"url": url, "token": serde_json::Value::Null}),
         ),
     }
-    finish(ctx).await;
     Ok(())
 }
 
@@ -54,6 +66,12 @@ pub(crate) async fn channel_set(
     if_forward: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
+    let result = run_channel_set(&ctx, url, token, if_forward).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_channel_set(ctx: &Ctx, url: &str, token: &str, if_forward: bool) -> Result<(), Error> {
     let outcome = ctx.nxr.channel_set(url, token, if_forward).await?;
     match outcome {
         nexus_raw_core::ChannelOutcome::Written { from } => print_line(
@@ -67,13 +85,18 @@ pub(crate) async fn channel_set(
             serde_json::json!({"url": url, "outcome": "skipped", "current": current}),
         ),
     }
-    finish(ctx).await;
     Ok(())
 }
 
 pub(crate) async fn verify(cli: &Cli, dir: &Path, manifest: Option<&str>) -> Result<(), Error> {
     // verify needs no network: the base is only a placeholder for the client.
     let ctx = make_ctx(cli, "http://localhost/")?;
+    let result = run_verify(&ctx, dir, manifest).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<(), Error> {
     let names = match manifest {
         Some(spec) => {
             let m: Manifest = if spec == "-" {
@@ -97,6 +120,5 @@ pub(crate) async fn verify(cli: &Cli, dir: &Path, manifest: Option<&str>) -> Res
             }
         );
     }
-    finish(ctx).await;
     Ok(())
 }

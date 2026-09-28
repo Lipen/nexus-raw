@@ -9,14 +9,27 @@ use crate::Cli;
 
 pub(crate) async fn get(cli: &Cli, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
-    let outcome = ctx.nxr.get(url, out.map(Path::to_owned), cont).await?;
-    report_get(&ctx, url, out, &outcome);
+    // The renderer drains on every path: the events the run already emitted
+    // must reach the output before the failure is reported.
+    let result = run_get(&ctx, url, out, cont).await;
     finish(ctx).await;
+    result
+}
+
+async fn run_get(ctx: &Ctx, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
+    let outcome = ctx.nxr.get(url, out.map(Path::to_owned), cont).await?;
+    report_get(ctx, url, out, &outcome);
     Ok(())
 }
 
 pub(crate) async fn put(cli: &Cli, url: &str, file: &Path, sha: bool) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
+    let result = run_put(&ctx, url, file, sha).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_put(ctx: &Ctx, url: &str, file: &Path, sha: bool) -> Result<(), Error> {
     let (size, digest) = ctx.nxr.put(url, file, sha).await?;
     match digest {
         Some(d) => print_line(
@@ -30,12 +43,17 @@ pub(crate) async fn put(cli: &Cli, url: &str, file: &Path, sha: bool) -> Result<
             serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": serde_json::Value::Null}),
         ),
     }
-    finish(ctx).await;
     Ok(())
 }
 
 pub(crate) async fn head(cli: &Cli, url: &str) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
+    let result = run_head(&ctx, url).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_head(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let info = ctx.nxr.head(url).await?;
     print_line(
         ctx.json,
@@ -54,7 +72,6 @@ pub(crate) async fn head(cli: &Cli, url: &str) -> Result<(), Error> {
             "content_type": info.content_type,
         }),
     );
-    finish(ctx).await;
     Ok(())
 }
 
@@ -72,13 +89,18 @@ pub(crate) async fn sha(cli: &Cli, target: &str) -> Result<(), Error> {
         return Ok(());
     }
     let ctx = make_ctx(cli, target)?;
+    let result = run_sha(&ctx, target).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_sha(ctx: &Ctx, target: &str) -> Result<(), Error> {
     let d = ctx.nxr.sha(ShaSource::Url(target.to_owned())).await?;
     print_line(
         ctx.json,
         d.as_str().to_owned(),
         serde_json::json!({"sha256": d.as_str(), "source": target}),
     );
-    finish(ctx).await;
     Ok(())
 }
 
