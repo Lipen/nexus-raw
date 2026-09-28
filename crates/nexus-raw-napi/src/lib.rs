@@ -600,29 +600,44 @@ pub async fn up(
     let cfg = mapping::build_config(&dst_url, &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
-    let names: Option<Vec<ArtifactName>> = match &o.manifest {
-        Some(spec) => Some(load_manifest(&nxr, spec).await.map_err(js_error)?.names),
-        None => parse_names(o.names)?,
-    };
+    // Pure parsing first: no events can precede the pump.
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     let claim = match &o.claim_first {
         Some(raw) => Some(ArtifactName::parse(raw).map_err(js_error)?),
         None => None,
     };
     let gen_markers = !o.no_sha.unwrap_or(false);
+    // The pump starts before any network call: events fired during the
+    // manifest fetch belong to JS as much as the later ones.
+    let pump = spawn_pump(rx, on_event);
+    let names: Option<Vec<ArtifactName>> = match &o.manifest {
+        Some(spec) => match load_manifest(&nxr, spec).await {
+            Ok(m) => Some(m.names),
+            Err(e) => return Err(finish_pump_err(pump, e).await),
+        },
+        None => parsed_names,
+    };
     if o.dry_run.unwrap_or(false) {
         let scanned = match names {
             Some(n) => n,
-            None => nxr.scan(Path::new(&src_dir)).map_err(js_error)?,
+            None => match nxr.scan(Path::new(&src_dir)) {
+                Ok(n) => n,
+                Err(e) => return Err(finish_pump_err(pump, e).await),
+            },
         };
-        let actions = nxr
+        let actions = match nxr
             .diff(Path::new(&src_dir), scanned, Mode::Up, gen_markers)
             .await
-            .map_err(js_error)?;
+        {
+            Ok(a) => a,
+            Err(e) => return Err(finish_pump_err(pump, e).await),
+        };
+        // The plan promise settles only after the events did.
+        finish_pump(pump).await?;
         return Ok(Either::B(NxrPlan {
             actions: actions.iter().map(NxrPlanAction::from).collect(),
         }));
     }
-    let pump = spawn_pump(rx, on_event);
     let summary = nxr
         .up(Path::new(&src_dir), names, gen_markers, claim, None)
         .await;
@@ -659,26 +674,37 @@ pub async fn down(
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    // The pump starts before any network call: events fired during the
+    // manifest fetch belong to JS as much as the later ones.
+    let pump = spawn_pump(rx, on_event);
     let enum_src = if o.ls.unwrap_or(false) {
         Enumeration::Search
     } else if let Some(spec) = &o.manifest {
-        Enumeration::Manifest(load_manifest(&nxr, spec).await.map_err(js_error)?)
+        let m = match load_manifest(&nxr, spec).await {
+            Ok(m) => m,
+            Err(e) => return Err(finish_pump_err(pump, e).await),
+        };
+        Enumeration::Manifest(m)
     } else {
         match parse_names(o.names)? {
             Some(v) => Enumeration::Names(v),
-            None => match nxr.manifest_at_base().await.map_err(js_error)? {
-                Some(m) => Enumeration::Manifest(m),
-                None => {
-                    return Err(js_error(nexus_raw_core::Error::Enumerate {
-                        url: nxr.base().to_owned(),
-                        reason: "no manifest.json on the server and no manifest/names/ls given"
-                            .into(),
-                    }))
+            None => match nxr.manifest_at_base().await {
+                Ok(Some(m)) => Enumeration::Manifest(m),
+                Ok(None) => {
+                    return Err(finish_pump_err(
+                        pump,
+                        nexus_raw_core::Error::Enumerate {
+                            url: nxr.base().to_owned(),
+                            reason: "no manifest.json on the server and no manifest/names/ls given"
+                                .into(),
+                        },
+                    )
+                    .await)
                 }
+                Err(e) => return Err(finish_pump_err(pump, e).await),
             },
         }
     };
-    let pump = spawn_pump(rx, on_event);
     let summary = nxr
         .down(
             Path::new(&dst_dir),
@@ -713,11 +739,16 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
     let cfg = mapping::build_config("http://localhost/", &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
-    let names: Option<Vec<ArtifactName>> = match &o.manifest {
-        Some(spec) => Some(load_manifest(&nxr, spec).await.map_err(js_error)?.names),
-        None => parse_names(o.names)?,
-    };
+    // Pure parsing first; the pump starts before any manifest fetch.
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     let pump = spawn_pump(rx, on_event);
+    let names: Option<Vec<ArtifactName>> = match &o.manifest {
+        Some(spec) => match load_manifest(&nxr, spec).await {
+            Ok(m) => Some(m.names),
+            Err(e) => return Err(finish_pump_err(pump, e).await),
+        },
+        None => parsed_names,
+    };
     let summary = nxr.verify(Path::new(&dir), names).await;
     drop(nxr);
     let summary = match summary {
