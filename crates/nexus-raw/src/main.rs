@@ -148,7 +148,7 @@ pub(crate) enum Cmd {
         #[arg(value_name = "DIR")]
         dir: PathBuf,
         /// Check exactly these names.
-        #[arg(long, value_name = "FILE|URL|-")]
+        #[arg(long, value_name = "FILE|-")]
         manifest: Option<String>,
     },
     /// Diagnose credentials, TLS and reachability.

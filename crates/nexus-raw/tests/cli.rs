@@ -610,30 +610,34 @@ fn ndjson_events_parse_and_summarize() {
 // ---- doctor ---------------------------------------------------------------
 
 /// A failing `up --json` still drains the event channel: stdout stays
-/// complete NDJSON with the plan event in it, and the last line is the
+/// complete NDJSON — plan, artifact lines — and the last line is the
 /// Summary event naming both failures. The loss used to be a per-run race,
 /// so the invocation repeats: five green runs in a row make the regression
 /// reliably red on the old `?`-before-drain code.
+///
+/// The scenario fails after the diff (an exhausted cut-off upload), so the
+/// events genuinely precede the error. An auth-gated up, by contrast,
+/// fails inside the diff and has no events to drain: stdout is empty by
+/// contract, stderr carries the failure.
 #[test]
 fn failing_up_still_flushes_ndjson_events() {
-    let srv = server(Scenario::Auth401 {
-        user: "nexus".into(),
-        pass: "secret".into(),
-    });
+    let srv = server(Scenario::FreezeUpload);
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.zip", ALPHA);
     write_file(src.path(), "b.bin", BETA);
 
     for _ in 0..5 {
         let up = nxr(&[
+            "--stall-secs",
+            "1",
+            "--retry",
+            "1",
             "--json",
             "up",
             src.path().to_str().unwrap(),
             &dir_url(&srv),
-            "--retry",
-            "1",
         ]);
-        expect_exit(&up, 3, "unauthorized up is an auth failure");
+        expect_exit(&up, 3, "an exhausted cut-off upload is transport");
         assert!(
             stderr(&up).contains("hint:"),
             "a hint accompanies the failure: {}",
@@ -664,6 +668,32 @@ fn failing_up_still_flushes_ndjson_events() {
             "both names reported: {events:?}"
         );
     }
+
+    // The auth variant: the failure precedes any event, so stdout stays
+    // empty and the error lands on stderr with its hint.
+    let auth = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    let guarded = nxr(&[
+        "--json",
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&auth),
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&guarded, 3, "an auth-gated up is an auth failure");
+    assert!(
+        stderr(&guarded).contains("hint:"),
+        "a hint accompanies the failure: {}",
+        stderr(&guarded)
+    );
+    assert_eq!(
+        ndjson(&guarded),
+        Vec::<serde_json::Value>::new(),
+        "no events precede a diff-phase failure"
+    );
 }
 
 /// 15. doctor: without credentials the credentials check fails (exit 2);
@@ -684,5 +714,37 @@ fn doctor_exit_codes() {
     assert!(
         !stdout(&ok).contains("hunter2"),
         "secrets never reach output"
+    );
+}
+
+/// 15b. doctor --json: one NDJSON line per check, names and booleans only —
+///      no secret ever appears in the detail field.
+#[test]
+fn doctor_json_lines() {
+    let bare = nxr(&["--json", "doctor"]);
+    expect_exit(&bare, 2, "doctor without credentials flags the gap");
+    let lines = ndjson(&bare);
+    assert!(
+        !lines.is_empty(),
+        "at least one check line is expected: {}",
+        stdout(&bare)
+    );
+    assert!(
+        lines.iter().all(|l| l.get("check").is_some()
+            && l.get("ok").is_some()
+            && l.get("detail").is_some()),
+        "every line is a check object: {lines:?}"
+    );
+    let creds = lines
+        .iter()
+        .find(|l| l["check"] == "credentials")
+        .expect("the credentials check is reported");
+    assert_eq!(creds["ok"], false, "anonymous credentials fail the check");
+
+    let ok = nxr(&["--json", "-u", "someone:hunter2", "doctor"]);
+    expect_exit(&ok, 0, "doctor with explicit credentials passes");
+    assert!(
+        !stdout(&ok).contains("hunter2"),
+        "secrets never reach json output"
     );
 }

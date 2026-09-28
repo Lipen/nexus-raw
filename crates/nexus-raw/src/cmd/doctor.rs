@@ -59,7 +59,6 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
     ));
 
     // Reachability, when a URL was given.
-    let mut probe_status: Option<u16> = None;
     if let Some(url) = url {
         match normalize_base(url) {
             Ok(base) => {
@@ -75,7 +74,6 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                 match nexus_raw_core::NexusClient::new(&cfg, dead_progress()) {
                     Ok(client) => match client.head_info(url).await {
                         Ok(info) => {
-                            probe_status = Some(info.status);
                             let ok = info.status < 500;
                             report.push((
                                 "probe",
@@ -92,25 +90,39 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         }
     }
 
-    // Rendering.
+    // Rendering: NDJSON lines in --json, the report in human mode.
     let mut failures = 0usize;
     let mut transport_failures = 0usize;
-    println!("doctor:");
-    for (name, ok, detail) in &report {
-        let mark = if *ok { "  ok  " } else { " FAIL " };
-        if !ok {
-            failures += 1;
-            if matches!(*name, "probe") {
-                transport_failures += 1;
+    if cli.json {
+        for (name, ok, detail) in &report {
+            if !*ok {
+                failures += 1;
+                if matches!(*name, "probe") {
+                    transport_failures += 1;
+                }
             }
+            println!(
+                "{}",
+                serde_json::json!({"check": name, "ok": ok, "detail": detail})
+            );
         }
-        println!("  [{mark}] {name}: {detail}");
-    }
-    if let Some(status) = probe_status {
-        let _ = status;
+    } else {
+        println!("doctor:");
+        for (name, ok, detail) in &report {
+            let mark = if *ok { "  ok  " } else { " FAIL " };
+            if !ok {
+                failures += 1;
+                if matches!(*name, "probe") {
+                    transport_failures += 1;
+                }
+            }
+            println!("  [{mark}] {name}: {detail}");
+        }
+        if failures == 0 {
+            println!("  all checks passed");
+        }
     }
     if failures == 0 {
-        println!("  all checks passed");
         Ok(())
     } else if transport_failures > 0 {
         Err(Error::Transport {
