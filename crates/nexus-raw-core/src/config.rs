@@ -70,16 +70,17 @@ pub fn normalize_base(base: &str) -> Result<String, Error> {
         ))
     };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
-    if url.query().is_some() || url.fragment().is_some() {
-        return Err(err());
-    }
     // Credentials in the URL userinfo leak into errors, logs and doctor
     // output. The only homes for credentials are `-u` and the environment.
+    // This check runs before any reject that echoes `{base}` back.
     if !url.username().is_empty() || url.password().is_some() {
         return Err(Error::misuse(
             "credentials in the URL userinfo would leak into errors and logs; \
              pass -u user:pass or export NXR_AUTH instead",
         ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(err());
     }
     if url.scheme() != "http" && url.scheme() != "https" {
         return Err(err());
@@ -129,8 +130,17 @@ mod tests {
         assert_eq!(normalize_base("http://h/a").unwrap(), "http://h/a/");
         assert!(normalize_base("http://h/a?x=1").is_err());
         assert!(normalize_base("notaurl").is_err());
-        // NXR-01: credentials never travel in the URL.
-        assert!(normalize_base("https://user:pass@host/repo/").is_err());
+        // NXR-01: credentials never travel in the URL, and no reject
+        // message echoes them back. The literal `user:pass` is reserved
+        // for the remedy hint, so the test credentials differ.
+        let leaked = normalize_base("https://alice:s3cret@host/repo/?x=1")
+            .expect_err("userinfo must be rejected")
+            .to_string();
+        assert!(
+            !leaked.contains("alice") && !leaked.contains("s3cret"),
+            "the rejection must not echo the credentials: {leaked}"
+        );
+        assert!(normalize_base("https://alice:s3cret@host/repo/").is_err());
         assert!(normalize_base("https://@host/repo/").is_ok());
         assert!(normalize_base("https://:pass@host/repo/").is_err());
     }
