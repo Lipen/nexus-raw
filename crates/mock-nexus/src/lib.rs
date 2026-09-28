@@ -96,6 +96,10 @@ pub enum Outcome {
     /// The request body ended after `bytes` bytes.
     /// No response was written.
     PartialRead { bytes: usize },
+    /// The head was read, then the connection went silent: the body was
+    /// never read and no response was ever written. The writer is expected
+    /// to give up on its own (stall detection).
+    Stalled,
 }
 
 /// One served request, in arrival order.

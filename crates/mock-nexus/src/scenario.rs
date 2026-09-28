@@ -38,12 +38,7 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     // answering, so the write side must detect the stall. The handler thread
     // parks for good; parked handlers die with the test process.
     if matches!(shared.scenario, Scenario::FreezeUpload) && req.method == "PUT" {
-        log_request(
-            shared,
-            &req.method,
-            &path,
-            Outcome::PartialRead { bytes: 0 },
-        );
+        log_request(shared, &req.method, &path, Outcome::Stalled);
         loop {
             std::thread::sleep(Duration::from_secs(3600));
         }
