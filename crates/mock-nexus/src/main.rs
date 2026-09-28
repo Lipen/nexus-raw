@@ -86,6 +86,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
             first_attempt_bytes: flags.partial_bytes,
         }),
         "drop-connection" => Some(Scenario::DropConnection),
+        "freeze-upload" => Some(Scenario::FreezeUpload),
         "slow" => Some(Scenario::Slow {
             chunk_delay_ms: flags.chunk_delay_ms,
             chunk_size: flags.chunk_size,

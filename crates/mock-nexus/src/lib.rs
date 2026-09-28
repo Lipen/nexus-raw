@@ -33,6 +33,7 @@ pub const SCENARIOS: &[&str] = &[
     "atomic",
     "partial-put",
     "drop-connection",
+    "freeze-upload",
     "slow",
     "foreign-marker",
     "markerless",
@@ -53,6 +54,10 @@ pub enum Scenario {
     /// The first request per path (any method) is read fully, then answered
     /// with a TCP reset. Later requests are served normally.
     DropConnection,
+    /// PUT connections are held right after the head: the body is never
+    /// read and no response is ever written, so the write side must detect
+    /// the stall. GET/HEAD behave like [`Scenario::Atomic`].
+    FreezeUpload,
     /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping
     /// `chunk_delay_ms` between pieces. PUT bodies are read normally.
     Slow {

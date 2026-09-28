@@ -34,6 +34,21 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     };
     let path = normalize_path(&req.target);
 
+    // freeze-upload: a PUT connection is held without reading the body or
+    // answering, so the write side must detect the stall. The handler thread
+    // parks for good; parked handlers die with the test process.
+    if matches!(shared.scenario, Scenario::FreezeUpload) && req.method == "PUT" {
+        log_request(
+            shared,
+            &req.method,
+            &path,
+            Outcome::PartialRead { bytes: 0 },
+        );
+        loop {
+            std::thread::sleep(Duration::from_secs(3600));
+        }
+    }
+
     // drop-connection: the first request per path is reset. The head reader
     // left the terminator's final byte unread on the socket, so dropping the
     // stream now makes the kernel send RST instead of FIN.

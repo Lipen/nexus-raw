@@ -101,6 +101,44 @@ async fn two_phase_up_recovers_after_partial_put() {
 }
 
 #[tokio::test]
+async fn stalled_upload_fails_within_the_stall_window() {
+    // freeze-upload holds the connection after the head: the attempt-level
+    // stall watchdog must surface a retryable transport failure instead of
+    // hanging on a socket nobody drains. Regression: the stall error once
+    // had to travel through the very channel it was reporting about, so a
+    // full channel meant the timeout never surfaced.
+    let mock = MockNexus::start(Scenario::FreezeUpload).unwrap();
+    let local = TempDir::new().unwrap();
+    // Big enough that kernel socket buffers and the body channel fill: the
+    // write side must actually feel the freeze.
+    let big = vec![0x5au8; 16 * 1024 * 1024];
+    std::fs::write(local.path().join("big.zip"), &big).unwrap();
+
+    let mut cfg = config(&mock, None);
+    cfg.stall_timeout = Duration::from_secs(1);
+    cfg.retry_attempts = 2;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).unwrap();
+
+    let started = std::time::Instant::now();
+    let result = tokio::time::timeout(
+        Duration::from_secs(30),
+        nxr.up(local.path(), None, true, None, None),
+    )
+    .await;
+    let elapsed = started.elapsed();
+    let result = result.unwrap_or_else(|_| panic!("upload hung past 30s under a frozen server"));
+    let error = result.unwrap_err();
+    assert_eq!(error.exit_code(), 3, "expected transport, got {error}");
+    assert!(
+        elapsed >= Duration::from_secs(1),
+        "failed too fast to have watched the stall: {elapsed:?}"
+    );
+    let puts = mock.requests().iter().filter(|r| r.method == "PUT").count();
+    assert!(puts >= 2, "expected a retry, saw {puts} PUT attempts");
+}
+
+#[tokio::test]
 async fn up_generates_markers_by_default() {
     // The plain-mode regression: a directory without any .sha256 file still
     // produces Complete remote objects (§5.2 markers-on-by-default).

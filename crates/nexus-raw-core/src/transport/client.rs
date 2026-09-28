@@ -4,7 +4,7 @@
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -394,9 +394,10 @@ impl NexusClient {
         .await
     }
 
-    /// PUT the bytes of a file: streamed body with Content-Length, stall
-    /// detection through a bounded channel (a full channel means the network
-    /// stopped consuming).
+    /// PUT the bytes of a file: streamed body with Content-Length.
+    /// Stall detection is attempt-level: no chunk pulled for `stall` fails
+    /// the attempt as retryable transport, so a frozen socket surfaces even
+    /// after the producer has finished reading the file.
     pub async fn upload_file(
         &self,
         subject: (&str, Dir),
@@ -413,6 +414,8 @@ impl NexusClient {
             let subject_name = subject_name.clone();
             Box::pin(async move {
                 let (tx, mut rx) = mpsc::channel::<std::io::Result<Vec<u8>>>(UPLOAD_CHANNEL);
+                // When the body last moved: a chunk was pulled for the wire.
+                let last = Arc::new(Mutex::new(std::time::Instant::now()));
                 let producer_src = src.clone();
                 let producer_progress = progress.clone();
                 let producer_subject = subject_name.clone();
@@ -432,19 +435,13 @@ impl NexusClient {
                             Ok(n) => {
                                 buf.truncate(n);
                                 produced += n as u64;
-                                match tokio::time::timeout(stall, tx.send(Ok(buf))).await {
-                                    Ok(Ok(())) => {}
+                                // A full channel is honest backpressure: the
+                                // consumer is busy on the wire, and the
+                                // attempt-level watchdog owns the stall
+                                // timeout, so this send cannot deadlock.
+                                if tx.send(Ok(buf)).await.is_err() {
                                     // Receiver gone: the attempt was cancelled.
-                                    Ok(Err(_)) => break,
-                                    Err(_) => {
-                                        let _ = tx
-                                            .send(Err(std::io::Error::other(format!(
-                                                "stalled: upload channel full for {}s",
-                                                stall.as_secs_f64()
-                                            ))))
-                                            .await;
-                                        break;
-                                    }
+                                    break;
                                 }
                                 producer_progress
                                     .bytes(&producer_subject, Dir::Up, produced, Some(size))
@@ -458,10 +455,12 @@ impl NexusClient {
                     }
                 });
                 progress.started(&subject_name, Dir::Up, Some(size)).await;
+                let watcher = last.clone();
                 let body = reqwest::Body::wrap_stream(futures_util::stream::poll_fn(move |cx| {
                     use futures_util::task::Poll;
                     match rx.poll_recv(cx) {
                         Poll::Ready(Some(Ok(chunk))) => {
+                            *watcher.lock().expect("progress lock") = std::time::Instant::now();
                             Poll::Ready(Some(
                                 Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(chunk),
                             ))
@@ -479,8 +478,35 @@ impl NexusClient {
                     .authorize(this.http.put(url))
                     .header(reqwest::header::CONTENT_LENGTH, size)
                     .body(body);
-                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                // The attempt owns stall detection: no chunk pulled for
+                // `stall` fails the attempt as retryable transport, whether
+                // the producer is alive, already done, or the socket stopped
+                // draining.
+                let mut send = std::pin::pin!(req.send());
+                let resp = loop {
+                    let since_progress = last.lock().expect("progress lock").elapsed();
+                    tokio::select! {
+                        biased;
+                        result = &mut send => {
+                            break result.map_err(|e| this.wrap_send_err(url, e));
+                        }
+                        _ = tokio::time::sleep(stall.saturating_sub(since_progress)) => {
+                            if last.lock().expect("progress lock").elapsed() >= stall {
+                                producer.abort();
+                                break Err(AttemptFailure {
+                                    retryable: true,
+                                    error: Error::transport(url, format!(
+                                        "stalled: no upload progress for {}s",
+                                        stall.as_secs_f64()
+                                    )),
+                                });
+                            }
+                            // Progress raced the timer: re-arm and keep waiting.
+                        }
+                    }
+                };
                 producer.abort();
+                let resp = resp?;
                 let status = resp.status();
                 match status {
                     s if s.is_success() => Ok(()),
