@@ -130,8 +130,8 @@ mod tests {
         assert_eq!(normalize_base("http://h/a").unwrap(), "http://h/a/");
         assert!(normalize_base("http://h/a?x=1").is_err());
         assert!(normalize_base("notaurl").is_err());
-        // NXR-01: credentials never travel in the URL, and no reject
-        // message echoes them back. The literal `user:pass` is reserved
+        // Credentials never travel in the URL, and no reject message
+        // echoes them back. The literal `user:pass` is reserved
         // for the remedy hint, so the test credentials differ.
         let leaked = normalize_base("https://alice:s3cret@host/repo/?x=1")
             .expect_err("userinfo must be rejected")

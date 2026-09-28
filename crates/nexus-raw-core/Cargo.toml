@@ -19,7 +19,7 @@ futures-util = { workspace = true }
 base64 = { workspace = true }
 log = { workspace = true }
 
-# O_NOFOLLOW for part files and local markers (NXR-02).
+# Part files and local markers are opened without following symlinks.
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 

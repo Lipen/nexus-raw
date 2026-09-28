@@ -242,7 +242,7 @@ async fn drop_connection_is_retried_through_the_client() {
 #[cfg(unix)]
 #[tokio::test]
 async fn symlinked_part_is_never_followed_on_resume() {
-    // NXR-02: the part name is derived from the server-controlled object
+    // The part name is derived from the server-controlled object
     // name, so a pre-placed symlink at the part path must fail the write
     // (O_NOFOLLOW), never become a write gadget into the decoy.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
@@ -276,7 +276,7 @@ async fn symlinked_part_is_never_followed_on_resume() {
 #[tokio::test]
 async fn symlinked_marker_is_never_followed_on_write() {
     // Same class as the part case, one stage later: bytes land fine, the
-    // local marker write must refuse to follow a symlink (NXR-02).
+    // local marker write must refuse to follow a symlink.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
     mock.insert(

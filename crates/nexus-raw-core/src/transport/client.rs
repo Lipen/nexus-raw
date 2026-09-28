@@ -31,7 +31,7 @@ type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + S
 
 /// Open options for files nxr writes under a server-name-derived path
 /// (`.part` files, local `.sha256` markers): create/truncate as asked, but
-/// never follow a symlink (NXR-02) — a predictable name must not become a
+/// never follow a symlink — a predictable name must not become a
 /// write gadget into some other file.
 pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     let mut options = tokio::fs::OpenOptions::new();
