@@ -60,6 +60,8 @@ impl Config {
 ///     "https://host/repository/raw/"
 /// );
 /// assert!(normalize_base("ftp://host/raw/").is_err());
+/// // Credentials in the userinfo are rejected: they leak into output.
+/// assert!(normalize_base("https://user:pass@host/raw/").is_err());
 /// ```
 pub fn normalize_base(base: &str) -> Result<String, Error> {
     let err = || {
@@ -70,6 +72,14 @@ pub fn normalize_base(base: &str) -> Result<String, Error> {
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
     if url.query().is_some() || url.fragment().is_some() {
         return Err(err());
+    }
+    // Credentials in the URL userinfo leak into errors, logs and doctor
+    // output. The only homes for credentials are `-u` and the environment.
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(Error::misuse(
+            "credentials in the URL userinfo would leak into errors and logs; \
+             pass -u user:pass or export NXR_AUTH instead",
+        ));
     }
     if url.scheme() != "http" && url.scheme() != "https" {
         return Err(err());
@@ -119,5 +129,9 @@ mod tests {
         assert_eq!(normalize_base("http://h/a").unwrap(), "http://h/a/");
         assert!(normalize_base("http://h/a?x=1").is_err());
         assert!(normalize_base("notaurl").is_err());
+        // NXR-01: credentials never travel in the URL.
+        assert!(normalize_base("https://user:pass@host/repo/").is_err());
+        assert!(normalize_base("https://@host/repo/").is_ok());
+        assert!(normalize_base("https://:pass@host/repo/").is_err());
     }
 }
