@@ -17,9 +17,7 @@ Run it:
 node publish-and-consume.mjs
 ```
 
-The demo spawns the mock server on :8091, publishes a version directory
-(claim-first), names it through a channel, downloads it back and verifies
-the result offline.
+The demo spawns the mock server on a free port (`--port 0`, so parallel runs never collide), reads the `listening http://…` URL from the mock's stdout and publishes a version directory (claim-first), names it through a channel, downloads it back and verifies the result offline.
 
 To run against a real repository instead:
 

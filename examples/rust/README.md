@@ -10,9 +10,7 @@ Run it:
 cargo run --manifest-path examples/rust/Cargo.toml
 ```
 
-The demo spawns the mock server on :8090, publishes a version directory
-(`up` with claim-first), names it through a channel, downloads it back
-and verifies the result offline.
+The demo spawns the mock server on a free port (`--port 0`, so parallel runs never collide), reads the `listening http://…` banner from its stdout and publishes a version directory (`up` with claim-first), names it through a channel, downloads it back and verifies the result offline.
 
 To run against a real repository instead:
 
