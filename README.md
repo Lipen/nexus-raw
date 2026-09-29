@@ -43,6 +43,11 @@ nxr verify vendor/prebuilt
 An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down` resumes from part files through `Range: bytes=N-` by default, and `--fresh` starts over.
 The rest of the model (explicit enumeration, dry-run plans, best-effort listings) is in the [command table](#commands) and the [docs](docs/index.md).
 
+## Integrate it
+
+Three depths, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
+The guide with the install lines, the snippet and the vendoring rules: [docs/how-to/integrate.md](docs/how-to/integrate.md).
+
 ## Credentials
 
 Three sources, tried in this order: `-u user:pass`, then `NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`.

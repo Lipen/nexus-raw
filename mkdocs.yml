@@ -45,6 +45,7 @@ nav:
   - How-to:
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
+      - Integrate it: how-to/integrate.md
       - Use in CI: how-to/ci.md
       - When it breaks: how-to/troubleshoot.md
   - Reference:

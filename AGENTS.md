@@ -57,8 +57,8 @@ just test         # unit and conformance suites alone
 just nxr -- --help
 ```
 
-The conformance tests drive `nexus-raw-core` (21 tests) and the `nxr` binary (18 tests) against `mock-nexus` scenarios.
-The workspace also carries 30 unit tests in the core library and 6 doctests.
+The conformance suites drive `nexus-raw-core` and the `nxr` binary against `mock-nexus` scenarios: the core suite through the facade, the CLI suite through the real binary.
+The workspace also carries unit tests in the core library, unit tests in the napi bindings and doctests, and `cargo test --workspace` runs them all.
 The scenario list in `mock-nexus` is the single source.
 Do not fork it.
 `--json` output shapes are fixed by golden tests in `crates/nexus-raw/tests/`.
