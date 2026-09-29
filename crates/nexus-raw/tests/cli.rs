@@ -607,6 +607,55 @@ fn ndjson_events_parse_and_summarize() {
     assert!(summary.get("skipped").is_some());
 }
 
+// ---- golden ndjson --------------------------------------------------------
+
+/// The --json surface is a contract, pinned byte-exact by fixtures in
+/// tests/golden/. One artifact per run keeps chunk events deterministic;
+/// no URL reaches these outputs, so the bytes carry no ports.
+#[test]
+fn golden_ndjson_up_down_hold() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    let up = nxr(&["--json", "up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "golden up");
+    assert_eq!(
+        stdout(&up),
+        include_str!("golden/up.ndjson"),
+        "the up ndjson changed: update tests/golden/up.ndjson deliberately"
+    );
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "--json",
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "golden down");
+    assert_eq!(
+        stdout(&down),
+        include_str!("golden/down.ndjson"),
+        "the down ndjson changed: update tests/golden/down.ndjson deliberately"
+    );
+}
+
+/// doctor --json is the same contract for the check-report shape.
+#[test]
+fn golden_ndjson_doctor_holds() {
+    let out = nxr(&["--json", "-u", "someone:hunter2", "doctor"]);
+    expect_exit(&out, 0, "golden doctor");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/doctor.ndjson"),
+        "the doctor ndjson changed: update tests/golden/doctor.ndjson deliberately"
+    );
+}
+
 // ---- doctor ---------------------------------------------------------------
 
 /// A failing `up --json` still drains the event channel: stdout stays

@@ -1,0 +1,3 @@
+{"check":"credentials","detail":"resolved from -u flag","ok":true}
+{"check":"tls","detail":"verification is ON","ok":true}
+{"check":"settings","detail":"workers 8, retry 4, stall 30s, connect 15s","ok":true}

@@ -1,0 +1,5 @@
+{"download":["a.zip"],"event":"plan","skip":[],"upload":[]}
+{"done":0,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"done","total":35}
+{"downloaded":1,"event":"summary","failed":[],"skipped":0,"uploaded":0}
