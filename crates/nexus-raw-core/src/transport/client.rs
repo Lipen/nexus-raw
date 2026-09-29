@@ -74,6 +74,20 @@ pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     options
 }
 
+/// Non-unix targets have no O_NOFOLLOW; the plain options keep them
+/// building, and the name grammar still blocks traversal.
+#[cfg(not(unix))]
+pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if append {
+        options.append(true);
+    } else {
+        options.create(true).truncate(true);
+    }
+    options
+}
+
 /// What a HEAD saw: the status and the advertised metadata.
 /// A 404 is a normal result, not an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
