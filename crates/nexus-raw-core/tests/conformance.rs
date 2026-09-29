@@ -355,7 +355,6 @@ async fn oversized_small_get_refuses_with_the_cap() {
         &format!("{VERSION}/manifest.json"),
         &vec![0u8; 16 * 1024 * 1024 + 1],
     );
-    let local = TempDir::new().unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
