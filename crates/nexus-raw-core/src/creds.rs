@@ -5,9 +5,16 @@ use base64::Engine as _;
 use crate::error::Error;
 
 /// The value of the `Authorization` header (e.g. `Basic <b64>`).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Creds {
     pub header: String,
+}
+
+impl std::fmt::Debug for Creds {
+    /// The header IS the credential: it never renders.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Creds").field("header", &"***").finish()
+    }
 }
 
 /// Order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`),
@@ -62,5 +69,15 @@ mod tests {
         let creds = resolve(Some(("user", "pass"))).unwrap().unwrap();
         assert_eq!(creds.header, "Basic dXNlcjpwYXNz");
         std::env::remove_var("NXR_AUTH");
+    }
+
+    #[test]
+    fn debug_never_shows_the_header() {
+        let creds = Creds {
+            header: "Basic c2VjcmV0".to_owned(),
+        };
+        let text = format!("{creds:?}");
+        assert!(!text.contains("c2VjcmV0"), "leak: {text}");
+        assert!(text.contains("***"), "redacted: {text}");
     }
 }

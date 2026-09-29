@@ -29,6 +29,10 @@ const UPLOAD_CHANNEL: usize = 4;
 
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + Send + 'a>>;
 
+/// Upper bound for "small" GETs: siblings, manifests, channel tokens,
+/// search pages. Way above any honest payload of that kind.
+const SMALL_CAP: u64 = 16 * 1024 * 1024;
+
 /// Open options for files nxr writes under a server-name-derived path
 /// (`.part` files, local `.sha256` markers): create/truncate as asked, but
 /// never follow a symlink — a predictable name must not become a
@@ -222,6 +226,10 @@ impl NexusClient {
     }
 
     /// GET a small object (sibling, manifest, channel): None on 404.
+    ///
+    /// The response is capped at [`SMALL_CAP`]: these objects are KiB-scale
+    /// by protocol, and an unbounded slurp would turn a runaway or hostile
+    /// server into a memory event.
     pub async fn get_small(&self, url: &str) -> Result<Option<Vec<u8>>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -229,12 +237,31 @@ impl NexusClient {
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status();
                 match status {
-                    s if s.is_success() => Ok(Some(
-                        resp.bytes()
-                            .await
-                            .map_err(|e| this.wrap_send_err(url, e))?
-                            .to_vec(),
-                    )),
+                    s if s.is_success() => {
+                        if resp.content_length().is_some_and(|n| n > SMALL_CAP) {
+                            return Err(AttemptFailure {
+                                retryable: false,
+                                error: Error::misuse(format!(
+                                    "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
+                                )),
+                            });
+                        }
+                        let mut body = resp.bytes_stream();
+                        let mut buf = Vec::new();
+                        while let Some(chunk) = body.next().await {
+                            let chunk = chunk.map_err(|e| this.wrap_send_err(url, e))?;
+                            if buf.len() as u64 + chunk.len() as u64 > SMALL_CAP {
+                                return Err(AttemptFailure {
+                                    retryable: false,
+                                    error: Error::misuse(format!(
+                                        "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
+                                    )),
+                                });
+                            }
+                            buf.extend_from_slice(&chunk);
+                        }
+                        Ok(Some(buf))
+                    }
                     s if s.as_u16() == 404 => Ok(None),
                     s => Err(this.status_failure(url, s)),
                 }

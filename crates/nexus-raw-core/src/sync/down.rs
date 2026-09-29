@@ -14,8 +14,9 @@ use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path};
 use crate::sync::diff::Action;
 use crate::transport::client::NexusClient;
+use sha2::Digest as _;
 
-/// The stable part-file prefix: `<prefix><fnv64hex>` per artifact name.
+/// The stable part-file prefix: `<prefix><128-bit sha256 hex>` per artifact name.
 /// A part survives an interrupted run so a rerun resumes it.
 const PART_PREFIX: &str = ".nxr-part-";
 /// Legacy temp prefix from pre-resume versions; cleaned up when dead.
@@ -28,11 +29,15 @@ enum Failure {
 }
 
 /// The stable part-file path for a name inside `dir`.
+///
+/// The digest is a 128-bit truncation of SHA-256 over the encoded name:
+/// two distinct names colliding into one part file would interleave
+/// writes, so the space stays far beyond birthday reach for any plausible
+/// directory.
 pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
-    dir.join(format!(
-        "{PART_PREFIX}{:016x}",
-        fnv64(name.encoded().as_bytes())
-    ))
+    let digest = sha2::Sha256::digest(name.encoded().as_bytes());
+    let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();
+    dir.join(format!("{PART_PREFIX}{hex}"))
 }
 
 /// Download the artifacts.
@@ -210,15 +215,6 @@ async fn download_one(
         .done(name.as_str(), Dir::Down, false, done, size_hint)
         .await;
     Ok(())
-}
-
-fn fnv64(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in bytes {
-        h ^= b as u64;
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    h
 }
 
 /// On start, orphans of dead pids from the pre-resume temp scheme are cleaned.

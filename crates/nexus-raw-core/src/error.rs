@@ -13,13 +13,15 @@ use std::fmt;
 #[non_exhaustive]
 pub enum Error {
     /// Digest mismatch on a completed artifact.
-    #[error("mismatch: {name}: {detail}")]
+    #[error("mismatch: {}: {detail}", name.escape_debug())]
     Mismatch { name: String, detail: String },
     /// Names lacking completion after the work (or before it).
     #[error("incomplete: {}", .names.join(", "))]
     Incomplete { names: Vec<String> },
-    /// Name rejected by the grammar.
-    #[error("unsafe name: {name}: {reason}")]
+    /// Name rejected by the grammar. The raw input is server- or
+    /// user-controlled, so it renders escaped (no ANSI/OSC injection into
+    /// the terminal).
+    #[error("unsafe name: {}: {reason}", name.escape_debug())]
     UnsafeName { name: String, reason: String },
     /// Requested names exist neither locally nor remotely.
     #[error("missing: {}: exist nowhere", .names.join(", "))]
@@ -112,7 +114,7 @@ impl Error {
 /// Symmetric diff refusal (spec §5.2). Always exit 1.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Verdict {
-    #[error("mismatch: {name}: {detail}")]
+    #[error("mismatch: {}: {detail}", name.escape_debug())]
     Mismatch { name: String, detail: String },
     #[error("missing: {}: exist nowhere", fmt_names(names))]
     Missing { names: Vec<String> },
@@ -140,6 +142,22 @@ impl From<Verdict> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Server-controlled names must not smuggle terminal escapes into
+    /// stderr (ANSI/OSC injection): the display renders them escaped.
+    #[test]
+    fn unsafe_name_display_is_escaped() {
+        let e = Error::UnsafeName {
+            name: "\u{1b}[31mevil\u{1b}[0m".to_owned(),
+            reason: "grammar".to_owned(),
+        };
+        let text = e.to_string();
+        assert!(!text.contains('\u{1b}'), "raw ESC leaked: {text:?}");
+        assert!(
+            text.contains("\\u{1b}"),
+            "the escape renders visibly: {text:?}"
+        );
+    }
 
     /// The crate docs promise a hint for every error: pin it for all variants.
     #[test]

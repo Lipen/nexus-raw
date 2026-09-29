@@ -345,6 +345,28 @@ async fn symlinked_local_marker_is_never_followed_on_up() {
     );
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn oversized_small_get_refuses_with_the_cap() {
+    // A manifest is a "small" GET: past the 16 MiB cap the read refuses
+    // (exit 2) instead of slurping an unbounded body into memory.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(
+        &format!("{VERSION}/manifest.json"),
+        &vec![0u8; 16 * 1024 * 1024 + 1],
+    );
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr.manifest_at_base().await.unwrap_err();
+    assert_eq!(err.exit_code(), 2, "the cap is a misuse refusal, got {err}");
+    assert!(
+        err.to_string().contains("small-object cap"),
+        "the message names the cap: {err}"
+    );
+}
+
 #[tokio::test]
 async fn up_generates_markers_by_default() {
     // The plain-mode regression: a directory without any .sha256 file still

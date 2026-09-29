@@ -136,7 +136,18 @@ async fn paginate(
     }
     let mut paths = Vec::new();
     let mut next: Option<String> = None;
+    // A hostile or broken endpoint can emit continuation tokens forever:
+    // the cap turns an endless scroll into an honest refusal.
+    const MAX_SEARCH_PAGES: usize = 100;
+    let mut pages = 0usize;
     loop {
+        pages += 1;
+        if pages > MAX_SEARCH_PAGES {
+            return Err(Error::Enumerate {
+                url: endpoint.to_string(),
+                reason: format!("search pagination exceeded {MAX_SEARCH_PAGES} pages"),
+            });
+        }
         let mut page = endpoint.clone();
         if let Some(token) = &next {
             page.query_pairs_mut()
@@ -202,6 +213,37 @@ fn percent_decode(seg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An endpoint that never stops emitting continuation tokens hits the
+    /// page cap and is refused, instead of scrolling forever.
+    #[tokio::test]
+    async fn pagination_cap_refuses_endless_tokens() {
+        let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic).unwrap();
+        let page = serde_json::json!({
+            "items": [],
+            "continuationToken": "more",
+        });
+        server.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let cfg = crate::config::Config {
+            base: server.base_url(),
+            tls_insecure: false,
+            workers: 1,
+            retry_attempts: 1,
+            connect_timeout: std::time::Duration::from_secs(5),
+            stall_timeout: std::time::Duration::from_secs(5),
+            auth: None,
+        };
+        let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
+
+        let err = paginate(&client, server.base_url().as_str(), "koala-raw", &[])
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("pagination exceeded"),
+            "the cap fires: {err}"
+        );
+    }
 
     #[test]
     fn base_split_repo_group_version() {

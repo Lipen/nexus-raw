@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::error::Error;
 
 /// The full core configuration for one invocation.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     /// Base URL of the directory this command works on.
     /// `up`/`down`/`ls` take a directory URL; primitives take full object URLs.
@@ -25,6 +25,21 @@ pub struct Config {
     pub stall_timeout: Duration,
     /// The `Authorization` header value, resolved from `-u` or env.
     pub auth: Option<String>,
+}
+
+impl std::fmt::Debug for Config {
+    /// `auth` is the credential: it renders as `***`, never as the value.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("base", &self.base)
+            .field("tls_insecure", &self.tls_insecure)
+            .field("workers", &self.workers)
+            .field("retry_attempts", &self.retry_attempts)
+            .field("connect_timeout", &self.connect_timeout)
+            .field("stall_timeout", &self.stall_timeout)
+            .field("auth", &self.auth.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 impl Config {
@@ -143,5 +158,14 @@ mod tests {
         assert!(normalize_base("https://alice:s3cret@host/repo/").is_err());
         assert!(normalize_base("https://@host/repo/").is_ok());
         assert!(normalize_base("https://:pass@host/repo/").is_err());
+    }
+
+    #[test]
+    fn debug_redacts_auth() {
+        let mut c = cfg("https://h/");
+        c.auth = Some("Basic c2VjcmV0".to_owned());
+        let text = format!("{c:?}");
+        assert!(!text.contains("c2VjcmV0"), "leak: {text}");
+        assert!(text.contains("***"), "redacted: {text}");
     }
 }
