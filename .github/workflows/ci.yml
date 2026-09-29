@@ -71,3 +71,115 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # The Node addon: a cargo build wrapped by the napi CLI. `npm run
+  # build:debug` compiles the crate and leaves the platform addon, the
+  # generated loader (binding.cjs) and the generated declarations
+  # (binding.d.ts) next to crates/nexus-raw-napi.
+  addon:
+    name: Node addon (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the Node addon
+        run: cd crates/nexus-raw-napi && npm install --silent && npm run build:debug
+
+      # index.d.ts is hand-maintained; the build above regenerated
+      # binding.d.ts from the Rust source, so this fails when the two drift.
+      - name: Guard index.d.ts against drift
+        run: node crates/nexus-raw-napi/check-dts.mjs
+
+      # The demo spawns the mock itself (`mock-nexus --port 0`) and reads the
+      # URL from its stdout, so a fresh build of the binary is all it needs.
+      - name: Build the mock server
+        run: cargo build -q -p mock-nexus
+
+      - name: Run the Node smoke
+        run: cd examples/node && npm install --silent && node publish-and-consume.mjs
+
+  # macOS builds the addon for the host triple (no prebuilt packages are
+  # involved in a local build) and the demo is plain Node plus a spawned
+  # mock binary, so the full smoke runs here unchanged.
+  addon-macos:
+    name: Node addon (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the Node addon
+        run: cd crates/nexus-raw-napi && npm install --silent && npm run build:debug
+
+      - name: Build the mock server
+        run: cargo build -q -p mock-nexus
+
+      - name: Run the Node smoke
+        run: cd examples/node && npm install --silent && node publish-and-consume.mjs
+
+  # Windows stays at compile-and-load: the demo spawns the mock binary by a
+  # POSIX-style path (target/debug/mock-nexus), which a Windows process
+  # cannot launch without the .exe suffix, so the full smoke stays on linux
+  # and macOS until the demo learns platform paths.
+  addon-windows:
+    name: Node addon (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the addon crate
+        run: cargo check -p nexus-raw-napi
+
+      - name: Build the Node addon
+        run: cd crates/nexus-raw-napi && npm install --silent && npm run build:debug
+
+      # Requiring the built addon proves the generated loader finds the
+      # platform binary and the wrapper exports the whole surface.
+      - name: Load the built addon
+        shell: bash
+        run: |
+          node --eval "const nxr = require('./crates/nexus-raw-napi/index.js'); const missing = ['get', 'put', 'head', 'sha', 'up', 'down', 'verify', 'channelGet', 'channelSet'].filter((f) => typeof nxr[f] !== 'function'); if (missing.length > 0) { throw new Error('addon surface missing: ' + missing.join(', ')) }"
