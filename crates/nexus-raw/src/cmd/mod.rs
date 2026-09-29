@@ -104,9 +104,9 @@ pub(crate) async fn finish(ctx: Ctx) {
 fn split_user(user: Option<&str>) -> Result<Option<(&str, &str)>, Error> {
     let Some(u) = user else { return Ok(None) };
     let Some((user, pass)) = u.split_once(':') else {
-        return Err(Error::Misuse(format!(
-            "-u expects user:pass, got {u:?} without ':'"
-        )));
+        return Err(Error::Misuse(
+            "-u expects user:pass (a single ':'); the value carries none".to_owned(),
+        ));
     };
     Ok(Some((user, pass)))
 }

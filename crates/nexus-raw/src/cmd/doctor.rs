@@ -139,9 +139,9 @@ fn split_and_resolve(explicit: Option<&str>) -> Result<Option<String>, Error> {
         Some(u) => match u.split_once(':') {
             Some((user, pass)) => Some((user, pass)),
             None => {
-                return Err(Error::Misuse(format!(
-                    "-u expects user:pass, got {u:?} without ':'"
-                )))
+                return Err(Error::Misuse(
+                    "-u expects user:pass (a single ':'); the value carries none".to_owned(),
+                ))
             }
         },
         None => None,
