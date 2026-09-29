@@ -389,7 +389,13 @@ async fn generate_markers(
             let bytes = crate::model::state::bytes_path(&dir, &name);
             let d = crate::model::digest::sha256_file(&bytes).map_err(|e| Error::io(&bytes, e))?;
             let sib = crate::model::state::sibling_path(&dir, &name);
-            std::fs::write(&sib, crate::model::sibling::format_line(name.as_str(), &d))
+            // The marker path derives from the object name: never follow a
+            // symlink planted there (same rule as the download side).
+            let mut f = crate::transport::client::write_options_blocking(false)
+                .open(&sib)
+                .map_err(|e| Error::io(&sib, e))?;
+            use std::io::Write as _;
+            f.write_all(crate::model::sibling::format_line(name.as_str(), &d).as_bytes())
                 .map_err(|e| Error::io(&sib, e))?;
             made.push((name, d));
         }

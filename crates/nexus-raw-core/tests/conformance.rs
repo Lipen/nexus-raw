@@ -313,6 +313,38 @@ async fn symlinked_marker_is_never_followed_on_write() {
     );
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_local_marker_is_never_followed_on_up() {
+    // The up side of the rule: auto-generated markers go through the same
+    // NOFOLLOW open as the download side. A symlink at the marker path
+    // fails the run before anything is sent; the decoy stays intact.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    std::fs::write(local.path().join("a.zip"), CONTENT).unwrap();
+    let decoy = local.path().join("decoy.txt");
+    std::fs::write(&decoy, b"decoy bytes").unwrap();
+    std::os::unix::fs::symlink(&decoy, local.path().join("a.zip.sha256")).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "the refused write is a data error");
+    assert_eq!(
+        std::fs::read(&decoy).unwrap(),
+        b"decoy bytes",
+        "the decoy must survive untouched"
+    );
+    assert_eq!(
+        mock.put_count(&format!("{VERSION}/a.zip")),
+        0,
+        "markers are generated before any transfer starts"
+    );
+}
+
 #[tokio::test]
 async fn up_generates_markers_by_default() {
     // The plain-mode regression: a directory without any .sha256 file still

@@ -139,9 +139,13 @@ async fn download_one(
     // markerless names always download from zero (§5.1): the client itself
     // must not resume, not just the self-heal branch below.
     let resume = expected.is_some() && !fresh;
+    // symlink_metadata, not metadata: a symlink at the part path must not
+    // be read for the prefix nor trusted for the resume decision — the
+    // NOFOLLOW write open would refuse it anyway, so fail that way up
+    // front and keep the read side honest too.
     let resumed = resume
-        && std::fs::metadata(&part)
-            .map(|m| m.len() > 0)
+        && std::fs::symlink_metadata(&part)
+            .map(|m| m.is_file() && m.len() > 0)
             .unwrap_or(false);
     let fetched = client
         .download_resumable(

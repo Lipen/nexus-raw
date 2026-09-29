@@ -33,19 +33,40 @@ type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + S
 /// (`.part` files, local `.sha256` markers): create/truncate as asked, but
 /// never follow a symlink — a predictable name must not become a
 /// write gadget into some other file.
+///
+/// The append arm deliberately lacks `create`: it may only open a part
+/// whose prefix was just read. A part that vanished in between must fail
+/// loudly — a silently recreated file would yield a truncated "complete"
+/// artifact whose digest still matches (the hash covers the prefix that
+/// was read, not the bytes on disk).
 pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     let mut options = tokio::fs::OpenOptions::new();
-    options.write(true).create(true);
+    options.write(true);
     if append {
         options.append(true);
     } else {
-        options.truncate(true);
+        options.create(true).truncate(true);
     }
     #[cfg(unix)]
     {
         // tokio::fs::OpenOptions mirrors the unix extension natively.
         options.custom_flags(libc::O_NOFOLLOW);
     }
+    options
+}
+
+/// The blocking counterpart of [`write_options`] for spawn_blocking code.
+#[cfg(unix)]
+pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if append {
+        options.append(true);
+    } else {
+        options.create(true).truncate(true);
+    }
+    options.custom_flags(libc::O_NOFOLLOW);
     options
 }
 
@@ -257,11 +278,32 @@ impl NexusClient {
                 &bytes_url,
                 |this: &Self, url: &str| {
                     Box::pin(async move {
-                        let info = this.head_info(url).await.map_err(|e| AttemptFailure {
-                            retryable: false,
-                            error: e,
-                        })?;
-                        match info.status {
+                        // The raw HEAD, inline: probe owns the only retry
+                        // loop, so connection errors and 5xx share one
+                        // attempt budget instead of nesting two.
+                        let resp = this
+                            .authorize(this.http.head(url))
+                            .send()
+                            .await
+                            .map_err(|e| this.wrap_send_err(url, e))?;
+                        let status = resp.status().as_u16();
+                        let info = HeadInfo {
+                            status,
+                            size: if (200..300).contains(&status) {
+                                resp.headers()
+                                    .get(reqwest::header::CONTENT_LENGTH)
+                                    .and_then(|v| v.to_str().ok())
+                                    .and_then(|v| v.parse::<u64>().ok())
+                            } else {
+                                None
+                            },
+                            content_type: resp
+                                .headers()
+                                .get(reqwest::header::CONTENT_TYPE)
+                                .and_then(|v| v.to_str().ok())
+                                .map(str::to_owned),
+                        };
+                        match status {
                             s if (200..300).contains(&s) => Ok(Some(info)),
                             404 => Ok(None),
                             s @ (401 | 403) => {

@@ -43,7 +43,7 @@ pub async fn get(
         Some(out) => {
             let part = part_of(&out);
             let resumed_from = if cont {
-                tokio::fs::metadata(&part)
+                tokio::fs::symlink_metadata(&part)
                     .await
                     .map(|m| m.len())
                     .unwrap_or(0)
