@@ -90,7 +90,7 @@ With `-o` the bytes stream into `<FILE>.part` and are renamed only after the tra
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
-koala app payload v1 for docs capture
+sample app payload for documentation capture
 $ echo $?
 0
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip

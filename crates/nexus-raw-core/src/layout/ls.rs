@@ -236,7 +236,7 @@ mod tests {
         };
         let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
 
-        let err = paginate(&client, server.base_url().as_str(), "koala-raw", &[])
+        let err = paginate(&client, server.base_url().as_str(), "raw", &[])
             .await
             .unwrap_err();
         assert!(
