@@ -613,7 +613,10 @@ pub async fn up(
     let names: Option<Vec<ArtifactName>> = match &o.manifest {
         Some(spec) => match load_manifest(&nxr, spec).await {
             Ok(m) => Some(m.names),
-            Err(e) => return Err(finish_pump_err(pump, e).await),
+            Err(e) => {
+                drop(nxr);
+                return Err(finish_pump_err(pump, e).await);
+            }
         },
         None => parsed_names,
     };
@@ -622,7 +625,10 @@ pub async fn up(
             Some(n) => n,
             None => match nxr.scan(Path::new(&src_dir)) {
                 Ok(n) => n,
-                Err(e) => return Err(finish_pump_err(pump, e).await),
+                Err(e) => {
+                    drop(nxr);
+                    return Err(finish_pump_err(pump, e).await);
+                }
             },
         };
         let actions = match nxr
@@ -630,9 +636,14 @@ pub async fn up(
             .await
         {
             Ok(a) => a,
-            Err(e) => return Err(finish_pump_err(pump, e).await),
+            Err(e) => {
+                drop(nxr);
+                return Err(finish_pump_err(pump, e).await);
+            }
         };
-        // The plan promise settles only after the events did.
+        // The plan promise settles only after the events did, and the
+        // events end only when the facade's sender is gone.
+        drop(nxr);
         finish_pump(pump).await?;
         return Ok(Either::B(NxrPlan {
             actions: actions.iter().map(NxrPlanAction::from).collect(),
@@ -674,34 +685,42 @@ pub async fn down(
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    // Pure parsing first: no events can precede the pump.
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     // The pump starts before any network call: events fired during the
-    // manifest fetch belong to JS as much as the later ones.
+    // manifest fetch belong to JS as much as the later ones. Every early
+    // return from here drops the facade before draining the pump — the
+    // pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
     let enum_src = if o.ls.unwrap_or(false) {
         Enumeration::Search
     } else if let Some(spec) = &o.manifest {
         let m = match load_manifest(&nxr, spec).await {
             Ok(m) => m,
-            Err(e) => return Err(finish_pump_err(pump, e).await),
+            Err(e) => {
+                drop(nxr);
+                return Err(finish_pump_err(pump, e).await);
+            }
         };
         Enumeration::Manifest(m)
     } else {
-        match parse_names(o.names)? {
+        match parsed_names {
             Some(v) => Enumeration::Names(v),
             None => match nxr.manifest_at_base().await {
                 Ok(Some(m)) => Enumeration::Manifest(m),
                 Ok(None) => {
-                    return Err(finish_pump_err(
-                        pump,
-                        nexus_raw_core::Error::Enumerate {
-                            url: nxr.base().to_owned(),
-                            reason: "no manifest.json on the server and no manifest/names/ls given"
-                                .into(),
-                        },
-                    )
-                    .await)
+                    let error = nexus_raw_core::Error::Enumerate {
+                        url: nxr.base().to_owned(),
+                        reason: "no manifest.json on the server and no manifest/names/ls given"
+                            .into(),
+                    };
+                    drop(nxr);
+                    return Err(finish_pump_err(pump, error).await);
                 }
-                Err(e) => return Err(finish_pump_err(pump, e).await),
+                Err(e) => {
+                    drop(nxr);
+                    return Err(finish_pump_err(pump, e).await);
+                }
             },
         }
     };
@@ -745,7 +764,10 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
     let names: Option<Vec<ArtifactName>> = match &o.manifest {
         Some(spec) => match load_manifest(&nxr, spec).await {
             Ok(m) => Some(m.names),
-            Err(e) => return Err(finish_pump_err(pump, e).await),
+            Err(e) => {
+                drop(nxr);
+                return Err(finish_pump_err(pump, e).await);
+            }
         },
         None => parsed_names,
     };
