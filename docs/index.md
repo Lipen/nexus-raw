@@ -1,6 +1,6 @@
 <div class="nxr-hero" markdown>
 
-<img class="hero-mark" src="assets/nxr.svg" alt="The nxr logo" />
+<img class="hero-mark" src="assets/nxr.svg" alt="The nxr logo" width="120" height="120" align="right" />
 
 # curl for a Nexus raw repository
 

@@ -154,6 +154,7 @@
 .md-typeset .nxr-hero .hero-mark {
   height: 7rem;
   width: auto;
+  float: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
