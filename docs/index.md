@@ -4,7 +4,7 @@
 
 # curl for a Nexus raw repository
 
-`nxr` publishes and fetches version directories that are provably complete.
+`nxr` publishes and fetches version directories whose files are digest-verified on the way in and on the way out.
 One binary, no config file, nothing to install on the server.
 
 [Get started](get-started.md){ .md-button .md-button--primary }
@@ -14,7 +14,8 @@ One binary, no config file, nothing to install on the server.
 
 <div class="nxr-strip" markdown>
 
-**Trust is mechanical.** An artifact counts as done only when its `<name>.sha256` sibling matches the bytes — and a divergent complete artifact is never overwritten.
+**An artifact counts as complete only when the bytes and the `<name>.sha256` beside them agree.**
+`nxr` writes that marker with every artifact and checks it on every transfer.
 
 </div>
 
@@ -23,9 +24,9 @@ One binary, no config file, nothing to install on the server.
 - :material-console: **Primitives** — `get`, `put`, `head`, `sha`: the URL in argv, credentials from `-u` or the environment.
 - :material-upload: **Publish** — `up` scans, diffs, then PUTs bytes and markers in parallel workers.
 - :material-download: **Consume** — `down` fetches exactly the enumerated names and resumes part files through `Range: bytes=N-`.
-- :material-brain: **Fail honestly** — exit codes 0/1/2/3, a `hint:` on every error, NDJSON event streams for pipelines.
-- :material-swap-horizontal: **Resume by default** — an interrupted transfer is finished by repeating the same command.
-- :material-language-rust: **Embed** — `nexus-raw-core` exposes the same operations as a Rust library, four layers deep.
+- :material-brain: **Exit codes** — 0 ok, 1 data, 2 misuse, 3 transport. Every error carries a `hint:`, and pipelines read NDJSON events.
+- :material-swap-horizontal: **Re-runs** — an interrupted transfer finishes by repeating the same command.
+- :material-language-rust: **Rust API** — `nexus-raw-core` exposes the same operations as a library, one module per concern.
 
 </div>
 
@@ -65,7 +66,7 @@ The [five-minute tour](get-started.md) runs it against a throwaway server on you
 
 ## What you stop maintaining
 
-Every repository that speaks raw Nexus eventually grows the same shell script: a retry loop, a stall watchdog, a temp-file dance, a checksum step and a prayer.
+Every repository that speaks raw Nexus eventually grows the same shell script: a retry loop, a stall watchdog, a temp-file dance and a checksum step.
 It breaks in a new way every quarter, and nobody owns it.
 
 ```console
@@ -76,7 +77,7 @@ $ curl -f --connect-timeout 15 --speed-limit 1 --speed-time 30 -o "$tmp" "$url" 
   || echo "which step failed, and did the partial survive?"
 ```
 
-`nxr` is that script, minus the prayer.
+`nxr` is that script, implemented once and tested against deliberate breakage.
 The full concern-by-concern comparison lives in [the design essay](explanation/design.md#the-curl-model). The three lines that sell it:
 
 | Concern | The hand-rolled script | `nxr` |
