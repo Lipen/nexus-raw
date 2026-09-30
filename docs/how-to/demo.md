@@ -35,10 +35,11 @@ just demo slow --chunk-delay-ms 400 --chunk-size 4096
 ## Keep it running and poke at it
 
 ```bash
-NXR_DEMO_KEEP=1 just demo      # leaves the last mock server serving and prints its URL
+NXR_DEMO_KEEP=1 just demo slow --port 8734
 ```
 
-In another terminal, with that URL:
+The script runs its session, leaves the server serving and prints the URL it bound, so the examples below work as written.
+Without `--port` the server picks an ephemeral port: use the URL the banner prints.
 
 ```bash
 nxr head http://127.0.0.1:8734/1.4.0/app-1.4.0.zip

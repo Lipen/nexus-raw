@@ -28,12 +28,14 @@ The trailing phases swap the server underneath the same commands: `flaky` answer
 ## Poking at it
 
 ```bash
-just demo slow --keep          # leave the mock running, poke it with nxr by hand
-just mock flaky --flaky 3      # another server, another failure mode
+NXR_DEMO_KEEP=1 just demo slow --port 8734   # keep the mock serving and print its URL
+curl -s http://127.0.0.1:8734/1.4.0/manifest.json
+just mock flaky --flaky 3                    # another server, another failure mode
 just nxr -- up --help
 ```
 
-Set `NXR_DEMO_EXTRA=0` to stop after the main story, `NXR_DEMO_KEEP=1` to keep the last mock server alive.
+Without `--port` the server takes an ephemeral port and the keep banner prints the URL to use.
+`NXR_DEMO_EXTRA=0` stops after the main story; `NXR_DEMO_KEEP=1` (or `--port` with it) keeps the last mock alive.
 
 ## Recording the landing animation
 
