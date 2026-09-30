@@ -14,7 +14,7 @@ Publishes that are provably complete, transfers that resume by default, and a fa
 cargo install --path crates/nexus-raw
 ```
 
-[Docs](docs/index.md) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
+[Docs](https://lipen.github.io/nexus-raw/) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
 
 </div>
 
@@ -127,7 +127,7 @@ The guide with install lines, snippets and the vendoring rules: [docs/how-to/int
 | `crates/nexus-raw-core/` | the Rust library, in four layers: `transport` + `primitive`, `sync`, `layout`, and the `Nxr` facade |
 | `crates/nexus-raw/` | the `nxr` binary: flags, rendering and exit codes only, no protocol logic |
 | `crates/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
-| `docs/` + `mkdocs.yml` | the documentation site (zensical), served by `just docs` |
+| `docs/` + `mkdocs.yml` | the documentation site (zensical), published at <https://lipen.github.io/nexus-raw/>, served locally by `just docs` |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`), promises over the `Nxr` facade |
 
 

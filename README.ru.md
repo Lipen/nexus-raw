@@ -14,7 +14,7 @@
 cargo install --path crates/nexus-raw
 ```
 
-[Документация](docs/index.md) · [Быстрый старт](#быстрый-старт) · [Команды](#команды) · [README in English](README.md)
+[Документация](https://lipen.github.io/nexus-raw/) · [Быстрый старт](#быстрый-старт) · [Команды](#команды) · [README in English](README.md)
 
 </div>
 
