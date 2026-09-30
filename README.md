@@ -1,31 +1,52 @@
+<div align="center">
+
+<img src="docs/assets/img/hero-terminal.png" alt="A real nxr session: publish, name with a channel, consume, verify" width="760">
+
 # nexus-raw
 
-<p align="center"><img src="docs/assets/img/hero-terminal.png" alt="A real nxr session: publish, name with a channel, consume, verify" width="720"></p>
+**`nxr` is curl for a Sonatype Nexus raw repository.**
+Publishes that are provably complete, transfers that resume by default, and a failure model your scripts can actually trust.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square" alt="rust 1.85+">
-</p>
-
-> `nxr` is curl for a Sonatype Nexus raw repository.
-
-One static binary: curl-grade primitives with retries, stall detection and TLS on, verified directory transfers with sha-sibling markers on top, channel refs and manifests above those.
-Every call is self-sufficient: URL in argv, credentials from `-u` or the environment, no config file, no profiles, zero server-side components.
-The `nexus-raw-core` crate exposes the same operations as a Rust library.
-
-## Install
+[![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
+[![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
+![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square)
+![Protocol](https://img.shields.io/badge/protocol-sha--sibling%20markers-3f80ea?style=flat-square)
 
 ```bash
-cargo install --path crates/nexus-raw    # the nxr binary
+cargo install --path crates/nexus-raw
 ```
+
+[Docs](docs/index.md) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
+
+</div>
+
+## Why
+
+Nexus raw repositories are where build outputs go to be babysat by shell scripts.
+A `curl -T` loop uploads, another `curl` downloads, and a human squints at the output to guess whether a version is actually there.
+Nothing checks digests, nothing resumes, and a half-uploaded version looks exactly like a finished one.
+
+`nxr` replaces that stack.
+One call publishes a directory, one call fetches it back, and both tell you the truth.
+URL in argv, credentials from `-u` or the environment: every invocation is self-sufficient, there is no config file, and nothing to install on the server.
+The same operations also ship as a Rust library (`nexus-raw-core`) and as Node bindings.
+
+| The curl pipeline | nxr |
+|:--|:--|
+| `curl -T` per file, then hope | `nxr up dist/1.4.0/ $BASE/1.4.0/` — scan, diff, parallel upload, markers |
+| A half-uploaded version looks published | Completeness is proven by `<name>.sha256` siblings, not by hope |
+| An interrupted upload means rerunning the whole loop | Repeat the same command: complete parts are skipped |
+| Digest checks live in a hand-written manifest | Siblings come out in plain `sha256sum -c` format, generated for you |
+| Failures are told apart by grepping output | Exit codes 0/1/2/3, a `hint:` on every error, `--json` event streams |
 
 ## Quick start
 
-Two flows cover the model. Publish a version and name it, then fetch it back and check it offline:
+Publish a version, name it with a channel, fetch it back and verify it offline:
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# list what consumers may fetch: down refuses a version without this file
+# what consumers may fetch: down refuses a version without this file
 printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 
 # publish a version directory: markers are generated, verified and uploaded by default
@@ -40,18 +61,29 @@ nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-An interrupted transfer is finished by repeating the same command: `up` skips what is already complete, `down` resumes from part files through `Range: bytes=N-` by default, and `--fresh` starts over.
-The rest of the model (explicit enumeration, dry-run plans, best-effort listings) is in the [command table](#commands) and the [docs](docs/index.md).
+An interrupted transfer is finished by repeating the same command.
+`up` skips what is already complete, `down` resumes from part files through `Range: bytes=N-` by default, and `--fresh` is the explicit start-over.
 
-## Integrate it
+## What you get
 
-Three depths, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
-The guide with the install lines, the snippet and the vendoring rules: [docs/how-to/integrate.md](docs/how-to/integrate.md).
+**Built for bad networks**
+- Retries, stall detection and connect timeouts are tuned in, not bolted on.
+- `down` resumes through part files and `206`; `up` re-checks completeness before writing anything.
+- The client is conformance-tested against `mock-nexus`, a std-only failure-injection server with 11 scenarios: dropped connections, partial PUTs, slow chunks, auth walls.
 
-## Credentials
+**Completeness you can prove**
+- Every published object ships a `<name>.sha256` sidecar in `sha256sum -c` format, generated by default, `--no-sha` to opt out.
+- A divergent complete artifact is refused, never overwritten.
+- `nxr verify` checks bytes, markers and digests offline, with no server round-trip.
 
-Three sources, tried in this order: `-u user:pass`, then `NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`.
-That is the whole list: the alias and the default URL live in your shell or CI instead of a config file.
+**A surface scripts can rely on**
+- Exit codes mean something: 0 ok, 1 data, 2 misuse, 3 transport — your CI can tell "refetch" from "the server is down".
+- Every error prints a `hint:` line; `--json` emits one object for simple commands and NDJSON events for transfers.
+- TLS verification is on, and `--tls-insecure` is the only off-switch.
+- Credentials come from `-u`, `NXR_AUTH` or `NXR_USERNAME` + `NXR_PASSWORD`, in that order; `nxr doctor` names the resolved source without printing values.
+
+<details>
+<summary>Credential setup examples</summary>
 
 ```bash
 # the simple way: two variables, nothing encoded
@@ -64,20 +96,8 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ```
 
 `-u` is the fastest for a one-off and is visible in `ps`.
-Not sure which source resolved? `nxr doctor` names it without printing values.
 
-## Features
-
-- `get`, `put`, `head`, `sha`: curl-grade primitives, digest computed on the fly.
-- `up`, `down`: directory transfers with the symmetric diff, parallel workers and Range-resume on by default (`.part` files, 206), `--fresh` starts over.
-- sha-sibling markers: every uploaded object gets a `<name>.sha256` sidecar in `sha256sum -c` format, `up` writes and generates them by default, `--no-sha` opts out.
-- `down` enumerates explicitly: `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
-- `channel get|set`: token files at any name, with a dotted-numeric `--if-forward` guard.
-- `verify`: offline check of bytes, markers and digests.
-- `doctor`: credentials, TLS, reachability.
-- TLS verification on by default, `--tls-insecure` is the only off-switch.
-- `--json`: one JSON object for simple commands, NDJSON events for transfers.
-- Exit codes 0/1/2/3, and every error prints a `hint:` line on stderr.
+</details>
 
 ## Commands
 
@@ -87,7 +107,7 @@ Not sure which source resolved? `nxr doctor` names it without printing values.
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers, `--manifest F` restricts the run to the names listed in F |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print a channel token (`unset` when empty) |
@@ -95,10 +115,15 @@ Not sure which source resolved? `nxr doctor` names it without printing values.
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 
-Exit codes: 0 ok, 1 data (`mismatch`, `incomplete`, `missing`, `cannot enumerate`), 2 misuse, 3 transport (network, auth, TLS, 5xx).
-A divergent complete artifact is refused, never overwritten.
+`down` enumerates explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 
-## Layout
+## Integrate it
+
+Three depths, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
+The guide with install lines, snippets and the vendoring rules: [docs/how-to/integrate.md](docs/how-to/integrate.md).
+
+<details>
+<summary>Repository layout</summary>
 
 | Path | For |
 |:-----|:----|
@@ -106,21 +131,22 @@ A divergent complete artifact is refused, never overwritten.
 | `crates/nexus-raw/` | the `nxr` binary: flags, rendering and exit codes only, no protocol logic |
 | `crates/mock-nexus/` | the mock server with the failure-scenario table, the conformance fixture |
 | `docs/` + `mkdocs.yml` | the documentation site (zensical), served by `just docs` |
-| `node/` | future home of the npm packaging, which does not exist yet |
+| `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`), promises over the `Nxr` facade |
 
-## Development
+</details>
+
+<details>
+<summary>Development</summary>
 
 ```bash
-just check        # fmt + clippy + prek + tests
+just check        # fmt + clippy + prek + tests: the full gate
 just test         # unit and conformance suites
 just mock atomic --port 8080
 just nxr -- up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
+just docs         # the documentation site, http://localhost:8000, live reload
 ```
 
-User documentation lives in [docs/](docs/index.md) and renders as a site:
+The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`.
+The scenario list in `crates/mock-nexus/src/lib.rs` is the single source: a scenario added for one client implementation lands in the same commit as its test.
 
-```bash
-just docs     # http://localhost:8000, live reload
-```
-
-The Russian readme: [README.ru.md](README.ru.md).
+</details>
