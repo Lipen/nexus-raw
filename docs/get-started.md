@@ -1,7 +1,7 @@
 # Get started
 
-One binary, five minutes, a throwaway server: prepare a version directory, publish it, name it, consume it, break it and recover.
-No Nexus installation is needed: the repository ships a mock server that speaks the same protocol.
+This page walks one full session against a local mock server: prepare a version directory, publish it, name it, consume it, break the transfer and resume it.
+No Nexus installation is needed: the repository ships `mock-nexus`, a mock Nexus raw server.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ nxr 0.1.0
 ## Start a throwaway Nexus
 
 The `mock-nexus` binary serves one failure scenario at a time.
-`atomic` is the honest one: every fully received request is stored and served.
+`atomic` is the correct-server scenario: PUT/GET/HEAD, `Range: bytes=N-` resume, 404 on unknown paths.
 
 ```bash
 cargo run -p mock-nexus -- atomic --port 8080
@@ -73,16 +73,16 @@ plan: 4 to upload, 0 to download, 0 up to date
 ↑ pinned.xml ok
 ↑ manifest.json ok
 ↑ app-1.4.0.zip ok
-up: 4 sent, 0 fetched, 0 skipped
 uploaded 4, downloaded 0, skipped 0
 ```
 
+The `ok` lines print in completion order, so your ordering may differ.
 No marker step appears anywhere because `up` generated every `<name>.sha256` from the bytes before uploading.
 The markers are ordinary `sha256sum -c` lines, and `up` leaves a copy next to your files:
 
 ```console
 $ cat dist/1.4.0/app-1.4.0.zip.sha256
-58e575b66d6c9388e63409246633bac6ecd070229fc1743b350b52436004a09a  app-1.4.0.zip
+405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a  app-1.4.0.zip
 ```
 
 Run the same command again and nothing transfers, because the server already holds byte-identical copies with equal markers:
@@ -90,7 +90,6 @@ Run the same command again and nothing transfers, because the server already hol
 ```console
 $ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
 plan: 0 to upload, 0 to download, 4 up to date
-up: 0 sent, 0 fetched, 4 skipped
 ○ app-1.4.0.zip skipped
 ○ bom/linux-x86_64.json skipped
 ○ manifest.json skipped
@@ -98,7 +97,7 @@ up: 0 sent, 0 fetched, 4 skipped
 uploaded 0, downloaded 0, skipped 4
 ```
 
-A publishing job can be retried blindly: finished names are skipped, missing ones transfer, diverging ones refuse.
+A publishing job can be retried blindly: finished names are skipped, missing ones transfer, and a name whose server marker diverges from your bytes stops the run with exit 1.
 
 ## Name the version
 
@@ -122,10 +121,9 @@ It reads `manifest.json`, fetches exactly the listed names, hashes each stream o
 ```console
 $ nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/
 plan: 0 to upload, 3 to download, 0 up to date
-↓ bom/linux-x86_64.json ok
 ↓ pinned.xml ok
+↓ bom/linux-x86_64.json ok
 ↓ app-1.4.0.zip ok
-down: 0 sent, 3 fetched, 0 skipped
 uploaded 0, downloaded 3, skipped 0
 ```
 
@@ -134,6 +132,7 @@ Each artifact arrives with its own `<name>.sha256` sibling, so the result verifi
 ```console
 $ nxr verify vendor/app/
 verify: 3 ok, FAILED: none
+uploaded 0, downloaded 0, skipped 3
 ```
 
 ## Break it on purpose
@@ -150,25 +149,29 @@ Every failure prints this way: the kind, the facts, and a `hint:` line naming th
 [When it breaks](how-to/troubleshoot.md) catalogues them all.
 
 Now interrupt a transfer mid-flight.
-Run a second mock in its `slow` scenario, which trickles bytes, and kill `down` three seconds in (`timeout` here stands in for `Ctrl-C`):
+Run a second mock in its `slow` scenario, which writes response bodies in small delayed chunks, and kill `down` three seconds in (`timeout` stands in for `Ctrl-C`):
 
 ```console
-$ cargo run -p mock-nexus -- slow --chunk-delay-ms 300 --chunk-size 65536 --port 8095 &
+$ cargo run -p mock-nexus -- slow --chunk-delay-ms 300 --chunk-size 2048 --port 8095 &
 listening http://127.0.0.1:8095
 $ nxr up dist/1.4.0/ http://127.0.0.1:8095/1.4.0/ >/dev/null
 $ timeout 3 nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
 plan: 0 to upload, 3 to download, 0 up to date
-↓ bom/linux-x86_64.json ok
 ↓ pinned.xml ok
-killed, timeout exit=124
+↓ bom/linux-x86_64.json ok
+$ echo $?
+124
 $ ls -A vendor/resume/
-.nxr-part-ad2572febfb75df3  bom  pinned.xml  pinned.xml.sha256
+.nxr-part-a83c001a1e7ecaa7bc6bca25eaec0a83
+bom
+pinned.xml
+pinned.xml.sha256
 ```
 
 Two names finished, and the third died as a hidden part file (`.nxr-part-<hash>`).
-A partially fetched name never reaches its final path, so the directory holds no half-truths.
+A part file never reaches its final path, so the directory holds no half-written artifact.
 Repeat the same command: resume is the default, so no flag is needed.
-Finished names are skipped, and the part file is picked up through a `Range: bytes=N-` request:
+Finished names are skipped, and the part file continues through a `Range: bytes=N-` request:
 
 ```console
 $ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
@@ -176,10 +179,16 @@ plan: 0 to upload, 1 to download, 2 up to date
 ○ bom/linux-x86_64.json skipped
 ○ pinned.xml skipped
 ↓ app-1.4.0.zip ok
-down: 0 sent, 1 fetched, 2 skipped
+uploaded 0, downloaded 1, skipped 2
 ```
 
-The part file is gone, `app-1.4.0.zip` is complete, and `nxr verify vendor/resume/` passes.
+The part file is gone, `app-1.4.0.zip` is complete, and `verify` passes:
+
+```console
+$ nxr verify vendor/resume/
+verify: 3 ok, FAILED: none
+uploaded 0, downloaded 0, skipped 3
+```
 
 ## Next steps
 

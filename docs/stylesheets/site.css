@@ -182,21 +182,6 @@
   }
 }
 
-/* ---- landing: the strip ---- */
-
-.md-typeset .nxr-strip {
-  margin: 0 0 2rem;
-  padding: 0.85rem 1.2rem;
-  border-left: 3px solid var(--nxr-hero-amber);
-  border-radius: 0 0.6rem 0.6rem 0;
-  background: color-mix(in oklch, var(--nxr-hero-amber) 9%, transparent);
-  font-size: 0.78rem;
-}
-
-.md-typeset .nxr-strip p {
-  margin: 0;
-}
-
 /* ---- landing: cards ---- */
 
 .md-typeset .nxr-cards > ul {
