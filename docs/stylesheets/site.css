@@ -60,30 +60,6 @@
 }
 
 /*
- * Source widget: the platform caption stacked above the repo slug
- * (the override in docs_overrides/partials/source.html provides the markup).
- * Renders in both the header and the mobile drawer.
- */
-
-.md-source__repository {
-  line-height: 1.25;
-}
-
-.md-source__platform {
-  display: block;
-  font-size: 0.55rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  opacity: 0.64;
-}
-
-.md-source__repo {
-  display: block;
-  font-size: 0.65rem;
-  font-weight: 700;
-}
-
-/*
  * Tables: rows answer the pointer.
  */
 

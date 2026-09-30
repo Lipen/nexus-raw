@@ -10,7 +10,6 @@ theme:
   favicon: assets/nxr.svg
   icon:
     repo: fontawesome/brands/github
-  custom_dir: docs_overrides
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
