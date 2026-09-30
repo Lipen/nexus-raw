@@ -1,8 +1,7 @@
 //! Error taxonomy (spec §7).
 //!
 //! The single mapping from error to exit code lives in [`Error::exit_code`].
-//! Every error carries a human hint: the CLI prints it to stderr and puts it
-//! into the `hint` field of JSON output.
+//! Every error carries a human hint: the CLI prints it to stderr and puts it into the `hint` field of JSON output.
 
 use std::fmt;
 
@@ -18,9 +17,8 @@ pub enum Error {
     /// Names lacking completion after the work (or before it).
     #[error("incomplete: {}", .names.join(", "))]
     Incomplete { names: Vec<String> },
-    /// Name rejected by the grammar. The raw input is server- or
-    /// user-controlled, so it renders escaped (no ANSI/OSC injection into
-    /// the terminal).
+    /// Name rejected by the grammar.
+    /// The raw input is server- or user-controlled, so it renders escaped (no ANSI/OSC injection into the terminal).
     #[error("unsafe name: {}: {reason}", name.escape_debug())]
     UnsafeName { name: String, reason: String },
     /// Requested names exist neither locally nor remotely.
@@ -111,7 +109,8 @@ impl Error {
     }
 }
 
-/// Symmetric diff refusal (spec §5.2). Always exit 1.
+/// Symmetric diff refusal (spec §5.2).
+/// Always exit 1.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Verdict {
     #[error("mismatch: {}: {detail}", name.escape_debug())]
@@ -143,8 +142,7 @@ impl From<Verdict> for Error {
 mod tests {
     use super::*;
 
-    /// Server-controlled names must not smuggle terminal escapes into
-    /// stderr (ANSI/OSC injection): the display renders them escaped.
+    /// Server-controlled names must not smuggle terminal escapes into stderr (ANSI/OSC injection): the display renders them escaped.
     #[test]
     fn unsafe_name_display_is_escaped() {
         let e = Error::UnsafeName {

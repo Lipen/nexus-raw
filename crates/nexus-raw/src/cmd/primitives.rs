@@ -9,8 +9,7 @@ use crate::Cli;
 
 pub(crate) async fn get(cli: &Cli, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
-    // The renderer drains on every path: the events the run already emitted
-    // must reach the output before the failure is reported.
+    // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
     let result = run_get(&ctx, url, out, cont).await;
     finish(ctx).await;
     result

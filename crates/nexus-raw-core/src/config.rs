@@ -1,7 +1,6 @@
 //! Per-invocation configuration: no config file, no profiles (spec §4).
 //!
-//! Every call is self-sufficient: the base URL comes from the command line,
-//! credentials from `-u` or env (see [`crate::creds`]).
+//! Every call is self-sufficient: the base URL comes from the command line, credentials from `-u` or env (see [`crate::creds`]).
 
 use std::time::Duration;
 
@@ -11,7 +10,8 @@ use crate::error::Error;
 #[derive(Clone)]
 pub struct Config {
     /// Base URL of the directory this command works on.
-    /// `up`/`down`/`ls` take a directory URL; primitives take full object URLs.
+    /// `up`/`down`/`ls` take a directory URL.
+    /// Primitives take full object URLs.
     pub base: String,
     /// Skip TLS certificate verification.
     pub tls_insecure: bool,
@@ -85,8 +85,8 @@ pub fn normalize_base(base: &str) -> Result<String, Error> {
         ))
     };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
-    // Credentials in the URL userinfo leak into errors, logs and doctor
-    // output. The only homes for credentials are `-u` and the environment.
+    // Credentials in the URL userinfo leak into errors, logs and doctor output.
+    // The only homes for credentials are `-u` and the environment.
     // This check runs before any reject that echoes `{base}` back.
     if !url.username().is_empty() || url.password().is_some() {
         return Err(Error::misuse(
@@ -145,9 +145,8 @@ mod tests {
         assert_eq!(normalize_base("http://h/a").unwrap(), "http://h/a/");
         assert!(normalize_base("http://h/a?x=1").is_err());
         assert!(normalize_base("notaurl").is_err());
-        // Credentials never travel in the URL, and no reject message
-        // echoes them back. The literal `user:pass` is reserved
-        // for the remedy hint, so the test credentials differ.
+        // Credentials never travel in the URL, and no reject message echoes them back.
+        // The literal `user:pass` is reserved for the remedy hint, so the test credentials differ.
         let leaked = normalize_base("https://alice:s3cret@host/repo/?x=1")
             .expect_err("userinfo must be rejected")
             .to_string();

@@ -114,12 +114,11 @@ impl Nxr {
 
     /// Upload a local directory (§5.2).
     ///
-    /// `names` restricts the transfer (manifest mode); `None` scans the directory.
-    /// Markers are written by default; `gen_markers == false` (`--no-sha`)
-    /// uploads bytes only.
-    /// `claim` names the file that must land before any other byte does
-    /// (claim-first publishing, §2): it uploads alone, and a failed claim
-    /// aborts the run without starting the rest.
+    /// `names` restricts the transfer (manifest mode).
+    /// `None` scans the directory.
+    /// Markers are written by default.
+    /// `gen_markers == false` (`--no-sha`) uploads bytes only.
+    /// `claim` names the file that must land before any other byte does (claim-first publishing, §2): it uploads alone, and a failed claim aborts the run without starting the rest.
     pub async fn up(
         &self,
         dir: &Path,
@@ -199,8 +198,8 @@ impl Nxr {
     /// Download into a local directory (§5.2, §5.2.1).
     ///
     /// The enumeration source is mandatory: without one the call refuses.
-    /// Part files resume by default; a stale part (digest mismatch against
-    /// the sibling) is discarded once and the name restarts from zero.
+    /// Part files resume by default.
+    /// A stale part (digest mismatch against the sibling) is discarded once and the name restarts from zero.
     /// `fresh` skips every existing part file.
     pub async fn down(
         &self,
@@ -359,9 +358,9 @@ impl Nxr {
     }
 }
 
-/// Give every markerless local file its sibling: hash the bytes, write the
-/// canonical marker (§5.2 "markers are mandatory where we write").
-/// Broken markers refuse early; the file is never touched.
+/// Give every markerless local file its sibling: hash the bytes, write the canonical marker (§5.2 "markers are mandatory where we write").
+/// Broken markers refuse early.
+/// The file is never touched.
 async fn generate_markers(
     dir: &Path,
     locals: &mut [(ArtifactName, LocalStatus)],
@@ -389,8 +388,7 @@ async fn generate_markers(
             let bytes = crate::model::state::bytes_path(&dir, &name);
             let d = crate::model::digest::sha256_file(&bytes).map_err(|e| Error::io(&bytes, e))?;
             let sib = crate::model::state::sibling_path(&dir, &name);
-            // The marker path derives from the object name: never follow a
-            // symlink planted there (same rule as the download side).
+            // The marker path derives from the object name: never follow a symlink planted there (same rule as the download side).
             let mut f = crate::transport::client::write_options_blocking(false)
                 .open(&sib)
                 .map_err(|e| Error::io(&sib, e))?;

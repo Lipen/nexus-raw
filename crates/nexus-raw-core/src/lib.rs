@@ -29,12 +29,11 @@
 //! The symmetric diff decides what to transfer.
 //! `Mismatch` and `Missing` refuse without overwriting.
 //!
-//! `up` writes markers by default; `--no-sha` opts out.
-//! `down` requires an enumeration source: a manifest, explicit names,
-//! or the best-effort search API.
+//! `up` writes markers by default.
+//! `--no-sha` opts out.
+//! `down` requires an enumeration source: a manifest, explicit names, or the best-effort search API.
 //!
-//! Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse,
-//! 3 transport) and [`Error::hint`], the human hint the CLI renders.
+//! Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse, 3 transport) and [`Error::hint`], the human hint the CLI renders.
 
 pub mod config;
 pub mod creds;

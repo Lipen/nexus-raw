@@ -18,8 +18,7 @@ pub(crate) async fn up(
     dry_run: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
-    // The renderer drains on every path: the events the run already emitted
-    // must reach the output before the failure is reported.
+    // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
     let result = run_up(&ctx, src, manifest, claim, no_sha, dry_run).await;
     finish(ctx).await;
     result
@@ -56,8 +55,8 @@ async fn run_up(
         }
         return Ok(());
     }
-    // The Summary event is the single source for totals; the renderer prints
-    // it in both modes. Printing a second copy here raced the renderer.
+    // The Summary event is the single source for totals: the renderer prints it in both modes.
+    // Printing a second copy here raced the renderer.
     ctx.nxr.up(src, names, !no_sha, claim, None).await?;
     Ok(())
 }

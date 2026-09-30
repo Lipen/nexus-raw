@@ -30,9 +30,8 @@ pub struct GetOutcome {
 
 /// GET a URL.
 ///
-/// With `out`: stream into `<out>.part` (resuming from it when `cont`), verify
-/// nothing, then rename to `out`. Without `out`: stream to stdout in a single
-/// body attempt, because a retry after the body started would duplicate bytes.
+/// With `out`: stream into `<out>.part` (resuming from it when `cont`), verify nothing, then rename to `out`.
+/// Without `out`: stream to stdout in a single body attempt, because a retry after the body started would duplicate bytes.
 pub async fn get(
     client: &NexusClient,
     url: &str,
@@ -76,8 +75,7 @@ pub async fn get(
         None => {
             let resp = client.get_stream(url).await?;
             let total = resp.content_length();
-            // The contract: Started precedes the body it announces, even in
-            // stdout mode where nothing else is written.
+            // The contract: Started precedes the body it announces, even in stdout mode where nothing else is written.
             client.progress().started("", Dir::Down, total).await;
             let mut body = resp.bytes_stream();
             let mut stdout = tokio::io::stdout();
@@ -105,8 +103,7 @@ pub async fn get(
 
 /// PUT a file, optionally with its sha-sibling marker (spec §5.1).
 ///
-/// `--sha` hashes the file (one extra local pass) and PUTs `<url>.sha256`
-/// right after the bytes.
+/// `--sha` hashes the file (one extra local pass) and PUTs `<url>.sha256` right after the bytes.
 /// Returns `(bytes sent, digest when --sha)`.
 pub async fn put(
     client: &NexusClient,
@@ -130,8 +127,8 @@ pub async fn put(
         return Ok((size, None));
     }
     let d = digest::sha256_file(src).map_err(|e| Error::io(src, e))?;
-    // The sibling URL is the object URL + ".sha256"; the marker names the
-    // object by its final path segment.
+    // The sibling URL is the object URL + ".sha256".
+    // The marker names the object by its final path segment.
     let marker = sibling::format_line(&last_segment(url), &d);
     let sib_url = format!("{url}.sha256");
     client.put_small(&sib_url, marker.into_bytes()).await?;

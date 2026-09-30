@@ -10,8 +10,7 @@ use crate::model::state::{bytes_path, local_status, LocalStatus, RemoteStatus};
 use crate::model::{digest, sibling};
 
 /// Which side the plan is for.
-/// The classification is symmetric; the mode only decides what a name with a
-/// single completed copy means (fetch it, or refuse to shadow it).
+/// The classification is symmetric: the mode only decides what a name with a single completed copy means (fetch it, or refuse to shadow it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Up,
@@ -23,7 +22,8 @@ pub enum Mode {
 pub enum Action {
     /// Both sides agree (or the local copy is already the truth for down).
     Skip { name: ArtifactName, digest: Digest },
-    /// Send the local bytes; `digest == Some` also writes the canonical marker.
+    /// Send the local bytes.
+    /// `digest == Some` also writes the canonical marker.
     /// `None` means the caller opted out of markers (`--no-sha`).
     Upload {
         name: ArtifactName,
@@ -62,8 +62,7 @@ pub async fn local_statuses(
 /// A refusal is a [`Verdict`]: the first violation in name order.
 /// `Missing` is collected across all names and fires only when no other refusal exists.
 ///
-/// The §5.2 gap "local Markerless, remote Absent" counts as Missing for down:
-/// no completed copy exists anywhere.
+/// The §5.2 gap "local Markerless, remote Absent" counts as Missing for down: no completed copy exists anywhere.
 pub fn classify(
     dir: &Path,
     mode: Mode,
@@ -72,9 +71,7 @@ pub fn classify(
     remotes: BTreeMap<ArtifactName, RemoteStatus>,
 ) -> Result<Vec<Action>, Verdict> {
     // `markers` decides whether Up actions carry a marker digest.
-    // Knowing the digest and writing the marker are separate concerns:
-    // `--no-sha` still hashes for the divergence checks, it just opts out
-    // of writing.
+    // Knowing the digest and writing the marker are separate concerns: `--no-sha` still hashes for the divergence checks, it just opts out of writing.
     let up_digest = |d: Digest| markers.then_some(d);
     let mut actions = Vec::with_capacity(locals.len());
     let mut missing: Vec<String> = Vec::new();
@@ -212,8 +209,7 @@ pub fn classify(
                     });
                 }
             },
-            // A sibling without bytes means the remote object is not complete:
-            // a foreign object is never overwritten.
+            // A foreign or unparseable sibling refuses the name: the remote object is never overwritten.
             (_, RemoteStatus::Broken(detail)) => {
                 return Err(Verdict::Mismatch {
                     name: name.to_string(),

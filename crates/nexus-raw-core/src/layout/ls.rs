@@ -1,19 +1,17 @@
 //! Best-effort listings through the Nexus search API (spec §5.3, §10).
 //!
-//! The endpoint is `/service/rest/v1/search/assets`; it exists on common
-//! Nexus 3 releases but is not guaranteed. Every refusal is an
-//! [`Error::Enumerate`] with a hint, never a silent empty list.
+//! The endpoint is `/service/rest/v1/search/assets`.
+//! It exists on common Nexus 3 releases but is not guaranteed.
+//! Every refusal is an [`Error::Enumerate`] with a hint, never a silent empty list.
 
 use crate::error::Error;
 use crate::model::name::validate_version;
 use crate::model::name::ArtifactName;
 use crate::transport::client::NexusClient;
 
-/// Versions under a repository/group base: the path segment right after the
-/// group prefix of every asset, collected and sorted.
+/// Versions under a repository/group base: the path segment right after the group prefix of every asset, collected and sorted.
 ///
-/// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any
-/// number of group segments, including none.
+/// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any number of group segments, including none.
 pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
     let (repo, group) = split_prefix(base)?;
     let paths = paginate(client, base, &repo, &group).await?;
@@ -29,8 +27,7 @@ pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<Str
     Ok(versions.into_iter().collect())
 }
 
-/// Artifact names under a version directory URL: every asset path that starts
-/// with `<group>/<version>/`, mapped to the relative name.
+/// Artifact names under a version directory URL: every asset path that starts with `<group>/<version>/`, mapped to the relative name.
 pub async fn search_assets(
     client: &NexusClient,
     dir_url: &str,
@@ -59,8 +56,7 @@ struct BaseParts {
     version: String,
 }
 
-/// `<…>/repository/<repo>/<group…>/` as a prefix: the group is everything
-/// after the repo, and there is no version segment requirement.
+/// `<…>/repository/<repo>/<group…>/` as a prefix: the group is everything after the repo, and there is no version segment requirement.
 fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
     let err = || {
         Error::misuse(format!(
@@ -81,7 +77,8 @@ fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
 }
 
 /// `<scheme>://host/repository/<repo>/<group…>/<version>/` → parts.
-/// The version is the last segment; the group is what is between the repo and it.
+/// The version is the last segment.
+/// The group is what is between the repo and it.
 fn split_base(base: &str) -> Result<BaseParts, Error> {
     let err = || {
         Error::misuse(format!(
@@ -136,8 +133,8 @@ async fn paginate(
     }
     let mut paths = Vec::new();
     let mut next: Option<String> = None;
-    // A hostile or broken endpoint can emit continuation tokens forever:
-    // the cap turns an endless scroll into an honest refusal.
+    // A hostile or broken endpoint can emit continuation tokens forever.
+    // The page cap turns an endless scroll into an Enumerate refusal.
     const MAX_SEARCH_PAGES: usize = 100;
     let mut pages = 0usize;
     loop {
@@ -214,8 +211,7 @@ fn percent_decode(seg: &str) -> String {
 mod tests {
     use super::*;
 
-    /// An endpoint that never stops emitting continuation tokens hits the
-    /// page cap and is refused, instead of scrolling forever.
+    /// An endpoint that never stops emitting continuation tokens hits the page cap and is refused, instead of scrolling forever.
     #[tokio::test]
     async fn pagination_cap_refuses_endless_tokens() {
         let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic).unwrap();

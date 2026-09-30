@@ -19,7 +19,8 @@ use sha2::Digest as _;
 /// The stable part-file prefix: `<prefix><128-bit sha256 hex>` per artifact name.
 /// A part survives an interrupted run so a rerun resumes it.
 const PART_PREFIX: &str = ".nxr-part-";
-/// Legacy temp prefix from pre-resume versions; cleaned up when dead.
+/// Legacy temp prefix from pre-resume versions.
+/// Cleaned up when the owning pid is dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
 
 enum Failure {
@@ -30,10 +31,7 @@ enum Failure {
 
 /// The stable part-file path for a name inside `dir`.
 ///
-/// The digest is a 128-bit truncation of SHA-256 over the encoded name:
-/// two distinct names colliding into one part file would interleave
-/// writes, so the space stays far beyond birthday reach for any plausible
-/// directory.
+/// The digest is a 128-bit truncation of SHA-256 over the encoded name: two distinct names colliding into one part file would interleave writes, so the space stays far beyond birthday reach for any plausible directory.
 pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
     let digest = sha2::Sha256::digest(name.encoded().as_bytes());
     let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();
@@ -42,10 +40,10 @@ pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
 
 /// Download the artifacts.
 ///
-/// Per-name failures land in `Summary.failed` (digest mismatches become
-/// `Error::Mismatch`).
+/// Per-name failures land in `Summary.failed` (digest mismatches become `Error::Mismatch`).
 /// The Summary event goes out before the error returns.
-/// Part files resume by default; `fresh` starts every name from zero.
+/// Part files resume by default.
+/// `fresh` starts every name from zero.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
@@ -58,7 +56,7 @@ pub async fn execute(
     let mut skipped = 0usize;
     for action in actions {
         match action {
-            // Already complete locally: nothing to fetch.
+            // In a down plan Skip and Upload both mean the local copy is complete: nothing to fetch.
             Action::Skip { name, .. } | Action::Upload { name, .. } => {
                 skipped += 1;
                 client
@@ -122,11 +120,9 @@ pub async fn execute(
     Ok(summary)
 }
 
-/// GET the bytes into the stable part file (hash on the fly, Range resume) →
-/// compare with the sibling → rename → write the local marker (§5.2).
+/// GET the bytes into the stable part file (hash on the fly, Range resume) → compare with the sibling → rename → write the local marker (§5.2).
 ///
-/// A refused or failed name leaves only the part file: the bytes and the
-/// marker never appear at the destination until the digest checked out.
+/// A refused or failed name leaves only the part file: the bytes and the marker never appear at the destination until the digest checked out.
 async fn download_one(
     client: &NexusClient,
     dir: &Path,
@@ -138,16 +134,12 @@ async fn download_one(
 ) -> Result<(), (ArtifactName, Failure)> {
     let bytes_url = client.object_url(dir_url, name);
     let part = part_path(dir, name);
-    // Resuming means the pre-existing part content joins the digest: a stale
-    // part (the remote object changed between runs) would poison the check.
-    // Without a remote sibling there is nothing to verify against, so
-    // markerless names always download from zero (§5.1): the client itself
-    // must not resume, not just the self-heal branch below.
+    // Resuming means the pre-existing part content joins the digest: a stale part (the remote object changed between runs) would poison the check.
+    // Without a remote sibling there is nothing to verify against, so markerless names always download from zero (§5.1).
+    // The client itself must not resume, not just the self-heal branch below.
     let resume = expected.is_some() && !fresh;
-    // symlink_metadata, not metadata: a symlink at the part path must not
-    // be read for the prefix nor trusted for the resume decision — the
-    // NOFOLLOW write open would refuse it anyway, so fail that way up
-    // front and keep the read side honest too.
+    // symlink_metadata, not metadata: a symlink at the part path must not be read for the prefix nor trusted for the resume decision.
+    // The NOFOLLOW write open would refuse it anyway, so fail the same way before any read.
     let resumed = resume
         && std::fs::symlink_metadata(&part)
             .map(|m| m.is_file() && m.len() > 0)
@@ -170,8 +162,8 @@ async fn download_one(
             // The part content diverges from the marker: never resume it later.
             let _ = tokio::fs::remove_file(&part).await;
             if resumed {
-                // A stale part, not a diverging server: one clean restart
-                // decides. The fresh attempt is digest-guarded as usual.
+                // A stale part, not a diverging server: one clean restart decides.
+                // The fresh attempt is digest-guarded as usual.
                 log::warn!("{}: part file was stale, restarting from zero", name);
                 let expected = Some(expected.clone());
                 return Box::pin(download_one(
@@ -218,8 +210,8 @@ async fn download_one(
 }
 
 /// On start, orphans of dead pids from the pre-resume temp scheme are cleaned.
-/// Live process temps are untouched. Part files never clean here: they are
-/// the resume fuel of a rerun.
+/// Live process temps are untouched.
+/// Part files never clean here: they are the resume state of a rerun.
 pub fn cleanup_orphans(dir: &Path) -> Result<(), Error> {
     let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
     for entry in entries {

@@ -209,8 +209,7 @@ impl Progress {
         let _ = self.tx.send(Event::Summary(summary.clone()));
     }
 
-    /// Plan event from an action list: for down, Upload actions mean
-    /// "the local copy is complete" and land in skip.
+    /// Plan event from an action list: for down, Upload actions mean "the local copy is complete" and land in skip.
     pub fn plan(&self, actions: &[Action], dir: Dir) {
         let mut upload = Vec::new();
         let mut download = Vec::new();

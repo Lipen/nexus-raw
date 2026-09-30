@@ -1,5 +1,4 @@
-//! Conformance: the v0.3 invariant matrix, driven through the core facade
-//! against the mock-nexus failure scenarios.
+//! Conformance: the v0.3 invariant matrix, driven through the core facade against the mock-nexus failure scenarios.
 
 use std::path::Path;
 use std::time::Duration;
@@ -102,15 +101,10 @@ async fn two_phase_up_recovers_after_partial_put() {
 
 #[tokio::test]
 async fn stalled_upload_fails_within_the_stall_window() {
-    // freeze-upload holds the connection after the head: the attempt-level
-    // stall watchdog must surface a retryable transport failure instead of
-    // hanging on a socket nobody drains. Regression: the stall error once
-    // had to travel through the very channel it was reporting about, so a
-    // full channel meant the timeout never surfaced.
+    // freeze-upload holds the connection after the head: the attempt-level stall watchdog must surface a retryable transport failure instead of hanging on a socket nobody drains.
     let mock = MockNexus::start(Scenario::FreezeUpload).unwrap();
     let local = TempDir::new().unwrap();
-    // Big enough that kernel socket buffers and the body channel fill: the
-    // write side must actually feel the freeze.
+    // Big enough that kernel socket buffers and the body channel fill: the write side must actually feel the freeze.
     let big = vec![0x5au8; 16 * 1024 * 1024];
     std::fs::write(local.path().join("big.zip"), &big).unwrap();
 
@@ -140,11 +134,7 @@ async fn stalled_upload_fails_within_the_stall_window() {
 
 #[tokio::test]
 async fn divergent_complete_refusal_is_wire_covered() {
-    // The never-overwrite invariant, driven through the wire: a complete
-    // remote artifact with a different digest refuses the whole up and the
-    // remote bytes stay untouched. Regression net: a revert to overwrite
-    // would pass the rest of the suite green — only unit tests covered the
-    // verdict before this test.
+    // The never-overwrite invariant, driven through the wire: a complete remote artifact with a different digest refuses the whole up and the remote bytes stay untouched.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let remote = b"remote bytes";
     mock.insert(&format!("{VERSION}/a.zip"), remote);
@@ -171,8 +161,7 @@ async fn divergent_complete_refusal_is_wire_covered() {
 
 #[tokio::test]
 async fn sizeless_head_refuses_instead_of_overwriting() {
-    // The proxy case: a 200 without Content-Length used to classify as
-    // Absent, so the upload skipped the digest comparison and overwrote.
+    // The proxy case: a 200 without Content-Length must not classify as Absent, or the digest comparison is skipped and the upload overwrites.
     // The object is present but unverifiable: refusal, not overwrite.
     let mock = MockNexus::start(Scenario::Sizeless).unwrap();
     let remote = b"remote bytes";
@@ -204,10 +193,8 @@ async fn sizeless_head_refuses_instead_of_overwriting() {
 
 #[tokio::test]
 async fn drop_connection_is_retried_through_the_client() {
-    // DropConnection resets the first request per path. Driven through the
-    // core client (it used to run only against the mock's own unit tests):
-    // the first request is reset on the wire, the retry succeeds, the
-    // artifact lands complete.
+    // DropConnection resets the first request per path.
+    // Driven through the core client: the first request is reset on the wire, the retry succeeds, the artifact lands complete.
     let mock = MockNexus::start(Scenario::DropConnection).unwrap();
     mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
     mock.insert(
@@ -242,9 +229,7 @@ async fn drop_connection_is_retried_through_the_client() {
 #[cfg(unix)]
 #[tokio::test]
 async fn symlinked_part_is_never_followed_on_resume() {
-    // The part name is derived from the server-controlled object
-    // name, so a pre-placed symlink at the part path must fail the write
-    // (O_NOFOLLOW), never become a write gadget into the decoy.
+    // The part name is derived from the server-controlled object name, so a pre-placed symlink at the part path must fail the write (O_NOFOLLOW), never become a write gadget into the decoy.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
     mock.insert(
@@ -275,8 +260,7 @@ async fn symlinked_part_is_never_followed_on_resume() {
 #[cfg(unix)]
 #[tokio::test]
 async fn symlinked_marker_is_never_followed_on_write() {
-    // Same class as the part case, one stage later: bytes land fine, the
-    // local marker write must refuse to follow a symlink.
+    // Same class as the part case, one stage later: bytes land fine, the local marker write must refuse to follow a symlink.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
     mock.insert(
@@ -316,9 +300,9 @@ async fn symlinked_marker_is_never_followed_on_write() {
 #[cfg(unix)]
 #[tokio::test]
 async fn symlinked_local_marker_is_never_followed_on_up() {
-    // The up side of the rule: auto-generated markers go through the same
-    // NOFOLLOW open as the download side. A symlink at the marker path
-    // fails the run before anything is sent; the decoy stays intact.
+    // The up side of the rule: auto-generated markers go through the same NOFOLLOW open as the download side.
+    // A symlink at the marker path fails the run before anything is sent.
+    // The decoy stays intact.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let local = TempDir::new().unwrap();
     std::fs::write(local.path().join("a.zip"), CONTENT).unwrap();
@@ -348,8 +332,7 @@ async fn symlinked_local_marker_is_never_followed_on_up() {
 #[cfg(unix)]
 #[tokio::test]
 async fn oversized_small_get_refuses_with_the_cap() {
-    // A manifest is a "small" GET: past the 16 MiB cap the read refuses
-    // (exit 2) instead of slurping an unbounded body into memory.
+    // A manifest is a "small" GET: past the 16 MiB cap the read refuses (exit 2) instead of slurping an unbounded body into memory.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     mock.insert(
         &format!("{VERSION}/manifest.json"),
@@ -368,8 +351,7 @@ async fn oversized_small_get_refuses_with_the_cap() {
 
 #[tokio::test]
 async fn up_generates_markers_by_default() {
-    // The plain-mode regression: a directory without any .sha256 file still
-    // produces Complete remote objects (§5.2 markers-on-by-default).
+    // A directory without any .sha256 file still produces Complete remote objects (§5.2 markers-on-by-default).
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let local = TempDir::new().unwrap();
     std::fs::write(local.path().join("a.zip"), CONTENT).unwrap();
@@ -496,10 +478,8 @@ async fn single_call_recovers_through_flaky() {
 
 #[tokio::test]
 async fn retry_events_name_the_object_they_retry() {
-    // A retried marker must never arrive as an unnamed event: the console line
-    // for it reads `↻ : retry 2 (…)`, and an NDJSON consumer cannot tell which
-    // object stalled. Markers and other small objects travel by URL, so their
-    // name comes from the URL when the caller has no ArtifactName to pass.
+    // A retried marker must never arrive as an unnamed event: the console line for it reads `↻ : retry 2 (…)`, and an NDJSON consumer cannot tell which object stalled.
+    // Markers and other small objects travel by URL, so their name comes from the URL when the caller has no ArtifactName to pass.
     let mock = MockNexus::start(Scenario::Flaky { first_failures: 1 }).unwrap();
     let local = TempDir::new().unwrap();
     seed_complete(local.path(), "a.zip", CONTENT);
@@ -620,8 +600,7 @@ async fn down_resume_of_complete_part_finalizes_without_refetch() {
     seed_complete(src.path(), "a.zip", CONTENT);
     nxr.up(src.path(), None, true, None, None).await.unwrap();
 
-    // The crash edge: the process died after the download finished but
-    // before the rename, so the part already holds the whole object.
+    // The crash edge: the process died after the download finished but before the rename, so the part already holds the whole object.
     let dst = TempDir::new().unwrap();
     let name = ArtifactName::parse("a.zip").unwrap();
     let part = part_path(dst.path(), &name);
@@ -731,10 +710,9 @@ async fn down_missing_name_is_data_error() {
 
 #[tokio::test]
 async fn down_markerless_remote_writes_computed_marker() {
-    // Markerless remote: bytes without a marker. Down fetches them and
-    // computes the marker locally (§5.2). Without a sibling there is nothing
-    // to verify a resume against, so an existing part is ignored entirely
-    // (§5.1): the name downloads from zero, however stale the part is.
+    // Markerless remote: bytes without a marker.
+    // Down fetches them and computes the marker locally (§5.2).
+    // Without a sibling there is nothing to verify a resume against, so an existing part is ignored entirely (§5.1): the name downloads from zero, however stale the part is.
     let mock = MockNexus::start(Scenario::Markerless).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
@@ -986,8 +964,7 @@ async fn down_stale_part_self_heals_without_a_flag() {
     seed_complete(src.path(), "a.zip", CONTENT);
     nxr.up(src.path(), None, true, None, None).await.unwrap();
 
-    // The part holds bytes of an object that no longer matches the sibling:
-    // an interrupted download of an older remote version.
+    // The part holds bytes of an object that no longer matches the sibling: an interrupted download of an older remote version.
     let dst = TempDir::new().unwrap();
     let name = ArtifactName::parse("a.zip").unwrap();
     let part = part_path(dst.path(), &name);

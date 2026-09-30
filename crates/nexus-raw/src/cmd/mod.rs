@@ -88,8 +88,7 @@ pub(crate) fn make_ctx(cli: &Cli, base: &str) -> Result<Ctx, Error> {
 
 /// Close the event channel and wait for the renderer to drain.
 ///
-/// The facade must die first: it holds a sender clone through the client's
-/// `Progress`, and the renderer only finishes when the channel closes.
+/// The facade must die first: it holds a sender clone through the client's `Progress`, and the renderer only finishes when the channel closes.
 pub(crate) async fn finish(ctx: Ctx) {
     let Ctx {
         nxr,
@@ -116,8 +115,7 @@ pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> 
     names.iter().map(|s| ArtifactName::parse(s)).collect()
 }
 
-/// Resolve a `--manifest` spec: `-` for stdin, http(s) URLs through the
-/// server, everything else as a local file.
+/// Resolve a `--manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file.
 pub(crate) async fn load_manifest(nxr: &Nxr, spec: &str) -> Result<Manifest, Error> {
     match spec {
         "-" => Manifest::from_stdin(),

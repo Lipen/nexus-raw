@@ -8,8 +8,7 @@ use crate::model::name::ArtifactName;
 /// Recursively list the artifact names in `dir`.
 ///
 /// Every regular file becomes a candidate name (relative path, `/` separated).
-/// Hidden path segments (starting with `.`) and `*.sha256` siblings are skipped:
-/// a sibling is the marker of its bytes, never an artifact of its own.
+/// Hidden path segments (starting with `.`) and `*.sha256` siblings are skipped: a sibling is the marker of its bytes, never an artifact of its own.
 /// Names that fail the grammar are a misuse error (exit 2), never silently skipped.
 pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
     let mut names = Vec::new();

@@ -29,9 +29,8 @@ pub async fn execute(
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
     let mut claim_uploaded = 0usize;
-    // Claim-first (§2): the named claim uploads alone, before any other name
-    // starts. A failed or refused claim aborts the run so consumers never see
-    // a version whose list disagrees with its bytes.
+    // Claim-first (§2): the named claim uploads alone, before any other name starts.
+    // A failed or refused claim aborts the run so consumers never see a version whose list disagrees with its bytes.
     let mut claim_action: Option<Action> = None;
     let mut rest: Vec<Action> = Vec::new();
     for action in actions {
@@ -117,8 +116,8 @@ pub async fn execute(
     }
     summary.failed = failed;
     client.progress().summary(&summary);
-    // Transport-level failures surface as their own error (exit 3),
-    // the failed names stay visible in the summary.
+    // Transport-level failures surface as their own error (exit 3).
+    // The failed names stay visible in the summary.
     if let Some(e) = first_error {
         return Err(e);
     }
@@ -131,8 +130,7 @@ pub async fn execute(
 }
 
 /// PUT the bytes, then the canonical marker of the same name (§5.2).
-/// The marker strictly follows the bytes: a crash in between leaves a
-/// Markerless object, which every reader refuses to trust.
+/// The marker strictly follows the bytes: a crash in between leaves a Markerless object, which every reader refuses to trust.
 async fn upload_one(
     client: &NexusClient,
     dir: &std::path::Path,

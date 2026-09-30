@@ -15,8 +15,8 @@ pub struct Manifest {
 impl Manifest {
     /// Parse a manifest: `{"artifacts": ["<name>", …]}`.
     ///
-    /// The version-document fields are tolerated: `schema_version` must be 1
-    /// when present, `version` is ignored. Every name passes the grammar.
+    /// The version-document fields are tolerated: `schema_version` must be 1 when present, `version` is ignored.
+    /// Every name passes the grammar.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
         let value: serde_json::Value = serde_json::from_slice(bytes)
             .map_err(|e| Error::misuse(format!("manifest is not JSON: {e}")))?;

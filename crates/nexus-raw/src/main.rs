@@ -10,14 +10,12 @@ use clap::{Parser, Subcommand};
 
 use std::path::PathBuf;
 
-/// curl for a Nexus raw repository: primitives with retries and TLS on,
-/// verified directory transfers, channel refs and manifests.
+/// curl for a Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
 #[derive(Debug, Parser)]
 #[command(name = "nxr", version, about)]
 pub(crate) struct Cli {
     /// Credentials as user:pass, curl style.
-    /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or
-    /// NXR_USERNAME + NXR_PASSWORD.
+    /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD.
     #[arg(short = 'u', long, value_name = "USER:PASS", global = true)]
     pub(crate) user: Option<String>,
     /// Parallel artifact transfers.
@@ -86,7 +84,7 @@ pub(crate) enum Cmd {
         #[arg(value_name = "FILE|URL")]
         target: String,
     },
-    /// Upload a local directory: verified, parallel, marker-perfect (§5.2).
+    /// Upload a local directory (§5.2).
     Up {
         /// The source directory.
         #[arg(value_name = "SRC_DIR")]
@@ -118,7 +116,7 @@ pub(crate) enum Cmd {
         /// Enumeration source: a manifest file, URL or `-` for stdin.
         #[arg(long, value_name = "FILE|URL|-")]
         manifest: Option<String>,
-        /// One explicit name; repeat as needed.
+        /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
         /// Best-effort enumeration through the server search API.
@@ -142,7 +140,7 @@ pub(crate) enum Cmd {
         #[command(subcommand)]
         op: ChannelOp,
     },
-    /// Check local bytes, markers and digests. No network.
+    /// Check local bytes, markers and digests (no network).
     Verify {
         /// The directory to check.
         #[arg(value_name = "DIR")]
@@ -153,7 +151,7 @@ pub(crate) enum Cmd {
     },
     /// Diagnose credentials, TLS and reachability.
     Doctor {
-        /// A base URL to probe; checks without it stay local.
+        /// A base URL to probe (checks without it stay local).
         #[arg(value_name = "URL")]
         url: Option<String>,
     },
@@ -161,7 +159,8 @@ pub(crate) enum Cmd {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ChannelOp {
-    /// Print the current token, or nothing when the channel is unset.
+    /// Print the current token.
+    /// An unset channel prints `unset`.
     Get {
         /// The channel file URL.
         #[arg(value_name = "URL")]

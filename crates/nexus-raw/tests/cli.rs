@@ -1,10 +1,6 @@
-//! CLI conformance: the v0.3 command surface driven through the `nxr`
-//! binary against `mock-nexus`.
+//! CLI conformance: the v0.3 command surface driven through the `nxr` binary against `mock-nexus`.
 //!
-//! Covers: up/down happy path and skip detection, marker generation
-//! (default, `--no-sha`), enumeration sources (`--name`, `--manifest`,
-//! none), Range resume, the put/get/sha/head primitives, channel refs,
-//! offline verify, auth gating, NDJSON events and the exit-code matrix.
+//! Covers: up/down happy path and skip detection, marker generation (default, `--no-sha`), enumeration sources (`--name`, `--manifest`, none), Range resume, the put/get/sha/head primitives, channel refs, offline verify, auth gating, NDJSON events and the exit-code matrix.
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -34,8 +30,9 @@ fn root_url(srv: &MockNexus) -> String {
     srv.base_url()
 }
 
-/// Run `nxr` with a hermetic environment: ambient NXR_* credentials must
-/// never leak into a test; pass `-u` explicitly instead.
+/// Run `nxr` with a hermetic environment.
+/// Ambient NXR_* credentials must never leak into a test.
+/// Pass `-u` explicitly instead.
 fn nxr(args: &[&str]) -> Output {
     Command::new(NXR)
         .args(args)
@@ -101,7 +98,8 @@ fn put_requests(srv: &MockNexus) -> Vec<ReqLog> {
         .collect()
 }
 
-/// Parse every stdout line as a JSON object; nothing else may be printed.
+/// Parse every stdout line as a JSON object.
+/// Nothing else may be printed.
 fn ndjson(out: &Output) -> Vec<serde_json::Value> {
     stdout(out)
         .lines()
@@ -111,8 +109,7 @@ fn ndjson(out: &Output) -> Vec<serde_json::Value> {
 
 // ---- transfers ------------------------------------------------------------
 
-/// 1. up then down round trip against Atomic: bytes and markers on the
-///    server, bytes and markers on disk, exit 0 everywhere.
+/// up then down round trip against Atomic: bytes and markers on the server, bytes and markers on disk, exit 0 everywhere.
 #[test]
 fn up_down_roundtrip_atomic() {
     let srv = server(Scenario::Atomic);
@@ -154,8 +151,7 @@ fn up_down_roundtrip_atomic() {
     );
 }
 
-/// 2. up generates sha-siblings: the local dir starts without any marker,
-///    yet the server ends up with one (and the local dir gains it).
+/// up generates sha-siblings: the local dir starts without any marker, yet the server ends up with one (and the local dir gains it).
 #[test]
 fn up_generates_markers_by_default() {
     let srv = server(Scenario::Atomic);
@@ -177,7 +173,7 @@ fn up_generates_markers_by_default() {
     );
 }
 
-/// 3. up --no-sha: bytes go up, no marker is generated or stored.
+/// up --no-sha: bytes go up, no marker is generated or stored.
 #[test]
 fn up_no_sha_skips_markers() {
     let srv = server(Scenario::Atomic);
@@ -199,7 +195,7 @@ fn up_no_sha_skips_markers() {
     assert!(!src.path().join("a.zip.sha256").exists());
 }
 
-/// 4. the second up skips everything: no new PUTs, summary all-skipped.
+/// the second up skips everything: no new PUTs, summary all-skipped.
 #[test]
 fn second_up_is_a_pure_skip() {
     let srv = server(Scenario::Atomic);
@@ -229,7 +225,7 @@ fn second_up_is_a_pure_skip() {
     );
 }
 
-/// 16. up --dry-run prints the plan and transfers nothing.
+/// up --dry-run prints the plan and transfers nothing.
 #[test]
 fn dry_run_prints_plan_without_uploading() {
     let srv = server(Scenario::Atomic);
@@ -250,8 +246,7 @@ fn dry_run_prints_plan_without_uploading() {
 
 // ---- enumeration ----------------------------------------------------------
 
-/// 5. down with no enumeration flags and no server manifest: exit 1 with
-///    a hint about enumeration.
+/// down with no enumeration flags and no server manifest: exit 1 with a hint about enumeration.
 #[test]
 fn down_without_enumeration_needs_a_source() {
     let srv = server(Scenario::Atomic);
@@ -269,7 +264,7 @@ fn down_without_enumeration_needs_a_source() {
     assert!(!dst.path().join("a.zip").exists());
 }
 
-/// 6. down --name fetches exactly the named artifact.
+/// down --name fetches exactly the named artifact.
 #[test]
 fn down_explicit_name() {
     let srv = server(Scenario::Atomic);
@@ -290,7 +285,7 @@ fn down_explicit_name() {
     assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
 }
 
-/// 7. down --manifest with a local manifest file.
+/// down --manifest with a local manifest file.
 #[test]
 fn down_manifest_from_local_file() {
     let srv = server(Scenario::Atomic);
@@ -315,8 +310,8 @@ fn down_manifest_from_local_file() {
     assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
 }
 
-/// 8. resume: a pre-seeded part file continues through a Range request;
-///    the mock answers 206 and the assembled file is byte-perfect.
+/// resume: a pre-seeded part file continues through a Range request.
+/// The mock answers 206 and the assembled file is byte-perfect.
 #[test]
 fn get_resumes_from_part_with_range() {
     let srv = server(Scenario::Atomic);
@@ -359,8 +354,7 @@ fn get_resumes_from_part_with_range() {
 
 // ---- primitives -----------------------------------------------------------
 
-/// 9. put → get roundtrip, put --sha stores the sibling, sha prints the
-///    digest of the remote bytes.
+/// put → get roundtrip, put --sha stores the sibling, sha prints the digest of the remote bytes.
 #[test]
 fn put_get_roundtrip_with_sha_sibling() {
     let srv = server(Scenario::Atomic);
@@ -407,7 +401,8 @@ fn put_get_roundtrip_with_sha_sibling() {
     );
 }
 
-/// 10. head reports the status; JSON mode carries status and size.
+/// head reports the status.
+/// JSON mode carries status and size.
 #[test]
 fn head_reports_status() {
     let srv = server(Scenario::Atomic);
@@ -430,8 +425,8 @@ fn head_reports_status() {
 
 // ---- channel --------------------------------------------------------------
 
-/// 11. channel set/get roundtrip; --if-forward keeps the current token
-///     when the new one is older.
+/// channel set/get roundtrip.
+/// `--if-forward` keeps the current token when the new one is older.
 #[test]
 fn channel_set_get_and_if_forward() {
     let srv = server(Scenario::Atomic);
@@ -467,7 +462,7 @@ fn channel_set_get_and_if_forward() {
 
 // ---- verify ---------------------------------------------------------------
 
-/// 12. verify accepts a complete dir and rejects tampered bytes.
+/// verify accepts a complete dir and rejects tampered bytes.
 #[test]
 fn verify_accepts_then_rejects_tampering() {
     let srv = server(Scenario::Atomic);
@@ -490,8 +485,9 @@ fn verify_accepts_then_rejects_tampering() {
 
 // ---- exit-code matrix -----------------------------------------------------
 
-/// 13. Auth401: anonymous is exit 3, correct -u credentials exit 0.
-///     (`head` reports a 401 as a normal status; the gate fires on fetch.)
+/// Auth401: anonymous is exit 3, correct -u credentials exit 0.
+/// (`head` reports a 401 as a normal status.
+/// The gate fires on fetch.)
 #[test]
 fn auth401_exit_codes() {
     let srv = server(Scenario::Auth401 {
@@ -521,7 +517,7 @@ fn auth401_exit_codes() {
     assert_eq!(std::fs::read(&target).unwrap(), BETA);
 }
 
-/// 17. a name outside the grammar is misuse: exit 2.
+/// a name outside the grammar is misuse: exit 2.
 #[test]
 fn unsafe_name_is_misuse_exit_2() {
     let srv = server(Scenario::Atomic);
@@ -537,7 +533,7 @@ fn unsafe_name_is_misuse_exit_2() {
     assert!(stderr(&down).contains("hint:"));
 }
 
-/// 18. a dead base (connection refused) is a transport error: exit 3.
+/// a dead base (connection refused) is a transport error: exit 3.
 #[test]
 fn dead_base_exit_3() {
     // A bound-then-dropped listener: the port is closed for certain.
@@ -560,8 +556,7 @@ fn dead_base_exit_3() {
 
 // ---- NDJSON ---------------------------------------------------------------
 
-/// 14. --json on up and down: stdout is pure NDJSON with plan, artifact
-///     and a final summary carrying the counters.
+/// --json on up and down: stdout is pure NDJSON with plan, artifact and a final summary carrying the counters.
 #[test]
 fn ndjson_events_parse_and_summarize() {
     let srv = server(Scenario::Atomic);
@@ -609,9 +604,9 @@ fn ndjson_events_parse_and_summarize() {
 
 // ---- golden ndjson --------------------------------------------------------
 
-/// The --json surface is a contract, pinned byte-exact by fixtures in
-/// tests/golden/. One artifact per run keeps chunk events deterministic;
-/// no URL reaches these outputs, so the bytes carry no ports.
+/// The --json surface is a contract, pinned byte-exact by fixtures in tests/golden/.
+/// One artifact per run keeps chunk events deterministic.
+/// No URL reaches these outputs, so the bytes carry no ports.
 #[test]
 fn golden_ndjson_up_down_hold() {
     let srv = server(Scenario::Atomic);
@@ -658,16 +653,12 @@ fn golden_ndjson_doctor_holds() {
 
 // ---- doctor ---------------------------------------------------------------
 
-/// A failing `up --json` still drains the event channel: stdout stays
-/// complete NDJSON — plan, artifact lines — and the last line is the
-/// Summary event naming both failures. The loss used to be a per-run race,
-/// so the invocation repeats: five green runs in a row make the regression
-/// reliably red on the old `?`-before-drain code.
+/// A failing `up --json` still drains the event channel: stdout stays complete NDJSON — plan, artifact lines — and the last line is the Summary event naming both failures.
 ///
-/// The scenario fails after the diff (an exhausted cut-off upload), so the
-/// events genuinely precede the error. An auth-gated up, by contrast,
-/// fails inside the diff and has no events to drain: stdout is empty by
-/// contract, stderr carries the failure.
+/// The drain is a race, so one green run proves nothing: the invocation repeats five times.
+///
+/// The scenario fails after the diff (an exhausted cut-off upload), so the events genuinely precede the error.
+/// An auth-gated up, by contrast, fails inside the diff and has no events to drain: stdout is empty by contract, stderr carries the failure.
 #[test]
 fn failing_up_still_flushes_ndjson_events() {
     let srv = server(Scenario::FreezeUpload);
@@ -697,8 +688,7 @@ fn failing_up_still_flushes_ndjson_events() {
             events.iter().any(|e| e["event"] == "plan"),
             "the plan event must survive the failure: {events:?}"
         );
-        // The Summary event goes out just before the error surfaces; on the
-        // old code it was the line lost most often.
+        // The Summary event goes out just before the error surfaces.
         let summary = events.last().expect("at least the summary line");
         assert_eq!(
             summary["event"], "summary",
@@ -718,8 +708,7 @@ fn failing_up_still_flushes_ndjson_events() {
         );
     }
 
-    // The auth variant: the failure precedes any event, so stdout stays
-    // empty and the error lands on stderr with its hint.
+    // The auth variant: the failure precedes any event, so stdout stays empty and the error lands on stderr with its hint.
     let auth = server(Scenario::Auth401 {
         user: "nexus".into(),
         pass: "secret".into(),
@@ -745,8 +734,8 @@ fn failing_up_still_flushes_ndjson_events() {
     );
 }
 
-/// 15. doctor: without credentials the credentials check fails (exit 2);
-///     with -u and no URL everything passes (exit 0).
+/// doctor: without credentials the credentials check fails (exit 2).
+/// With -u and no URL everything passes (exit 0).
 #[test]
 fn doctor_exit_codes() {
     let bare = nxr(&["doctor"]);
@@ -766,8 +755,7 @@ fn doctor_exit_codes() {
     );
 }
 
-/// 15b. doctor --json: one NDJSON line per check, names and booleans only —
-///      no secret ever appears in the detail field.
+/// doctor --json: one NDJSON line per check, names and booleans only — no secret ever appears in the detail field.
 #[test]
 fn doctor_json_lines() {
     let bare = nxr(&["--json", "doctor"]);

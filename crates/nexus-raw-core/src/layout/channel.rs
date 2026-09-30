@@ -1,7 +1,6 @@
 //! Channel refs: mutable token files with any name (spec §5.3).
 //!
 //! A channel is a plain object holding exactly one token line (`<token>\n`).
-//! The tool has no favorites: the name is free to be `latest`, `stable`, or `prod/edge`.
 
 use crate::error::Error;
 use crate::model::pointer;

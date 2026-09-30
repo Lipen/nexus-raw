@@ -9,8 +9,7 @@ use crate::Cli;
 
 pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
-    // The renderer drains on every path: the events the run already emitted
-    // must reach the output before the failure is reported.
+    // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
     let result = run_ls(&ctx, assets).await;
     finish(ctx).await;
     result

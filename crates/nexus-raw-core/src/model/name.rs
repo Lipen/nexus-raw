@@ -7,8 +7,7 @@ use crate::error::Error;
 
 /// Artifact name: a path relative to the directory being transferred.
 ///
-/// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each,
-/// no empty/`.`/`..` segments, no leading/trailing `/`.
+/// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each, no empty/`.`/`..` segments, no leading/trailing `/`.
 /// Reserved: the `.sha256` suffix (marker collision).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactName(String);
@@ -149,9 +148,8 @@ mod tests {
         assert!(!unsafe_reason("a//b").is_empty());
         assert!(!unsafe_reason("x/").is_empty());
         assert!(!unsafe_reason("x.sha256").is_empty());
-        // v0.3: no reserved names beyond the .sha256 suffix.
-        // `latest`/`nightly`/`version.json` are ordinary artifact names now:
-        // channels and manifests are generic files, not protocol.
+        // No reserved names beyond the .sha256 suffix.
+        // `latest`/`nightly`/`version.json` are ordinary artifact names: channels and manifests are generic files, not protocol.
         for name in ["latest", "nightly", "version.json"] {
             ArtifactName::parse(name).unwrap_or_else(|e| panic!("{name}: {e}"));
         }

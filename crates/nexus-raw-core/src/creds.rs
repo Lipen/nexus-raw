@@ -1,4 +1,5 @@
-//! Credentials resolver: `-u` flag first, then env; values never printed (spec §4).
+//! Credentials resolver: `-u` flag first, then env.
+//! Values are never printed (spec §4).
 
 use base64::Engine as _;
 
@@ -11,14 +12,13 @@ pub struct Creds {
 }
 
 impl std::fmt::Debug for Creds {
-    /// The header IS the credential: it never renders.
+    /// The header is the credential, so Debug never renders it.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Creds").field("header", &"***").finish()
     }
 }
 
-/// Order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`),
-/// then `NXR_USERNAME` + `NXR_PASSWORD`.
+/// Order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
 pub fn resolve(explicit: Option<(&str, &str)>) -> Result<Option<Creds>, Error> {
     if let Some((user, pass)) = explicit {
         return Ok(Some(Creds {
@@ -54,7 +54,7 @@ pub fn basic(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // One env at a time: these tests mutate NXR_AUTH and run in parallel.
+    // These tests mutate NXR_AUTH: the lock serializes them across cargo's parallel test threads.
     static ENV_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 
     #[test]

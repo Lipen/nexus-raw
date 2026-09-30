@@ -21,28 +21,20 @@ use crate::model::sibling;
 use crate::model::state::RemoteStatus;
 use crate::transport::retry::{is_retryable, AttemptFailure, RetryPolicy};
 
-/// Outgoing body chunk size: small enough that a full outbound buffer drains
-/// well inside the stall timeout, so channel backpressure means a real stall.
+/// Outgoing body chunk size: small enough that a full outbound buffer drains well inside the stall timeout, so channel backpressure means a real stall.
 const UPLOAD_CHUNK: usize = 16 * 1024;
 /// Depth of the outgoing body channel.
 const UPLOAD_CHANNEL: usize = 4;
 
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + Send + 'a>>;
 
-/// Upper bound for "small" GETs: siblings, manifests, channel tokens,
-/// search pages. Way above any honest payload of that kind.
+/// Upper bound for "small" GETs: siblings, manifests, channel tokens, search pages.
 const SMALL_CAP: u64 = 16 * 1024 * 1024;
 
-/// Open options for files nxr writes under a server-name-derived path
-/// (`.part` files, local `.sha256` markers): create/truncate as asked, but
-/// never follow a symlink — a predictable name must not become a
-/// write gadget into some other file.
+/// Open options for files nxr writes under a server-name-derived path (`.part` files, local `.sha256` markers): create/truncate as asked, but never follow a symlink — a predictable name must not become a write into a different file.
 ///
-/// The append arm deliberately lacks `create`: it may only open a part
-/// whose prefix was just read. A part that vanished in between must fail
-/// loudly — a silently recreated file would yield a truncated "complete"
-/// artifact whose digest still matches (the hash covers the prefix that
-/// was read, not the bytes on disk).
+/// The append arm deliberately lacks `create`: it may only open a part whose prefix was just read.
+/// A part that vanished in between must fail loudly — a silently recreated file would yield a truncated "complete" artifact whose digest still matches (the hash covers the prefix that was read, not the bytes on disk).
 pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true);
@@ -59,7 +51,7 @@ pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     options
 }
 
-/// The blocking counterpart of [`write_options`] for spawn_blocking code.
+/// The blocking counterpart of `write_options` for spawn_blocking code.
 #[cfg(unix)]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     use std::os::unix::fs::OpenOptionsExt;
@@ -74,8 +66,8 @@ pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     options
 }
 
-/// Non-unix targets have no O_NOFOLLOW; the plain options keep them
-/// building, and the name grammar still blocks traversal.
+/// Non-unix targets have no O_NOFOLLOW: the plain options keep them building.
+/// The name grammar still blocks traversal.
 #[cfg(not(unix))]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     let mut options = std::fs::OpenOptions::new();
@@ -155,8 +147,7 @@ impl NexusClient {
     }
 
     /// The shared attempt loop: connect errors, timeouts, body breaks and 5xx retry.
-    /// Each attempt builds a fresh boxed future borrowing `self` and `url`
-    /// through the closure arguments, so nothing is carried between tries.
+    /// Each attempt builds a fresh boxed future borrowing `self` and `url` through the closure arguments, so nothing is carried between tries.
     async fn with_retries<T>(
         &self,
         subject: Option<(&str, Dir)>,
@@ -210,11 +201,9 @@ impl NexusClient {
         AttemptFailure { retryable, error }
     }
 
-    /// The object a URL addresses, for callers that transfer by URL rather than by
-    /// [`ArtifactName`]: markers, channel tokens, manifests, search pages.
-    /// The label is the last path segment, which is the name these objects carry
-    /// on the wire. Callers that know the artifact name pass it as a subject
-    /// instead, so this only ever names small objects.
+    /// The object a URL addresses, for callers that transfer by URL rather than by [`ArtifactName`]: markers, channel tokens, manifests, search pages.
+    /// The label is the last path segment, which is the name these objects carry on the wire.
+    /// Callers that know the artifact name pass it as a subject instead, so this only ever names small objects.
     fn object_label(url: &str) -> String {
         let path = url.split(['?', '#']).next().unwrap_or(url);
         match path.trim_end_matches('/').rsplit('/').next() {
@@ -223,9 +212,9 @@ impl NexusClient {
         }
     }
 
-    /// HEAD with full metadata; 404 is `HeadInfo { status: 404, .. }`.
-    /// The size comes from the raw header: hyper reports a zero body size hint
-    /// for HEAD responses regardless of Content-Length.
+    /// HEAD with full metadata.
+    /// 404 is `HeadInfo { status: 404, .. }`.
+    /// The size comes from the raw header: hyper reports a zero body size hint for HEAD responses regardless of Content-Length.
     pub async fn head_info(&self, url: &str) -> Result<HeadInfo, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -256,9 +245,7 @@ impl NexusClient {
 
     /// GET a small object (sibling, manifest, channel): None on 404.
     ///
-    /// The response is capped at [`SMALL_CAP`]: these objects are KiB-scale
-    /// by protocol, and an unbounded slurp would turn a runaway or hostile
-    /// server into a memory event.
+    /// The response is capped at `SMALL_CAP`: these objects are KiB-scale by protocol, and an unbounded slurp would turn a runaway or hostile server into a memory event.
     pub async fn get_small(&self, url: &str) -> Result<Option<Vec<u8>>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -319,13 +306,9 @@ impl NexusClient {
     /// Remote state of a name: HEAD of bytes + GET of sibling (§5.2).
     ///
     /// A sibling without bytes is ignored: the object is not complete.
-    /// Classification of the HEAD: 404 is [`RemoteStatus::Absent`];
-    /// 401/403 surface as [`Error::Auth`]; a 2xx without `Content-Length`
-    /// (and any other answered-but-unverifiable status) is
-    /// [`RemoteStatus::Broken`] — never [`RemoteStatus::Absent`], or a
-    /// proxy could skip the digest comparison and the never-overwrite rule.
-    /// Transient statuses (5xx, connection breaks) ride the shared retry
-    /// loop like any other request.
+    /// Classification of the HEAD: 404 is [`RemoteStatus::Absent`], 401/403 surface as [`Error::Auth`].
+    /// A 2xx without `Content-Length` (and any other answered-but-unverifiable status) is [`RemoteStatus::Broken`] — never [`RemoteStatus::Absent`], or a proxy could skip the digest comparison and the never-overwrite rule.
+    /// Transient statuses (5xx, connection breaks) ride the shared retry loop like any other request.
     pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
         let bytes_url = self.object_url(dir, name);
         let info = self
@@ -334,9 +317,7 @@ impl NexusClient {
                 &bytes_url,
                 |this: &Self, url: &str| {
                     Box::pin(async move {
-                        // The raw HEAD, inline: probe owns the only retry
-                        // loop, so connection errors and 5xx share one
-                        // attempt budget instead of nesting two.
+                        // The raw HEAD, inline: probe owns the only retry loop, so connection errors and 5xx share one attempt budget instead of nesting two.
                         let resp = this
                             .authorize(this.http.head(url))
                             .send()
@@ -408,10 +389,9 @@ impl NexusClient {
         }
     }
 
-    /// GET a body as a stream of chunks, hashing nothing, deciding nothing.
+    /// GET a URL body as a chunk stream: no hashing, no completion decision.
     ///
-    /// The single-attempt body stream for stdout mode: once the body started
-    /// arriving, a retry would duplicate bytes, so breaks surface as errors.
+    /// The single-attempt body stream for stdout mode: once the body started arriving, a retry would duplicate bytes, so breaks surface as errors.
     pub async fn get_stream(&self, url: &str) -> Result<reqwest::Response, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -429,12 +409,10 @@ impl NexusClient {
 
     /// GET into a part file with Range resume (§5.2).
     ///
-    /// `cont == true` and an existing `part` continue from its size through
-    /// `Range: bytes=N-`; a server that answers `200` (range ignored) restarts
-    /// from zero, and a `416` (range already satisfied) finalizes the part,
-    /// the died-between-download-end-and-rename edge.
-    /// Verifying the finalized bytes is the caller's duty: `down` digest-checks
-    /// against the sibling, the `get` primitive trusts the part.
+    /// `cont == true` and an existing `part` continue from its size through `Range: bytes=N-`.
+    /// A server that answers `200` (range ignored) restarts from zero.
+    /// A `416` (range already satisfied) finalizes the part: the crash-between-download-end-and-rename edge.
+    /// Verifying the finalized bytes is the caller's duty: `down` digest-checks against the sibling, the `get` primitive trusts the part.
     /// The digest covers the whole file, prefix included.
     /// Returns the final file size and digest.
     pub async fn download_resumable(
@@ -492,10 +470,8 @@ impl NexusClient {
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status().as_u16();
                 if status == 416 && prefix > 0 {
-                    // The server refuses the range because it is already
-                    // satisfied: the part holds the whole object. This is the
-                    // crash-between-download-end-and-rename edge: finalize
-                    // the part and let the caller digest-check and rename.
+                    // The server refuses the range because it is already satisfied: the part holds the whole object.
+                    // This is the crash-between-download-end-and-rename edge: finalize the part and let the caller digest-check and rename.
                     let digest =
                         Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
                     return Ok((prefix, digest));
@@ -556,9 +532,7 @@ impl NexusClient {
     }
 
     /// PUT the bytes of a file: streamed body with Content-Length.
-    /// Stall detection is attempt-level: no chunk pulled for `stall` fails
-    /// the attempt as retryable transport, so a frozen socket surfaces even
-    /// after the producer has finished reading the file.
+    /// Stall detection is attempt-level: no chunk pulled for `stall` fails the attempt as retryable transport, so a frozen socket surfaces even after the producer has finished reading the file.
     pub async fn upload_file(
         &self,
         subject: (&str, Dir),
@@ -596,10 +570,8 @@ impl NexusClient {
                             Ok(n) => {
                                 buf.truncate(n);
                                 produced += n as u64;
-                                // A full channel is honest backpressure: the
-                                // consumer is busy on the wire, and the
-                                // attempt-level watchdog owns the stall
-                                // timeout, so this send cannot deadlock.
+                                // A full channel is backpressure: the consumer is busy on the wire.
+                                // The attempt-level watchdog owns the stall timeout, so this send cannot deadlock.
                                 if tx.send(Ok(buf)).await.is_err() {
                                     // Receiver gone: the attempt was cancelled.
                                     break;
@@ -639,10 +611,7 @@ impl NexusClient {
                     .authorize(this.http.put(url))
                     .header(reqwest::header::CONTENT_LENGTH, size)
                     .body(body);
-                // The attempt owns stall detection: no chunk pulled for
-                // `stall` fails the attempt as retryable transport, whether
-                // the producer is alive, already done, or the socket stopped
-                // draining.
+                // The attempt owns stall detection: no chunk pulled for `stall` fails the attempt as retryable transport, whether the producer is alive, already done, or the socket stopped draining.
                 let mut send = std::pin::pin!(req.send());
                 let resp = loop {
                     let since_progress = last.lock().expect("progress lock").elapsed();

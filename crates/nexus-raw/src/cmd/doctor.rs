@@ -36,7 +36,7 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         }
     };
 
-    // TLS: the off switch is a loud, deliberate choice.
+    // --tls-insecure counts as a failed check: the report flags it, it does not hide it.
     if cli.tls_insecure {
         report.push((
             "tls",
@@ -48,7 +48,6 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         report.push(("tls", true, "verification is ON".to_owned()));
     }
 
-    // Timeouts and workers.
     report.push((
         "settings",
         cli.workers > 0 && cli.workers <= 64,
@@ -58,7 +57,6 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         ),
     ));
 
-    // Reachability, when a URL was given.
     if let Some(url) = url {
         match normalize_base(url) {
             Ok(base) => {
@@ -90,7 +88,6 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         }
     }
 
-    // Rendering: NDJSON lines in --json, the report in human mode.
     let mut failures = 0usize;
     let mut transport_failures = 0usize;
     if cli.json {
