@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/img/hero-terminal.png" alt="Реальная сессия nxr: публикация, канал, потребление, верификация" width="760">
+<img src="docs/assets/img/hero-terminal.png" alt="Записанная сессия nxr: публикация каталога версии против мок-сервера" width="760">
 
 # nexus-raw
 

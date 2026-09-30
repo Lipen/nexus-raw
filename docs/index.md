@@ -30,39 +30,19 @@ One binary, no config file, nothing to install on the server.
 
 </div>
 
-![A real nxr session: publish, name with a channel, consume, verify](assets/img/hero-terminal.png)
-
 ## The 30-second version
 
-The transcript above is real output, verbatim.
-Publish a version directory, markers included and re-runs free:
+<figure class="nxr-term" data-cast="assets/cast/session.json" markdown>
 
-```console
-$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-plan: 4 to upload, 0 to download, 0 up to date
-↑ bom/linux-x86_64.json ok
-↑ app-1.4.0.zip ok
-…
-uploaded 4, downloaded 0, skipped 0
-```
+<img src="assets/img/hero-terminal.png" alt="A frame of the recording: publishing a version directory against the mock server.">
 
-Name it so consumers do not hard-code versions, then pull it somewhere and check it offline:
+</figure>
 
-```console
-$ nxr channel set https://nexus.example.com/repository/raw-main/latest 1.4.0 --if-forward
-channel: set https://nexus.example.com/repository/raw-main/latest → 1.4.0
-$ V=$(nxr channel get https://nexus.example.com/repository/raw-main/latest)
-$ nxr down "https://nexus.example.com/repository/raw-main/$V/" vendor/app/
-plan: 0 to upload, 3 to download, 0 up to date
-↓ app-1.4.0.zip ok
-…
-uploaded 0, downloaded 3, skipped 0
-$ nxr verify vendor/app/
-verify: 3 ok, FAILED: none
-```
+That window is a recording, not a mock-up: the `nxr` binary this repository builds, against the [mock server](explanation/conformance.md) the conformance suites drive, every line with the time it arrived.
+It publishes a version directory, names it with a channel, fetches the version back, checks the digests offline, and then refuses to overwrite an artifact someone edited by hand.
 
-Everything above is one binary and one URL per call.
-The [five-minute tour](get-started.md) runs it against a throwaway server on your machine, breakage included.
+`just demo` runs the same session on your machine, mock server and stub payloads included.
+It is one binary and one URL per call, and the [five-minute tour](get-started.md) walks the same ground with copy-pasteable commands.
 
 ## What you stop maintaining
 
@@ -93,6 +73,7 @@ A divergence is a human decision: the transfer stops with exit 1 instead of pick
 
 | You want | Page |
 | :-- | :-- |
+| the recorded session, runnable on your machine | [run the demo](how-to/demo.md) |
 | a working end-to-end tour in five minutes | [get started](get-started.md) |
 | publish a version and name it with a channel | [publish](how-to/publish.md) |
 | fetch artifacts, verify, resume an interrupted pull | [consume](how-to/consume.md) |

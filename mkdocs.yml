@@ -42,6 +42,7 @@ nav:
   - Home: index.md
   - Get started: get-started.md
   - How-to:
+      - Run the demo: how-to/demo.md
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
       - Integrate it: how-to/integrate.md
@@ -58,6 +59,9 @@ nav:
 
 extra_css:
   - stylesheets/site.css
+
+extra_javascript:
+  - javascripts/terminal.js
 
 markdown_extensions:
   - admonition

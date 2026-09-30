@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/img/hero-terminal.png" alt="A real nxr session: publish, name with a channel, consume, verify" width="760">
+<img src="docs/assets/img/hero-terminal.png" alt="A recorded nxr session: publishing a version directory against the mock server" width="760">
 
 # nexus-raw
 
@@ -136,6 +136,7 @@ The guide with install lines, snippets and the vendoring rules: [docs/how-to/int
 ```bash
 just check        # fmt + clippy + prek + tests: the full gate
 just test         # unit and conformance suites
+just demo         # the recorded session, against the mock server and stub payloads
 just mock atomic --port 8080
 just nxr -- up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
 just docs         # the documentation site, http://localhost:8000, live reload

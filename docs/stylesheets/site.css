@@ -273,3 +273,144 @@
 .md-typeset table tbody tr:hover {
   background-color: color-mix(in srgb, var(--md-accent-fg-color) 8%, transparent);
 }
+
+/*
+ * The recorded session: a terminal window that replays a real run.
+ * The frame keeps the still image's aspect ratio, so swapping the picture for
+ * the player does not move the page underneath the reader.
+ */
+
+.md-typeset .nxr-term {
+  position: relative;
+  margin: 1.6rem 0 1.2rem;
+  border: 1px solid oklch(0.32 0.02 210);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--nxr-ink);
+  box-shadow: 0 12px 32px oklch(0.2 0.02 210 / 0.35);
+}
+
+.md-typeset .nxr-term img {
+  display: block;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.md-typeset .nxr-term[data-ready="true"] img {
+  display: none;
+}
+
+.nxr-term__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  background: oklch(0.25 0.018 210);
+  border-bottom: 1px solid oklch(0.32 0.02 210);
+}
+
+.nxr-term__dots {
+  flex: none;
+  width: 2.6rem;
+  height: 0.75rem;
+  background-image:
+    radial-gradient(circle at 0.375rem 50%, oklch(0.72 0.16 25) 0.3rem, transparent 0.32rem),
+    radial-gradient(circle at 1.3rem 50%, oklch(0.82 0.14 85) 0.3rem, transparent 0.32rem),
+    radial-gradient(circle at 2.225rem 50%, oklch(0.78 0.15 150) 0.3rem, transparent 0.32rem);
+}
+
+.nxr-term__title {
+  flex: 1;
+  font-size: 0.6rem;
+  font-family: var(--md-code-font-family, ui-monospace, monospace);
+  letter-spacing: 0.02em;
+  color: oklch(0.72 0.015 210);
+}
+
+.nxr-term__replay {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: oklch(0.85 0.02 210);
+  background: transparent;
+  border: 1px solid oklch(0.42 0.02 210);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color var(--nxr-lift), color var(--nxr-lift);
+}
+
+.nxr-term__replay:hover {
+  color: var(--nxr-teal-bright);
+  border-color: var(--nxr-teal);
+}
+
+.nxr-term__body {
+  aspect-ratio: 860 / 496;
+  text-align: left;
+  overflow: hidden;
+  padding: 0.8rem 1rem 1rem;
+  font-family: var(--md-code-font-family, ui-monospace, monospace);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: oklch(0.88 0.01 210);
+}
+
+.nxr-l {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.nxr-l--cmd {
+  color: oklch(0.96 0.005 210);
+  font-weight: 600;
+}
+
+.nxr-l--ok {
+  color: var(--nxr-teal-bright);
+}
+
+.nxr-l--warn {
+  color: var(--nxr-amber);
+}
+
+.nxr-l--err {
+  color: oklch(0.75 0.16 25);
+}
+
+.nxr-l--hint {
+  color: oklch(0.7 0.06 60);
+  padding-left: 0.8rem;
+}
+
+.nxr-l--dim {
+  color: oklch(0.66 0.015 210);
+}
+
+.nxr-l--note {
+  color: oklch(0.82 0.02 200);
+}
+
+.nxr-term__cursor {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.9em;
+  margin-top: 0.1rem;
+  background: var(--nxr-teal-bright);
+  animation: nxr-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes nxr-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nxr-term__cursor {
+    animation: none;
+  }
+}
