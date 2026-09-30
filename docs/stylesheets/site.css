@@ -1,48 +1,238 @@
 /*
- * Site tweaks: card contrast, hover states, framed images, table rows.
- * The header source widget comes from docs_overrides/partials/source.html.
+ * nexus-raw docs: a small design system on top of Material.
+ *
+ * Tokens first (palette, type, rhythm), then the landing shell (hero, strip,
+ * cards), then the page furniture (images, tables, console blocks).
+ *
+ * Fonts are vendored, no runtime CDN: Space Grotesk for headings, Inter for
+ * body. Both are SIL OFL 1.1 (space-grotesk: Florian Karsten; inter: Rasmus
+ * Andersson), files copied from the sibling panda-sdk docs.
  */
 
-/*
- * Cards: visible at rest, alive on hover.
- * Material's defaults are border-invisible at rest and border-transparent on
- * hover; these rules restore contrast in both schemes and add a lift.
- */
+/* ---- fonts ---- */
 
-.md-typeset .grid.cards > ol > li,
-.md-typeset .grid.cards > ul > li,
-.md-typeset .grid > .card {
-  border-radius: 0.45rem;
-  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../assets/fonts/space-grotesk.woff2") format("woff2-variations");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
 }
 
-[data-md-color-scheme="default"] .md-typeset .grid.cards > ol > li,
-[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li,
-[data-md-color-scheme="default"] .md-typeset .grid > .card {
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07), 0 2px 8px rgba(0, 0, 0, 0.06);
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li,
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li,
-[data-md-color-scheme="slate"] .md-typeset .grid > .card {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+/* ---- tokens ---- */
+
+:root {
+  --nxr-teal: oklch(0.62 0.1 195);
+  --nxr-teal-bright: oklch(0.78 0.11 190);
+  --nxr-amber: oklch(0.8 0.14 78);
+  --nxr-amber-dim: oklch(0.62 0.13 75);
+  --nxr-ink: oklch(0.2 0.015 210);
+  --nxr-radius: 0.75rem;
+  --nxr-lift: 150ms ease;
 }
 
-.md-typeset .grid.cards > ol > li:hover,
-.md-typeset .grid.cards > ul > li:hover,
-.md-typeset .grid > .card:hover {
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: oklch(0.26 0.028 200);
+  --md-accent-fg-color: oklch(0.52 0.1 195);
+  --md-typeset-a-color: oklch(0.48 0.1 200);
+  --nxr-hero-teal: var(--nxr-teal);
+  --nxr-hero-amber: var(--nxr-amber-dim);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: oklch(0.19 0.014 210);
+  --md-accent-fg-color: var(--nxr-teal-bright);
+  --md-typeset-a-color: var(--nxr-teal-bright);
+  --nxr-hero-teal: var(--nxr-teal-bright);
+  --nxr-hero-amber: var(--nxr-amber);
+}
+
+/* ---- type ---- */
+
+.md-typeset {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+
+.md-typeset h2 {
+  margin-top: 3rem;
+  font-size: 1.5rem;
+}
+
+.md-typeset h3 {
+  margin-top: 2.2rem;
+  font-size: 1.15rem;
+}
+
+.md-typeset .md-button {
+  border-radius: 2rem;
+  transition: transform var(--nxr-lift), box-shadow var(--nxr-lift);
+}
+
+.md-typeset .md-button--primary {
+  background-color: var(--md-accent-fg-color);
   border-color: var(--md-accent-fg-color);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--md-accent-fg-color);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary {
+  color: var(--nxr-ink);
+}
+
+.md-typeset .md-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--md-accent-fg-color) 35%, transparent);
+}
+
+/* ---- landing: hero ---- */
+
+.md-typeset .nxr-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2rem;
+  margin: 0 0 1.4rem;
+  padding: 2.2rem 2.4rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 1rem;
+  background:
+    radial-gradient(36rem 20rem at 8% -20%, color-mix(in oklch, var(--nxr-hero-teal) 22%, transparent), transparent 62%),
+    radial-gradient(28rem 16rem at 98% 120%, color-mix(in oklch, var(--nxr-hero-amber) 16%, transparent), transparent 62%);
+}
+
+.md-typeset .nxr-hero h1 {
+  grid-column: 1;
+  margin: 0 0 0.6rem;
+  font-size: 2rem;
+  line-height: 1.15;
+  width: fit-content;
+  background: linear-gradient(100deg, var(--nxr-hero-teal), var(--nxr-hero-amber));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.md-typeset .nxr-hero .headerlink {
+  display: none;
+}
+
+.md-typeset .nxr-hero > p {
+  grid-column: 1;
+  max-width: 32rem;
+  margin: 0 0 1.2rem;
+  font-size: 0.84rem;
+}
+
+.md-typeset .nxr-hero > p:last-child {
+  margin-bottom: 0;
+}
+
+.md-typeset .nxr-hero > p:has(.hero-mark) {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  margin: 0;
+}
+
+.md-typeset .nxr-hero .hero-mark {
+  height: 7rem;
+  width: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 6px 18px color-mix(in oklch, var(--nxr-hero-teal) 30%, transparent));
+}
+
+@media screen and (max-width: 56em) {
+  .md-typeset .nxr-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 1.6rem 1.4rem;
+  }
+
+  .md-typeset .nxr-hero > p:has(.hero-mark) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .md-typeset .nxr-hero .hero-mark {
+    height: 4.5rem;
+    margin: 0 0 1rem;
+  }
+
+  .md-typeset .nxr-hero h1 {
+    font-size: 1.6rem;
+  }
+}
+
+/* ---- landing: the strip ---- */
+
+.md-typeset .nxr-strip {
+  margin: 0 0 2rem;
+  padding: 0.85rem 1.2rem;
+  border-left: 3px solid var(--nxr-hero-amber);
+  border-radius: 0 0.6rem 0.6rem 0;
+  background: color-mix(in oklch, var(--nxr-hero-amber) 9%, transparent);
+  font-size: 0.78rem;
+}
+
+.md-typeset .nxr-strip p {
+  margin: 0;
+}
+
+/* ---- landing: cards ---- */
+
+.md-typeset .nxr-cards > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .nxr-cards > ul > li {
+  margin: 0;
+  padding: 0.9rem 1.05rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: var(--nxr-radius);
+  background: color-mix(in oklch, var(--md-default-fg-color) 3%, transparent);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  transition:
+    transform var(--nxr-lift),
+    border-color var(--nxr-lift),
+    box-shadow var(--nxr-lift);
+}
+
+.md-typeset .nxr-cards > ul > li:hover {
+  border-color: color-mix(in oklch, var(--md-accent-fg-color) 65%, transparent);
+  box-shadow: 0 6px 18px color-mix(in oklch, var(--md-accent-fg-color) 18%, transparent);
   transform: translateY(-2px);
 }
 
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li:hover,
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover,
-[data-md-color-scheme="slate"] .md-typeset .grid > .card:hover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--md-accent-fg-color), 0 0 22px rgba(255, 191, 0, 0.28);
+.md-typeset .nxr-cards .twemoji,
+.md-typeset .nxr-cards svg {
+  color: var(--md-accent-fg-color);
 }
+
+/* ---- page furniture ---- */
 
 /*
  * Images: framed and rounded (the terminal hero, page screenshots).
@@ -60,6 +250,18 @@
 }
 
 /*
+ * Console blocks: a quiet frame around real transcripts.
+ */
+
+.md-typeset pre > code {
+  border-radius: 0.6rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset pre > code {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/*
  * Tables: rows answer the pointer.
  */
 
@@ -68,6 +270,5 @@
 }
 
 .md-typeset table tbody tr:hover {
-  background-color: rgba(255, 191, 0, 0.08);
   background-color: color-mix(in srgb, var(--md-accent-fg-color) 8%, transparent);
 }

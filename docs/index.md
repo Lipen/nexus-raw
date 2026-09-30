@@ -1,25 +1,35 @@
-# nexus-raw
+<div class="nxr-hero" markdown>
 
-<img src="assets/nxr.svg" width="120" align="right" alt="The nxr logo" />
+<img class="hero-mark" src="assets/nxr.svg" alt="The nxr logo" />
 
-<p style="font-size:1.05em">
-<code>nxr</code> is curl for a Sonatype Nexus raw repository: HTTP-grade primitives with retries, stall detection and TLS on, verified directory transfers on top, channel refs and manifests above those: one static binary, zero config files.
-</p>
+# curl for a Nexus raw repository
 
-<div class="grid cards" markdown>
+`nxr` publishes and fetches version directories that are provably complete.
+One binary, no config file, nothing to install on the server.
 
-- :material-curling: **Primitives**: `get`, `put`, `head`, `sha`. Every call is self-sufficient, with the URL in argv and credentials from `-u` or the environment.
-- :material-upload: **Publish**: `up` pushes a whole directory, markers generated and checked by default, bytes and siblings in parallel workers.
-- :material-download: **Consume**: `down` fetches exactly the enumerated names, hashes on the fly, and resumes part files with `Range: bytes=N-`.
-- :material-shield-check: **Trustworthy completion**: an artifact counts as done only with its `<name>.sha256` marker in `sha256sum -c` format, and divergent artifacts are never overwritten.
-- :material-code-json: **Scriptable**: `--json` for one-object commands and NDJSON event streams, exit codes that split data problems from transport trouble, and a `hint:` on every error.
-- :material-language-rust: **Embeddable**: the `nexus-raw-core` crate exposes four public layers, from raw transport to the `Nxr` facade.
+[Get started](get-started.md){ .md-button .md-button--primary }
+[The 30-second version](#the-30-second-version){ .md-button }
+
+</div>
+
+<div class="nxr-strip" markdown>
+
+**Trust is mechanical.** An artifact counts as done only when its `<name>.sha256` sibling matches the bytes — and a divergent complete artifact is never overwritten.
+
+</div>
+
+<div class="nxr-cards" markdown>
+
+- :material-console: **Primitives** — `get`, `put`, `head`, `sha`: the URL in argv, credentials from `-u` or the environment.
+- :material-upload: **Publish** — `up` scans, diffs, then PUTs bytes and markers in parallel workers.
+- :material-download: **Consume** — `down` fetches exactly the enumerated names and resumes part files through `Range: bytes=N-`.
+- :material-brain: **Fail honestly** — exit codes 0/1/2/3, a `hint:` on every error, NDJSON event streams for pipelines.
+- :material-swap-horizontal: **Resume by default** — an interrupted transfer is finished by repeating the same command.
+- :material-language-rust: **Embed** — `nexus-raw-core` exposes the same operations as a Rust library, four layers deep.
 
 </div>
 
 ![A real nxr session: publish, name with a channel, consume, verify](assets/img/hero-terminal.png)
-
----
 
 ## The 30-second version
 
