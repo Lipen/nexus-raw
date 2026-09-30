@@ -77,6 +77,26 @@ example-rust:
     cargo build -q -p mock-nexus
     cargo run --manifest-path examples/rust/Cargo.toml
 
+# The local stand: mock server, stub payloads, the real binary. Every command
+# is printed as it runs; scenarios are the mock's (`just mock --print-scenarios`).
+[doc('Run the demo stand: publish, name, consume, verify, refuse, repair.')]
+[group('examples')]
+demo scenario='slow' *args:
+    cargo build -q -p mock-nexus -p nexus-raw
+    examples/demo/demo.sh {{scenario}} {{args}}
+
+# The landing animation is a recording of that same stand, not a mock-up.
+# The port is pinned so the recorded URLs stay comparable between recordings;
+# a busy port fails loudly instead of silently changing the file.
+[doc('Record the demo session into the docs landing animation.')]
+[group('examples')]
+demo-cast *args:
+    cargo build -q -p mock-nexus -p nexus-raw
+    NXR_DEMO_EXTRA=0 NXR_DEMO_CAST=docs/assets/cast/session.json \
+        examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 40 {{args}}
+    test -s docs/assets/cast/session.json
+    @echo "cast: docs/assets/cast/session.json"
+
 # The whole site, written in docs/ (zensical, Material stack).
 # Live reload included: edit a page, the browser refreshes itself.
 [doc('Serve the docs site with live reload (http://localhost:8000).')]

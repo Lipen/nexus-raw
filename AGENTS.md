@@ -73,7 +73,7 @@ New fields are additive.
 | `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
-| `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/node` (npm project on a `file:` dependency) and `examples/rust` (crate on a path dependency); run with `just example-node` / `just example-rust` |
+| `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (npm project on a `file:` dependency) and `examples/rust` (crate on a path dependency); run with `just demo` / `just example-node` / `just example-rust` |
 
 ## Commits
 
