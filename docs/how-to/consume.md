@@ -1,7 +1,6 @@
 # Consume artifacts
 
-The consumer side, end to end: resolve which version is current, fetch it (or a slice of it) into a directory you can build against, and prove it intact without the network.
-
+The consumer side: resolve which version is current, fetch it (or a slice of it) into a directory you can build against, and prove it intact without the network.
 The scenario behind every transcript here: your build needs the artifacts of version `1.4.0` from the `raw-main` repository into `vendor/app/`.
 
 ## Prerequisites
@@ -12,7 +11,7 @@ The scenario behind every transcript here: your build needs the artifacts of ver
 
 ## Choosing an enumeration source
 
-`down` must know *which names* to fetch, and a Nexus raw repository has no guaranteed directory listing.
+`down` must know which names to fetch, and a Nexus raw repository has no guaranteed directory listing.
 Every `down` names its source, explicitly or through one convention:
 
 | Source | Invocation | Reach for it when |
@@ -30,7 +29,8 @@ error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: n
 hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
 ```
 
-Every name a source lists must exist, locally or remotely. A typo stops the run with `missing` instead of silently fetching less.
+Every name a source lists must exist, locally or remotely.
+A typo stops the run with `missing` instead of silently fetching less.
 
 ## Resolve the version through a channel
 
@@ -48,15 +48,14 @@ nxr down "https://nexus.example.com/repository/raw-main/$V/" vendor/app/    # (2
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
 plan: 0 to upload, 3 to download, 0 up to date
-↓ bom/linux-x86_64.json ok
-↓ pinned.xml ok
 ↓ app-1.4.0.zip ok
+↓ pinned.xml ok
+↓ bom/linux-x86_64.json ok
 uploaded 0, downloaded 3, skipped 0
-down: 0 sent, 3 fetched, 0 skipped
 ```
 
 Three names listed in `manifest.json`, three fetched.
-`manifest.json` itself is the map, not the territory: it is not copied into the target directory.
+`manifest.json` is the enumeration source, not an artifact: it is not copied into the target directory.
 
 ### What the pipeline guarantees
 
@@ -77,7 +76,7 @@ flowchart LR
     V -- yes --> R --> M
 ```
 
-Two consequences worth internalizing:
+Two consequences:
 
 - A name that dies mid-download leaves only a hidden part file (`.nxr-part-<hash>`): the destination never holds partial bytes under a real name.
 - The local marker is computed from the received bytes, so the result verifies offline even if the server had no marker.
@@ -93,25 +92,24 @@ plan: 0 to upload, 1 to download, 2 up to date
 ○ bom/linux-x86_64.json skipped
 ↓ pinned.xml ok
 uploaded 0, downloaded 1, skipped 2
-down: 0 sent, 1 fetched, 2 skipped
 ```
 
-Only the missing name transfers. Names whose digest matches the server are skipped.
-A locally complete artifact whose digest *diverges* refuses the run instead of being overwritten (see [when it breaks](troubleshoot.md#divergent-objects-are-never-overwritten)).
+Only the missing name transfers.
+Names whose digest matches the server are skipped.
+A locally complete artifact whose digest diverges refuses the run instead of being overwritten (see [divergent objects are never overwritten](troubleshoot.md#divergent-objects-are-never-overwritten)).
 
 An interrupted pull recovers the same way: rerunning the command resumes the part files through `Range` requests by default, and `--fresh` starts over from zero.
 The full walkthrough with a real interruption: [break it on purpose](../get-started.md#break-it-on-purpose).
 
 ## Fetch a subset
 
-Large version, small job. Name what you need and repeat `--name` as often as needed:
+Name what you need and repeat `--name` as often as needed:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/subset/ --name app-1.4.0.zip
 plan: 0 to upload, 1 to download, 0 up to date
 ↓ app-1.4.0.zip ok
 uploaded 0, downloaded 1, skipped 0
-down: 0 sent, 1 fetched, 0 skipped
 ```
 
 For longer lists, keep a manifest file in your own repository and point `--manifest` at it (a file, a URL, or `-` for stdin).
@@ -124,22 +122,23 @@ Before building against the result, or after any manual fiddling, check every ar
 ```console
 $ nxr verify vendor/app/
 verify: 3 ok, FAILED: none
+uploaded 0, downloaded 0, skipped 3
 ```
 
-A tampered file is named and refuses with exit 1:
+A tampered file is named and the run exits 1:
 
 ```console
 $ nxr verify vendor/app/
 uploaded 0, downloaded 0, skipped 2
+failed: bom/linux-x86_64.json
 error: incomplete: bom/linux-x86_64.json
 hint: rerun the same command; finished names are skipped and the rest is retried
-failed: bom/linux-x86_64.json
 ```
 
-`verify` checks a directory you own, so you have two honest repairs: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum`, whichever matches why the digest drifted.
+Two repairs fit: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum`, whichever matches why the digest drifted.
 Pass `--manifest` to check a subset instead of the whole directory.
 
-As the last gate of a consumer CI job, `verify` costs no network and catches every silent corruption upstream (see [a consumer job](ci.md#a-consumer-job)).
+As the last gate of a consumer CI job, `verify` costs no network (see [a consumer job](ci.md#a-consumer-job)).
 
 ## Next steps
 

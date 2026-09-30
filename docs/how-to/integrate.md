@@ -1,11 +1,9 @@
 # Integrate nexus-raw
 
-nexus-raw meets your project at three depths, and the contract is the same at each: URL in argv, credentials from the environment or the call, verified bytes, refusals instead of overwrites.
-Start at the top (a process you shell out to) and descend only when you need the API in-process.
+Three depths, one contract: URL in argv, credentials from the environment or the call, verified bytes, refusals instead of overwrites.
+Start with the CLI and descend only when you need the API in-process.
 
 ## As the CLI
-
-The binary is the integration most pipelines need: it is curl for a raw repository, and everything it does is visible on the command line.
 
 Install it from source (no package registry yet):
 
@@ -13,7 +11,6 @@ Install it from source (no package registry yet):
 cargo install --path crates/nexus-raw
 ```
 
-Every command takes the base URL as an argument.
 Credentials resolve from `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`, in that order — the sources, the precedence and the argv caveat are in the [CLI reference](../reference/cli.md#credentials-and-urls).
 
 The command surface, one line each, all details in the [CLI reference](../reference/cli.md):
@@ -27,15 +24,8 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `verify` | offline check of bytes, markers and digests |
 | `doctor` | credentials, TLS and reachability, without printing secrets |
 
-Scripts gate on the exit codes, not on output text:
-
-| Exit | Class | A script should |
-|:----:|:------|:----------------|
-| `0` | ok | continue |
-| `1` | data problem: mismatch, incomplete, missing, cannot enumerate | stop and page a human |
-| `2` | misuse: bad flags, unsafe name, half-set credentials | fix the invocation |
-| `3` | transport: network, auth, TLS, 5xx after retries | retry later |
-
+Scripts gate on the exit codes, not on output text: `0` continues, `1` is a data problem, `2` is a broken invocation, `3` is transport trouble.
+The cause-and-fix table is on [when it breaks](troubleshoot.md#exit-codes-cause-and-fix).
 The classes and their hints are pinned in [errors and exit codes](../reference/errors.md).
 
 For scripting, `--json` turns every command into machine output: one JSON object for simple commands, one NDJSON event per line for transfers.
@@ -114,7 +104,8 @@ node publish-and-consume.mjs
 
 Every command is one self-sufficient call, and an optional `onEvent` callback receives the core's NDJSON events as parsed JSON objects.
 The ordering contract matters for tests: the promise settles only after every event has been handed to the callback, including on failure — the events that led to the error arrive first, then the promise rejects with an `Error` carrying `exitCode` and `hint`.
-Events still cross a thread boundary, so the last callback invocation may run an instant after the promise resolved; tests that assert on collected events drain the JS queue first, as `crates/nexus-raw-napi/smoke.mjs` does.
+Events still cross a thread boundary, so the last callback invocation may run an instant after the promise resolved.
+Tests that assert on collected events drain the JS queue first, as `crates/nexus-raw-napi/smoke.mjs` does.
 
 ```js
 import { up } from 'nexus-raw'
@@ -125,7 +116,8 @@ const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw
 })
 ```
 
-The typed surface is `crates/nexus-raw-napi/index.d.ts`, maintained by hand; `binding.d.ts` is the mechanically generated twin, and `check-dts.mjs` next to them fails when the two drift.
+The typed surface is `crates/nexus-raw-napi/index.d.ts`, maintained by hand.
+`binding.d.ts` is the mechanically generated twin, and `check-dts.mjs` next to them fails when the two drift.
 
 ### Vendoring
 

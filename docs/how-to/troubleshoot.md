@@ -7,13 +7,13 @@ Find yours in the tables, fix the cause, repeat the command: `up` skips finished
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local fec438ab…, remote 58e575b6…
+error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
-Three lines, three jobs.
-The `error:` line starts with the error *kind* and names the artifact and both sides of the disagreement.
-The `hint:` line names the next check. The same text travels in the `hint` field of `--json` output.
+The `error:` line starts with the error kind and names the artifact and both sides of the disagreement.
+The `hint:` line names the next check.
+The same text travels in the `hint` field of `--json` output.
 The process exit code separates data problems from transport trouble.
 
 ## Exit codes: cause and fix
@@ -51,19 +51,19 @@ stateDiagram-v2
 ```
 
 `Complete` means bytes plus a sibling whose digest matches.
-`Markerless` means bytes only, normal mid-transfer but suspicious when a run finished.
-`Broken` means bytes and marker disagree, and `nxr` will not "fix" it by overwriting: the next `up` or `down` refuses with `mismatch` until a human deletes or repairs one side.
+`Markerless` means bytes only: normal mid-transfer, suspicious when a run finished.
+`Broken` means bytes and marker disagree, and `nxr` will not fix it by overwriting: the next `up` or `down` refuses with `mismatch` until a human deletes or repairs one side.
 `Absent` means no bytes, and a marker without bytes reads as `Absent`.
 
 ## Divergent objects are never overwritten
 
-The refusal you will meet most often, with its two faces:
+The refusal you will meet most often, with its two faces.
 
 A local file drifted after its marker was written:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8aca37a7…, actual 4116253a…
+error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
@@ -71,53 +71,53 @@ The same name holds two different artifacts on the two sides, for example a rebu
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local fec438ab…, remote 58e575b6…
+error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 Exit 1 in both cases, and nothing was sent.
 The way out is a decision, not a flag: rebuild and fix the local copy, or publish the new content under a new version directory and move the channel.
-Version directories are cheap precisely so you never have to argue with an existing one.
 
 ## Interrupted transfers
 
-Kill a `get` mid-flight and the bytes so far live in a part file next to the target:
-`timeout` here stands in for `Ctrl-C`:
+Kill a `get` mid-flight (`timeout` here stands in for `Ctrl-C`) and the bytes so far live in a part file next to the target:
 
 ```console
 $ timeout 4 nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip
-killed, timeout exit=124
+$ echo $?
+124
+$ ls -A | grep app.zip
+app.zip.part
 ```
 
-Nothing partial ever hides under the real name. Everything fetched so far sits in `app.zip.part`.
+Nothing partial ever hides under the real name.
 Repeat the command with `--continue` and the transfer resumes through a `Range: bytes=N-` request instead of starting over:
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --continue
-get: 3000000 bytes → app.zip (resumed from 917504)
+get: 98304 bytes → app.zip (resumed from 32768)
 ```
 
 The `(resumed from …)` figure is the part-file size the server was asked to continue from.
-For a whole directory the same story runs through `down`: rerunning the command resumes its part files by default (see [the tour](../get-started.md#break-it-on-purpose) for the part-file anatomy).
+For a whole directory the same story runs through `down`: rerunning the command resumes its part files by default (see [break it on purpose](../get-started.md#break-it-on-purpose) for the part-file anatomy).
 
 A killed `up` leaves the server with whatever completed: some names `Complete`, the name in flight `Markerless` or `Absent`.
-No repair mode exists because none is needed. Repeat the same command and the diff re-sends exactly the unfinished names:
+Repeat the same command and the diff re-sends exactly the unfinished names.
+Here someone crashed earlier: the archive is on the server, its marker is not:
 
 ```console
-$ curl -T app-1.4.0.zip https://nexus.example.com/repository/raw-main/half/1.0.0/app-1.4.0.zip   # (1)!
+$ curl -sT dist/1.4.0/app-1.4.0.zip https://nexus.example.com/repository/raw-main/half/1.0.0/app-1.4.0.zip -w '%{http_code}\n'
+201
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/half/1.0.0/
 plan: 4 to upload, 0 to download, 0 up to date
-↑ manifest.json ok
-↑ bom/linux-x86_64.json ok
 ↑ pinned.xml ok
+↑ bom/linux-x86_64.json ok
+↑ manifest.json ok
 ↑ app-1.4.0.zip ok
 uploaded 4, downloaded 0, skipped 0
-up: 4 sent, 0 fetched, 0 skipped
 ```
 
-1. Someone crashed here earlier: the archive is on the server, its marker is not.
-
-The pre-existing bytes are not skipped as "good enough": a `Markerless` remote name is re-sent complete with its marker, because an unverifiable object is not done.
+The pre-existing bytes are not skipped as good enough: a `Markerless` remote name is re-sent complete with its marker, because an unverifiable object is not done.
 
 ## `down` refuses with "cannot enumerate"
 
@@ -131,7 +131,7 @@ hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server h
 
 Three ways out, in order of preference:
 
-1. publish a `manifest.json` into the version directory (see [publish](publish.md#ship-a-manifest-for-consumers)), and plain `nxr down <ver-url>/ dst/` works.
+1. publish a `manifest.json` into the version directory (see [ship a manifest for consumers](publish.md#ship-a-manifest-for-consumers)), and plain `nxr down <ver-url>/ dst/` works.
 2. pass the names: `--manifest <file|url|->` or repeatable `--name`.
 3. `--ls` for a best-effort walk through the server search API, which depends on the server release.
 
@@ -139,18 +139,16 @@ The decision table for picking one: [choosing an enumeration source](consume.md#
 
 ## Auth failures
 
-Wrong or missing credentials surface as `auth`, exit 3:
+Wrong or missing credentials surface as `auth`, exit 3, before anything transfers:
 
 ```console
-$ nxr -u deployer:wrong-horse up dist/1.3.0/ https://nexus.example.com/repository/raw-main/authchk/
-plan: 1 to upload, 0 to download, 0 up to date
-uploaded 0, downloaded 0, skipped 0
-failed: pinned.xml
-error: auth: https://nexus.example.com/repository/raw-main/authchk/pinned.xml: HTTP 401 Unauthorized; pass -u user:pass or export NXR_AUTH (base64 user:pass)
+$ nxr -u deployer:wrong-horse up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+error: auth: https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip: HTTP 401 Unauthorized; pass -u user:pass or export NXR_AUTH (base64 user:pass)
 hint: pass -u user:pass or export NXR_AUTH (base64 user:pass)
 ```
 
-`nxr doctor <url>` separates *no credentials* from *rejected credentials* without printing secrets (see [check the setup before the run](ci.md#check-the-setup-before-the-run)).
+The named object varies: the 401 lands on whichever status probe arrives first.
+`nxr doctor <url>` separates no credentials from rejected credentials without printing secrets (see [check the setup before the run](ci.md#check-the-setup-before-the-run)).
 
 ## Transport trouble
 
@@ -159,25 +157,12 @@ A connection reset, with retries disabled to make it visible:
 
 ```console
 $ nxr --retry 1 down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/drop/
-error: transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: error sending request for url (…)
+error: transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: error sending request for url (https://nexus.example.com/repository/raw-main/1.4.0/manifest.json)
 hint: check the network; transfers are resumable, rerunning is safe
 ```
 
-With the default `--retry 4` the same blips are absorbed and surface as `retrying` events under `--json`.
+With the default `--retry 4` the same blips are absorbed and surface as `retrying` events under `--json` (see [NDJSON events](ci.md#ndjson-events)).
 Repeat the command when you see exit 3: finished names are skipped, part files resume, nothing starts from zero.
-
-A server-side rate limit looks like this. Note the plan succeeded and the writes failed:
-
-```console
-$ nxr up dist/1.3.0/ https://nexus.example.com/repository/raw-main/1.3.0/
-plan: 1 to upload, 0 to download, 0 up to date
-uploaded 0, downloaded 0, skipped 0
-failed: pinned.xml
-error: http 429: https://nexus.example.com/repository/raw-main/1.3.0/pinned.xml
-```
-
-Exit 3, and the response carries a `Retry-After` header.
-Do not tighten the retry loop against a 429: back off, or the server extends the ban.
 
 ## Unsafe names
 
@@ -200,13 +185,18 @@ Exit 2 in both cases: path traversal is impossible by construction, and an artif
 ## TLS problems
 
 Certificate verification is on by default.
-For a test server with a self-signed certificate, switch it off per call instead of weakening any global state:
+`--tls-insecure` switches it off per call, for a test server with a self-signed certificate, and `nxr doctor` reports the choice loudly:
 
-```bash
-nxr --tls-insecure ls https://localhost:8443/repository/raw-dev/
+```console
+$ nxr --tls-insecure -u deployer:pw doctor http://127.0.0.1:8734/1.4.0/manifest.json
+doctor:
+  [  ok  ] credentials: resolved from -u flag
+  [ FAIL ] tls: verification is OFF (--tls-insecure); fine for a local mock, dangerous beyond it
+  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] probe: HEAD http://127.0.0.1:8734/1.4.0/manifest.json → HTTP 200
+error: misuse: 1 check(s) failed
+hint: check the command line arguments
 ```
-
-`nxr doctor` reports the switch loudly: verification OFF is a deliberate choice, fine for a local mock, dangerous beyond it.
 
 ## Debugging aids
 
@@ -218,17 +208,21 @@ The repository ships a mock server that replays failure modes deterministically,
 
 | Scenario | Behavior | Rehearse |
 |:---------|:---------|:---------|
-| `atomic` | straight-through storage, the honest server | the happy paths |
+| `atomic` | straight-through storage: every fully-read request is served normally | the happy paths |
 | `partial-put` | first PUT per path cut mid-body, nothing stored | interrupted `up` |
 | `drop-connection` | first request per path answered with a TCP reset | transport errors and retries |
-| `slow` | bodies drip in chunks with delays | stall detection, kill-and-resume |
-| `flaky` | first K requests per path answered `503` | retry exhaustion |
-| `auth-401` | every request needs `--auth user:pass` | auth failures |
+| `freeze-upload` | PUT connections held after the head: body never read, no answer | upload stall detection |
+| `sizeless` | success GET/HEAD answers carry no `Content-Length` (the proxy case) | clients that read sizeless objects |
+| `slow` | GET/HEAD bodies drip in `--chunk-size` pieces, `--chunk-delay-ms` apart | stall detection, kill-and-resume |
+| `foreign-marker` | stored markers get their digest replaced by 64 zeros | divergence detection |
 | `markerless` | markers acknowledged but never stored | the `Markerless` repair path |
+| `auth-401` | every request needs Basic auth (default `ci:secret`) | auth failures |
+| `doc-drift` | atomic until drift is switched on in the library API, then every `version.json` GET serves a ghost artifact | the conformance suites |
+| `flaky` | the first `--flaky K` requests per path answer 503 (default 2) | retry behavior |
 
 ```bash
-cargo run -p mock-nexus -- drop-connection --port 8080
-cargo run -p mock-nexus -- slow --chunk-delay-ms 2000 --port 8080
+target/debug/mock-nexus drop-connection --port 8080
+target/debug/mock-nexus slow --chunk-delay-ms 2000 --port 8080
 ```
 
 The full scenario table: [conformance](../explanation/conformance.md).

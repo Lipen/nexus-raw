@@ -1,7 +1,6 @@
 # Use in CI
 
-`nxr` is built for pipelines: stable exit codes, machine-readable events, free resume, credentials from the environment.
-This page wires a release job and a consumer job into GitHub Actions. The shapes apply to any CI.
+This page wires a release job and a consumer job into GitLab CI.
 
 ## Credentials
 
@@ -21,7 +20,7 @@ variables:
 ```
 
 `printf 'ci-bot:%s' "$TOKEN" | base64` produces the `NXR_AUTH` value.
-There is no rc-file to leak and no profile to forget: every command takes its URL from argv, so the secret and the target live and die with the job.
+Every command takes its URL from argv, so nothing persists between jobs.
 
 Half-set credentials are a misuse error, caught before any request:
 
@@ -38,17 +37,10 @@ hint: check the command line arguments
 
 ## Exit codes are the API
 
-| Code | Meaning | A pipeline should |
-|:-----|:--------|:------------------|
-| `0` | ok: transferred, converged or a successful check | continue |
-| `1` | data problem: mismatch, incomplete, missing, cannot enumerate | stop and page a human |
-| `2` | misuse: bad flags, unsafe name, half-set credentials | fix the pipeline definition |
-| `3` | transport: network, auth, TLS, 5xx after retries | retry the job later |
+Exit `0` continues, `1` is a data problem (a retry fails identically), `2` is a broken job definition, `3` is transport trouble (the same command is expected to succeed on a later run).
+The cause-and-fix table: [exit codes](troubleshoot.md#exit-codes-cause-and-fix), the full taxonomy: [errors and exit codes](../reference/errors.md).
 
-The classes are worth the distinction: exit 1 means the data is wrong and a retry will fail identically, exit 3 means the pipe hiccuped and the same command is expected to succeed later.
-Transfers are resumable and re-runs are free, so a retry loop is always safe to write.
-
-A small retry harness around any command:
+Transfers are resumable and re-runs are free, so a retry loop is always safe to write:
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
@@ -68,14 +60,23 @@ esac
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json
 {"download":[],"event":"plan","skip":[],"upload":["app-1.4.0.zip","bom/linux-x86_64.json","manifest.json","pinned.xml"]}
-{"done":0,"event":"artifact","name":"bom/linux-x86_64.json","state":"uploading","total":39}
-{"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":3000000}
-…
-{"done":3000000,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":3000000}
+{"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":98304}
+{"done":0,"event":"artifact","name":"manifest.json","state":"uploading","total":76}
+{"done":0,"event":"artifact","name":"bom/linux-x86_64.json","state":"uploading","total":8192}
+{"done":0,"event":"artifact","name":"pinned.xml","state":"uploading","total":512}
+{"done":512,"event":"artifact","name":"pinned.xml","state":"uploading","total":512}
+{"done":16384,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":98304}
+{"done":76,"event":"artifact","name":"manifest.json","state":"uploading","total":76}
+{"done":8192,"event":"artifact","name":"bom/linux-x86_64.json","state":"uploading","total":8192}
+{"done":76,"event":"artifact","name":"manifest.json","state":"done","total":76}
+{"done":512,"event":"artifact","name":"pinned.xml","state":"done","total":512}
+{"done":8192,"event":"artifact","name":"bom/linux-x86_64.json","state":"done","total":8192}
+{"done":98304,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":98304}
 {"downloaded":0,"event":"summary","failed":[],"skipped":0,"uploaded":4}
 ```
 
-The last line is all a job usually gates on, and a re-run of the same job converges instead of transferring:
+The `summary` event is what a job gates on.
+A re-run of the same job converges instead of transferring:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json \
@@ -83,8 +84,7 @@ $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json
 {"downloaded":0,"event":"summary","failed":[],"skipped":4,"uploaded":0}
 ```
 
-`uploaded: 0` with everything `skipped` is the converged signature.
-`failed` is the list to be empty.
+`uploaded: 0` with everything `skipped` is the converged signature, and `failed` is the list to be empty.
 
 The event kinds:
 
@@ -97,17 +97,17 @@ The event kinds:
 
 Artifact states: `uploading`, `downloading`, `done`, `skipped`.
 Byte progress is coalesced (at most one event per 200 ms per name), so a slow link does not flood the log.
-Retries surface as `retrying` events. Here a server answered `503` twice before cooperating:
+Retries surface as `retrying` events.
+Here a server answered `503` twice before cooperating:
 
 ```console
-$ nxr down "$BASE/$V/" vendor/app/ --json | jq -c 'select(.event=="retrying")'
-{"attempt":2,"event":"retrying","name":"","reason":"transport: …/manifest.json: HTTP 503"}
-{"attempt":3,"event":"retrying","name":"","reason":"transport: …/manifest.json: HTTP 503"}
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json \
+  | jq -c 'select(.event=="retrying" and .name=="manifest.json")'
+{"attempt":2,"event":"retrying","name":"manifest.json","reason":"transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: HTTP 503"}
+{"attempt":3,"event":"retrying","name":"manifest.json","reason":"transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: HTTP 503"}
 ```
 
-An empty `"name"` means the retry happened during enumeration, before any artifact was named.
-
-Simple commands are different: `head`, `put`, `sha`, `get -o` and `channel get` print **one JSON object**, not a stream (see [the CLI reference](../reference/cli.md#output)).
+Simple commands are different: `head`, `put`, `sha`, `get -o` and `channel get` print one JSON object, not a stream (see [the CLI reference](../reference/cli.md#output)).
 
 ## A release job, end to end
 
@@ -123,9 +123,9 @@ publish:
     - nxr channel set https://nexus.example.com/repository/raw-main/latest "$V" --if-forward
 ```
 
-No marker step exists because `up` generates and uploads the `.sha256` siblings itself.
+There is no marker step: `up` generates and uploads the `.sha256` siblings itself.
 The `up` line is re-runnable as-is: a retried job uploads only what is missing.
-`--if-forward` makes the last line rollback-proof even when two pipelines race.
+`--if-forward` rejects a backward token, so an older pipeline cannot roll `latest` back.
 
 ## A consumer job
 
@@ -148,7 +148,7 @@ The offline `verify` is the gate before anything links against the download: no 
 `doctor` verifies credentials, settings and reachability without printing secrets:
 
 ```console
-$ nxr doctor https://nexus.example.com/repository/raw-main/1.4.0/manifest.json
+$ nxr -u deployer:pw doctor https://nexus.example.com/repository/raw-main/1.4.0/manifest.json
 doctor:
   [  ok  ] credentials: resolved from -u flag
   [  ok  ] tls: verification is ON
@@ -157,7 +157,7 @@ doctor:
   all checks passed
 ```
 
-Without credentials it fails fast and cheap:
+Without credentials, against a server that rejects anonymous requests, it fails fast and cheap:
 
 ```console
 $ nxr doctor https://nexus.example.com/repository/raw-main/1.4.0/manifest.json
@@ -166,15 +166,18 @@ doctor:
   [  ok  ] tls: verification is ON
   [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
   [  ok  ] probe: HEAD https://nexus.example.com/repository/raw-main/1.4.0/manifest.json → HTTP 401
-1 check(s) failed
+error: misuse: 1 check(s) failed
+hint: check the command line arguments
 ```
 
-Exit 2 with no runner time wasted on a doomed transfer. Run it at the top of a pipeline.
-The exit code tells you which side to fix: `2` is your job definition, `3` is the server or the network.
+The probe only checks that the URL answers.
+
+The exit code says which side to fix: `2` is the job definition, `3` is the server or the network (an unreachable server probes as `transport` and exits 3).
+Run it at the top of a pipeline.
 
 ## Next steps
 
-- What the producer side publishes and why: [publish a version](publish.md).
+- What the producer side publishes: [publish a version](publish.md).
 - What the consumer job downloads and how it verifies: [consume artifacts](consume.md).
 - Decoding a failure from its `error:` line: [when it breaks](troubleshoot.md).
 - The full event and exit-code contract: [errors and exit codes](../reference/errors.md).

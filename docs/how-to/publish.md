@@ -1,7 +1,6 @@
 # Publish a version
 
-The producer side, end to end: take a build directory from *nothing on the server* to *published, named and re-runnable*, on a real Sonatype Nexus with authentication on.
-
+The producer side: take a build directory and publish it to a Sonatype Nexus raw repository with authentication on.
 The scenario behind every transcript here: a release directory `1.4.0/` with an application archive, a bill of materials and a pin file, going to the `raw-main` repository.
 
 ## Prerequisites
@@ -33,7 +32,7 @@ dist/1.4.0/
 
 Every relative path under the directory is an artifact name.
 Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved: `latest`, `nightly` and `version.json` are ordinary names if your convention uses them.
-Before anything touches the network, every local file is classified against its sibling marker (see [the object states](troubleshoot.md#the-four-states-of-an-object)).
+Before anything touches the network, every local file is classified against its sibling marker (see [the four states of an object](troubleshoot.md#the-four-states-of-an-object)).
 
 ## Look before you leap: the dry run
 
@@ -47,6 +46,7 @@ upload manifest.json
 upload pinned.xml
 ```
 
+Against a directory the server already holds, the same command prints `skip <name>` per up-to-date artifact.
 The plan lists artifact names, not marker uploads, because each name carries its marker along automatically.
 
 ## Publish
@@ -60,15 +60,14 @@ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/   # (1)!
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 plan: 4 to upload, 0 to download, 0 up to date
-↑ bom/linux-x86_64.json ok
+↑ pinned.xml ok
 ↑ manifest.json ok
 ↑ app-1.4.0.zip ok
-↑ pinned.xml ok
-up: 4 sent, 0 fetched, 0 skipped
+↑ bom/linux-x86_64.json ok
 uploaded 4, downloaded 0, skipped 0
 ```
 
-Each name goes up as a pair: the bytes first, then its `sha256sum -c` marker.
+Each name goes up as a pair: the bytes first, then its `sha256sum`-style marker.
 With the default `--workers 8`, several names travel at once, but within a name the marker is never sent before its bytes:
 
 ```mermaid
@@ -85,14 +84,14 @@ sequenceDiagram
     note over W: markerless on the server? the next up fills exactly this gap
 ```
 
-A crash between the two PUTs leaves the object with bytes but no marker, obviously unfinished. The next `up` repairs exactly that.
-[When it breaks](troubleshoot.md#interrupted-transfers) shows the repair.
+A crash between the two PUTs leaves the object with bytes but no marker.
+The next `up` repairs exactly that.
+[interrupted transfers](troubleshoot.md#interrupted-transfers) shows the repair.
 
 Re-run the same command and the second transfer is free:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-up: 0 sent, 0 fetched, 4 skipped
 plan: 0 to upload, 0 to download, 4 up to date
 ○ app-1.4.0.zip skipped
 ○ bom/linux-x86_64.json skipped
@@ -101,7 +100,7 @@ plan: 0 to upload, 0 to download, 4 up to date
 uploaded 0, downloaded 0, skipped 4
 ```
 
-### Markers: `--sha` against `--no-sha`
+### Markers: against `--no-sha`
 
 | | default (`up`, `put --sha`) | `up --no-sha` |
 |:--|:--|:--|
@@ -111,36 +110,36 @@ uploaded 0, downloaded 0, skipped 4
 | Divergence detection | refuses on any disagreement | blind spots everywhere |
 | Use it for | anything a human or a pipeline will consume | scratch data nobody verifies |
 
-A hand-written marker is welcome: if the sibling exists locally, `up` checks it against the bytes and refuses on disagreement instead of quietly "fixing" it.
-On the server, the marker is an ordinary object, 80 bytes of `digest  name` served as `text/plain`:
+A hand-written sibling is used as-is: `up` checks it against the bytes and refuses on disagreement instead of overwriting it.
+On the server, the marker is an ordinary object, 80 bytes of `digest  name`:
 
 ```console
 $ nxr head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip.sha256
-head: 200 80 text/plain
+head: 200 80 -
 ```
 
 !!! warning "`--no-sha` leaves objects uncertified"
 
     Bytes uploaded with `--no-sha` have no marker on the server.
-    A later `up` of a marker-bearing directory classifies them as `Markerless` and fills the gap, but until then nothing can detect corruption or divergence for those names.
+    A later `up` of a marker-bearing directory classifies them as `Markerless` and re-sends them complete with markers, but until then nothing can detect corruption or divergence for those names.
 
 ## When `up` refuses
 
-Two situations stop the run before a single byte moves, because continuing would overwrite something:
+Two situations stop the run before a single byte moves, because continuing would overwrite something.
 
 A local file disagrees with its own marker because the bytes drifted after the marker was written:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8aca37a7…, actual 4116253a…
+error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
-A local copy is complete and valid, but the server already holds a *different* complete object under the same name, for example a rebuild with different flags published twice into one version:
+A local copy is complete and valid, but the server already holds a different complete object under the same name, for example a rebuild with different flags published twice into one version:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local fec438ab…, remote 58e575b6…
+error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
@@ -150,23 +149,17 @@ Fix the cause (rebuild, or republish under a new version directory) and run agai
 
 ## Restrict the transfer with a manifest
 
-`--manifest` takes a file, a URL, or `-` for stdin and limits the run to the listed names:
+`--manifest` takes a file, a URL, or `-` for stdin and limits the run to the listed names.
+Everything listed must exist locally, and one ghost name refuses the whole run:
 
-```bash
-echo '{"artifacts": ["app-1.4.0.zip", "pinned.xml"]}' \
-  | nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --manifest -   # (1)!
+```console
+$ echo '{"artifacts": ["app-1.4.0.zip", "ghost.zip"]}' | nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --manifest -
+error: missing: ghost.zip: exist nowhere
+hint: the name is absent on both sides; check spelling and the manifest
 ```
 
-1. Everything listed must exist locally, and one ghost name refuses the whole run:
-
-    ```console
-    $ echo '{"artifacts": ["app-1.4.0.zip", "ghost.zip"]}' | nxr up … --manifest -
-    error: missing: ghost.zip: exist nowhere
-    hint: the name is absent on both sides; check spelling and the manifest
-    ```
-
 Exit 1, nothing uploaded.
-The same strictness makes `--manifest` a safety belt for scripted subsets: a typo stops the pipeline instead of silently publishing less.
+A listed name that exists and matches on both sides is skipped like any other name in the plan.
 
 ## Ship a manifest for consumers
 
@@ -176,16 +169,17 @@ A `manifest.json` in the version directory is what lets consumers run `down` wit
 {"artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json", "pinned.xml"]}
 ```
 
-Keep the file in the version directory before uploading. `up` ships it like any artifact, marker included.
+Keep the file in the version directory before uploading.
+`up` ships it like any artifact, marker included.
 `down` reads it as the enumeration source and fetches the listed names.
 It does not pull `manifest.json` itself into the target directory.
 
-Without it, consumers must pass `--manifest`, `--name` or `--ls` (see the decision table in [consume artifacts](consume.md#choosing-an-enumeration-source)).
+Without it, consumers must pass `--manifest`, `--name` or `--ls` (the decision table: [choosing an enumeration source](consume.md#choosing-an-enumeration-source)).
 
 ## Name the version with a channel
 
 A channel is a token file at any URL.
-Write it after a successful publish and any consumer can resolve *the version to use* without hard-coding one:
+Write it after a successful publish and any consumer can resolve the current version without hard-coding one:
 
 ```bash
 nxr channel set https://nexus.example.com/repository/raw-main/latest 1.4.0 --if-forward   # (1)!
@@ -194,16 +188,16 @@ nxr channel set https://nexus.example.com/repository/raw-main/latest 1.4.0 --if-
 1. `--if-forward` writes only when the new token compares forward in dotted-numeric version order.
 
 ```console
-$ nxr channel set …/raw-main/latest 1.4.0 --if-forward
-channel: set …/raw-main/latest → 1.4.0
-$ nxr channel set …/raw-main/latest 1.0.0 --if-forward
-channel: kept …/raw-main/latest at 1.4.0 (forward-only)
-$ nxr channel get …/raw-main/latest
+$ nxr channel set https://nexus.example.com/repository/raw-main/latest 1.4.0 --if-forward
+channel: set https://nexus.example.com/repository/raw-main/latest → 1.4.0
+$ nxr channel set https://nexus.example.com/repository/raw-main/latest 1.0.0 --if-forward
+channel: kept https://nexus.example.com/repository/raw-main/latest at 1.4.0 (forward-only)
+$ nxr channel get https://nexus.example.com/repository/raw-main/latest
 1.4.0
 ```
 
-The `kept` line is the rollback guard: a late CI job running an older branch cannot roll `latest` back.
-Drop `--if-forward` only when you really mean to force the token. The `nightly` channel is the usual place where that is true.
+The `kept` line is what stops a late CI job on an older branch from rolling `latest` back.
+Drop `--if-forward` only when you mean to force the token.
 
 ## A nightly pattern
 
@@ -218,9 +212,9 @@ nxr channel set "$BASE/nightly" "$V"          # (2)!
 ```
 
 1. No marker step: `up` generates and uploads the `.sha256` siblings itself.
-2. No `--if-forward`: each nightly is a fresh directory, so the token always moves forward anyway.
+2. No `--if-forward`: each nightly is a fresh directory, so the token always moves forward.
 
-Every nightly is its own directory. Version directories are never reused, which is exactly why re-runs, resume and forward-only channels stay cheap.
+Version directories are never reused, which is what keeps re-runs, resume and forward-only channels cheap.
 
 !!! note "Deleting is out of scope"
 
