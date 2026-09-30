@@ -5,12 +5,10 @@
 # nexus-raw
 
 **`nxr` — это curl для raw-репозитория Sonatype Nexus.**
-Публикации, завершённость которых доказуема, переносы, которые докачиваются сами собой, и модель отказов, которой можно верить из скриптов.
+Публикации, завершённость которых доказуема, переносы, которые докачиваются сами собой, и модель отказов, которой скрипты могут доверять.
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
-![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?style=flat-square)
-![Protocol](https://img.shields.io/badge/protocol-sha--sibling%20markers-3f80ea?style=flat-square)
 
 ```bash
 cargo install --path crates/nexus-raw
