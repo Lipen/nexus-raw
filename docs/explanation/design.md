@@ -1,21 +1,17 @@
 # Design
 
-`nxr` is curl for a Sonatype Nexus raw repository.
-This page explains why it is shaped that way and what each decision buys.
+This page records the decisions behind `nxr` and the alternatives they beat.
 The exact wire behavior lives in the [protocol reference](../reference/protocol.md), the commands in the [CLI reference](../reference/cli.md), and the test evidence behind every guarantee in [Conformance](conformance.md).
 
 ## The curl model
 
-Scripted artifact flows grow hand-rolled curl snippets: retries, stall detection, digest checks, resume, all rewritten in every repository that needs them.
-`nxr` replaces those snippets with one static binary whose every invocation is self-sufficient: URL in argv, credentials from `-u` or the environment, nothing else.
-No config file, no profiles, no home server.
-
-The comparison, concern by concern:
+Scripted artifact flows grow hand-rolled curl snippets: retries, stall detection, digest checks, resume, rewritten in every repository that needs them.
+`nxr` replaces those snippets with one binary whose every invocation is self-sufficient: URL in argv, credentials from `-u` or the environment, nothing else.
 
 | Concern | The hand-rolled script | `nxr` |
 | :-- | :-- | :-- |
-| Retries with backoff | a loop someone wrote at 2 a.m. | built in, transport-level |
-| Stalled connections | `--speed-limit` and `--speed-time`, official flags, set by hand, forgotten in half the scripts | per-connection stall timeout, on by default |
+| Retries with backoff | a local loop | built in, transport-level |
+| Stalled connections | `--speed-limit` and `--speed-time`, set by hand, forgotten in half the scripts | per-connection stall timeout, on by default |
 | Partial artifacts | temp files and `mv`, or the partial survives a crash | hidden part files, rename only after verify |
 | Digest check | a second fetch piped to `sha256sum -c` | checked against the remote marker while streaming |
 | Markers | written by hand, or forgotten | generated from the bytes, written after them |
@@ -26,11 +22,11 @@ The comparison, concern by concern:
 Config files were rejected for one reason: transferability.
 A pipeline must be able to reproduce any call from any machine that has the binary and the environment.
 An rc-file quietly breaks that property, because the call now depends on a state the URL does not carry.
-The cost of the curl model is real but bounded: repeating a long URL is the caller's problem, solved with a shell alias or a CI variable, which is the caller's own tooling rather than a second configuration format.
+The cost is bounded: repeating a long URL is the caller's problem, solved with a shell alias or a CI variable, which is the caller's own tooling rather than a second configuration format.
 
 ## Four layers, dependencies point one way
 
-The crate is deliberately embeddable at four depths.
+The crate is embeddable at four depths.
 Dependencies point one way, from UX down to transport, and no layer ever imports upward.
 
 ```mermaid
@@ -45,33 +41,32 @@ flowchart TB
     L1 --> L0
 ```
 
-Each layer is blind by design.
+Each layer is blind on purpose.
 L0 knows HTTP, retries, stall detection, TLS and auth, and does not know that directories or markers exist.
 L1 knows scans, diffs, markers, workers and Range-resume, and does not know that versions or channels exist.
 L2 knows channels, manifests and listings, and does not know the CLI exists.
-L3 is the CLI itself (doctor, hints, rendering, exit codes), and it is the only layer allowed to talk to a human.
+L3 is the only layer allowed to talk to a human.
 
-The blindness is the product.
-A wrapper that wants raw PUT-with-retry embeds L0 and nothing above it.
+The point of the blindness: a wrapper that wants raw PUT-with-retry embeds L0 and nothing above it.
 One that wants verified directory sync without opinionated naming embeds L1.
 Both enter through the [Rust facade](../reference/api.md).
 
 ## Completion is bytes plus a marker
 
 Checksum catalogs, manifests and lockfiles share one flaw: the catalog and the content are two objects with two lifecycles, and every divergence between them is a bug class.
-The sha-sibling puts the proof next to the bytes, in `sha256sum -c` format every Unix tool already speaks.
+The sha-sibling puts the proof next to the bytes, in `sha256sum -c` format Unix tools already speak.
 A name is complete exactly when bytes and sibling both exist and the digest matches.
 
 Markers are mandatory by default because a tool that writes bytes should not leave them uncertified.
 A Markerless object is unverifiable, which makes it exactly as useful as a missing object, only harder to notice.
-`up` therefore generates missing local siblings before uploading and writes the remote sibling strictly after the bytes.
-`--no-sha` exists so that the opt-out is an explicit, greppable decision recorded in the command line instead of a default anyone gets by accident.
+`up` generates missing local siblings before uploading and writes the remote sibling strictly after the bytes.
+`--no-sha` makes the opt-out an explicit, greppable decision recorded in the command line instead of a default anyone gets by accident.
 The result of that flag is Markerless objects the server never certifies: a deliberate downgrade, and the tests pin that it stays one.
 
 ## One diff, two directions, refusals included
 
 The same classification table answers "what is missing here?" for both directions: up asks before sending, down asks before receiving.
-Four states per side (Absent, Markerless, Broken, Complete) and a small decision table remove the two hardest bugs of scripted artifact flows: re-uploading what is already there, and consuming a half-written file.
+Four states per side (Absent, Markerless, Broken, Complete) remove the two hardest bugs of scripted artifact flows: re-uploading what is already there, and consuming a half-written file.
 States are per side, and the decision is about the pair.
 The full table is in the [protocol reference](../reference/protocol.md).
 
@@ -108,7 +103,7 @@ The client does not pick a winner because it cannot know which side is the truth
 The same refusal protects a Broken marker on either side, because a foreign object is never shadowed.
 
 Mirror-delete was rejected for the same reason.
-A remote-only name found by `up` is a mismatch, not a to-do: a sync tool that deletes on a server's behalf is a demolition tool with extra steps.
+A remote-only name found by `up` is a mismatch, not a to-do: acting on it would mean deleting on a server's behalf, and a client that deletes is a different tool.
 As far as this client is concerned, the repository stays append-only.
 
 ## The core is resume, and resume is asymmetric on purpose
@@ -121,8 +116,7 @@ Downloads can and do resume, because HTTP Range is already there.
 `down` keeps each name's bytes in a stable part file (`.nxr-part-<hash>`) by default, sends `Range: bytes=N-` when the part holds N bytes, appends on `206`, and restarts from zero on a `200`, the answer of a server that ignored the range.
 A resumed part that belongs to an older remote version fails the digest check and is discarded once, and the name restarts from zero under the same check, so a rerun self-heals after a remote update instead of refusing.
 `--fresh` starts every name over, and only a fresh download that still diverges refuses with exit 1.
-The interesting signal is `416`.
-The asymmetry that remains is deliberate: the `get` primitive resumes only under `--continue`, because a primitive trusts the caller to know its part files, while `down` resumes by default, because a rerun of a directory transfer should simply converge.
+The asymmetry that remains is deliberate: the `get` primitive resumes only under `--continue`, because a primitive trusts the caller to know its part files, while `down` resumes by default, because a rerun of a directory transfer should converge.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
@@ -157,7 +151,7 @@ sequenceDiagram
 The client finalizes the part, digest-checks it against the remote sibling, and renames or discards.
 No bytes are re-fetched for an already-complete part, and that exact absence of a range fetch is pinned by a conformance test.
 
-One upstream quirk is worth documenting honestly.
+One upstream quirk is documented honestly.
 The Nexus version this client targets answers `500` instead of `416` when a Range request arrives for a zero-byte object, because the range computation in its `PartialFetchHandler` builds a Guava `Range.closed(0, -1)` and crashes.
 `nxr` never ranges a zero-length object: a `Range` header goes out only when the part already holds bytes, and a complete part of a zero-byte object is empty, so the request is a plain unconditional GET.
 That makes the quirk upstream behavior worth knowing rather than a client contract.
@@ -182,7 +176,7 @@ A channel is any token file (`latest`, `stable`, `prod-1`), and the meaning of a
 
 What was rejected along the way is claim immutability.
 The old reserved pointer tried to be an immutable claim, but a dumb store cannot enforce immutability, so the guarantee was fictional and the special case leaked into every layer.
-The special case was deleted and replaced by a comparison the client can actually perform.
+The special case was deleted and replaced by a comparison the client can perform.
 
 ## The transport trusts no single signal
 

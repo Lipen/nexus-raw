@@ -1,9 +1,7 @@
 # Wire protocol
 
-What `nxr` actually says to the server: the store layout, the objects, the classification that drives transfers, the write order and the Range contract.
-This page documents implemented behavior.
-The normative protocol text is maintained by the project outside the public docs, and a divergence between code and that text is a bug in the code.
-Everything below was exercised against a live Sonatype Nexus Repository 3 release, and the transcripts are real.
+What `nxr` says to the server: the store layout, the objects, the classification that drives transfers, the write order and the Range contract.
+This page documents implemented behavior; a divergence between this page and the code is a bug in one of them.
 
 ## The shape of a store
 
@@ -45,7 +43,7 @@ PUT https://nexus.example.com/repository/raw-main/1.4.0/bom/linux-x86_64.json.sh
 - Reserved: the `.sha256` suffix and nothing else.
 - `version.json`, `latest`, `nightly` are ordinary names: upload them, download them, point a channel at them.
 
-What a name *means* is the publisher's convention, not the protocol's.
+What a name means is the publisher's convention, not the protocol's.
 The grammar lives in `ArtifactName` and is enforced before any byte moves.
 
 ## Objects
@@ -59,11 +57,11 @@ Exactly one strict `sha256sum -c` line next to the bytes:
 ```
 
 The digest covers the artifact bytes, never the marker itself.
-A real marker, as `up` wrote it:
+A marker as `up` wrote it:
 
 ```console
 $ cat dist/1.4.0/app-1.4.0.zip.sha256
-54e0bee99b80197dc68472b6b3b7c67584df16584a5f27db0cc8ba479f2bc1d9  app-1.4.0.zip
+a8a242091894256798c34ed08c990bccb4a275883335d9209f9954b12e36ac1f  app-1.4.0.zip
 ```
 
 The parse is strict, because a loose parse would bless foreign markers:
@@ -77,7 +75,7 @@ The parse is strict, because a loose parse would bless foreign markers:
 | name is non-empty and contains no double space | `<hex>  \n` |
 | trailing newline required | the same line without `\n` |
 
-An artifact is **complete** when bytes and sibling both exist and the digest matches.
+An artifact is complete when bytes and sibling both exist and the digest matches.
 The sibling is the marker of its bytes and is never an artifact in its own right, so `nxr` never uploads a `.sha256` as a standalone name.
 
 ### manifest
@@ -87,7 +85,7 @@ The sibling is the marker of its bytes and is never an artifact in its own right
 ```
 
 An ordinary file with a conventional role: the enumeration source for `down` and the optional name filter for `up`.
-It carries no digests. Each artifact's sibling does.
+It carries no digests; each artifact's sibling does.
 
 | Rule | Behavior |
 |:-----|:---------|
@@ -98,8 +96,9 @@ It carries no digests. Each artifact's sibling does.
 | `schema_version` | tolerated, must be `1` when present |
 | `version` | tolerated and ignored |
 
+Manifest and channel reads are capped at 16 MiB; a larger object is refused as a misuse error instead of being slurped into memory.
 A `manifest.json` sitting in a published directory is just a file that `up` uploads like any artifact.
-Version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
+The version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
 
 ### channel ref
 
@@ -107,12 +106,14 @@ One line: `<token>\n`, written by `channel set` and read by `channel get`.
 The bytes of a live channel file:
 
 ```console
+$ nxr channel set https://nexus.example.com/repository/raw-main/stable 1.10.0
+channel: set https://nexus.example.com/repository/raw-main/stable → 1.10.0
 $ curl -s https://nexus.example.com/repository/raw-main/stable | xxd
-00000000: 312e 3130 2e31 0a                        1.10.1.
+00000000: 312e 3130 2e30 0a                        1.10.0.
 ```
 
-A channel is **any** name: `latest`, `stable` and `prod-1` are all ordinary token files.
-The token itself must be exactly one non-empty line with no CR.
+A channel is any name: `latest`, `stable` and `prod-1` are all ordinary token files.
+The token must be exactly one non-empty line with no CR.
 `--if-forward` compares tokens in dotted-numeric order:
 
 | Comparison | Result |
@@ -132,10 +133,11 @@ For every name, each side (local directory or remote directory) is in one of:
 | `Complete` | yes | yes | digest matches |
 | `Markerless` | yes | no | bytes without a marker, either under-uploaded or mid-transfer |
 | `Broken` | yes | yes | digest mismatch, or the marker does not parse |
-| `Absent` | none | none | no bytes, a stray marker is ignored |
+| `Absent` | none | none | no bytes; a stray marker is ignored |
 
 Locally, bytes decide: a sibling without bytes is `Absent`.
 Remotely, a name costs two requests: `HEAD` on the bytes and `GET` on the sibling, both overlapped by the worker pool.
+A remote `HEAD` that answers 2xx without `Content-Length` classifies as `Broken`, never as `Absent`: the object is present but unverifiable, and calling it absent would skip the digest comparison.
 
 ## The symmetric diff
 
@@ -176,7 +178,7 @@ Upload:
 ```
 
 Marker-after-bytes is what makes `Markerless` mean "under-uploaded": a client never trusts a marker whose bytes are absent, and a crash between steps 2 and 3 is recoverable by design.
-A local sibling that does not match its bytes stops the run at step 1. The file is never touched, and nothing is uploaded.
+A local sibling that does not match its bytes stops the run at step 1; the file is never touched and nothing is uploaded.
 
 Download mirrors the order locally:
 
@@ -188,19 +190,18 @@ Download mirrors the order locally:
 ```
 
 Every successful download writes its local sibling, so a directory `down` has touched verifies offline even when the server never had a marker.
-`--no-sha` opts out of steps 1 and 3 on the upload side on purpose: the result is `Markerless` objects the server never certifies.
 
 ### Claim first
 
 `up --claim-first <NAME>` changes only the order: the named file uploads first and alone, before any other name starts.
-The intended claim is the entry file a consumer reads first, such as a `manifest.json` or an index.
-A failed claim aborts the run with nothing else sent, so the server is never left with new bytes behind an old entry file, and a claim name outside the scanned directory is misuse (exit 2).
+A failed claim aborts the run with nothing else sent, so the server is never left with new bytes behind an old entry file.
+A claim name outside the scanned directory is misuse (exit 2).
 
 ### Part files
 
 | Surface | Part file | On failure | On success |
 |:--------|:----------|:-----------|:-----------|
-| `get -o FILE` | `<FILE>.part` | removed on a clean failure, and only a killed run leaves one | renamed to `FILE` |
+| `get -o FILE` | `<FILE>.part` | removed on a clean failure; only a killed run leaves one | renamed to `FILE` |
 | `down` | `.nxr-part-<16 hex>` per name | kept, because it is the resume fuel | renamed to the name |
 | `put` / `up` | none | PUTs replay whole | none |
 
@@ -219,49 +220,53 @@ The client sends `Range: bytes=<part-size>-` only when resuming a non-empty part
 | `416 Range Not Satisfiable` | the part already holds the whole object | **finalize the part**: rename and verify |
 | anything else | unexpected | retryable only if 5xx, otherwise the run fails |
 
-The `416` finalize covers the crash-between-download-end-and-rename edge: the part is complete, the server says so, and the run finishes instead of restarting.
-Both edges were verified live, first a resume from a 12-byte part and then the 416 finalize from a complete part:
+The `416` finalize covers the crash between the last downloaded byte and the rename: the part is complete, the server says so, and the run finishes instead of restarting.
+The raw exchange, captured against the mock:
 
 ```console
-$ nxr get .../raw-main/1.4.0/app-1.4.0.zip -o app.zip --continue --json
-{"bytes":38,"ok":true,"out":"app.zip","resumed_from":12,"sha256":"54e0bee9…","url":"…"}
-$ cp dist/1.4.0/app-1.4.0.zip app.zip.part
-$ nxr get .../raw-main/1.4.0/app-1.4.0.zip -o app.zip --continue --json
-{"bytes":38,"ok":true,"out":"app.zip","resumed_from":38,"sha256":"54e0bee9…","url":"…"}
+$ nxr put https://nexus.example.com/repository/raw-main/1.4.0/r16.bin -f r16.bin
+put: 16 bytes → https://nexus.example.com/repository/raw-main/1.4.0/r16.bin (no marker)
+$ curl -s -D - -o /dev/null -H 'Range: bytes=4-' https://nexus.example.com/repository/raw-main/1.4.0/r16.bin | grep -E '^HTTP|Content-Range|Content-Length'
+HTTP/1.1 206 Partial Content
+Content-Length: 12
+Content-Range: bytes 4-15/16
+$ curl -s -D - -o /dev/null -H 'Range: bytes=16-' https://nexus.example.com/repository/raw-main/1.4.0/r16.bin | grep -E '^HTTP'
+HTTP/1.1 416 Range Not Satisfiable
 ```
 
-The raw exchange, captured on the live server:
+The same edge through the client, first a resume from a 12-byte part and then the finalize of a complete part:
 
 ```console
-$ curl -s -D - -o /dev/null -H 'Range: bytes=4-' .../raw-main/1.4.0/r16.bin | grep -E '^HTTP|Content-Range|Content-Length'
-HTTP/1.1 206 Partial Content
-Content-Range: bytes 4-15/16
-Content-Length: 12
-$ curl -s -D - -o /dev/null -H 'Range: bytes=16-' .../raw-main/1.4.0/r16.bin | grep -E '^HTTP'
-HTTP/1.1 416 Range Not Satisfiable
+$ head -c 12 dist/1.4.0/app-1.4.0.zip > app.zip.part
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --continue --json
+{"done":0,"event":"artifact","name":"app.zip","state":"downloading","total":45}
+{"done":45,"event":"artifact","name":"app.zip","state":"downloading","total":45}
+{"bytes":45,"ok":true,"out":"app.zip","resumed_from":12,"sha256":"a8a24209…","url":"…"}
+$ cp dist/1.4.0/app-1.4.0.zip app.zip.part
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --continue --json
+{"bytes":45,"ok":true,"out":"app.zip","resumed_from":45,"sha256":"a8a24209…","url":"…"}
 ```
 
 !!! warning "Upstream quirk: Range on an empty object"
 
-    A `Range` GET against a zero-byte object answers **500** on this Nexus 3 generation.
-    Verified live: `Range: bytes=0-` on an empty asset returns `500 Server Error` with an HTML error page.
-    This is a server-side quirk that `nxr` cannot influence.
-    It only matters when resuming onto a zero-byte object, because a fresh download never sends a Range header.
+    A `Range` GET against a zero-byte object answers **500** on the Nexus 3 generation this client targets.
+    This is server-side behavior that `nxr` cannot influence, and it only matters when resuming onto a zero-byte object.
+    A fresh download never sends a Range header, and neither does the client here: a `Range` header goes out only when the part already holds bytes, and the complete part of a zero-byte object is empty, so the request is a plain unconditional GET.
 
 `down` resumes each name's part file the same way by default, and `--fresh` ignores the parts to start every name from zero.
 A resumed part that belongs to an older remote version fails the digest check: `nxr` discards that part once and restarts the name from zero under the same digest check, so a rerun after a remote update self-heals instead of refusing.
 Only a fresh download that still diverges from the sibling refuses the run with exit 1.
 Uploads cannot resume: a PUT is byte-exact and replayed whole, which is safe because PUTs are idempotent.
-A server-side cut of the first PUT attempt demonstrates the replay. The retry sends the object from byte zero, and the stored content is complete:
+A server-side cut of the first PUT attempt demonstrates the replay: the retry sends the object from byte zero, and the stored content is complete.
 
 ```console
-$ nxr put .../raw-main/pp/app.bin -f pp.bin --json
-{"done":43,"event":"artifact","name":"pp.bin","state":"uploading","total":43}
-{"attempt":2,"event":"retrying","name":"pp.bin","reason":"transport: …: error sending request …"}
-{"done":43,"event":"artifact","name":"pp.bin","state":"uploading","total":43}
-{"bytes":43,"marker":null,"ok":true,"url":"…/pp/app.bin"}
-$ curl -s .../raw-main/pp/app.bin
-partial put payload that must arrive whole
+$ nxr put https://nexus.example.com/repository/raw-main/pp/app.bin -f dist/1.4.0/app-1.4.0.zip --json
+{"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":45}
+{"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":45}
+{"attempt":2,"event":"retrying","name":"app-1.4.0.zip","reason":"transport: https://nexus.example.com/repository/raw-main/pp/app.bin: error sending request for url (https://nexus.example.com/repository/raw-main/pp/app.bin)"}
+{"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":45}
+{"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"uploading","total":45}
+{"bytes":45,"marker":null,"ok":true,"url":"https://nexus.example.com/repository/raw-main/pp/app.bin"}
 ```
 
 ## Enumeration
@@ -278,40 +283,30 @@ partial put payload that must arrive whole
 
 Without any source and without `manifest.json` at the directory URL, `down` refuses with `cannot enumerate` and does no guessing or HEAD-probing for likely names.
 The search API walks `/service/rest/v1/search/assets` with continuation tokens.
-It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths. Treat `--ls` output as a hint only, and take the plan of record from a manifest or from explicit names.
+It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
+Treat `--ls` output as a hint only, and take the plan of record from a manifest or from explicit names.
 
 ## Transport
 
 | Aspect | Behavior |
 |:-------|:---------|
-| auth | `Basic`, attached to every request when credentials resolve, and `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
+| auth | `Basic`, attached to every request when credentials resolve; `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
-| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry, 4xx never |
-| backoff | 0.5 s × 2ⁿ + jitter ≤ 250 ms, deterministic hash-based jitter |
-| stall | no bytes for `--stall-secs` aborts the attempt (default 30 s) |
+| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry; 4xx never |
+| backoff | 0.5 s × 2ⁿ per attempt, capped at 60 s, plus hash-based jitter ≤ 250 ms |
+| stall | no bytes for `--stall-secs` aborts the attempt as retryable (default 30 s) |
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |
 | parallelism | 8 workers by default (`--workers`), one name per worker at a time |
 | idempotency | PUTs are byte-exact repeats, and a resumed download replays the same bytes |
 
-5xx responses retry with backoff, which the event stream makes visible:
+Auth failures bypass the retry loop: a 401/403 is answered once and reported.
+5xx responses retry with backoff, which the output makes visible:
 
 ```console
-$ nxr put .../raw-main/flaky/app.bin -f app.bin
-↻ app.bin: retry 2 (transport: …: HTTP 503)
-↻ app.bin: retry 3 (transport: …: HTTP 503)
-put: 13 bytes → .../raw-main/flaky/app.bin (no marker)
+$ nxr put https://nexus.example.com/repository/raw-main/flaky/app.bin -f extra.txt
+↻ extra.txt: retry 2 (transport: https://nexus.example.com/repository/raw-main/flaky/app.bin: HTTP 503)
+↻ extra.txt: retry 3 (transport: https://nexus.example.com/repository/raw-main/flaky/app.bin: HTTP 503)
+put: 13 bytes → https://nexus.example.com/repository/raw-main/flaky/app.bin (no marker)
 ```
 
-A 401 or 403 stops immediately, because retrying bad credentials only feeds the server's rate limiter.
-
-!!! note "Known edge: a non-2xx HEAD reads as `Absent`"
-
-    The remote probe treats any HEAD that does not answer 2xx (including 429 from a rate limiter) as "bytes absent", so `up` plans full uploads and the PUTs then surface the real status per name in the `failed:` list.
-    Verified live during a rate-limit window.
-    The outcome is safe: PUTs are idempotent and byte-exact, so nothing diverges. The run is just noisy until the window passes.
-
-## Errors
-
-The taxonomy mirrors these guarantees: refusals for diverging data, exit `2` for broken invocations, exit `3` for broken pipes.
-The mapping from error to exit code has one home, documented in [errors and exit codes](errors.md).
 How the layers expose this protocol to Rust callers: [the Rust API](api.md).

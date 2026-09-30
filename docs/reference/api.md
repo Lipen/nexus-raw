@@ -2,15 +2,14 @@
 
 `nexus-raw-core` is the protocol without a UI: the operations of the CLI as a small async API around one facade.
 The crate is organized in layers, the CLI is a thin shell over the top layer, and every layer below it is public API: you can embed just the transport, just the transfer engine, or the whole facade.
-The exhaustive type-level documentation lives in the crate docs (`cargo doc -p nexus-raw-core --open`, or the crate's page on docs.rs once published).
-This page is the guided tour.
+The exhaustive type-level documentation is `cargo doc -p nexus-raw-core --open`.
 
 ## Layers
 
 | Layer | Modules | Content | Depends on |
 |:------|:--------|:--------|:-----------|
 | L0 · transport | `transport` | one client: retries, backoff, stall detection, TLS, auth, Range-resume | nothing above |
-| L0 · primitive | `primitive` | `get`/`put`/`head`/`sha`: curl-grade, no verification | transport |
+| L0 · primitive | `primitive` | `get`/`put`/`head`/`sha`: single-object, no verification | transport |
 | L1 · transfer | `sync` | directory up/down, the symmetric diff, sha-sibling markers, parallel workers | transport, primitive |
 | L2 · layout | `layout` | channels (token files with any name), manifests, search-based listings | transport |
 | facade | `nxr` | `Nxr`, the single entry point that threads everything together | all of the above |
@@ -42,8 +41,6 @@ flowchart BT
 ```toml
 [dependencies]
 nexus-raw-core = { path = "crates/nexus-raw-core" }   # inside this workspace
-# or, once published:
-# nexus-raw-core = "0.3"
 ```
 
 ## The facade
@@ -79,12 +76,12 @@ let nxr = Nxr::new(
 ```
 
 `Config::base` is the directory URL this invocation works on, normalized to a trailing `/`.
-`auth` is the ready `Authorization` header value. Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does.
-`creds::resolve` does this for you.
-`Config::validate` enforces the sane ranges the CLI flags map onto: workers in `1..=64`, positive timeouts.
+`auth` is the ready `Authorization` header value.
+Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does; `creds::resolve` does this for you.
+`Config::validate` enforces the ranges the CLI flags map onto: workers in `1..=64`, positive timeouts.
 
 A complete, self-contained round trip (publish a directory against a scratch server and fetch it back) is `cargo run -p nexus-raw-core --example publish`.
-It starts its own mock server, so the example runs with zero setup, and its shape (build config → open channel → `up` → `down` → drop facade → join renderer) is the intended embedding pattern.
+It starts its own mock server, so the example runs with zero setup, and its shape (build config → open channel → `up` → `down` → drop facade → join the event printer) is the intended embedding pattern.
 
 ## Operations
 
@@ -142,7 +139,7 @@ let client = NexusClient::new(&cfg, nexus_raw_core::Progress::new(tx))?;
 ```
 
 The primitive layer is four functions over that client.
-`sha` of a local file never touches the network, which makes it the offline smoke test of choice:
+`sha` of a local file never touches the network:
 
 ```rust
 use nexus_raw_core::{Digest, Nxr, ShaSource};
@@ -173,7 +170,7 @@ fn what_would_up_scan(nxr: &Nxr) -> Result<(), nexus_raw_core::Error> {
 
 An `Action` is one name's line of a plan and has exactly three shapes: `Upload { name, size, digest }`, `Download { name, size, digest }` and `Skip { name, digest }`.
 `Mode::Up` and `Mode::Down` select which side wins a single-completed-copy name, per the [symmetric diff matrix](protocol.md#the-symmetric-diff).
-The digest inside an `Upload` action is present only when markers are enabled. Knowing the digest and writing the marker are separate concerns.
+The digest inside an `Upload` action is present only when markers are enabled: knowing the digest and writing the marker are separate concerns.
 
 ## L2: layout
 
@@ -192,12 +189,13 @@ fn parse_manifest(bytes: &[u8]) -> Result<(), nexus_raw_core::Error> {
 }
 ```
 
-`Manifest::from_slice` tolerates the version-document fields (`schema_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name, the exact rules the [protocol page](protocol.md#manifest) documents.
+`Manifest::from_slice` tolerates the version-document fields (`schema_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name: the exact rules the [protocol page](protocol.md#manifest) documents.
 `channel_set` returns `ChannelOutcome::Written { from }` or `ChannelOutcome::Skipped { current }`, where the forward-only guard compares tokens in dotted-numeric order.
 
 ## Enumeration
 
-`down` refuses to guess what to fetch, so the facade takes an explicit source. The variants mirror the CLI's enumeration flags:
+`down` refuses to guess what to fetch, so the facade takes an explicit source.
+The variants mirror the CLI's enumeration flags:
 
 | Variant | CLI flag | Semantics |
 |:--------|:---------|:----------|
@@ -218,20 +216,20 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 | `ArtifactStarted { name, dir, total }` | when a name begins moving | `{"event":"artifact","name":"a.zip","state":"uploading","done":0,"total":38}` |
 | `ArtifactBytes { name, dir, done, total }` | coalesced: at most one per 200 ms per name | `{"event":"artifact","name":"a.zip","state":"downloading","done":12,"total":38}` |
 | `ArtifactDone { name, dir, skipped, done, total }` | when a name settles | `{"event":"artifact","name":"a.zip","state":"done","done":38,"total":38}` |
-| `Retrying { name, attempt, reason }` | before each replayed attempt | `{"event":"retrying","name":"a.zip","attempt":2,"reason":"transport: …: HTTP 503"}` |
+| `Retrying { name, attempt, reason }` | before each replayed attempt | `{"event":"retrying","name":"a.zip","attempt":2,"reason":"transport: …"}` |
 | `Summary(Summary)` | last event of every transfer | `{"event":"summary","uploaded":1,"downloaded":0,"skipped":2,"failed":[]}` |
 
 `dir` renders as the state prefix: `Dir::Up` → `"uploading"`, `Dir::Down` → `"downloading"`.
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
 `total` is `null` when the server advertises no `Content-Length`.
 
-A real stream, captured by `down --name app.zip --json`:
+A real stream, captured by `down --name app-1.4.0.zip --json` against the mock:
 
 ```json
-{"download":["app.zip"],"event":"plan","skip":[],"upload":[]}
-{"done":0,"event":"artifact","name":"app.zip","state":"downloading","total":38}
-{"done":38,"event":"artifact","name":"app.zip","state":"downloading","total":38}
-{"done":38,"event":"artifact","name":"app.zip","state":"done","total":38}
+{"download":["app-1.4.0.zip"],"event":"plan","skip":[],"upload":[]}
+{"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
+{"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
+{"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":45}
 {"downloaded":1,"event":"summary","failed":[],"skipped":0,"uploaded":0}
 ```
 
@@ -240,8 +238,9 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `Transport`, `Http`, `Misuse`.
-`Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint. Both are covered variant by variant in [errors and exit codes](errors.md).
+`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `Transport`, `Http`, `Misuse`, `Io`.
+`Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint.
+Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`, `LocalIncomplete`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 
 ## Node bindings
@@ -259,7 +258,7 @@ const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw
 })
 ```
 
-The crate is built on napi-rs 3: async exports run on its built-in tokio runtime, the build scripts come from the `@napi-rs/cli`, and `linux-x86_64-gnu` is the wired prebuilt target.
+The crate is built on napi-rs 3: async exports run on its built-in tokio runtime, the build scripts come from the `@napi-rs/cli`, and `x86_64-unknown-linux-gnu` is the wired prebuilt target.
 The typed declarations live in `crates/nexus-raw-napi/index.d.ts`, and `crates/nexus-raw-napi/smoke.mjs` is the runnable offline check of the built addon.
 
 ## Guarantees
