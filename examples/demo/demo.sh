@@ -209,7 +209,10 @@ say ""
 
 note "--- name it, so consumers never hard-code a version --------------"
 run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
-say "\$ V=\$(nxr channel get $REPO/latest)"
+# A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints
+# nothing for an assignment, and a command with no output reads as one that
+# did nothing. The captured token drives the fetch below.
+run "$NXR" channel get "$REPO/latest"
 VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
 say ""
 
