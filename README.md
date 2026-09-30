@@ -120,8 +120,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 Three ways to integrate, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
 The guide with install lines, snippets and the vendoring rules: [docs/how-to/integrate.md](docs/how-to/integrate.md).
 
-<details>
-<summary>Repository layout</summary>
+## Repository layout
 
 | Path | For |
 |:-----|:----|
@@ -131,10 +130,8 @@ The guide with install lines, snippets and the vendoring rules: [docs/how-to/int
 | `docs/` + `mkdocs.yml` | the documentation site (zensical), served by `just docs` |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`), promises over the `Nxr` facade |
 
-</details>
 
-<details>
-<summary>Development</summary>
+## Development
 
 ```bash
 just check        # fmt + clippy + prek + tests: the full gate
@@ -146,5 +143,3 @@ just docs         # the documentation site, http://localhost:8000, live reload
 
 The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`.
 The scenario list in `crates/mock-nexus/src/lib.rs` is the single source: a scenario added for one client implementation lands in the same commit as its test.
-
-</details>

@@ -120,8 +120,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 Три способа интеграции с одним контрактом: вызвать `nxr` из шелла, встроить `nexus-raw-core` в Rust или подключить Node-биндинги.
 Гайд с командами установки, сниппетами и правилами вендоринга: [docs/how-to/integrate.md](docs/how-to/integrate.md).
 
-<details>
-<summary>Устройство репозитория</summary>
+## Устройство репозитория
 
 | Путь | Для |
 |:-----|:----|
@@ -131,10 +130,8 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 | `docs/` + `mkdocs.yml` | сайт документации (zensical), поднимается `just docs` |
 | `crates/nexus-raw-napi/` | Node-биндинги (npm-пакет `nexus-raw`), промисы над фасадом `Nxr` |
 
-</details>
 
-<details>
-<summary>Разработка</summary>
+## Разработка
 
 ```bash
 just check        # fmt + clippy + prek + тесты: полный гейт
@@ -146,5 +143,3 @@ just docs         # сайт документации, http://localhost:8000, li
 
 Конформанс-наборы гоняют и `nexus-raw-core`, и бинарь `nxr` против `mock-nexus`.
 Список сценариев в `crates/mock-nexus/src/lib.rs` — единственный источник: сценарий для одной реализации кладётся тем же коммитом вместе с её тестом.
-
-</details>
