@@ -1,49 +1,49 @@
 # nxr
 
-curl for a Sonatype Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
-Every call is self-sufficient — URL in argv, credentials from `-u` or the environment.
+curl for a Sonatype Nexus raw repository.
 
 ## Install
 
+Requires Rust 1.85 or newer.
+Nothing is published on crates.io or npm yet, so install from git or from a checkout.
+
+From git, without cloning (installs whatever is on the default branch, not a tagged release):
+
 ```bash
-cargo install --path crates/nexus-raw
+cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
 ```
 
-## Quickstart
+From a checkout:
+
+```bash
+cargo install --path crates/nexus-raw --locked
+```
+
+`nxr --version` prints `nxr 0.1.0`.
+
+## Quick start
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# publish a version directory: markers are generated and uploaded by default
+# down refuses a version without manifest.json; it lists the names a consumer may fetch
+printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
-
-# name it with a channel (any name works)
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
-
-# fetch it elsewhere; manifest.json in the version directory drives the enumeration
-nxr down "$BASE/1.4.0/" vendor/ --continue
-
-# plain primitives
-nxr put "$BASE/1.4.0/notes.txt" -f notes.txt --sha
-nxr get "$BASE/1.4.0/notes.txt" -o notes.txt
-nxr head "$BASE/1.4.0/notes.txt"
-nxr sha notes.txt
-
-# offline check of a local directory
-nxr verify dist/1.4.0/
+V=$(nxr channel get "$BASE/latest")
+nxr down "$BASE/$V/" vendor/prebuilt
+nxr verify vendor/prebuilt
 ```
 
-An interrupted transfer finishes by repeating the same command.
-`down` without an enumeration source refuses with a hint instead of guessing names.
+An interrupted transfer finishes by repeating the same command: complete parts are skipped.
 
 ## Scripts
 
-- Credentials: `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD` — `-u` wins.
-- `--json` emits machine output: one JSON object for `head`/`put`/`sha`/`get -o`/`channel get`, NDJSON events (`plan`, `artifact`, `retrying`, `summary`) for transfers.
-- Exit codes: `0` ok, `1` data problem, `2` misuse, `3` transport.
-- Every error prints a `hint:` line on stderr.
+- Credentials, in checked order: `-u user:pass`, `NXR_AUTH` (base64 of `user:pass`), `NXR_USERNAME` + `NXR_PASSWORD`; `nxr doctor [URL]` names the resolved source.
+- Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
+- Every error prints a `hint:` line; `--json` emits one JSON object per line on stdout.
 
 ## More
 
-- Full command reference and guides: [docs/](../../docs/)
-- The library behind the CLI: [nexus-raw-core](../nexus-raw-core/)
+- Guides and reference: <https://lipen.github.io/nexus-raw/>
+- The repository: <https://github.com/Lipen/nexus-raw>
