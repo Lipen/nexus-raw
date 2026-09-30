@@ -16,7 +16,9 @@
 #
 #   NXR_DEMO_CAST=<file>   record the session (`just demo-cast` writes the docs
 #                          landing animation): every command and every output
-#                          line lands in the file with its own timestamp.
+#                          line lands in the file with the time it arrived,
+#                          quantized to 50 ms so that regenerating a recording
+#                          diffs only where the run really differed.
 #   NXR_DEMO_KEEP=1        leave the last mock server running and print its URL.
 #   NXR_DEMO_EXTRA=0       skip the extra failure-scenario phases at the end.
 
@@ -43,6 +45,10 @@ EXTRA="${NXR_DEMO_EXTRA:-1}"
 # Ambient credentials would change the session, and the mock wants none.
 unset NXR_AUTH NXR_USERNAME NXR_PASSWORD
 
+# Recorded times are bucketed: a millisecond-exact recording of a local
+# transfer is machine jitter, and it would churn the diff of a committed file
+# on every regeneration. The pauses that matter are seconds long.
+CAST_QUANTUM_MS=50
 CAST_RAW=""
 CAST_START_MS=0
 MOCK_PIDS=()
@@ -54,7 +60,7 @@ cleanup() {
   done
   [ -n "$CAST_RAW" ] && rm -f "$CAST_RAW"
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # ---- output --------------------------------------------------------------
 
@@ -70,9 +76,10 @@ now_ms() {
 say() {
   printf '%s\n' "$1"
   if [ -n "$CAST_RAW" ]; then
-    local text
+    local text t
     text="$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g')"
-    printf '["%s","%s"]\n' "$(( $(now_ms) - CAST_START_MS ))" "$text" >> "$CAST_RAW"
+    t="$(( ($(now_ms) - CAST_START_MS) / CAST_QUANTUM_MS * CAST_QUANTUM_MS ))"
+    printf '[%s,"%s"]\n' "$t" "$text" >> "$CAST_RAW"
   fi
 }
 
@@ -141,7 +148,14 @@ start_mock() {
   shift
   local log
   log="$(mktemp)"
-  "$MOCK" "$scenario" --port 0 "$@" > "$log" 2>&1 &
+  # Ephemeral by default, but a caller-supplied --port wins: passing both
+  # would work only by accident of parse order.
+  local port_args=(--port 0)
+  local arg
+  for arg in "$@"; do
+    [ "$arg" = "--port" ] && port_args=()
+  done
+  "$MOCK" "$scenario" "${port_args[@]}" "$@" > "$log" 2>&1 &
   local pid=$!
   MOCK_PIDS+=("$pid")
 
