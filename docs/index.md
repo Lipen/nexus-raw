@@ -23,7 +23,7 @@ One binary, no config file, nothing to install on the server.
 
 - :material-console: **Primitives** — `get`, `put`, `head`, `sha`: the URL in argv, credentials from `-u` or the environment.
 - :material-upload: **Publish** — `up` scans, diffs, then PUTs bytes and markers in parallel workers.
-- :material-download: **Consume** — `down` fetches exactly the enumerated names and resumes part files through `Range: bytes=N-`.
+- :material-download: **Consume** — `down` fetches exactly the enumerated names and resumes part files through HTTP ranges (`Range: bytes=N-`).
 - :material-brain: **Exit codes** — 0 ok, 1 data, 2 misuse, 3 transport. Every error carries a `hint:`, and pipelines read NDJSON events.
 - :material-swap-horizontal: **Re-runs** — an interrupted transfer finishes by repeating the same command.
 - :material-language-rust: **Rust API** — `nexus-raw-core` exposes the same operations as a library, one module per concern.
