@@ -396,11 +396,17 @@
 
 .nxr-term__cursor {
   display: inline-block;
+  /* An author `display` outranks the UA `[hidden]` rule: the JS toggles the
+   * attribute, so the attribute needs its own rule. */
   width: 0.5rem;
   height: 0.9em;
   margin-top: 0.1rem;
   background: var(--nxr-teal-bright);
   animation: nxr-blink 1.05s steps(1, end) infinite;
+}
+
+.nxr-term__cursor[hidden] {
+  display: none;
 }
 
 @keyframes nxr-blink {
