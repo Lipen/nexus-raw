@@ -117,7 +117,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 ## Integrate it
 
-Three depths, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
+Three ways to integrate, one contract: shell out to `nxr`, embed `nexus-raw-core` in Rust, or call the Node bindings.
 The guide with install lines, snippets and the vendoring rules: [docs/how-to/integrate.md](docs/how-to/integrate.md).
 
 <details>

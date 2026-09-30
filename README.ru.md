@@ -117,7 +117,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 ## Интеграция
 
-Три глубины, один контракт: шёллить `nxr`, встраивать `nexus-raw-core` в Rust, звать Node-биндинги.
+Три способа интеграции с одним контрактом: вызвать `nxr` из шелла, встроить `nexus-raw-core` в Rust или подключить Node-биндинги.
 Гайд с командами установки, сниппетами и правилами вендоринга: [docs/how-to/integrate.md](docs/how-to/integrate.md).
 
 <details>
