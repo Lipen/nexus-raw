@@ -172,7 +172,9 @@ impl NexusClient {
                     let reason = fail.error.to_string();
                     log::warn!("retry {n}/{} for {url}: {reason}", self.retry.attempts);
                     let _ = self.events.sender().send(Event::Retrying {
-                        name: subject.map(|(name, _)| name.to_owned()).unwrap_or_default(),
+                        name: subject
+                            .map(|(name, _)| name.to_owned())
+                            .unwrap_or_else(|| Self::object_label(url)),
                         attempt: n + 1,
                         reason,
                     });
@@ -206,6 +208,19 @@ impl NexusClient {
             },
         };
         AttemptFailure { retryable, error }
+    }
+
+    /// The object a URL addresses, for callers that transfer by URL rather than by
+    /// [`ArtifactName`]: markers, channel tokens, manifests, search pages.
+    /// The label is the last path segment, which is the name these objects carry
+    /// on the wire. Callers that know the artifact name pass it as a subject
+    /// instead, so this only ever names small objects.
+    fn object_label(url: &str) -> String {
+        let path = url.split(['?', '#']).next().unwrap_or(url);
+        match path.trim_end_matches('/').rsplit('/').next() {
+            Some(segment) if !segment.is_empty() => segment.to_owned(),
+            _ => path.to_owned(),
+        }
     }
 
     /// HEAD with full metadata; 404 is `HeadInfo { status: 404, .. }`.

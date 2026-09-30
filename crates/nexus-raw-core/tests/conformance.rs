@@ -495,6 +495,37 @@ async fn single_call_recovers_through_flaky() {
 }
 
 #[tokio::test]
+async fn retry_events_name_the_object_they_retry() {
+    // A retried marker must never arrive as an unnamed event: the console line
+    // for it reads `↻ : retry 2 (…)`, and an NDJSON consumer cannot tell which
+    // object stalled. Markers and other small objects travel by URL, so their
+    // name comes from the URL when the caller has no ArtifactName to pass.
+    let mock = MockNexus::start(Scenario::Flaky { first_failures: 1 }).unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
+
+    let retries: Vec<(String, u32)> = collect_events(&mut rx)
+        .into_iter()
+        .filter_map(|e| match e {
+            Event::Retrying { name, attempt, .. } => Some((name, attempt)),
+            _ => None,
+        })
+        .collect();
+    assert!(!retries.is_empty(), "flaky server produced no retry event");
+    for (name, attempt) in &retries {
+        assert!(!name.is_empty(), "nameless retry event, attempt {attempt}");
+    }
+    assert!(
+        retries.iter().any(|(name, _)| name == "a.zip.sha256"),
+        "the marker retry should name the marker: {retries:?}"
+    );
+}
+
+#[tokio::test]
 async fn empty_dir_refuses_up() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let local = TempDir::new().unwrap();
