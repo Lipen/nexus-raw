@@ -1,26 +1,19 @@
 #!/usr/bin/env bash
 #
-# The local stand: a full nexus-raw session against the repo's mock server and
-# stub payloads, with every command printed as it runs.
+# A full nexus-raw session against the repo's mock server and generated payloads.
+# Every command prints as it runs, exactly as a user would type it.
 #
-#   just demo                     # the story: publish, name, consume, verify, refuse
-#   just demo flaky               # the same story against another failure scenario
+#   just demo                     # publish, name, consume, verify, refuse
+#   just demo flaky               # the same session against another failure scenario
 #   just demo slow --chunk-delay-ms 400 --chunk-size 4096
 #
-# Nothing is simulated at the nexus-raw layer: the `nxr` binary that ships runs
-# these commands, and the mock server is the one the conformance suites use.
-# The only stub is the payload directory, and it is generated deterministically,
-# so digests and transcripts stay stable between runs.
+# The `nxr` and `mock-nexus` binaries are real.
+# The only stub is the payload directory, generated deterministically, so digests and transcripts stay stable between runs.
 #
-# Two modes beyond the plain run:
-#
-#   NXR_DEMO_CAST=<file>   record the session (`just demo-cast` writes the docs
-#                          landing animation): every command and every output
-#                          line lands in the file with the time it arrived,
-#                          quantized to 50 ms so that regenerating a recording
-#                          diffs only where the run really differed.
-#   NXR_DEMO_KEEP=1        leave the last mock server running and print its URL.
-#   NXR_DEMO_EXTRA=0       skip the extra failure-scenario phases at the end.
+# Environment:
+#   NXR_DEMO_CAST=<file>   record the session: every command and output line with its arrival time, bucketed to 50 ms (`just demo-cast` writes the docs landing animation)
+#   NXR_DEMO_KEEP=1        leave the last mock server running and print its URL
+#   NXR_DEMO_EXTRA=0       skip the extra failure-scenario phases at the end
 
 set -uo pipefail
 
@@ -31,8 +24,8 @@ INVOKED_FROM="$PWD"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-# The commands print as a user types them: `nxr` from PATH, paths relative to
-# this directory. Absolute scratch paths would make a recording unreadable.
+# The commands print as a user types them: `nxr` from PATH, paths relative to this directory.
+# Absolute scratch paths would make a recording unreadable.
 export PATH="$ROOT/target/debug:$PATH"
 MOCK="mock-nexus"
 NXR="nxr"
@@ -45,14 +38,15 @@ EXTRA="${NXR_DEMO_EXTRA:-1}"
 # Ambient credentials would change the session, and the mock wants none.
 unset NXR_AUTH NXR_USERNAME NXR_PASSWORD
 
-# Recorded times are bucketed: a millisecond-exact recording of a local
-# transfer is machine jitter, and it would churn the diff of a committed file
-# on every regeneration. The pauses that matter are seconds long.
+# Recorded times are bucketed: a millisecond-exact recording of a local transfer is machine jitter, and it would churn the diff of a committed file on every regeneration.
+# The pauses that matter are seconds long.
 CAST_QUANTUM_MS=50
 CAST_RAW=""
 CAST_START_MS=0
 MOCK_PIDS=()
 MOCK_URL=""
+MAIN_MOCK_PID=""
+MAIN_MOCK_URL=""
 
 cleanup() {
   for pid in "${MOCK_PIDS[@]:-}"; do
@@ -72,7 +66,8 @@ now_ms() {
   fi
 }
 
-# `say` is part of the recorded session; `note` is commentary for the human.
+# `say` is part of the recorded session.
+# `note` is commentary for the human.
 say() {
   printf '%s\n' "$1"
   if [ -n "$CAST_RAW" ]; then
@@ -119,8 +114,8 @@ run_expecting_failure() {
 
 # ---- payloads ------------------------------------------------------------
 
-# Deterministic filler: the same bytes every run, so the digests in a recording
-# stay stable. /dev/urandom would make every session print different output.
+# Deterministic filler: the same bytes every run, so the digests in a recording stay stable.
+# /dev/urandom would make every session print different output.
 fill() {
   local path="$1" bytes="$2" seed="${3:-nxr demo payload line}"
   mkdir -p "$(dirname "$path")"
@@ -141,15 +136,15 @@ JSON
 
 # ---- the mock ------------------------------------------------------------
 
-# Start the mock server on an ephemeral port; its URL arrives on stdout.
+# Start the mock server on an ephemeral port.
+# Its URL arrives on stdout.
 # A fixed port would collide with whatever else runs on this machine.
 start_mock() {
   local scenario="$1"
   shift
   local log
   log="$(mktemp)"
-  # Ephemeral by default, but a caller-supplied --port wins: passing both
-  # would work only by accident of parse order.
+  # Ephemeral by default, but a caller-supplied --port wins: passing both would work only by accident of parse order.
   local port_args=(--port 0)
   local arg
   for arg in "$@"; do
@@ -173,6 +168,10 @@ start_mock() {
   [ -n "$url" ] || { note "mock-nexus ($scenario) never reported a port"; exit 1; }
 
   MOCK_URL="${url#listening }"
+  if [ -z "$MAIN_MOCK_PID" ]; then
+    MAIN_MOCK_PID="$pid"
+    MAIN_MOCK_URL="$MOCK_URL"
+  fi
 }
 
 # ---- session -------------------------------------------------------------
@@ -185,8 +184,7 @@ fi
 cd "$HERE"
 
 if [ -n "${NXR_DEMO_CAST:-}" ]; then
-  # The session runs from this directory; a relative cast path belongs to the
-  # caller's, so resolve it before any `cd`.
+  # The session runs from this directory; a relative cast path belongs to the caller's, so resolve it before any `cd`.
   case "$NXR_DEMO_CAST" in
     /*) ;;
     *) NXR_DEMO_CAST="$INVOKED_FROM/$NXR_DEMO_CAST" ;;
@@ -209,9 +207,8 @@ say ""
 
 note "--- name it, so consumers never hard-code a version --------------"
 run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
-# A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints
-# nothing for an assignment, and a command with no output reads as one that
-# did nothing. The captured token drives the fetch below.
+# A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
+# The captured token drives the fetch below.
 run "$NXR" channel get "$REPO/latest"
 VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
 say ""
@@ -262,6 +259,14 @@ note ""
 note "poke it yourself:  just mock flaky   |   just nxr -- up --help"
 write_cast
 if [ -n "${NXR_DEMO_KEEP:-}" ]; then
-  note "the last mock is still serving ${MOCK_URL} (scenario $SCENARIO); ctrl-c to stop it"
-  wait
+  # Hand over the main server, the one holding the published version, and drop
+  # the failure-scenario servers: a poke session wants that version, not the
+  # auth wall of whichever scenario started last.
+  for pid in "${MOCK_PIDS[@]}"; do
+    [ "$pid" = "$MAIN_MOCK_PID" ] && continue
+    kill "$pid" 2>/dev/null
+  done
+  MOCK_PIDS=("$MAIN_MOCK_PID")
+  note "still serving $MAIN_MOCK_URL (scenario $SCENARIO); ctrl-c to stop it"
+  wait "$MAIN_MOCK_PID"
 fi
