@@ -1,7 +1,4 @@
-// An external npm consumer's view of nexus-raw: the package comes from a
-// `file:` dependency (crates/nexus-raw-napi), so no registry is involved.
-// The flow is the whole story in miniature: publish a version directory
-// with a claim, name it through a channel, download it back, verify offline.
+// The publish-and-consume flow through the npm package: publish a version directory with a claim, name it through a channel, download it back, verify offline.
 //
 // Without arguments the demo spawns the repo's mock server on :8091.
 // Pass a base URL to run against a real repository instead:
@@ -45,16 +42,16 @@ const check = await verify("demo-vendor");
 console.log(`verify: ${check.skipped + downSummary.downloaded} names ok`);
 mock.child?.kill();
 
-/** Spawn the repo's mock server; leaked on purpose, it dies with this process. */
+/** Spawn the repo's mock server.
+ * Leaked on purpose: it dies with this process. */
 function spawnMock() {
-  // The demo runs from the repo root (just) or from examples/node (npm):
-  // try both, and let the environment override.
+  // The demo runs from the repo root (just) or from examples/node (npm): try both, and let the environment override.
   const candidates = process.env.MOCK_NEXUS_BIN
     ? [process.env.MOCK_NEXUS_BIN]
     : ["target/debug/mock-nexus", "../../target/debug/mock-nexus"];
 
-  // Port 0 = an ephemeral port: a busy fixed port would collide with
-  // whatever else lives on this machine. The real URL arrives on stdout.
+  // Port 0 = an ephemeral port: a busy fixed port would collide with whatever else lives on this machine.
+  // The real URL arrives on stdout.
   // A spawn error or an early exit falls through to the next candidate.
   const tryCandidate = (i) =>
     i >= candidates.length

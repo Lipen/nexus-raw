@@ -1,8 +1,6 @@
-//! The mapping layer: plain-Rust conversions between Node-facing options and
-//! the core API, unit-testable without a Node process.
+//! The mapping layer: plain-Rust conversions between Node-facing options and the core API, unit-testable without a Node process.
 //!
-//! Everything here is pure data plumbing: opts → [`Config`], [`Event`] → JSON,
-//! [`Error`] → `{ exitCode, hint }`. The `#[napi]` exports in `lib.rs` stay thin.
+//! Everything here is pure data plumbing: opts → [`Config`], [`Event`] → JSON, [`Error`] → `{ exitCode, hint }`.
 
 use std::time::Duration;
 
@@ -17,8 +15,7 @@ pub const DEFAULT_STALL_MS: u32 = 30_000;
 
 /// The common option fields every command accepts.
 ///
-/// `auth` wins over the env fallback (`NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`),
-/// mirroring the `-u` flag order in `creds::resolve`.
+/// `auth` wins over the env fallback (`NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`), mirroring the `-u` flag order in `creds::resolve`.
 #[derive(Debug, Clone, Default)]
 pub struct CommonOpts {
     pub auth_user: Option<String>,
@@ -32,8 +29,8 @@ pub struct CommonOpts {
 
 /// Build the per-invocation core config from a base URL plus common options.
 ///
-/// The base URL is always in argv (zero config); the placeholder base for
-/// network-free commands is the caller's business.
+/// The base URL is always in argv (zero config).
+/// The placeholder base for network-free commands is the caller's business.
 pub fn build_config(base: &str, common: &CommonOpts) -> Result<Config, Error> {
     let explicit = match (&common.auth_user, &common.auth_pass) {
         (Some(u), Some(p)) => Some((u.as_str(), p.as_str())),
@@ -64,9 +61,8 @@ pub fn build_config(base: &str, common: &CommonOpts) -> Result<Config, Error> {
 
 /// The JS-facing rejection payload of a core error.
 ///
-/// `message` carries the hint as a trailing `hint: ` line so even a raw
-/// consumer of the addon binary sees the full CLI-style text; the JS entry
-/// strips that line and promotes it to the `hint` property.
+/// `message` carries the hint as a trailing `hint: ` line so even a raw consumer of the addon binary sees the full CLI-style text.
+/// The JS entry strips that line and promotes it to the `hint` property.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorPayload {
     /// The error code string on the rejected `Error`: `NXR_EXIT_<exit_code>`.
@@ -98,8 +94,7 @@ pub fn event_to_json(event: &Event) -> serde_json::Value {
     event.to_json()
 }
 
-/// Classify a `manifest` spec: `-` for stdin, http(s) through the server,
-/// everything else a local file — the CLI `load_manifest` rules.
+/// Classify a `manifest` spec: `-` for stdin, http(s) through the server, everything else a local file — the CLI `load_manifest` rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestSpec {
     Stdin,
@@ -127,8 +122,7 @@ mod tests {
     use super::*;
     use nexus_raw_core::Summary;
 
-    /// build_config reads the process env for credentials: tests that touch it
-    /// hold this lock so parallel tests never see each other's variables.
+    /// build_config reads the process env for credentials: tests that touch it hold this lock so parallel tests never see each other's variables.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]

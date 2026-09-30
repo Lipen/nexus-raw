@@ -1,13 +1,12 @@
 //! Mock Nexus raw-storage server with a failure-scenario table.
 //!
-//! Implements just enough HTTP/1.1 (std only) to exercise the nexus-raw
-//! transport contract: `GET`/`HEAD`/`PUT` with `Content-Length` or chunked
-//! bodies, percent-encoded paths stored verbatim, one request per connection,
-//! `Connection: close` on every response. GET honors resumable downloads: a
-//! single open `Range: bytes=N-` is answered with `206` and `Content-Range`
-//! (out-of-range starts get `416`); any other `Range` form is ignored.
-//! A [`Scenario`] selects a failure mode (partial PUT bodies, connection
-//! resets, slow links, drifted documents, flaky 503s, Basic-auth gating).
+//! Implements just enough HTTP/1.1 (std only) to exercise the nexus-raw transport contract.
+//! `GET`/`HEAD`/`PUT` with `Content-Length` or chunked bodies.
+//! Percent-encoded paths stored verbatim.
+//! One request per connection, `Connection: close` on every response.
+//! GET honors resumable downloads: a single open `Range: bytes=N-` is answered with `206` and `Content-Range`, out-of-range starts get `416`.
+//! Any other `Range` form is ignored.
+//! A [`Scenario`] selects a failure mode: partial PUT bodies, connection resets, slow links, drifted documents, flaky 503s, Basic-auth gating.
 //!
 //! Rust conformance tests use the library API directly.
 //! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:
@@ -48,30 +47,26 @@ pub const SCENARIOS: &[&str] = &[
 pub enum Scenario {
     /// Straight-through storage: every fully-read request is served normally.
     Atomic,
-    /// The first PUT per path is cut off after `first_attempt_bytes` body
-    /// bytes: the connection closes with no response and nothing is stored.
+    /// The first PUT per path is cut off after `first_attempt_bytes` body bytes: the connection closes with no response and nothing is stored.
     /// Later PUT attempts on that path are read fully and stored.
     PartialPut { first_attempt_bytes: usize },
-    /// The first request per path (any method) is read fully, then answered
-    /// with a TCP reset. Later requests are served normally.
+    /// The first request per path (any method) is read fully, then answered with a TCP reset.
+    /// Later requests are served normally.
     DropConnection,
-    /// PUT connections are held right after the head: the body is never
-    /// read and no response is ever written, so the write side must detect
-    /// the stall. GET/HEAD behave like [`Scenario::Atomic`].
+    /// PUT connections are held right after the head: the body is never read and no response is ever written, so the write side must detect the stall.
+    /// GET/HEAD behave like [`Scenario::Atomic`].
     FreezeUpload,
-    /// GET/HEAD answers for present objects carry no `Content-Length`:
-    /// the proxy case. A client must refuse to treat such objects as
-    /// absent (the digest comparison would be skipped). PUTs behave like
-    /// [`Scenario::Atomic`].
+    /// GET/HEAD answers for present objects carry no `Content-Length`: the proxy case.
+    /// A client must refuse to treat such objects as absent (the digest comparison would be skipped).
+    /// PUTs behave like [`Scenario::Atomic`].
     Sizeless,
-    /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping
-    /// `chunk_delay_ms` between pieces. PUT bodies are read normally.
+    /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping `chunk_delay_ms` between pieces.
+    /// PUT bodies are read normally.
     Slow {
         chunk_delay_ms: u64,
         chunk_size: usize,
     },
-    /// Stored `.sha256` markers get their 64-char digest replaced by 64 zeros
-    /// (digest of a foreign object).
+    /// Stored `.sha256` markers get their 64-char digest replaced by 64 zeros (digest of a foreign object).
     /// Everything else is stored verbatim.
     ForeignMarker,
     /// `.sha256` markers are acknowledged (201 Created) but never stored.
@@ -82,12 +77,10 @@ pub enum Scenario {
     /// Valid credentials behave like [`Scenario::Atomic`].
     Auth401 { user: String, pass: String },
     /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`].
-    /// Afterwards every GET of a `*/version.json` path serves a synthesized
-    /// version document with a ghost artifact.
+    /// Afterwards every GET of a `*/version.json` path serves a synthesized version document with a ghost artifact.
     /// PUTs keep storing verbatim, and [`MockNexus::disable_drift`] restores store-backed responses.
     DocDrift,
-    /// The first `first_failures` requests per path (any method) get
-    /// 503 Service Unavailable.
+    /// The first `first_failures` requests per path (any method) get 503 Service Unavailable.
     /// Later requests are served normally.
     Flaky { first_failures: u32 },
 }
@@ -102,9 +95,8 @@ pub enum Outcome {
     /// The request body ended after `bytes` bytes.
     /// No response was written.
     PartialRead { bytes: usize },
-    /// The head was read, then the connection went silent: the body was
-    /// never read and no response was ever written. The writer is expected
-    /// to give up on its own (stall detection).
+    /// The head was read, then the connection went silent: the body was never read and no response was ever written.
+    /// The writer is expected to give up on its own (stall detection).
     Stalled,
 }
 
@@ -112,8 +104,7 @@ pub enum Outcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReqLog {
     pub method: String,
-    /// Raw request path: percent-encoding preserved, query stripped, no
-    /// leading `/` (same key format as [`MockNexus::store_get`]).
+    /// Raw request path: percent-encoding preserved, query stripped, no leading `/` (same key format as [`MockNexus::store_get`]).
     pub path: String,
     pub outcome: Outcome,
 }
@@ -263,8 +254,7 @@ impl MockNexus {
 impl Drop for MockNexus {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
-        // Unblock the blocking accept() so the listener thread exits and the
-        // port is released.
+        // Unblock the blocking accept() so the listener thread exits and the port is released.
         let _ = TcpStream::connect(self.addr);
     }
 }
@@ -285,8 +275,7 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>
     }
 }
 
-/// Lock a mutex, surviving poisoning: a panicking test thread must not take
-/// unrelated assertions down with it.
+/// Lock a mutex, surviving poisoning: a panicking test thread must not take unrelated assertions down with it.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
@@ -325,7 +314,6 @@ mod tests {
     }
 
     /// Read one full response.
-    /// Returns (status, headers, body).
     fn read_response(stream: &mut TcpStream) -> io::Result<Response> {
         let mut buf = Vec::new();
         let mut chunk = [0u8; 4096];

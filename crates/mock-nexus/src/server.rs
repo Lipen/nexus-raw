@@ -1,8 +1,6 @@
 //! Minimal HTTP/1.1 request parsing and response writing (std only).
 //!
-//! One request per connection: read the head, decide how much of the body to
-//! take (a scenario may cut the body short), then write a single response
-//! carrying `Content-Length` and `Connection: close`.
+//! One request per connection: read the head, decide how much of the body to take (a scenario may cut the body short), then write a single response carrying `Content-Length` and `Connection: close`.
 
 use std::io::{self, BufRead, Read, Write};
 use std::thread;
@@ -60,16 +58,14 @@ pub(crate) enum BodyError {
 pub(crate) struct Resp {
     pub(crate) status: u16,
     pub(crate) extra_headers: Vec<(&'static str, String)>,
-    /// Value sent as `Content-Length` (the real body length even for HEAD,
-    /// which writes no body bytes).
+    /// Value sent as `Content-Length` (the real body length even for HEAD, which writes no body bytes).
     pub(crate) content_length: usize,
     /// Bytes to write on the wire (empty for HEAD).
     pub(crate) body: Vec<u8>,
     /// Slow-drip parameters.
     /// `Some` only for the `slow` scenario.
     pub(crate) drip: Option<Drip>,
-    /// Omit the `Content-Length` header (the sizeless scenario): the client
-    /// frames the body by connection close.
+    /// Omit the `Content-Length` header (the sizeless scenario): the client frames the body by connection close.
     pub(crate) hide_length: bool,
 }
 
@@ -80,13 +76,9 @@ pub(crate) struct Drip {
     pub(crate) chunk_size: usize,
 }
 
-/// Read the request head with byte-precise control: stop as soon as the
-/// buffer ends with the first three bytes of the CRLFCRLF terminator,
-/// deliberately leaving the final byte unread on the socket.
+/// Read the request head with byte-precise control: stop as soon as the buffer ends with the first three bytes of the CRLFCRLF terminator, deliberately leaving the final byte unread on the socket.
 ///
-/// The drop-connection scenario exploits this: a socket closed while its
-/// receive queue still holds data is reset (RST) by the kernel instead of
-/// being closed cleanly, so the peer sees a connection reset, not EOF.
+/// The drop-connection scenario exploits this: a socket closed while its receive queue still holds data is reset (RST) by the kernel instead of being closed cleanly, so the peer sees a connection reset, not EOF.
 pub(crate) fn read_head_raw<R: Read>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
     let mut buf = Vec::new();
     let mut byte = [0u8; 1];
@@ -112,8 +104,7 @@ pub(crate) fn read_head_raw<R: Read>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
     }
 }
 
-/// Parse request line and headers from head bytes as produced by
-/// [`read_head_raw`] (which stop short of the terminator's final `\n`).
+/// Parse request line and headers from head bytes as produced by [`read_head_raw`] (which stop short of the terminator's final `\n`).
 pub(crate) fn parse_head(head: &[u8]) -> io::Result<Request> {
     let mut full = head.to_vec();
     full.push(b'\n');
@@ -154,8 +145,7 @@ pub(crate) fn parse_head(head: &[u8]) -> io::Result<Request> {
 
 /// Read the request body into `req.body` according to `plan`.
 ///
-/// On `BodyError::Aborted` the body holds whatever bytes arrived before the
-/// connection broke.
+/// On `BodyError::Aborted` the body holds whatever bytes arrived before the connection broke.
 /// The request is never complete in that case.
 pub(crate) fn read_body_into<R: BufRead>(
     r: &mut R,

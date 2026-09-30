@@ -1,6 +1,4 @@
-//! An external consumer's view of `nexus-raw-core`: a standalone crate that
-//! pulls the library by path (a crates.io version when published), owns its
-//! own workspace and runs the whole publish-and-consume loop in one process.
+//! The publish-and-consume loop through the `nexus-raw-core` library API, in one process.
 //!
 //! Without arguments the demo spawns the repo's mock server on :8090.
 //! Pass a base URL to run against a real repository instead:
@@ -20,14 +18,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => spawn_mock()?,
     };
 
-    // The producer side: a version directory with two artifacts and the
-    // manifest that names them.
+    // The producer side: a version directory with two artifacts and the manifest that names them.
     let dist = std::env::current_dir()?.join("demo-dist");
     std::fs::create_dir_all(dist.join("bom"))?;
     std::fs::write(dist.join("app.bin"), vec![7u8; 4096])?;
     std::fs::write(dist.join("bom/manifest.json"), br#"{"artifacts": ["app.bin"]}"#)?;
-    // In a real pipeline the manifest sits at the version root and lists
-    // exactly what consumers may fetch.
+    // In a real pipeline the manifest sits at the version root and lists exactly what consumers may fetch.
     std::fs::copy(dist.join("bom/manifest.json"), dist.join("manifest.json"))?;
 
     let cfg = Config {
@@ -59,8 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let version = nxr.channel_get(&format!("{repo}latest")).await?.unwrap();
     println!("channel latest -> {version}");
 
-    // The consumer side: a fresh process would re-point Config at the
-    // resolved version URL and read manifest.json from there.
+    // The consumer side: a fresh process would re-point Config at the resolved version URL and read manifest.json from there.
     let vendor = std::env::current_dir()?.join("demo-vendor");
     let _ = std::fs::remove_dir_all(&vendor);
     let manifest = std::fs::read(dist.join("manifest.json"))?;
@@ -77,12 +72,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Spawn the repo's mock server on an ephemeral port and return its demo
-/// repository base URL. The child is leaked on purpose: it serves until the
-/// demo process exits.
+/// Spawn the repo's mock server on an ephemeral port and return its demo repository base URL.
+/// The child is leaked on purpose: it serves until the demo process exits.
 fn spawn_mock() -> Result<String, Box<dyn std::error::Error>> {
-    // The demo runs from the repo root (just) or from examples/rust (cargo):
-    // try both, and let the environment override.
+    // The demo runs from the repo root (just) or from examples/rust (cargo): try both, and let the environment override.
     let candidates: Vec<String> = if let Ok(bin) = std::env::var("MOCK_NEXUS_BIN") {
         vec![bin]
     } else {
@@ -95,8 +88,7 @@ fn spawn_mock() -> Result<String, Box<dyn std::error::Error>> {
     for bin in &candidates {
         if let Ok(c) = std::process::Command::new(bin)
             .arg("atomic")
-            // Port 0 = an ephemeral port: a busy fixed port would collide
-            // with whatever else lives on this machine.
+            // Port 0 = an ephemeral port: a busy fixed port would collide with whatever else lives on this machine.
             .arg("--port")
             .arg("0")
             .stdout(std::process::Stdio::piped())

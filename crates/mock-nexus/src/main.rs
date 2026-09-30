@@ -37,8 +37,7 @@ impl Default for Flags {
 
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    // Machine-readable scenario table for external conformance suites (§5c):
-    // `mock-nexus --print-scenarios` prints the names, one JSON array.
+    // Machine-readable scenario table for external conformance suites (§5c): `mock-nexus --print-scenarios` prints the names, one JSON array.
     if argv.as_slice() == ["--print-scenarios"] {
         print_scenarios(std::io::stdout().lock()).expect("stdout write");
         return;
@@ -70,8 +69,7 @@ fn main() {
     println!("listening http://127.0.0.1:{}", server.addr().port());
     let _ = std::io::stdout().flush();
 
-    // Keep the handle alive (dropping it would stop the server) and serve
-    // forever.
+    // Keep the handle alive (dropping it would stop the server) and serve forever.
     // SIGTERM/SIGINT kill us.
     loop {
         std::thread::park();

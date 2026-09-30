@@ -1,5 +1,4 @@
-//! Per-scenario behavior: connection handling, per-path state machines and
-//! the pure transforms (marker zeroing, document drift, auth decision).
+//! Per-scenario behavior: connection handling, per-path state machines and the pure transforms (marker zeroing, document drift, auth decision).
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read};
@@ -34,9 +33,9 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     };
     let path = normalize_path(&req.target);
 
-    // freeze-upload: a PUT connection is held without reading the body or
-    // answering, so the write side must detect the stall. The handler thread
-    // parks for good; parked handlers die with the test process.
+    // freeze-upload: a PUT connection is held without reading the body or answering, so the write side must detect the stall.
+    // The handler thread parks for good.
+    // Parked handlers die with the test process.
     if matches!(shared.scenario, Scenario::FreezeUpload) && req.method == "PUT" {
         log_request(shared, &req.method, &path, Outcome::Stalled);
         loop {
@@ -44,9 +43,8 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
         }
     }
 
-    // drop-connection: the first request per path is reset. The head reader
-    // left the terminator's final byte unread on the socket, so dropping the
-    // stream now makes the kernel send RST instead of FIN.
+    // drop-connection: the first request per path is reset.
+    // The head reader left the terminator's final byte unread on the socket, so dropping the stream now makes the kernel send RST instead of FIN.
     {
         let mut seq = lock(&shared.first_request);
         if matches!(shared.scenario, Scenario::DropConnection) && bump(&mut seq, &path) == 0 {
@@ -203,8 +201,7 @@ fn body_plan(shared: &Shared, method: &str, path: &str) -> BodyPlan {
     }
 }
 
-/// GET payload: the synthesized drifting version document once drift is enabled,
-/// otherwise whatever is in the store.
+/// GET payload: the synthesized drifting version document once drift is enabled, otherwise whatever is in the store.
 fn drift_or_store(shared: &Shared, path: &str) -> Option<Vec<u8>> {
     if shared.drift.load(Relaxed) && is_version_path(path) {
         return Some(drift_doc(first_segment(path)));
@@ -308,15 +305,13 @@ fn first_segment(path: &str) -> &str {
     path.split('/').next().unwrap_or_default()
 }
 
-/// Synthesized drifting version document, same shape as protocol §4.1 but
-/// listing a ghost artifact instead of the real ones.
+/// Synthesized drifting version document, same shape as protocol §4.1 but listing a ghost artifact instead of the real ones.
 fn drift_doc(version: &str) -> Vec<u8> {
     format!("{{\"schema_version\":1,\"version\":\"{version}\",\"artifacts\":[\"ghost.zip\"]}}")
         .into_bytes()
 }
 
-/// Replace the 64-char digest of the marker's first line with 64 zeros
-/// (simulating a sibling written for a foreign object).
+/// Replace the 64-char digest of the marker's first line with 64 zeros (simulating a sibling written for a foreign object).
 /// Everything else is stored verbatim.
 /// Shorter payloads pass through unchanged.
 fn zero_digest(marker: &[u8]) -> Vec<u8> {

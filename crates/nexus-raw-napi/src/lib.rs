@@ -1,21 +1,15 @@
 //! Node bindings for nexus-raw: the `nxr` CLI surface as promise-returning functions.
 //!
-//! The addon is built on napi-rs 3 (the current stable major, `napi` 3.x with
-//! the `@napi-rs/cli` 3.x build tool): async exports run on napi's built-in
-//! multi-threaded tokio runtime (`async` feature, drivers all enabled), and
-//! events cross the boundary as parsed JSON (`serde-json` feature).
+//! Built on napi-rs 3: async exports run on napi's built-in multi-threaded tokio runtime (the `async` feature with all drivers enabled).
+//! Events cross the boundary as parsed JSON (the `serde-json` feature).
 //!
-//! Every command is one self-sufficient call, exactly like the CLI: the base
-//! URL is in argv, credentials come from `auth` or the env fallback
-//! (`NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`), no config file.
-//! A promise resolves to the command's result and rejects with an `Error`
-//! whose `exitCode` and `hint` mirror `Error::exit_code` and `Error::hint`
-//! of the core; the JS entry (`index.js`) promotes them from the rejection
-//! message the raw addon produces.
+//! Every command is one self-sufficient call, exactly like the CLI: the base URL is in argv, credentials come from `auth` or the env fallback (`NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`), no config file.
+//! A promise resolves to the command's result and rejects with an `Error` whose `exitCode` and `hint` mirror `Error::exit_code` and `Error::hint` of the core.
+//! The JS entry (`index.js`) promotes them from the rejection message the raw addon produces.
 //!
 //! Platform status: `linux-x86_64-gnu` is the wired prebuilt target.
-//! macOS and Windows triples are known-good for the core but wait for
-//! release runners; no prebuilt packages exist for them yet.
+//! macOS and Windows triples are known-good for the core but wait for release runners.
+//! No prebuilt packages exist for them yet.
 
 mod mapping;
 
@@ -40,8 +34,7 @@ type EventCallback = ThreadsafeFunction<serde_json::Value, (), serde_json::Value
 
 /// Credentials for the `Authorization` header, curl style.
 ///
-/// When `auth` is absent the env fallback applies: `NXR_AUTH`
-/// (base64 `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
+/// When `auth` is absent the env fallback applies: `NXR_AUTH` (base64 `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
 #[derive(Default)]
 #[napi(object)]
 pub struct NxrAuth {
@@ -53,7 +46,8 @@ pub struct NxrAuth {
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrCommonOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -70,8 +64,7 @@ pub struct NxrCommonOpts {
     pub on_event: Option<EventCallback>,
 }
 
-/// Extract the mapping common options and the event callback from the
-/// common option fields every command opts object carries.
+/// Extract the mapping common options and the event callback from the common option fields every command opts object carries.
 #[allow(clippy::too_many_arguments)]
 fn split_common(
     auth: Option<NxrAuth>,
@@ -104,7 +97,8 @@ fn split_common(
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrGetOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -119,7 +113,8 @@ pub struct NxrGetOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Output file; without it the body streams to the process stdout, like the CLI.
+    /// Output file.
+    /// Without it the body streams to the process stdout, like the CLI.
     pub out: Option<String>,
     /// Resume from an existing `<out>.part` through a Range request.
     pub cont: Option<bool>,
@@ -129,7 +124,8 @@ pub struct NxrGetOpts {
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrPutOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -152,7 +148,8 @@ pub struct NxrPutOpts {
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrUpOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -183,7 +180,8 @@ pub struct NxrUpOpts {
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrDownOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -212,7 +210,8 @@ pub struct NxrDownOpts {
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
 pub struct NxrVerifyOpts {
-    /// Explicit credentials; they win over the env fallback.
+    /// Explicit credentials.
+    /// They win over the env fallback.
     pub auth: Option<NxrAuth>,
     /// Parallel artifact transfers, 1..=64, default 8.
     pub workers: Option<u32>,
@@ -333,9 +332,8 @@ pub struct NxrChannelSetResult {
 
 // ---- helpers ---------------------------------------------------------------
 
-/// Map a core error onto the rejection message: the CLI-style text with the
-/// exit line and the hint appended, which `index.js` promotes to `.exitCode`
-/// and `.hint` on the rejected Error.
+/// Map a core error onto the rejection message: the CLI-style text with the exit line and the hint appended.
+/// `index.js` promotes them to `.exitCode` and `.hint` on the rejected Error.
 fn js_error(e: nexus_raw_core::Error) -> Error {
     let payload = mapping::error_payload(&e);
     Error::new(Status::GenericFailure, payload.message)
@@ -343,18 +341,14 @@ fn js_error(e: nexus_raw_core::Error) -> Error {
 
 /// Drain the core event stream into the JS callback.
 ///
-/// The pump ends when the facade drops and the channel closes, so the
-/// promise resolves only after every event has been handed to JS.
+/// The pump ends when the facade drops and the channel closes, so the promise resolves only after every event has been handed to JS.
 fn spawn_pump(
     mut rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
     on_event: Option<EventCallback>,
 ) -> Option<tokio::task::JoinHandle<()>> {
     on_event.map(|tsfn| {
-        // tokio::spawn, not the napi re-export: the re-export disappears
-        // under the noop feature that unit tests need for linking. Inside a
-        // napi async fn the current runtime is napi's own tokio RT, so both
-        // calls land on the same workers (napi-3.13 tokio_runtime.rs:
-        // `spawn` is `RT.spawn`).
+        // tokio::spawn, not the napi re-export: the re-export disappears under the noop feature that unit tests need for linking.
+        // Inside a napi async fn the current runtime is napi's own tokio RT, so both calls land on the same workers (napi-3.13 tokio_runtime.rs: `spawn` is `RT.spawn`).
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
                 tsfn.call(
@@ -376,8 +370,8 @@ async fn finish_pump(pump: Option<tokio::task::JoinHandle<()>>) -> Result<()> {
     }
 }
 
-/// Drain the event pump, then map `error` for JS: the caller must see the
-/// events that led to the failure before the promise rejects.
+/// Drain the event pump, then map `error` for JS.
+/// The caller must see the events that led to the failure before the promise rejects.
 async fn finish_pump_err(
     pump: Option<tokio::task::JoinHandle<()>>,
     error: nexus_raw_core::Error,
@@ -386,8 +380,7 @@ async fn finish_pump_err(
     js_error(error)
 }
 
-/// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the
-/// server, everything else as a local file — the CLI rules.
+/// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file — the CLI rules.
 async fn load_manifest(
     nxr: &Nxr,
     spec: &str,
@@ -403,8 +396,7 @@ async fn load_manifest(
 fn parse_names(names: Option<Vec<String>>) -> Result<Option<Vec<ArtifactName>>> {
     match names {
         None => Ok(None),
-        // An explicit empty list restricts nothing: that is a caller bug,
-        // not a whole-catalog request.
+        // An explicit empty list restricts nothing: that is a caller bug, not a whole-catalog request.
         Some(v) if v.is_empty() => Err(js_error(nexus_raw_core::Error::Misuse(
             "names: an empty list would transfer the whole catalog; omit the \
              option for that, or name at least one artifact"
@@ -455,8 +447,8 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
 
 /// PUT a file path or an exact byte body, optionally with its sha-sibling.
 ///
-/// A string source is a file path (like the CLI `-f`); a Buffer is the
-/// exact bytes, staged through a temporary file.
+/// A string source is a file path (like the CLI `-f`).
+/// A Buffer is the exact bytes, staged through a temporary file.
 #[napi]
 pub async fn put(
     url: String,
@@ -577,10 +569,9 @@ pub async fn sha(target: String, opts: Option<NxrCommonOpts>) -> Result<String> 
 
 // ---- L1 transfer -----------------------------------------------------------
 
-/// Upload a local directory: verified, parallel, marker-perfect.
+/// Upload a local directory.
 ///
-/// With `dryRun` the promise resolves to the plan instead of a summary and
-/// nothing transfers, like `up --dry-run`.
+/// With `dryRun` the promise resolves to the plan instead of a summary and nothing transfers, like `up --dry-run`.
 #[napi]
 pub async fn up(
     src_dir: String,
@@ -607,8 +598,7 @@ pub async fn up(
         None => None,
     };
     let gen_markers = !o.no_sha.unwrap_or(false);
-    // The pump starts before any network call: events fired during the
-    // manifest fetch belong to JS as much as the later ones.
+    // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
     let pump = spawn_pump(rx, on_event);
     let names: Option<Vec<ArtifactName>> = match &o.manifest {
         Some(spec) => match load_manifest(&nxr, spec).await {
@@ -641,8 +631,7 @@ pub async fn up(
                 return Err(finish_pump_err(pump, e).await);
             }
         };
-        // The plan promise settles only after the events did, and the
-        // events end only when the facade's sender is gone.
+        // The plan promise settles only after the events did, and the events end only when the facade's sender is gone.
         drop(nxr);
         finish_pump(pump).await?;
         return Ok(Either::B(NxrPlan {
@@ -663,9 +652,8 @@ pub async fn up(
 
 /// Download a remote directory into a local one.
 ///
-/// The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
-/// or the conventional `manifest.json` at the directory URL — otherwise the
-/// promise rejects like the CLI.
+/// The enumeration source is mandatory: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// Otherwise the promise rejects like the CLI.
 #[napi]
 pub async fn down(
     src_url: String,
@@ -687,10 +675,8 @@ pub async fn down(
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     // Pure parsing first: no events can precede the pump.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
-    // The pump starts before any network call: events fired during the
-    // manifest fetch belong to JS as much as the later ones. Every early
-    // return from here drops the facade before draining the pump — the
-    // pump ends only when the facade's sender is gone.
+    // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
+    // Every early return from here drops the facade before draining the pump — the pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
     let enum_src = if o.ls.unwrap_or(false) {
         Enumeration::Search
@@ -758,7 +744,7 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
     let cfg = mapping::build_config("http://localhost/", &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
-    // Pure parsing first; the pump starts before any manifest fetch.
+    // Pure parsing first: the pump starts before any manifest fetch.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     let pump = spawn_pump(rx, on_event);
     let names: Option<Vec<ArtifactName>> = match &o.manifest {
