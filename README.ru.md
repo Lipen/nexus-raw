@@ -63,16 +63,16 @@ nxr verify vendor/prebuilt
 | Команда | Делает |
 |:--------|:-------|
 | `nxr get <URL> [-o FILE] [--continue]` | GET в файл (через `.part`, докачка через Range) или stdout |
-| `nxr put <URL> -f FILE [--sha]` | PUT байтов: `--sha` ещё и PUT `.sha256`-сиблинга |
+| `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → поток+hash → rename + локальный маркер |
-| `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (experimental) |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (экспериментально) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена. `--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
-| `nxr doctor [URL]` | креды, TLS, настройки, достижимость |
+| `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 
 `down` берёт перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`. Без любого из них — отказ.
 
@@ -80,7 +80,7 @@ Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.
 `--json` печатает по одному JSON-объекту на строку в stdout.
 
-## Креды
+## Учётные данные
 
 Источники в порядке проверки: `-u user:pass`, затем `NXR_AUTH` (base64 от `user:pass`), затем `NXR_USERNAME` + `NXR_PASSWORD`.
 

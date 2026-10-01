@@ -4,13 +4,13 @@ curl for a Sonatype Nexus raw repository.
 
 ## Install
 
-Requires Rust 1.85 or newer.
-
 ```bash
 cargo install nexus-raw
 ```
 
-From the repository instead (whatever is on the default branch, not a release):
+Needs Rust 1.85 or newer.
+
+From the repository:
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
@@ -22,16 +22,14 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-The Node bindings are not on npm yet: they need their per-platform prebuilt packages first.
-
-Check it landed with `nxr --version`.
+Check the install with `nxr --version`.
 
 ## Quick start
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down refuses a version without manifest.json; it lists the names a consumer may fetch
+# down needs a name list: manifest.json provides it
 printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
@@ -40,13 +38,13 @@ nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-An interrupted transfer finishes by repeating the same command: complete parts are skipped.
+If a transfer is interrupted, run the same command again: what already landed is skipped, the rest continues.
 
 ## Scripts
 
-- Credentials, in checked order: `-u user:pass`, `NXR_AUTH` (base64 of `user:pass`), `NXR_USERNAME` + `NXR_PASSWORD`; `nxr doctor [URL]` names the resolved source.
+- Credentials, in checked order: `-u user:pass`, `NXR_AUTH` (base64 of `user:pass`), `NXR_USERNAME` + `NXR_PASSWORD`. `nxr doctor [URL]` names the resolved source.
 - Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
-- Every error prints a `hint:` line; `--json` emits one JSON object per line on stdout.
+- Every error prints a `hint:` line. `--json` emits one JSON object per line on stdout.
 
 ## More
 
