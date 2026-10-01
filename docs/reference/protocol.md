@@ -1,7 +1,7 @@
 # Wire protocol
 
 What `nxr` says to the server: the store layout, the objects, the classification that drives transfers, the write order and the Range contract.
-This page documents implemented behavior; a divergence between this page and the code is a bug in one of them.
+This page documents implemented behavior. A divergence between this page and the code is a bug in one of them.
 
 ## The shape of a store
 
@@ -85,7 +85,7 @@ The sibling is the marker of its bytes and is never an artifact in its own right
 ```
 
 An ordinary file with a conventional role: the enumeration source for `down` and the optional name filter for `up`.
-It carries no digests; each artifact's sibling does.
+It carries no digests. Each artifact's sibling does.
 
 | Rule | Behavior |
 |:-----|:---------|
@@ -96,7 +96,7 @@ It carries no digests; each artifact's sibling does.
 | `schema_version` | tolerated, must be `1` when present |
 | `version` | tolerated and ignored |
 
-Manifest and channel reads are capped at 16 MiB; a larger object is refused as a misuse error instead of being slurped into memory.
+Manifest and channel reads are capped at 16 MiB. A larger object is refused as a misuse error instead of being slurped into memory.
 A `manifest.json` sitting in a published directory is just a file that `up` uploads like any artifact.
 The version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
 
@@ -178,7 +178,7 @@ Upload:
 ```
 
 Marker-after-bytes is what makes `Markerless` mean "under-uploaded": a client never trusts a marker whose bytes are absent, and a crash between steps 2 and 3 is recoverable by design.
-A local sibling that does not match its bytes stops the run at step 1; the file is never touched and nothing is uploaded.
+A local sibling that does not match its bytes stops the run at step 1. The file is never touched and nothing is uploaded.
 
 Download mirrors the order locally:
 

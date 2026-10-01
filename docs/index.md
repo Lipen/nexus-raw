@@ -70,7 +70,7 @@ What the recording shows, one beat per command:
 
 1. **Publish** — `nxr up` puts a version directory on the server: the claim lands first, then the bytes and their `.sha256` markers.
 2. **Name** — `nxr channel set --if-forward` points `latest` at it, and a pointer only moves forward.
-3. **Fetch** — `nxr down` pulls that version back; an interrupted pull resumes by repeating the same command.
+3. **Fetch** — `nxr down` pulls that version back. An interrupted pull resumes by repeating the same command.
 4. **Verify** — `nxr verify` checks every digest offline, no network.
 
 Every line is real output: the binary this repository builds, against its [mock server](explanation/conformance.md).

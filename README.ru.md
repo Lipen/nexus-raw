@@ -1,7 +1,7 @@
 <div align="center">
 
 <a href="https://lipen.github.io/nexus-raw/how-to/demo/">
-<img src="docs/assets/img/session.svg" alt="Записанная сессия nxr: публикация каталога версии, имя через канал, обратная загрузка и проверка дайджестов против мок-сервера" width="760">
+<img src="docs/assets/img/session.svg" alt="Записанная сессия nxr: публикация каталога версии, именование каналом, загрузка обратно и офлайн-проверка дайджестов против мок-сервера" width="760">
 </a>
 
 # nexus-raw
@@ -18,13 +18,15 @@
 
 ## Установка
 
-Требуется Rust 1.85 или новее.
+Из crates.io:
 
 ```bash
 cargo install nexus-raw
 ```
 
-Из репозитория вместо реестра (ставится то, что на ветке по умолчанию, а не релиз):
+Нужен Rust 1.85 или новее.
+
+Из репозитория:
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
@@ -36,18 +38,16 @@ cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
 cargo install --path crates/nexus-raw --locked
 ```
 
-Node-биндингов на npm пока нет: сначала нужны предсобранные пакеты под платформы.
-
-Проверить, что встало: `nxr --version`.
+Проверить установку: `nxr --version`.
 
 ## Быстрый старт
 
-Опубликовать версию, назвать её каналом, забрать назад и проверить офлайн:
+От каталога с файлами до проверенной локальной копии:
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down отказывает версии без manifest.json; в нём перечислены имена, которые могут забирать потребители
+# down нужен перечень имён: manifest.json его и даёт
 printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
@@ -56,7 +56,7 @@ nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-Прерванная передача доезжает повтором той же команды: завершённое пропускается.
+Если передача прервалась, запустите ту же команду снова: уже полученное пропускается, остальное скачивается дальше.
 
 ## Команды
 
@@ -70,11 +70,11 @@ nxr verify vendor/prebuilt
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → поток+hash → rename + локальный маркер |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (experimental) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена; `--if-forward` допускает сдвиг только вперёд в dotted-numeric порядке |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена. `--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | креды, TLS, настройки, достижимость |
 
-`down` берёт перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`; без ничего — отказ.
+`down` берёт перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`. Без любого из них — отказ.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.
@@ -97,13 +97,13 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Документация
 
 Гайды и справочник: <https://lipen.github.io/nexus-raw/>.
-Исходники в [docs/](docs/); локально сайт поднимается `just docs`.
+Исходники в [docs/](docs/). Локально сайт поднимается `just docs`.
 
 ## Участие
 
 Сборка, тесты, коммиты, изменения протокола и чеклист релиза: [CONTRIBUTING.md](CONTRIBUTING.md).
 Устройство репозитория и правила изменений: [AGENTS.md](AGENTS.md).
-`just check` — полный гейт; `just demo` — записанная сессия против локального мок-сервера.
+`just check` — полный гейт. `just demo` — записанная сессия против локального мок-сервера.
 
 ## Лицензия
 

@@ -83,5 +83,5 @@ The pace and the colors are computed from the lines themselves, so the animation
 Two more fields are display data, written from the recording by `examples/demo/stage.py`: `at`, when each line appears on screen, and `kinds`, what each line is — command, note, digest result, error.
 The player above and `docs/assets/img/session.svg` both replay that timeline, which is why the readmes embed the same animation without a line of JavaScript.
 
-The hero is four beats on one screen; the rest of the story — the edited artifact and the refusal, the flaky server, the auth wall — stays in the session itself (`just demo`).
+The hero is four beats on one screen. The rest of the story — the edited artifact and the refusal, the flaky server, the auth wall — stays in the session itself (`just demo`).
 Regenerate the cast, its pace and the SVG in one step after any change to the demo commands, to the output format or to the payloads.

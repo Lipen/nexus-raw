@@ -294,7 +294,7 @@ With `--json`, `--dry-run` prints one object per plan line:
 {"action":"upload","name":"manifest.json","size":2}
 ```
 
-`--claim-first <NAME>` uploads the named file first and alone; a failed claim aborts the run with nothing else sent.
+`--claim-first <NAME>` uploads the named file first and alone. A failed claim aborts the run with nothing else sent.
 A claim name outside the scanned directory is misuse:
 
 ```console
@@ -541,7 +541,7 @@ nxr doctor [URL]
 
 Diagnose the setup before a pipeline runs.
 Local checks always execute: credentials (resolved source, never values), TLS mode, worker and timeout settings.
-With a URL: one `HEAD` probe for reachability; any status below 500 passes, a 5xx or a connection failure fails the probe as transport.
+With a URL: one `HEAD` probe for reachability. Any status below 500 passes, a 5xx or a connection failure fails the probe as transport.
 
 ```console
 $ env -u NXR_USERNAME -u NXR_PASSWORD -u NXR_AUTH nxr doctor
@@ -585,7 +585,7 @@ With `--json` the report lines are one object per check:
 
 ## Output
 
-Human output goes to stdout; `error:` and `hint:` lines go to stderr.
+Human output goes to stdout. `error:` and `hint:` lines go to stderr.
 The line vocabulary:
 
 - `plan: N to upload, N to download, N up to date`, once per transfer.

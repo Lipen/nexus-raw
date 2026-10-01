@@ -55,7 +55,7 @@ The commands run at their default verbosity: `-v` prints every name three times 
 `stage.py` writes the two display fields from the recording.
 `at` is when each line appears: the recorded times are the tool's own speed, and a reader needs a pace, so a long line is held longer, a blank line is a beat and a command is held before its output starts.
 `kinds` is what each line is (command, note, digest result, error), which is the color both renderers paint it with.
-The landing player and the SVG replay that same timeline, so the animation and the readme show one session at one pace; `svg.py` only lays it out.
-The recorded times are what the machine measured, so recording again moves them; `at` and `kinds` come from the line contents, so the animation, its length and the SVG do not.
+The landing player and the SVG replay that same timeline, so the animation and the readme show one session at one pace. `svg.py` only lays it out.
+The recorded times are what the machine measured, so recording again moves them. `at` and `kinds` come from the line contents, so the animation, its length and the SVG do not.
 
 Regenerate all three after any change to the commands, the output format or the payloads.

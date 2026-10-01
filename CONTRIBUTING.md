@@ -1,7 +1,7 @@
 # Contributing
 
 The repository is a Rust workspace (`crates/`), a docs site (`docs/`) and three examples (`examples/`).
-`AGENTS.md` holds the rules that matter when you change behaviour; this file holds how to build, test and release.
+`AGENTS.md` holds the rules that matter when you change behaviour. This file holds how to build, test and release.
 
 ## Build and test
 
@@ -40,7 +40,7 @@ Transcripts in the docs come from a real run: paste what the binary printed, nev
 One version for the whole workspace, `[workspace.package] version` in `Cargo.toml`.
 `nexus-raw-core`, `nexus-raw` and `mock-nexus` inherit it; `nexus-raw-napi` inherits it too, because the npm package carries the same number.
 
-Before 1.0 a minor release may break anything; a patch release may not.
+Before 1.0 a minor release may break anything. A patch release may not.
 The public surface is larger than the Rust API: CLI flags and their defaults, exit codes 0/1/2/3, the `--json` shapes, the `hint:` text the docs quote, and the wire invariants (the `<name>.sha256` marker, the enumeration document, claim-first, the refusal to overwrite a diverged object).
 Raising the MSRV is a minor change and belongs in the release notes.
 
@@ -63,7 +63,7 @@ git push origin master --follow-tags
 ```
 
 The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw` with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
-The generated release notes are the changelog; there is no `CHANGELOG.md` to rot.
+The generated release notes are the changelog. There is no `CHANGELOG.md` to rot.
 
 `nexus-raw-napi` is `publish = false`.
 Publishing the npm package is a separate track: it needs the per-platform prebuilt packages and the `optionalDependencies` wiring before a linux-only package can be avoided.

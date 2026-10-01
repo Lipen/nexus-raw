@@ -18,13 +18,15 @@
 
 ## Install
 
-Requires Rust 1.85 or newer.
+From crates.io:
 
 ```bash
 cargo install nexus-raw
 ```
 
-From the repository instead (installs whatever is on the default branch, not a released version):
+Needs Rust 1.85 or newer.
+
+From the repository:
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
@@ -36,18 +38,16 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-The Node bindings are not on npm yet: they need their per-platform prebuilt packages first.
-
-Check it landed with `nxr --version`.
+Check the install with `nxr --version`.
 
 ## Quick start
 
-Publish a version, name it with a channel, fetch it back and verify it offline:
+From a directory of files to a verified local copy:
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down refuses a version without manifest.json; it lists the names a consumer may fetch
+# down needs a name list: manifest.json provides it
 printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
@@ -56,7 +56,7 @@ nxr down "$BASE/$V/" vendor/prebuilt
 nxr verify vendor/prebuilt
 ```
 
-An interrupted transfer finishes by repeating the same command: complete parts are skipped.
+If a transfer is interrupted, run the same command again: what already landed is skipped, the rest continues.
 
 ## Commands
 
@@ -70,11 +70,11 @@ An interrupted transfer finishes by repeating the same command: complete parts a
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token; `--if-forward` accepts only forward moves in dotted-numeric order |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token. `--if-forward` accepts only forward moves in dotted-numeric order |
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 
-`down` enumerates explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`; with none of them it refuses.
+`down` enumerates explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`. With none of them it refuses.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.
@@ -97,13 +97,13 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Docs
 
 Guides and reference: <https://lipen.github.io/nexus-raw/>.
-Sources live in [docs/](docs/); `just docs` serves the site locally.
+Sources live in [docs/](docs/). `just docs` serves the site locally.
 
 ## Contributing
 
 Build, test, commit, protocol changes and the release checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 Repository layout and the rules for changing things: [AGENTS.md](AGENTS.md).
-`just check` runs the full gate; `just demo` runs the recorded session against the local mock server.
+`just check` runs the full gate. `just demo` runs the recorded session against the local mock server.
 
 ## License
 
