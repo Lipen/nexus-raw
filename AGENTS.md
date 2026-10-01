@@ -47,15 +47,18 @@ The canonical protocol text is kept outside this repository.
 | a mock scenario's exact behavior | `crates/mock-nexus/src/lib.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
+| the version agreement check | `scripts/version-check.sh` |
 
 ## Verify before reporting done
 
 ```bash
-just check        # fmt + clippy + prek + tests: the full gate
+just check        # fmt + clippy + prek + version-check + tests: the full gate
 just check-docs   # the docs site builds and every page resolves
 just test         # unit and conformance suites alone
 just nxr -- --help
 ```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) carries the release checklist: one version for the workspace, `just version X.Y.Z`, a signed tag, and a workflow that publishes the crates in dependency order.
 
 The conformance suites drive `nexus-raw-core` and the `nxr` binary against `mock-nexus` scenarios: the core suite through the facade, the CLI suite through the real binary.
 The workspace also carries unit tests in the core library, unit tests in the napi bindings and doctests, and `cargo test --workspace` runs them all.

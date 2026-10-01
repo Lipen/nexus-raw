@@ -35,6 +35,19 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  # The release number lives in one place; a second copy that drifted would
+  # ship a number nobody wrote down.
+  version:
+    name: Version agreement
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check the version agrees everywhere
+        run: scripts/version-check.sh
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest

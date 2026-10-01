@@ -81,27 +81,7 @@ version v:
 [group('release')]
 [group('check')]
 version-check:
-    #!/bin/sh
-    set -eu
-    ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-    pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
-    lock="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package-lock.json | head -1)"
-    dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
-    failed=0
-    for pair in "package.json:$pkg" "package-lock.json:$lock" "cli dependency:$dep"; do
-      name="${pair%%:*}"; got="${pair#*:}"
-      if [ "$got" != "$ws" ]; then echo "version-check: $name is $got, workspace is $ws" >&2; failed=1; fi
-    done
-    # Docs and readmes may name the command, never the current number: a pinned
-    # version is a lie on the next release.
-    # The recorded session keeps the version it was made with: `just demo-cast`
-    # refreshes it, so it is provenance, not an assertion.
-    if grep -rEn --exclude-dir=assets 'nxr [0-9]+\.[0-9]+\.[0-9]+' README.md README.ru.md crates/nexus-raw/README.md docs; then
-      echo "version-check: a page pins the current version" >&2
-      failed=1
-    fi
-    [ "$failed" = 0 ] || exit 1
-    echo "version-check: $ws agrees everywhere"
+    scripts/version-check.sh
 
 [doc('Debug build of the workspace.')]
 [group('build')]
