@@ -218,6 +218,106 @@
   color: var(--md-accent-fg-color);
 }
 
+/* ---- landing: where to go ---- */
+
+/*
+ * Intent cards, not a link table: the two people this tool has (the one who
+ * publishes and the one who fetches) get the wide cards, the situational ones
+ * sit under them, and reference stays a quiet line. The link is the card.
+ */
+
+.md-typeset .nxr-go > ul {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.8rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .nxr-go > ul > li {
+  margin: 0;
+  padding: 0;
+  grid-column: span 2;
+}
+
+/* the first two are the personas this tool actually has: they get the width */
+.md-typeset .nxr-go > ul > li:nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+.md-typeset .nxr-go > ul > li > p {
+  margin: 0;
+}
+
+.md-typeset .nxr-go > ul > li a {
+  display: block;
+  height: 100%;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: var(--nxr-radius);
+  background: color-mix(in oklch, var(--md-default-fg-color) 3%, transparent);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  text-decoration: none;
+  transition:
+    transform var(--nxr-lift),
+    border-color var(--nxr-lift),
+    box-shadow var(--nxr-lift);
+}
+
+.md-typeset .nxr-go > ul > li a:hover {
+  border-color: color-mix(in oklch, var(--md-accent-fg-color) 65%, transparent);
+  box-shadow: 0 6px 18px color-mix(in oklch, var(--md-accent-fg-color) 18%, transparent);
+  transform: translateY(-2px);
+}
+
+.md-typeset .nxr-go .twemoji {
+  color: var(--md-accent-fg-color);
+  vertical-align: -0.25em;
+}
+
+/* the time-to-value hint is a quiet tag, not a second title */
+.md-typeset .nxr-go a em {
+  color: var(--md-default-fg-color--light);
+  font-style: normal;
+}
+
+/* the arrow is the affordance: it is not there until the reader aims at it */
+.md-typeset .nxr-go > ul > li a::after {
+  content: "\2192";
+  float: right;
+  margin-left: 0.5rem;
+  color: var(--md-accent-fg-color);
+  opacity: 0;
+  transform: translateX(-0.4rem);
+  transition:
+    opacity var(--nxr-lift),
+    transform var(--nxr-lift);
+}
+
+.md-typeset .nxr-go > ul > li a:hover::after {
+  opacity: 1;
+  transform: none;
+}
+
+.md-typeset .nxr-go__under {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+}
+
+@media screen and (max-width: 60em) {
+  .md-typeset .nxr-go > ul {
+    grid-template-columns: 1fr;
+  }
+
+  /* the persona cards' span outranks a bare li selector, so it is named here too */
+  .md-typeset .nxr-go > ul > li,
+  .md-typeset .nxr-go > ul > li:nth-child(-n + 2) {
+    grid-column: auto;
+  }
+}
+
 /* ---- page furniture ---- */
 
 /*

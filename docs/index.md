@@ -77,17 +77,16 @@ Every line is real output: the binary this repository builds, against its [mock 
 `just demo` replays the session on your machine and takes it further — an edited artifact, the refusal to overwrite it, a flaky and an authenticating server: [run the demo](how-to/demo.md).
 [Get started](get-started.md) is the same four commands, copy-pasteable.
 
-## Where to go
+## What do you want to do?
 
-| You want | Page |
-| :-- | :-- |
-| the recorded session, runnable on your machine | [run the demo](how-to/demo.md) |
-| a working end-to-end tour | [get started](get-started.md) |
-| publish a version and name it with a channel | [publish](how-to/publish.md) |
-| fetch artifacts, verify, resume an interrupted pull | [consume](how-to/consume.md) |
-| pipelines: NDJSON events and exit codes | [use in CI](how-to/ci.md) |
-| decode a failure and recover | [when it breaks](how-to/troubleshoot.md) |
-| every flag of every command, credentials and URLs | [CLI reference](reference/cli.md) |
-| the wire protocol in full | [protocol](reference/protocol.md) |
-| the Rust API of `nexus-raw-core` | [Rust API](reference/api.md) |
-| why it is shaped this way | [design](explanation/design.md) |
+<div class="nxr-go" markdown>
+
+- [:material-upload: **Publish a version** · *about 2 minutes* — a build directory goes up claim-first: the enumeration, then the bytes and their `.sha256` markers.](how-to/publish/)
+- [:material-download: **Fetch artifacts** · *about 2 minutes* — named files come down verified, and an interrupted pull resumes where it stopped.](how-to/consume/)
+- [:material-play-circle: **See it run** · *half a minute* — the full session against the mock server, then the same session on your machine.](how-to/demo/)
+- [:material-robot: **Use it in CI** · *about 5 minutes* — exit codes a pipeline can read, NDJSON events, credentials from the environment.](how-to/ci/)
+- [:material-wrench: **When it breaks** — decode the error, recover, and know what is safe to run again.](how-to/troubleshoot/)
+
+</div>
+
+<p class="nxr-go__under" markdown>Under the hood: [every flag of every command](reference/cli.md) · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>
