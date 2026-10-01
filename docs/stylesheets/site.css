@@ -346,9 +346,9 @@
 }
 
 .nxr-term__body {
-  /* 23 recorded lines, one wrapped command and the beats between them;
-   * svg.py draws the same box with the same fractions of its own width. */
-  aspect-ratio: 860 / 680;
+  /* As tall as the recording; the cap turns a long cast into a terminal that
+   * scrolls (the player follows its tail) instead of stretching the page. */
+  max-height: 45em;
   text-align: left;
   overflow: hidden;
   padding: 1.24em 1.55em 1.55em;
@@ -360,6 +360,18 @@
 .nxr-l {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* A blank line is a beat between commands, and an empty div has no line box:
+ * without a height of its own the pauses the session took would vanish. */
+.nxr-l:empty {
+  min-height: 1.5em;
+  min-height: 1lh;
+}
+
+.nxr-l--comment {
+  color: oklch(0.66 0.015 210);
+  font-style: italic;
 }
 
 .nxr-l--cmd {

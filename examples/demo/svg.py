@@ -22,14 +22,13 @@ import sys
 # Geometry: the landing stylesheet's fractions, in this canvas's units.
 # site.css sizes the screen's type at 1.85% of the frame width (--nxr-term-font)
 # and expresses everything inside in em, so the same design in an 860-wide
-# canvas is these numbers; .nxr-term__body is an 860/680 box. Change both sides
-# together: they are one design seen twice, and a swap that moved the page
-# would be the visible symptom of them drifting apart.
+# canvas is these numbers. The window is as tall as the recording, so the page
+# shows a terminal, not a terminal-shaped void: no fixed aspect ratio to keep in
+# step, only these shared fractions.
 WIDTH = 860
 FONT = 0.0185 * WIDTH  # 15.91
 LINE_H = 1.5 * FONT  # 23.87
 BAR_H = 52.8  # measured from the live bar: 0.78em padding, 0.93em title row
-BODY_H = 680
 RADIUS = 18.75  # 0.75rem
 PAD_TOP = 1.24 * FONT  # 19.7
 PAD_SIDE = 1.55 * FONT  # 24.7
@@ -42,6 +41,9 @@ BAR_PAD = 1.32 * FONT
 DOTS_W = 4.03 * FONT
 BAR_GAP = 0.45 * FONT
 REVEAL_MS = 140
+# The player caps its window at max-height 45em, which is thirty lines: past
+# that the two renderings would show different amounts of the same session.
+MAX_ROWS = 30
 
 # The docs palette, oklch as written in site.css.
 COLORS = {
@@ -56,6 +58,7 @@ COLORS = {
     "err": (0.75, 0.16, 25),
     "hint": (0.70, 0.06, 60),
     "dim": (0.66, 0.015, 210),
+    "comment": (0.66, 0.015, 210),
     "note": (0.82, 0.02, 200),
     "dot-red": (0.72, 0.16, 25),
     "dot-amber": (0.82, 0.14, 85),
@@ -110,32 +113,41 @@ def render(cast: dict) -> str:
     palette = {name: oklch(*value) for name, value in COLORS.items()}
 
     limit = int((WIDTH - 2 * PAD_SIDE) / (0.6 * FONT))
+    parts = [
+        (when, kind, wrap(text, limit))
+        for (_, text), when, kind in zip(lines, at, kinds)
+    ]
+    rows = sum(len(chunk) for _, _, chunk in parts)
+    if rows > MAX_ROWS:
+        raise SystemExit(
+            f"svg: {rows} rendered rows past the {MAX_ROWS} the player shows;"
+            " record a shorter session (NXR_DEMO_SCOPE=core)"
+        )
+    body_h = PAD_TOP + PAD_BOTTOM + rows * LINE_H
+
     body: list[str] = []
     y = BAR_H + PAD_TOP + ASCENT
-    for (_, text), when, kind in zip(lines, at, kinds):
+    for when, kind, chunk in parts:
         fill = palette.get(kind, palette["text"])
         weight = ' font-weight="600"' if kind == "cmd" else ""
+        style = ' font-style="italic"' if kind == "comment" else ""
         x = PAD_SIDE + (INDENT if kind == "hint" else 0)
-        for part in wrap(text, limit):
+        for part in chunk:
             # A wrapped line continues flush left, the way the player wraps it.
             body.append(
-                f'<text class="l" x="{x}" y="{y}" fill="{fill}"{weight}'
+                f'<text class="l" x="{x:.1f}" y="{y:.1f}" fill="{fill}"{weight}{style}'
                 f' style="animation-delay:{when}ms">{escape(part)}</text>'
             )
             y += LINE_H
-    bottom = BAR_H + BODY_H - PAD_BOTTOM
-    if y > bottom:
-        raise SystemExit(
-            f"svg: the transcript runs {y - bottom}px past the window; record a shorter session"
-        )
 
+    height = BAR_H + body_h
     dots = "".join(
         f'<circle cx="{BAR_PAD + at_x:.1f}" cy="{BAR_H / 2:.1f}" r="{DOT_R:.1f}"'
         f' fill="{palette[name]}"/>'
         for at_x, name in ((0.58 * FONT, "dot-red"), (2.02 * FONT, "dot-amber"), (3.45 * FONT, "dot-green"))
     )
     title = cast["title"]
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{BAR_H + BODY_H}" viewBox="0 0 {WIDTH} {BAR_H + BODY_H}" role="img" font-family="{MONO}" font-size="{FONT}">
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height:.1f}" viewBox="0 0 {WIDTH} {height:.1f}" role="img" font-family="{MONO}" font-size="{FONT:.1f}">
 <title>{escape(title)}</title>
 <desc>An animated transcript of a real nxr session against the mock server.</desc>
 <style>
@@ -143,7 +155,7 @@ def render(cast: dict) -> str:
   .l {{ opacity: 0; animation: nxr-in {REVEAL_MS}ms linear forwards }}
   @media (prefers-reduced-motion: reduce) {{ .l {{ opacity: 1; animation: none }} }}
 </style>
-<rect x="0.5" y="0.5" width="{WIDTH - 1}" height="{BAR_H + BODY_H - 1}" rx="{RADIUS}" fill="{palette["ink"]}" stroke="{palette["border"]}"/>
+<rect x="0.5" y="0.5" width="{WIDTH - 1}" height="{height - 1:.1f}" rx="{RADIUS}" fill="{palette["ink"]}" stroke="{palette["border"]}"/>
 <path d="M0 {BAR_H} h{WIDTH}" stroke="{palette["border"]}"/>
 <rect x="0.5" y="0.5" width="{WIDTH - 1}" height="{BAR_H}" rx="{RADIUS}" fill="{palette["bar"]}"/>
 {dots}

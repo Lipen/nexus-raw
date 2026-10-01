@@ -206,32 +206,40 @@ run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first manifest.json --workers 1
 say ""
 
 note "--- name it, so consumers never hard-code a version --------------"
+say "# give the version a name, so consumers never hard-code it"
 run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
 # A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
-# The captured token drives the fetch below.
-run "$NXR" channel get "$REPO/latest"
-VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
+# The recorded hero skips the read-back and names the version it just set.
+if [ "$SCOPE" = "full" ]; then
+  say ""
+  say "# read the pointer back"
+  run "$NXR" channel get "$REPO/latest"
+  VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
+else
+  VERSION_AT_CHANNEL="$VERSION"
+fi
 say ""
 
 note "--- consume exactly that version ---------------------------------"
+say "# fetch that version back, digests checked on the way in"
 run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
 say ""
 
 note "--- verify offline, no network -----------------------------------"
+say "# check every digest offline, no network"
 run "$NXR" verify "$VENDOR/"
 
 if [ "$SCOPE" = "full" ]; then
 say ""
-note "--- the part that matters: a diverged local file -----------------"
-note "someone edited a downloaded artifact: bytes and marker no longer agree"
+say "# someone edits a downloaded artifact: bytes and marker disagree"
 say "\$ printf 'edited by hand\\n' >> vendor/1.4.0/app-1.4.0.zip"
 printf 'edited by hand\n' >> "$VENDOR/app-1.4.0.zip"
 run_expecting_failure "$NXR" verify "$VENDOR/"
 say ""
-note "the command that fetched it now refuses to overwrite it"
+say "# the command that fetched it refuses to overwrite a diverged file"
 run_expecting_failure "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
 say ""
-note "delete the bad copy: a re-run fetches exactly what is missing"
+say "# delete the bad copy; a re-run fetches exactly what is missing"
 say "\$ rm -f vendor/1.4.0/app-1.4.0.zip vendor/1.4.0/app-1.4.0.zip.sha256"
 rm -f "$VENDOR/app-1.4.0.zip" "$VENDOR/app-1.4.0.zip.sha256"
 run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
@@ -240,17 +248,16 @@ say ""
 fi
 
 if [ "$SCOPE" = "full" ]; then
-  note "--- the weak link: the same publish over a flaky server ----------"
+  say ""
+  say "# the same publish, over a server that fails the first request per path"
   start_mock flaky --flaky 1
   run "$NXR" up "$DIST/" "${MOCK_URL%/}/$VERSION/" --claim-first manifest.json --workers 1
   say ""
-
-  note "--- and a server that wants credentials --------------------------"
+  say "# a server that wants credentials: wrong ones are transport, exit 3"
   start_mock auth-401 --auth ci:secret
   AUTHED="${MOCK_URL%/}"
-  note "the server answers 401: transport, not data, so the exit code is 3"
   run_expecting_failure "$NXR" up "$DIST/" "$AUTHED/$VERSION/" -u ci:wrong
-  note "the same command with the right credentials"
+  say "# the right credentials, and it completes"
   run env NXR_USERNAME=ci NXR_PASSWORD=secret "$NXR" up "$DIST/" "$AUTHED/$VERSION/" -q
   say ""
 fi

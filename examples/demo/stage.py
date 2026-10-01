@@ -41,6 +41,7 @@ ERROR_MS = 90
 
 # The class suffixes the stylesheet and the SVG palette both key on.
 KINDS = (
+    (re.compile(r"^#"), "comment"),
     (re.compile(r"^\$ "), "cmd"),
     (re.compile(r"^error:"), "err"),
     (re.compile(r"^hint:"), "hint"),

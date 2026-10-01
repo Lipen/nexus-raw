@@ -7,23 +7,24 @@
 [50, "↑ pinned.xml ok"],
 [50, "uploaded 4, downloaded 0, skipped 0"],
 [50, ""],
+[50, "# give the version a name, so consumers never hard-code it"],
 [50, "$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward"],
 [100, "channel: set http://127.0.0.1:8734/latest → 1.4.0"],
-[100, "$ nxr channel get http://127.0.0.1:8734/latest"],
-[100, "1.4.0"],
-[150, ""],
-[150, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],
-[200, "plan: 0 to upload, 3 to download, 0 up to date"],
-[700, "↓ app-1.4.0.zip ok"],
-[700, "↓ bom/linux-x86_64.json ok"],
-[700, "↓ pinned.xml ok"],
-[700, "uploaded 0, downloaded 3, skipped 0"],
-[750, ""],
-[750, "$ nxr verify vendor/1.4.0/"],
-[750, "verify: 3 ok, FAILED: none"],
-[750, "uploaded 0, downloaded 0, skipped 3"]
+[100, ""],
+[100, "# fetch that version back, digests checked on the way in"],
+[100, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],
+[150, "plan: 0 to upload, 3 to download, 0 up to date"],
+[600, "↓ app-1.4.0.zip ok"],
+[650, "↓ bom/linux-x86_64.json ok"],
+[650, "↓ pinned.xml ok"],
+[650, "uploaded 0, downloaded 3, skipped 0"],
+[650, ""],
+[650, "# check every digest offline, no network"],
+[650, "$ nxr verify vendor/1.4.0/"],
+[700, "verify: 3 ok, FAILED: none"],
+[700, "uploaded 0, downloaded 0, skipped 3"]
 ],"at":[
-400, 877, 1105, 1255, 1405, 1573, 1723, 1918, 2158, 2563, 2800, 3148, 3298, 3538, 3943, 4171, 4321, 4489, 4639, 4834, 5074, 5362, 5530
+400, 877, 1105, 1255, 1405, 1573, 1723, 1918, 2158, 2422, 2827, 3064, 3304, 3562, 3967, 4195, 4345, 4513, 4663, 4858, 5098, 5308, 5596, 5764
 ],"kinds":[
-"cmd", "note", "ok", "ok", "ok", "ok", "", "", "cmd", "note", "cmd", "", "", "cmd", "note", "ok", "ok", "ok", "", "", "cmd", "note", ""
+"cmd", "note", "ok", "ok", "ok", "ok", "", "", "comment", "cmd", "note", "", "comment", "cmd", "note", "ok", "ok", "ok", "", "", "comment", "cmd", "note", ""
 ]}
