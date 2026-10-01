@@ -1,0 +1,72 @@
+name: Release
+
+# A tag is the release. The workflow refuses a tag that disagrees with the
+# workspace version, publishes the crates in dependency order, and opens the
+# GitHub release whose generated notes are the changelog.
+on:
+  push:
+    tags: [v*]
+
+# The release notes are written with the repository token.
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish the crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # The version lives in one place; a tag that disagrees with it would
+      # publish a number nobody wrote down.
+      - name: Tag matches the workspace version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          workspace="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if [ "$tag" != "$workspace" ]; then
+            echo "tag $GITHUB_REF_NAME does not match workspace version $workspace" >&2
+            exit 1
+          fi
+          echo "releasing $workspace"
+
+      # Order matters: nexus-raw depends on nexus-raw-core by version.
+      - name: Publish nexus-raw-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked -p nexus-raw-core
+
+      # crates.io resolves a dependent only after the index carries the
+      # dependency, which takes a moment after the upload.
+      - name: Wait for the index
+        run: sleep 30
+
+      # The mock is a fixture other projects' harnesses drive; it depends on
+      # nothing inside the workspace, so it can publish on its own.
+      - name: Publish mock-nexus
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked -p mock-nexus
+
+      - name: Publish nexus-raw
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked -p nexus-raw
+
+      - name: Open the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+
+# nexus-raw-napi is `publish = false`: its artifact is the npm package, whose
+# release needs the per-platform prebuilt packages first.
