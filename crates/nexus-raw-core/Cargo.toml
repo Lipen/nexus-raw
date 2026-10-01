@@ -3,8 +3,14 @@ name = "nexus-raw-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 readme = "README.md"
 description = "Protocol core for nexus-raw: claim, sha-siblings, symmetric diff, resumable up/down against Nexus raw storage"
+keywords = ["nexus", "http-client", "sha256", "resume", "artifacts"]
+categories = ["api-bindings", "development-tools"]
 
 [dependencies]
 tokio = { workspace = true }

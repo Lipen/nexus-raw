@@ -1,6 +1,20 @@
 {
   "name": "nexus-raw",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lipen/nexus-raw.git"
+  },
+  "homepage": "https://lipen.github.io/nexus-raw/",
+  "keywords": [
+    "nexus",
+    "nexus-raw",
+    "artifacts",
+    "sha256",
+    "cli",
+    "devops"
+  ],
   "description": "Node bindings for nexus-raw: the nxr surface as promises over Nexus raw storage",
   "main": "index.js",
   "types": "index.d.ts",

@@ -3,6 +3,10 @@ name = "nexus-raw-napi"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+# The artifact this crate produces is the npm package; a crates.io copy would
+# be dead weight, and its prebuilt binaries are what npm consumers install.
+publish = false
 readme = "README.md"
 description = "Node bindings for nexus-raw: the nxr surface as promises, on top of nexus-raw-core"
 
