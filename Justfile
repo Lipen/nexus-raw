@@ -46,13 +46,62 @@ test *args:
     {{cargo}} test --workspace {{args}}
 
 # The full gate a change must pass before it lands: fmt, clippy, prek, tests.
-[doc('The whole gate: fmt + clippy + prek + tests.')]
+[doc('The whole gate: fmt + clippy + prek + tests + version agreement.')]
 [group('check')]
 check:
     just fmt -- --check
     just clippy
     just lint
+    just version-check
     just test
+
+# ---- release ---------------------------------------------------------------
+
+# The workspace manifest is the source of truth; the npm package, its lock and
+# the internal dependency version follow it. `just check` runs version-check.
+[doc('Set the release version everywhere it is asserted: `just version 0.2.0`.')]
+[group('release')]
+version v:
+    #!/bin/sh
+    set -eu
+    case "{{v}}" in
+      [0-9]*.[0-9]*.[0-9]*) ;;
+      *) echo "version {{v}} is not X.Y.Z" >&2; exit 2 ;;
+    esac
+    old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+    [ -n "$old" ] || { echo "no workspace version in Cargo.toml" >&2; exit 1; }
+    perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{v}}\"/" Cargo.toml
+    perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json crates/nexus-raw-napi/package-lock.json
+    perl -pi -e "s/version = \"\Q$old\E\"/version = \"{{v}}\"/" crates/nexus-raw/Cargo.toml
+    # Resolve once so Cargo.lock carries the new workspace version.
+    cargo metadata --format-version 1 >/dev/null
+    echo "version {{v}} set (was $old)"
+
+[doc('Assert the version agrees everywhere and that no page pins it.')]
+[group('release')]
+[group('check')]
+version-check:
+    #!/bin/sh
+    set -eu
+    ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+    pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
+    lock="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package-lock.json | head -1)"
+    dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
+    failed=0
+    for pair in "package.json:$pkg" "package-lock.json:$lock" "cli dependency:$dep"; do
+      name="${pair%%:*}"; got="${pair#*:}"
+      if [ "$got" != "$ws" ]; then echo "version-check: $name is $got, workspace is $ws" >&2; failed=1; fi
+    done
+    # Docs and readmes may name the command, never the current number: a pinned
+    # version is a lie on the next release.
+    # The recorded session keeps the version it was made with: `just demo-cast`
+    # refreshes it, so it is provenance, not an assertion.
+    if grep -rEn --exclude-dir=assets 'nxr [0-9]+\.[0-9]+\.[0-9]+' README.md README.ru.md crates/nexus-raw/README.md docs; then
+      echo "version-check: a page pins the current version" >&2
+      failed=1
+    fi
+    [ "$failed" = 0 ] || exit 1
+    echo "version-check: $ws agrees everywhere"
 
 [doc('Debug build of the workspace.')]
 [group('build')]
