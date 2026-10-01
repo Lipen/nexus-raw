@@ -30,7 +30,7 @@ The protocol text is the contract, and a change to it is one change, not a serie
 - update `docs/reference/protocol.md`;
 - update every implementation in the same commit range: `nexus-raw-core`, the `nxr` surface, the Node bindings;
 - add the mock scenario that exercises the new behaviour, in `crates/mock-nexus/src/lib.rs`, with its test;
-- regenerate the recorded session (`just demo-cast`) when the demo's commands or the output format changed.
+- regenerate the recorded session and its animation (`just demo-cast`) when the demo's commands or the output format changed.
 
 Docs are corrected in the same commit as the behaviour they describe.
 Transcripts in the docs come from a real run: paste what the binary printed, never what it should have printed.

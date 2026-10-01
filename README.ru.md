@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/img/hero-terminal.png" alt="Записанная сессия nxr: публикация каталога версии против мок-сервера" width="760">
+<a href="https://lipen.github.io/nexus-raw/how-to/demo/">
+<img src="docs/assets/img/session.svg" alt="Записанная сессия nxr: публикация каталога версии, имя через канал, обратная загрузка и проверка дайджестов против мок-сервера" width="760">
+</a>
 
 # nexus-raw
 

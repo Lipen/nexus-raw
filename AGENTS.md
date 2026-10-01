@@ -47,6 +47,7 @@ The canonical protocol text is kept outside this repository.
 | a mock scenario's exact behavior | `crates/mock-nexus/src/lib.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
+| the recorded session and the landing animation | `examples/demo/README.md` |
 | the version agreement check | `scripts/version-check.sh` |
 
 ## Verify before reporting done

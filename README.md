@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/img/hero-terminal.png" alt="A recorded nxr session: publishing a version directory against the mock server" width="760">
+<a href="https://lipen.github.io/nexus-raw/how-to/demo/">
+<img src="docs/assets/img/session.svg" alt="A recorded nxr session: publishing a version directory, naming it with a channel, fetching it back and verifying it against the mock server" width="760">
+</a>
 
 # nexus-raw
 
