@@ -19,7 +19,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-`nxr --version` prints `nxr 0.1.0`.
+Check it landed with `nxr --version`.
 
 ## Quick start
 
@@ -47,3 +47,4 @@ An interrupted transfer finishes by repeating the same command: complete parts a
 
 - Guides and reference: <https://lipen.github.io/nexus-raw/>
 - The repository: <https://github.com/Lipen/nexus-raw>
+- License: MIT, see <https://github.com/Lipen/nexus-raw/blob/master/LICENSE>

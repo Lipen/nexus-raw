@@ -30,7 +30,7 @@ cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
 cargo install --path crates/nexus-raw --locked
 ```
 
-`nxr --version` печатает `nxr 0.1.0`.
+Проверить, что встало: `nxr --version`.
 
 ## Быстрый старт
 
@@ -93,5 +93,10 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 ## Участие
 
+Сборка, тесты, коммиты, изменения протокола и чеклист релиза: [CONTRIBUTING.md](CONTRIBUTING.md).
 Устройство репозитория и правила изменений: [AGENTS.md](AGENTS.md).
-`just check` — полный гейт (fmt, clippy, prek, тесты); `just demo` — записанная сессия против локального мок-сервера.
+`just check` — полный гейт; `just demo` — записанная сессия против локального мок-сервера.
+
+## Лицензия
+
+MIT, см. [LICENSE](LICENSE).

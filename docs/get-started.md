@@ -22,10 +22,11 @@ No Nexus installation is needed: the repository ships `mock-nexus`, a mock Nexus
     cargo run -p nexus-raw -- --version
     ```
 
-```console
-$ nxr --version
-nxr 0.1.0
+```bash
+nxr --version
 ```
+
+It prints the version you installed.
 
 ## Start a throwaway Nexus
 

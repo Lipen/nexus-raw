@@ -30,7 +30,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-`nxr --version` prints `nxr 0.1.0`.
+Check it landed with `nxr --version`.
 
 ## Quick start
 
@@ -93,5 +93,10 @@ Sources live in [docs/](docs/); `just docs` serves the site locally.
 
 ## Contributing
 
+Build, test, commit, protocol changes and the release checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 Repository layout and the rules for changing things: [AGENTS.md](AGENTS.md).
-`just check` runs the full gate (fmt, clippy, prek, tests); `just demo` runs the recorded session against the local mock server.
+`just check` runs the full gate; `just demo` runs the recorded session against the local mock server.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
