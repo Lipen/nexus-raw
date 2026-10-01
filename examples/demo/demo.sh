@@ -11,9 +11,9 @@
 # The only stub is the payload directory, generated deterministically, so digests and transcripts stay stable between runs.
 #
 # Environment:
+#   NXR_DEMO_SCOPE=core    stop after verify: the four beats the landing animation shows
 #   NXR_DEMO_CAST=<file>   record the session: every command and output line with its arrival time, bucketed to 50 ms (`just demo-cast` writes the docs landing animation)
 #   NXR_DEMO_KEEP=1        leave the last mock server running and print its URL
-#   NXR_DEMO_EXTRA=0       skip the extra failure-scenario phases at the end
 
 set -uo pipefail
 
@@ -33,7 +33,7 @@ NXR="nxr"
 DIST="dist/1.4.0"
 VENDOR="vendor/1.4.0"
 VERSION="1.4.0"
-EXTRA="${NXR_DEMO_EXTRA:-1}"
+SCOPE="${NXR_DEMO_SCOPE:-full}"
 
 # Ambient credentials would change the session, and the mock wants none.
 unset NXR_AUTH NXR_USERNAME NXR_PASSWORD
@@ -202,7 +202,7 @@ start_mock "$SCENARIO" "$@"
 REPO="${MOCK_URL%/}"
 
 note "--- publish a version directory ----------------------------------"
-run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first manifest.json --workers 1 -v
+run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first manifest.json --workers 1
 say ""
 
 note "--- name it, so consumers never hard-code a version --------------"
@@ -214,13 +214,14 @@ VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
 say ""
 
 note "--- consume exactly that version ---------------------------------"
-run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1 -v
+run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
 say ""
 
 note "--- verify offline, no network -----------------------------------"
 run "$NXR" verify "$VENDOR/"
-say ""
 
+if [ "$SCOPE" = "full" ]; then
+say ""
 note "--- the part that matters: a diverged local file -----------------"
 note "someone edited a downloaded artifact: bytes and marker no longer agree"
 say "\$ printf 'edited by hand\\n' >> vendor/1.4.0/app-1.4.0.zip"
@@ -236,8 +237,9 @@ rm -f "$VENDOR/app-1.4.0.zip" "$VENDOR/app-1.4.0.zip.sha256"
 run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
 run "$NXR" verify "$VENDOR/"
 say ""
+fi
 
-if [ "$EXTRA" != "0" ]; then
+if [ "$SCOPE" = "full" ]; then
   note "--- the weak link: the same publish over a flaky server ----------"
   start_mock flaky --flaky 1
   run "$NXR" up "$DIST/" "${MOCK_URL%/}/$VERSION/" --claim-first manifest.json --workers 1

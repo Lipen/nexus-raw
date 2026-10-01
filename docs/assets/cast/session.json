@@ -1,4 +1,29 @@
-{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.1.0","lines":[
-[0,"$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first manifest.json --workers 1 -v"],[50,"plan: 4 to upload, 0 to download, 0 up to date"],[50,"↑ app-1.4.0.zip"],[50,"↑ bom/linux-x86_64.json"],[50,"↑ manifest.json"],[50,"↑ pinned.xml"],[50,"→ manifest.json (76)"],[50,"↑ manifest.json ok"],[50,"→ app-1.4.0.zip (98304)"],[50,"↑ app-1.4.0.zip ok"],[50,"→ bom/linux-x86_64.json (8192)"],[50,"↑ bom/linux-x86_64.json ok"],[50,"→ pinned.xml (512)"],[50,"↑ pinned.xml ok"],[50,"uploaded 4, downloaded 0, skipped 0"],[50,""],[100,"$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward"],[100,"channel: set http://127.0.0.1:8734/latest → 1.4.0"],[100,"$ nxr channel get http://127.0.0.1:8734/latest"],[150,"1.4.0"],[200,""],[200,"$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1 -v"],[250,"plan: 0 to upload, 3 to download, 0 up to date"],[250,"↓ app-1.4.0.zip"],[250,"↓ bom/linux-x86_64.json"],[250,"↓ pinned.xml"],[250,"→ app-1.4.0.zip (98304)"],[4050,"↓ app-1.4.0.zip ok"],[4050,"→ bom/linux-x86_64.json (8192)"],[4350,"↓ bom/linux-x86_64.json ok"],[4350,"→ pinned.xml (512)"],[4350,"↓ pinned.xml ok"],[4350,"uploaded 0, downloaded 3, skipped 0"],[4350,""],[4350,"$ nxr verify vendor/1.4.0/"],[4400,"verify: 3 ok, FAILED: none"],[4400,"uploaded 0, downloaded 0, skipped 3"],[4400,""],[4400,"$ printf 'edited by hand\\n' >> vendor/1.4.0/app-1.4.0.zip"],[4400,"$ nxr verify vendor/1.4.0/"],[4450,"uploaded 0, downloaded 0, skipped 2"],[4450,"failed: app-1.4.0.zip"],[4450,"error: incomplete: app-1.4.0.zip"],[4450,"hint: rerun the same command; finished names are skipped and the rest is retried"],[4450,"(exit 1)"],[4450,""],[4450,"$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],[4500,"error: mismatch: app-1.4.0.zip: local object is broken and must not be overwritten: digest mismatch: sibling 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a, actual 3904b03abcf386410cf0889e842b1b40655d962bbda1b951975cb14b648197ed"],[4500,"hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object"],[4500,"(exit 1)"],[4500,""],[4500,"$ rm -f vendor/1.4.0/app-1.4.0.zip vendor/1.4.0/app-1.4.0.zip.sha256"],[4500,"$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],[4550,"plan: 0 to upload, 1 to download, 2 up to date"],[4550,"○ bom/linux-x86_64.json skipped"],[4550,"○ pinned.xml skipped"],[8350,"↓ app-1.4.0.zip ok"],[8350,"uploaded 0, downloaded 1, skipped 2"],[8400,"$ nxr verify vendor/1.4.0/"],[8400,"verify: 3 ok, FAILED: none"],[8400,"uploaded 0, downloaded 0, skipped 3"],[8400,""]
-
+{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.1.0","title":"nxr 0.1.0 · against mock-nexus (slow)","lines":[
+[0, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first manifest.json --workers 1"],
+[50, "plan: 4 to upload, 0 to download, 0 up to date"],
+[50, "↑ manifest.json ok"],
+[50, "↑ app-1.4.0.zip ok"],
+[50, "↑ bom/linux-x86_64.json ok"],
+[50, "↑ pinned.xml ok"],
+[50, "uploaded 4, downloaded 0, skipped 0"],
+[50, ""],
+[50, "$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward"],
+[100, "channel: set http://127.0.0.1:8734/latest → 1.4.0"],
+[100, "$ nxr channel get http://127.0.0.1:8734/latest"],
+[100, "1.4.0"],
+[150, ""],
+[150, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],
+[200, "plan: 0 to upload, 3 to download, 0 up to date"],
+[700, "↓ app-1.4.0.zip ok"],
+[700, "↓ bom/linux-x86_64.json ok"],
+[700, "↓ pinned.xml ok"],
+[700, "uploaded 0, downloaded 3, skipped 0"],
+[750, ""],
+[750, "$ nxr verify vendor/1.4.0/"],
+[750, "verify: 3 ok, FAILED: none"],
+[750, "uploaded 0, downloaded 0, skipped 3"]
+],"at":[
+400, 877, 1105, 1255, 1405, 1573, 1723, 1918, 2158, 2563, 2800, 3148, 3298, 3538, 3943, 4171, 4321, 4489, 4639, 4834, 5074, 5362, 5530
+],"kinds":[
+"cmd", "note", "ok", "ok", "ok", "ok", "", "", "cmd", "note", "cmd", "", "", "cmd", "note", "ok", "ok", "ok", "", "", "cmd", "note", ""
 ]}

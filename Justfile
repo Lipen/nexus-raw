@@ -117,14 +117,20 @@ demo scenario='slow' *args:
 # The landing animation is a recording of that same stand, not a mock-up.
 # The port is pinned so the recorded URLs stay comparable between recordings;
 # a busy port fails loudly instead of silently changing the file.
-[doc('Record the demo session into the docs landing animation.')]
+# Three steps, one source: the cast (a real run), the pace (a reader's timeline)
+# and the SVG (the same timeline, drawn for pages without JavaScript).
+# Needs python3 for the two tiny scripts next to the stand.
+[doc('Record the demo session: the cast, its pace and the landing SVG.')]
 [group('examples')]
 demo-cast *args:
     cargo build -q -p mock-nexus -p nexus-raw
-    NXR_DEMO_EXTRA=0 NXR_DEMO_CAST=docs/assets/cast/session.json \
-        examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 40 {{args}}
+    NXR_DEMO_SCOPE=core NXR_DEMO_CAST=docs/assets/cast/session.json \
+        examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 5 {{args}}
     test -s docs/assets/cast/session.json
+    python3 examples/demo/stage.py docs/assets/cast/session.json
+    python3 examples/demo/svg.py docs/assets/cast/session.json docs/assets/img/session.svg
     @echo "cast: docs/assets/cast/session.json"
+    @echo "svg:  docs/assets/img/session.svg"
 
 # The whole site, written in docs/ (zensical, Material stack).
 # Live reload included: edit a page, the browser refreshes itself.
