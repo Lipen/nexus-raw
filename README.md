@@ -8,6 +8,7 @@
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
+[![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
 
 [Docs](https://lipen.github.io/nexus-raw/) · [Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
 
@@ -16,9 +17,12 @@
 ## Install
 
 Requires Rust 1.85 or newer.
-Nothing is published on crates.io or npm yet, and there are no prebuilt binaries, so the two forms below are the ways in.
 
-From git, without cloning (installs whatever is on the default branch, not a tagged release):
+```bash
+cargo install nexus-raw
+```
+
+From the repository instead (installs whatever is on the default branch, not a released version):
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
@@ -29,6 +33,8 @@ From a checkout:
 ```bash
 cargo install --path crates/nexus-raw --locked
 ```
+
+The Node bindings are not on npm yet: they need their per-platform prebuilt packages first.
 
 Check it landed with `nxr --version`.
 

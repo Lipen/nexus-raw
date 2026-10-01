@@ -5,9 +5,12 @@ curl for a Sonatype Nexus raw repository.
 ## Install
 
 Requires Rust 1.85 or newer.
-Nothing is published on crates.io or npm yet, so install from git or from a checkout.
 
-From git, without cloning (installs whatever is on the default branch, not a tagged release):
+```bash
+cargo install nexus-raw
+```
+
+From the repository instead (whatever is on the default branch, not a release):
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
@@ -18,6 +21,8 @@ From a checkout:
 ```bash
 cargo install --path crates/nexus-raw --locked
 ```
+
+The Node bindings are not on npm yet: they need their per-platform prebuilt packages first.
 
 Check it landed with `nxr --version`.
 

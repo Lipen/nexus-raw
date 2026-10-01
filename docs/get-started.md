@@ -10,6 +10,12 @@ No Nexus installation is needed: the repository ships `mock-nexus`, a mock Nexus
 
 ## Install
 
+=== "From crates.io"
+
+    ```bash
+    cargo install nexus-raw
+    ```
+
 === "From the checkout"
 
     ```bash

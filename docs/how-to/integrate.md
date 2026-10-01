@@ -5,11 +5,11 @@ Start with the CLI and descend only when you need the API in-process.
 
 ## As the CLI
 
-Install it from source (no package registry yet):
-
 ```bash
-cargo install --path crates/nexus-raw
+cargo install nexus-raw
 ```
+
+From a checkout instead, if you want the revision your code is building against: `cargo install --path crates/nexus-raw`.
 
 Credentials resolve from `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`, in that order — the sources, the precedence and the argv caveat are in the [CLI reference](../reference/cli.md#credentials-and-urls).
 
