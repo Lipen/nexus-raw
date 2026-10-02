@@ -2,11 +2,12 @@
   "name": "nexus-raw-example-node",
   "private": true,
   "type": "module",
-  "description": "An external npm consumer of nexus-raw via a file: dependency",
+  "packageManager": "pnpm@10.34.6",
+  "description": "An external npm consumer of nexus-raw via a link: dependency",
   "scripts": {
     "start": "node publish-and-consume.mjs"
   },
   "dependencies": {
-    "nexus-raw": "file:../../crates/nexus-raw-napi"
+    "nexus-raw": "link:../../crates/nexus-raw-napi"
   }
 }

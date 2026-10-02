@@ -11,9 +11,9 @@ The addon is a cargo build wrapped by the napi CLI, which also generates the loa
 
 ```bash
 cargo build -p nexus-raw-napi          # the cdylib, like any workspace crate
-npm install                            # the @napi-rs/cli build tool
-npm run build:debug                    # addon + binding.cjs + binding.d.ts
-npm run build                          # the same, in release mode
+pnpm install                           # the @napi-rs/cli build tool
+pnpm run build:debug                   # addon + binding.cjs + binding.d.ts
+pnpm run build                         # the same, in release mode
 ```
 
 The generated files (`binding.cjs`, `binding.d.ts`, `*.node`) are local build outputs and gitignored.

@@ -92,11 +92,11 @@ The guided tour of the API, layers included: [the Rust API](../reference/api.md)
 The `nexus-raw-napi` crate ships the same surface to Node as promises: the npm package name is `nexus-raw`, built on napi-rs 3.
 
 npm publishing is not set up.
-Consume the package the way [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node) does, as a `file:` dependency — no registry involved:
+Consume the package the way [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node) does, as a `link:` dependency — no registry involved:
 
 ```bash
-(cd crates/nexus-raw-napi && npm install && npm run build:debug)
-cd examples/node && npm install
+(cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
+cd examples/node && pnpm install
 node publish-and-consume.mjs
 ```
 

@@ -10,11 +10,10 @@ ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 [ -n "$ws" ] || { echo "version-check: no workspace version in Cargo.toml" >&2; exit 1; }
 
 pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
-lock="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package-lock.json | head -1)"
 dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
 
 failed=0
-for pair in "crates/nexus-raw-napi/package.json:$pkg" "crates/nexus-raw-napi/package-lock.json:$lock" "nexus-raw's dependency on nexus-raw-core:$dep"; do
+for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep"; do
   name="${pair%%:*}"; got="${pair#*:}"
   if [ "$got" != "$ws" ]; then
     echo "version-check: $name is '$got', the workspace is '$ws'" >&2

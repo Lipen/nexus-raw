@@ -1,14 +1,14 @@
 # Node example: an external npm consumer of `nexus-raw`
 
 A standalone npm project that pulls the package the way an outside user would:
-a `file:` dependency pointing at the bindings crate, no registry involved.
+a `link:` dependency pointing at the bindings crate, no registry involved.
 Once the package is on npm, swap the dependency to a version.
 
 One-time setup (builds the native addon and links the dependency):
 
 ```bash
-(cd crates/nexus-raw-napi && npm install && npm run build:debug)
-cd examples/node && npm install
+(cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
+cd examples/node && pnpm install
 ```
 
 Run it:

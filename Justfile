@@ -90,7 +90,7 @@ version v:
     old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
     [ -n "$old" ] || { echo "no workspace version in Cargo.toml" >&2; exit 1; }
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{v}}\"/" Cargo.toml
-    perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json crates/nexus-raw-napi/package-lock.json
+    perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/version = \"\Q$old\E\"/version = \"{{v}}\"/" crates/nexus-raw/Cargo.toml
     # Resolve once so Cargo.lock carries the new workspace version.
     cargo metadata --format-version 1 >/dev/null
@@ -141,7 +141,7 @@ release:
 example-node:
     cargo build -q -p mock-nexus
     cargo build -q -p nexus-raw-napi
-    cd examples/node && npm install --silent && node publish-and-consume.mjs
+    cd examples/node && pnpm install && node publish-and-consume.mjs
 
 [doc('Run the Rust example: standalone crate on a path dependency.')]
 [group('examples')]
