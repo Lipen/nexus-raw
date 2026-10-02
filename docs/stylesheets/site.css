@@ -380,6 +380,9 @@
   overflow: hidden;
   background: var(--nxr-ink);
   box-shadow: 0 12px 32px oklch(0.2 0.02 210 / 0.35);
+  /* The screen is dark in both schemes, so its ink is baked here, not taken
+   * from the theme: a light scheme would otherwise paint dark text on it. */
+  color: oklch(0.88 0.01 210);
   /* Fluid, not shrink-to-fit: inline-size containment would collapse a figure
    * sized by its contents, and the column is the width this screen has. */
   width: 100%;

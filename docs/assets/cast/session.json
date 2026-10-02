@@ -1,4 +1,4 @@
-{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.1.0","title":"nxr 0.1.0 · against mock-nexus (slow)","cycle":14730,"lines":[
+{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.1.0","title":"nxr 0.1.0 · against mock-nexus (slow)","clear":16930,"cycle":17380,"lines":[
 [0, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first manifest.json --workers 1"],
 [50, "plan: 4 to upload, 0 to download, 0 up to date"],
 [50, "↑ manifest.json ok"],
@@ -15,16 +15,16 @@
 [100, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1"],
 [150, "plan: 0 to upload, 3 to download, 0 up to date"],
 [650, "↓ app-1.4.0.zip ok"],
-[650, "↓ bom/linux-x86_64.json ok"],
-[650, "↓ pinned.xml ok"],
-[650, "uploaded 0, downloaded 3, skipped 0"],
+[700, "↓ bom/linux-x86_64.json ok"],
+[700, "↓ pinned.xml ok"],
+[700, "uploaded 0, downloaded 3, skipped 0"],
 [700, ""],
 [700, "# check every digest offline, no network"],
 [700, "$ nxr verify vendor/1.4.0/"],
-[700, "verify: 3 ok, FAILED: none"],
-[700, "uploaded 0, downloaded 0, skipped 3"]
+[750, "verify: 3 ok, FAILED: none"],
+[750, "uploaded 0, downloaded 0, skipped 3"]
 ],"at":[
-500, 1445, 1875, 2255, 2635, 3015, 3395, 3775, 4325, 4815, 5640, 6085, 6635, 7115, 7940, 8370, 8750, 9130, 9510, 9890, 10440, 10840, 11470, 11850
+500, 1445, 1875, 2255, 2635, 3015, 3395, 3775, 4225, 4715, 5540, 5985, 6435, 6915, 7740, 8170, 8550, 8930, 9310, 9690, 10140, 10540, 11170, 11550
 ],"kinds":[
 "cmd", "note", "ok", "ok", "ok", "ok", "", "", "comment", "cmd", "note", "", "comment", "cmd", "note", "ok", "ok", "ok", "", "", "comment", "cmd", "note", ""
 ]}

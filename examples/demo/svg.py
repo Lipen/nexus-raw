@@ -128,9 +128,10 @@ def render(cast: dict) -> str:
     body_h = PAD_TOP + PAD_BOTTOM + rows * LINE_H
 
     # one loop: lines appear instantly at their beat, the finished run holds
-    # for half the tail, the screen clears, and the cycle starts over
+    # for the hold stage.py budgets, the screen clears for a short beat, and
+    # the cycle starts over
     cycle = float(cast["cycle"])
-    clear_pct = 100 * (at[-1] + (cycle - at[-1]) / 2) / cycle
+    clear_pct = 100 * float(cast["clear"]) / cycle
 
     body: list[str] = []
     steps: list[str] = []
@@ -234,7 +235,7 @@ def render(cast: dict) -> str:
 def main(source: str, target: str) -> int:
     with open(source, encoding="utf-8") as handle:
         cast = json.load(handle)
-    for field in ("at", "kinds", "title", "cycle"):
+    for field in ("at", "kinds", "title", "clear", "cycle"):
         if field not in cast:
             raise SystemExit(f"svg: {source} has no {field}; run stage.py on it first")
     svg = render(cast)
