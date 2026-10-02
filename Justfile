@@ -136,7 +136,7 @@ build *args:
 release:
     {{cargo}} build --release -p nexus-raw
 
-[doc('Run the Node example: file: dependency, claim-first up, channel, down, verify.')]
+[doc('Run the Node example: link: dependency, claim-first up, channel, down, verify.')]
 [group('examples')]
 example-node:
     cargo build -q -p mock-nexus
