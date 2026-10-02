@@ -19,6 +19,8 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 | `atomic` | the correct server: PUT/GET/HEAD, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
 | `partial-put` | cuts the first PUT body short and closes the connection |
 | `drop-connection` | resets the first request per path after reading its headers |
+| `freeze-upload` | accepts a PUT connection and then never reads or answers, so the client's stall detection must fire |
+| `sizeless` | omits `Content-Length` on GET responses (chunked/streamed bodies of unknown size) |
 | `slow` | writes response bodies in small delayed chunks |
 | `foreign-marker` | stores markers with a foreign digest |
 | `markerless` | accepts markers but silently drops them |
