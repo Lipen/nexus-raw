@@ -18,7 +18,7 @@ homepage = "https://github.com/Lipen/nexus-raw"
 documentation = "https://lipen.github.io/nexus-raw/"
 
 [workspace.dependencies]
-base64 = "0.22"
+base64 = "0.23"
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 libc = "0.2"
@@ -31,11 +31,11 @@ percent-encoding = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "fs", "io-util", "io-std"] }
-toml = "0.8"
+toml = "1.1"
 
 [profile.release]
 strip = true
