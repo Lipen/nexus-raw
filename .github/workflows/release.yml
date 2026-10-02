@@ -200,8 +200,11 @@ jobs:
 
       - name: Upload to the release
         if: github.event_name == 'push'
+        # The job has no checkout: without a git remote gh cannot infer the
+        # repository, so the release is named explicitly.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: gh release upload "$GITHUB_REF_NAME" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
 
 # nexus-raw-napi is `publish = false`: its artifact is the npm package, whose
