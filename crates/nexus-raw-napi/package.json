@@ -22,8 +22,7 @@
     "index.d.ts",
     "index.js",
     "binding.cjs",
-    "binding.d.ts",
-    "npm"
+    "binding.d.ts"
   ],
   "engines": {
     "node": ">= 18"
@@ -36,7 +35,9 @@
   "napi": {
     "binaryName": "nexus-raw",
     "targets": [
-      "x86_64-unknown-linux-gnu"
+      "x86_64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin"
     ]
   },
   "devDependencies": {

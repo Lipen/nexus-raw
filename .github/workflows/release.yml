@@ -207,5 +207,159 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: gh release upload "$GITHUB_REF_NAME" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
 
-# nexus-raw-napi is `publish = false`: its artifact is the npm package, whose
-# release needs the per-platform prebuilt packages first.
+  node:
+    name: Node addon ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # win32-x64-msvc joins when its placeholder package clears the npm
+        # spam filter (403 on first publish; support ticket filed).
+        include:
+          - name: linux-x64-gnu
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform-os: linux
+            platform-cpu: x64
+          - name: darwin-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            platform-os: darwin
+            platform-cpu: x64
+          - name: darwin-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            platform-os: darwin
+            platform-cpu: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: node-${{ matrix.target }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: crates/nexus-raw-napi/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
+
+      - name: Install the dependencies
+        run: cd crates/nexus-raw-napi && pnpm install
+
+      - name: Build the release addon
+        run: cd crates/nexus-raw-napi && pnpm exec napi build --platform --release --target ${{ matrix.target }} --js binding.cjs --dts binding.d.ts
+
+      # The staged package is what npm publish ships: the loader requires
+      # the package name, and its main file is the renamed addon.
+      - name: Stage the platform package
+        run: |
+          cd crates/nexus-raw-napi
+          mkdir -p "npm/nexus-raw-${{ matrix.name }}"
+          cp nexus-raw.*.node "npm/nexus-raw-${{ matrix.name }}/index.node"
+          node -e '
+            const fs = require("fs");
+            const main = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const pkg = {
+              name: "nexus-raw-" + process.argv[1],
+              version: main.version,
+              description: "Prebuilt nexus-raw native addon",
+              license: "MIT",
+              repository: main.repository,
+              os: [process.argv[2]],
+              cpu: [process.argv[3]],
+              main: "index.node",
+              files: ["index.node"],
+            };
+            fs.writeFileSync("npm/nexus-raw-" + process.argv[1] + "/package.json", JSON.stringify(pkg, null, 2) + "\n");
+          ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}"
+
+      - name: Upload the staged package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.name }}
+          path: crates/nexus-raw-napi/npm/nexus-raw-${{ matrix.name }}
+          if-no-files-found: error
+
+  npm:
+    name: Publish the npm packages
+    needs: [node]
+    if: ${{ github.event_name == 'push' && needs.node.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # OIDC publish: npm exchanges the workflow identity for a short-lived
+      # credential, matched against the per-package trusted publisher.
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # npm >= 11.5 speaks trusted publishing; node 24 carries it.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Collect the staged packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: npm-*
+          path: npm
+          merge-multiple: true
+
+      # Platform packages first: the main package declares them as its
+      # optionalDependencies, and a consumer must never hit a missing one.
+      - name: Publish the platform packages
+        run: |
+          for d in npm/nexus-raw-*; do
+            npm publish "$d" --provenance --access public
+          done
+
+      # The dev manifest stays free of version pins: the platform packages
+      # do not exist between releases, and a frozen pnpm install would fail
+      # on them, so the release manifest is composed here from the tag.
+      - name: Stage the main package
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}" node <<'EOF'
+          const fs = require("fs");
+          const version = process.env.VERSION;
+          const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
+          const pkg = {
+            ...main,
+            optionalDependencies: {
+              "nexus-raw-linux-x64-gnu": version,
+              "nexus-raw-darwin-x64": version,
+              "nexus-raw-darwin-arm64": version,
+            },
+          };
+          fs.mkdirSync("pkg-main", { recursive: true });
+          for (const f of main.files) {
+            fs.copyFileSync(`crates/nexus-raw-napi/${f}`, `pkg-main/${f}`);
+          }
+          fs.writeFileSync("pkg-main/package.json", JSON.stringify(pkg, null, 2) + "\n");
+          EOF
+
+      - name: Publish the main package
+        run: npm publish pkg-main --provenance --access public
+
+# `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
+# weight, the npm registry above is the artifact channel.
