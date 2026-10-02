@@ -1,11 +1,21 @@
 name: Release
 
 # A tag is the release. The workflow refuses a tag that disagrees with the
-# workspace version, publishes the crates in dependency order, and opens the
-# GitHub release whose generated notes are the changelog.
+# workspace version, publishes the crates in dependency order, builds the
+# platform binaries, and attaches them to the GitHub release whose generated
+# notes are the changelog.
+# `workflow_dispatch` with `dry_run` runs the binary matrix alone: the same
+# build jobs, no crates.io, no release - the way to test this workflow
+# without spending a tag or a version number.
 on:
   push:
     tags: [v*]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and checksum the binaries, publish nothing
+        type: boolean
+        default: true
 
 # The release notes are written with the repository token.
 permissions:
@@ -14,6 +24,7 @@ permissions:
 jobs:
   publish:
     name: Publish the crates
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -67,6 +78,125 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - name: darwin-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - name: darwin-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: ${{ matrix.target }}
+
+      # The musl target links C code from ring statically; that needs the
+      # musl cross toolchain, not just the Rust target.
+      - name: Install the musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build nxr
+        run: cargo build --locked --release -p nexus-raw --target ${{ matrix.target }}
+
+      - name: Strip the binary
+        if: runner.os != 'Windows'
+        run: strip "target/${{ matrix.target }}/release/nxr"
+
+      # The binary has to run before it ships: this catches a broken link
+      # (missing loader, bad static libc) far cheaper than a user would.
+      - name: Smoke the binary
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/nxr"
+          if [ "${{ runner.os }}" = Windows ]; then bin="$bin.exe"; fi
+          "$bin" --version
+
+      - name: Pack and checksum
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/nxr"
+          if [ "${{ runner.os }}" = Windows ]; then bin="$bin.exe"; fi
+          mkdir stage
+          cp "$bin" README.md LICENSE stage/
+          archive="nxr-${{ matrix.name }}.tar.gz"
+          tar -czf "$archive" -C stage .
+          # macOS ships shasum, not GNU sha256sum; the emitted lines are the
+          # same "hash  name" either way, which is what SHA256SUMS needs.
+          if command -v sha256sum > /dev/null 2>&1; then
+            sha256sum "$archive" > "$archive.sha256"
+          else
+            shasum -a 256 "$archive" > "$archive.sha256"
+          fi
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: bins-${{ matrix.name }}
+          path: |
+            nxr-*.tar.gz
+            nxr-*.tar.gz.sha256
+          if-no-files-found: error
+
+  attach:
+    name: Attach the binaries
+    needs: [publish, build]
+    # On a tag the archives ride on the release the publish job opened; a
+    # dry run has no release, so the files stop at the workflow artifacts.
+    if: ${{ always() && needs.build.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.publish.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Collect the archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bins-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify the checksums
+        run: |
+          cd dist
+          cat *.sha256 > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Stop at the workflow artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Upload to the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
 
 # nexus-raw-napi is `publish = false`: its artifact is the npm package, whose
 # release needs the per-platform prebuilt packages first.
