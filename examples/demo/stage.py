@@ -30,14 +30,17 @@ import json
 import re
 import sys
 
-START_MS = 400  # a beat before the first line lands
-BASE_MS = 90
-PER_CHAR_MS = 3
-MIN_MS = 150
-MAX_MS = 620
-BLANK_MS = 240
-CMD_MS = 120
-ERROR_MS = 90
+START_MS = 500  # a beat before the first line lands
+BASE_MS = 200
+PER_CHAR_MS = 5
+MIN_MS = 380
+MAX_MS = 1400
+BLANK_MS = 550
+CMD_MS = 300
+ERROR_MS = 200
+# after the last line, the finished transcript stays up, then the screen
+# clears and the run starts over: the loop the readme animation plays
+TAIL_MS = 2500
 
 # The class suffixes the stylesheet and the SVG palette both key on.
 KINDS = (
@@ -74,7 +77,7 @@ def encode(cast: dict) -> str:
     """The cast file, one line per recorded line: the diff stays readable."""
     head = ",".join(
         f'"{key}":{json.dumps(cast[key], ensure_ascii=False)}'
-        for key in ("v", "scenario", "version", "tool", "title")
+        for key in ("v", "scenario", "version", "tool", "title", "cycle")
     )
     lines = ",\n".join(json.dumps(line, ensure_ascii=False) for line in cast["lines"])
     at = ", ".join(str(t) for t in cast["at"])
@@ -97,14 +100,15 @@ def main(path: str) -> int:
         kinds.append(kind(line[1]))
         clock += hold(line[1])
     cast["at"], cast["kinds"] = at, kinds
+    cast["cycle"] = clock + TAIL_MS
 
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(encode(cast))
 
     blanks = sum(1 for line in lines if not line[1])
     print(
-        f"stage: {len(lines)} lines, {blanks} beats, {clock / 1000:.1f}s on screen"
-        f" (avg {clock // len(lines)}ms)"
+        f"stage: {len(lines)} lines, {blanks} beats, {clock / 1000:.1f}s on screen,"
+        f" {cast['cycle'] / 1000:.1f}s per loop (avg {clock // len(lines)}ms a line)"
     )
     return 0
 

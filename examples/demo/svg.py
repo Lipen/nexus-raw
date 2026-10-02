@@ -7,7 +7,10 @@ embed it directly — GitHub serves SVG as an image, so it animates there with n
 script and no GIF, and stays sharp at any zoom.
 
 Every line lands at `at[i]` and wears the color of `kinds[i]`, both written by
-`stage.py`: this script decides layout, not timing or semantics.
+`stage.py`: this script decides layout, not timing or semantics. Lines appear
+the way a terminal prints them — instantly, at their beat, no fade — and the
+whole run loops: it holds finished for the tail `stage.py` budgets, clears,
+and starts over.
 
 Colors are the docs palette, converted from oklch here because a committed SVG
 has to render the same in viewers that know nothing about CSS Color 4.
@@ -40,7 +43,6 @@ DOT_R = 0.465 * FONT
 BAR_PAD = 1.32 * FONT
 DOTS_W = 4.03 * FONT
 BAR_GAP = 0.45 * FONT
-REVEAL_MS = 140
 # The player caps its window at max-height 45em, which is thirty lines: past
 # that the two renderings would show different amounts of the same session.
 MAX_ROWS = 30
@@ -125,20 +127,79 @@ def render(cast: dict) -> str:
         )
     body_h = PAD_TOP + PAD_BOTTOM + rows * LINE_H
 
+    # one loop: lines appear instantly at their beat, the finished run holds
+    # for half the tail, the screen clears, and the cycle starts over
+    cycle = float(cast["cycle"])
+    clear_pct = 100 * (at[-1] + (cycle - at[-1]) / 2) / cycle
+
     body: list[str] = []
+    steps: list[str] = []
+    clips: list[str] = []
+    carets: list[str] = []
     y = BAR_H + PAD_TOP + ASCENT
-    for when, kind, chunk in parts:
+    for index, (when, kind, chunk) in enumerate(parts):
         fill = palette.get(kind, palette["text"])
         weight = ' font-weight="600"' if kind == "cmd" else ""
-        style = ' font-style="italic"' if kind == "comment" else ""
+        ital = ' font-style="italic"' if kind == "comment" else ""
         x = PAD_SIDE + (INDENT if kind == "hint" else 0)
-        for part in chunk:
-            # A wrapped line continues flush left, the way the player wraps it.
-            body.append(
-                f'<text class="l" x="{x:.1f}" y="{y:.1f}" fill="{fill}"{weight}{style}'
-                f' style="animation-delay:{when}ms">{escape(part)}</text>'
+        at_pct = 100 * when / cycle
+        steps.append(
+            f"  @keyframes l{index} {{ 0% {{opacity:0}} {at_pct:.3f}% {{opacity:1}}"
+            f" {clear_pct:.3f}% {{opacity:0}} }}"
+        )
+
+        # a command types: a clip rect sweeps each wrapped row while a caret
+        # rides its edge, and the machine's output simply prints
+        clip = ""
+        if kind == "cmd":
+            gap = (at[index + 1] if index + 1 < len(at) else cycle) - when
+            duration = min(max(sum(map(len, chunk)) * 9, 350), 1100, 0.7 * gap)
+            row_ys = [y + j * LINE_H for j in range(len(chunk))]
+            edge = [
+                (
+                    100 * (when + duration * j / len(chunk)) / cycle,
+                    100 * (when + duration * (j + 1) / len(chunk)) / cycle,
+                    len(part) * 0.6 * FONT,
+                )
+                for j, part in enumerate(chunk)
+            ]
+            clips.append(
+                f'  <clipPath id="cp{index}">'
+                + "".join(
+                    f'<rect x="{x:.1f}" y="{ry - 0.95 * FONT:.1f}" width="0" height="{LINE_H:.1f}"'
+                    f' style="animation: w{index}_{j} {cycle / 1000:.2f}s linear infinite"/>'
+                    for j, ry in enumerate(row_ys)
+                )
+                + "</clipPath>"
             )
-            y += LINE_H
+            for j, (ry, (p0, p1, w)) in enumerate(zip(row_ys, edge)):
+                steps.append(
+                    f"  @keyframes w{index}_{j} {{ 0%, {p0:.3f}% {{width:0}}"
+                    f" {p1:.3f}%, 100% {{width: {w:.1f}px}} }}"
+                )
+                steps.append(
+                    f"  @keyframes o{index}_{j} {{ 0%, {p0:.3f}% {{opacity:0}}"
+                    f" {p0:.3f}% {{opacity:1}} {p1:.3f}% {{opacity:0}} 100% {{opacity:0}} }}"
+                )
+                steps.append(
+                    f"  @keyframes x{index}_{j} {{ 0%, {p0:.3f}% {{transform:translateX(0)}}"
+                    f" {p1:.3f}%, 100% {{transform:translateX({w - 0.6 * FONT:.1f}px)}} }}"
+                )
+                carets.append(
+                    f'<rect class="caret" x="{x:.1f}" y="{ry - 0.95 * FONT:.1f}"'
+                    f' width="{0.6 * FONT:.1f}" height="{1.25 * FONT:.1f}"'
+                    f' style="animation: o{index}_{j} {cycle / 1000:.2f}s step-end infinite,'
+                    f" x{index}_{j} {cycle / 1000:.2f}s linear infinite\"/>"
+                )
+            clip = f' clip-path="url(#cp{index})"'
+
+        for j, part in enumerate(chunk):
+            row_y = y + j * LINE_H
+            body.append(
+                f'<text class="l" x="{x:.1f}" y="{row_y:.1f}" fill="{fill}"{weight}{ital}{clip}'
+                f' style="animation: l{index} {cycle / 1000:.2f}s step-end infinite">{escape(part)}</text>'
+            )
+        y += LINE_H * len(chunk)
 
     height = BAR_H + body_h
     dots = "".join(
@@ -151,16 +212,21 @@ def render(cast: dict) -> str:
 <title>{escape(title)}</title>
 <desc>An animated transcript of a real nxr session against the mock server.</desc>
 <style>
-  @keyframes nxr-in {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
-  .l {{ opacity: 0; animation: nxr-in {REVEAL_MS}ms linear forwards }}
-  @media (prefers-reduced-motion: reduce) {{ .l {{ opacity: 1; animation: none }} }}
+{chr(10).join(steps)}
+  .l {{ opacity: 0 }}
+  .caret {{ fill: {palette["cmd"]} }}
+  @media (prefers-reduced-motion: reduce) {{ .l {{ opacity: 1; animation: none }} .caret {{ display: none }} }}
 </style>
+<defs>
+{chr(10).join(clips)}
+</defs>
 <rect x="0.5" y="0.5" width="{WIDTH - 1}" height="{height - 1:.1f}" rx="{RADIUS}" fill="{palette["ink"]}" stroke="{palette["border"]}"/>
 <path d="M0 {BAR_H} h{WIDTH}" stroke="{palette["border"]}"/>
 <rect x="0.5" y="0.5" width="{WIDTH - 1}" height="{BAR_H}" rx="{RADIUS}" fill="{palette["bar"]}"/>
 {dots}
 <text x="{BAR_PAD + DOTS_W + BAR_GAP:.1f}" y="{BAR_H / 2 + TITLE_FONT / 3:.1f}" fill="{palette["title"]}" font-size="{TITLE_FONT:.1f}">{escape(title)}</text>
 {"".join(body)}
+{chr(10).join(carets)}
 </svg>
 """
 
@@ -168,7 +234,7 @@ def render(cast: dict) -> str:
 def main(source: str, target: str) -> int:
     with open(source, encoding="utf-8") as handle:
         cast = json.load(handle)
-    for field in ("at", "kinds", "title"):
+    for field in ("at", "kinds", "title", "cycle"):
         if field not in cast:
             raise SystemExit(f"svg: {source} has no {field}; run stage.py on it first")
     svg = render(cast)

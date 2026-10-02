@@ -79,6 +79,7 @@
       body.append(node);
       return node;
     });
+    const texts = lines.map(([, text]) => text);
 
     const cursor = document.createElement("div");
     cursor.className = "nxr-l nxr-term__cursor";
@@ -98,12 +99,34 @@
     let shown = 0;
     let startedAt = 0;
     let raf = 0;
+    let generation = 0;
+
+    /* A command types itself out; the machine's output just prints. The window
+     * is the one the SVG draws: most of the gap to the next line, ~9 ms a
+     * character. `generation` retires typers from a previous replay. */
+    const typeCommand = (node, text, gapMs) => {
+      const gen = generation;
+      const ms = Math.min(Math.max(text.length * 9, 350), 1100, gapMs * 0.7);
+      const t0 = performance.now();
+      const step = (now) => {
+        if (gen !== generation) return;
+        const n = Math.min(text.length, 1 + Math.floor(((now - t0) / ms) * text.length));
+        node.textContent = text.slice(0, n);
+        if (n < text.length) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
 
     const reveal = (now) => {
       const elapsed = now - startedAt;
       let added = false;
       while (shown < nodes.length && at[shown] <= elapsed) {
-        nodes[shown].hidden = false;
+        const node = nodes[shown];
+        node.hidden = false;
+        if (cast.kinds[shown] === "cmd") {
+          const gap = (shown + 1 < at.length ? at[shown + 1] : cast.cycle ?? at[shown] + 2500) - at[shown];
+          typeCommand(node, cast.lines[shown][1], gap);
+        }
         shown += 1;
         added = true;
       }
@@ -120,7 +143,11 @@
 
     const play = () => {
       cancelAnimationFrame(raf);
-      for (const node of nodes) node.hidden = true;
+      generation += 1;
+      for (const [index, node] of nodes.entries()) {
+        node.hidden = true;
+        node.textContent = texts[index];
+      }
       cursor.hidden = false;
       replay.hidden = true;
       shown = 0;
