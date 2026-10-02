@@ -13,9 +13,15 @@ cargo *args:
     {{cargo}} {{args}}
 
 # Runs the binary: `just nxr -- up --base http://127.0.0.1:8080/ --dir dist/`.
+# A leading `--` is the habit cargo and curl teach; one of those is swallowed
+# so the CLI never sees it, while the recipe's own `--` keeps cargo's hands
+# off the flags: without it `just nxr --version` would print cargo's version.
+# Args pass through word-splitting (a just interpolation limit), so paths
+# with spaces need `cargo run -p nexus-raw --` directly.
 [doc('Run the nxr CLI against your base URL.')]
 nxr *args:
-    {{cargo}} run -p nexus-raw --quiet -- {{args}}
+    @set -- {{args}} && { [ "${1:-}" = -- ] && shift || :; } && \
+        exec {{cargo}} run -p nexus-raw --quiet -- "$@"
 
 # `--auth user:pass` and scenario flags come after the scenario name.
 [doc('Serve the mock Nexus: `just mock atomic --port 8080`.')]
