@@ -299,7 +299,7 @@ jobs:
   npm:
     name: Publish the npm packages
     needs: [node]
-    if: ${{ github.event_name == 'push' && needs.node.result == 'success' }}
+    if: ${{ always() && needs.node.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -317,18 +317,46 @@ jobs:
         with:
           node-version: 24
 
+      # No merge-multiple: every artifact carries a package.json of its own,
+      # a flat merge would keep only the last one downloaded.
       - name: Collect the staged packages
         uses: actions/download-artifact@v4
         with:
           pattern: npm-*
           path: npm
-          merge-multiple: true
+
+      # Runs on dispatch too: the dry run must exercise the same collection
+      # and validation a real release would, or it rehearses nothing.
+      - name: Validate the staged packages
+        run: |
+          node <<'EOF'
+          const fs = require("fs");
+          const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
+          const dirs = fs.readdirSync("npm").filter((d) => d.startsWith("npm-"));
+          if (dirs.length !== 3) {
+            throw new Error(`expected 3 staged packages, found ${dirs.length}`);
+          }
+          for (const dir of dirs) {
+            const pkg = JSON.parse(fs.readFileSync(`npm/${dir}/package.json`, "utf8"));
+            if (!fs.existsSync(`npm/${dir}/index.node`)) {
+              throw new Error(`${dir}: index.node is missing`);
+            }
+            if (pkg.name !== "nexus-raw-" + dir.slice(4)) {
+              throw new Error(`${dir}: package name ${pkg.name} does not match the artifact`);
+            }
+            if (pkg.version !== main.version) {
+              throw new Error(`${dir}: version ${pkg.version} does not match the workspace ${main.version}`);
+            }
+            console.log(`${pkg.name}@${pkg.version} ok`);
+          }
+          EOF
 
       # Platform packages first: the main package declares them as its
       # optionalDependencies, and a consumer must never hit a missing one.
       - name: Publish the platform packages
+        if: ${{ github.event_name == 'push' }}
         run: |
-          for d in npm/nexus-raw-*; do
+          for d in npm/npm-*/; do
             npm publish "$d" --provenance --access public
           done
 
@@ -336,6 +364,7 @@ jobs:
       # do not exist between releases, and a frozen pnpm install would fail
       # on them, so the release manifest is composed here from the tag.
       - name: Stage the main package
+        if: ${{ github.event_name == 'push' }}
         env:
           VERSION: ${{ github.ref_name }}
         run: |
@@ -359,6 +388,7 @@ jobs:
           EOF
 
       - name: Publish the main package
+        if: ${{ github.event_name == 'push' }}
         run: npm publish pkg-main --provenance --access public
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
