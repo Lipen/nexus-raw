@@ -43,7 +43,13 @@ pub async fn search_assets(
         if rel.is_empty() {
             continue;
         }
-        names.push(ArtifactName::parse(rel)?);
+        // The search sees markers too, and a marker name carries the reserved
+        // suffix: it is not an artifact, so skip it instead of failing the
+        // whole listing on it.
+        let Ok(name) = ArtifactName::parse(rel) else {
+            continue;
+        };
+        names.push(name);
     }
     names.sort();
     names.dedup();
