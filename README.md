@@ -24,8 +24,6 @@ From crates.io:
 cargo install nexus-raw
 ```
 
-Needs Rust 1.85 or newer.
-
 From the repository:
 
 ```bash
@@ -38,6 +36,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
+Every way builds from source, so Rust 1.85 or newer is required.
 Check the install with `nxr --version`.
 
 ## Quick start
