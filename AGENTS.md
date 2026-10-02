@@ -53,10 +53,11 @@ The canonical protocol text is kept outside this repository.
 ## Verify before reporting done
 
 ```bash
-just check        # fmt + clippy + prek + version-check + tests: the full gate
+just check        # fmt + clippy + prek + tests: the full gate
 just check-docs   # the docs site builds and every page resolves
 just test         # unit and conformance suites alone
 just nxr -- --help
+just stand        # the real-Nexus battery (needs docker)
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) carries the release checklist: one version for the workspace, `just version X.Y.Z`, a signed tag, and a workflow that publishes the crates in dependency order.
@@ -74,7 +75,8 @@ New fields are additive.
 |:-----|:-----|
 | `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
 | `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
-| `crates/mock-nexus/` | the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites |
+|`crates/mock-nexus/`|the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites|
+|`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (npm project on a `file:` dependency) and `examples/rust` (crate on a path dependency); run with `just demo` / `just example-node` / `just example-rust` |

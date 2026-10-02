@@ -1,0 +1,10 @@
+# A real Nexus3 for the stand: bootstrap.sh waits for it and creates the raw
+# repository, battery.sh drives nxr against it. The image tag is pinned so a
+# nightly cannot be red by an upstream release; bump it deliberately.
+services:
+  nexus:
+    image: sonatype/nexus3:3.96.3
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      INSTALL4J_ADD_VM_PARAMS: "-Xms512m -Xmx2g"

@@ -1,0 +1,36 @@
+name: Nightly
+
+# The real-Nexus stand: the same battery `just stand` runs locally, executed
+# nightly on a clean runner, so a regression against a real server is caught
+# without anybody remembering to check. The recipe dumps the server log on
+# failure, so a red job carries its own evidence.
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-nexus:
+    name: The real-Nexus battery
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Run the stand
+        run: just stand

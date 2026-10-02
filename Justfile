@@ -29,6 +29,19 @@ nxr *args:
 mock scenario='atomic' *args:
     {{cargo}} run -p mock-nexus --quiet -- {{scenario}} {{args}}
 
+# The real-Nexus stand: a dockerized Nexus3, bootstrapped, driven by the same
+# battery the nightly job runs. Needs docker; the recipe dumps the server log
+# on failure and leaves no state behind either way.
+[doc('Run the real-Nexus stand: docker nexus3, bootstrap, the battery.')]
+[group('stand')]
+stand *args:
+    cargo build -q --locked -p nexus-raw && \
+        docker compose -f stand/real-nexus/compose.yaml up -d && \
+        stand/real-nexus/bootstrap.sh && \
+        stand/real-nexus/battery.sh {{args}}; status=$?; \
+    if [ "$status" -ne 0 ]; then docker compose -f stand/real-nexus/compose.yaml logs --tail 200 >&2 || :; fi; \
+    docker compose -f stand/real-nexus/compose.yaml down -v; exit $status
+
 [doc('Format all crates.')]
 [group('check')]
 fmt *args:
