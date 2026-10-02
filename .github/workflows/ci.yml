@@ -115,6 +115,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Build the Node addon
         run: cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug
@@ -161,6 +162,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Build the Node addon
         run: cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug
@@ -201,6 +203,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Check the addon crate
         run: cargo check -p nexus-raw-napi
