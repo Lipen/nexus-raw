@@ -2,7 +2,7 @@
   "name": "nexus-raw-example-node",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.34.6",
+  "packageManager": "pnpm@11.26.0",
   "description": "An external npm consumer of nexus-raw via a link: dependency",
   "scripts": {
     "start": "node publish-and-consume.mjs"
