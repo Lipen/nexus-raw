@@ -94,7 +94,31 @@ version v:
     perl -pi -e "s/version = \"\Q$old\E\"/version = \"{{v}}\"/" crates/nexus-raw/Cargo.toml
     # Resolve once so Cargo.lock carries the new workspace version.
     cargo metadata --format-version 1 >/dev/null
+    # The recipe owns every asserted copy: a failed edit must fail the recipe,
+    # not wait for `just check` to find a half-bumped tree.
+    scripts/version-check.sh
     echo "version {{v}} set (was $old)"
+
+# The manifest is the source of truth for the current number; this only does
+# the arithmetic and hands the result to `just version`.
+[doc('Compute the next version and set it: `just bump patch` (also minor, major).')]
+[group('release')]
+bump part:
+    #!/bin/sh
+    set -eu
+    cur="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+    [ -n "$cur" ] || { echo "bump: no workspace version in Cargo.toml" >&2; exit 1; }
+    IFS=.
+    set -- $cur
+    [ "$#" -eq 3 ] || { echo "bump: '$cur' is not X.Y.Z" >&2; exit 2; }
+    case "{{part}}" in
+      patch) next="$1.$2.$(($3 + 1))" ;;
+      minor) next="$1.$(($2 + 1)).0" ;;
+      major) next="$(($1 + 1)).0.0" ;;
+      *) echo "bump: '{{part}}' is not patch, minor or major" >&2; exit 2 ;;
+    esac
+    echo "bumping $cur -> $next"
+    exec just version "$next"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('release')]

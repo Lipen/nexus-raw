@@ -51,6 +51,12 @@ jobs:
           fi
           echo "releasing $workspace"
 
+      # The same full agreement `just check` asserts locally: the internal
+      # dependency line and the npm package must not drift, and the tag gate
+      # cannot rely on the master CI run that races it here.
+      - name: The whole workspace agrees on the version
+        run: scripts/version-check.sh
+
       # Order matters: nexus-raw depends on nexus-raw-core by version.
       - name: Publish nexus-raw-core
         env:
