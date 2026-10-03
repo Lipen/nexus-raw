@@ -1,0 +1,475 @@
+//! Conformance tests driven through the public library API.
+
+use std::fmt::Write as _;
+use std::io::{self, Read, Write};
+use std::net::{SocketAddr, TcpStream};
+
+use crate::{MockNexus, Outcome, Scenario};
+
+/// Parsed response: (status, headers, body).
+type Response = (u16, Vec<(String, String)>, Vec<u8>);
+
+/// Open a connection and send a hand-built request.
+fn send(addr: SocketAddr, request: &[u8]) -> io::Result<TcpStream> {
+    let mut stream = TcpStream::connect(addr)?;
+    stream.write_all(request)?;
+    Ok(stream)
+}
+
+/// Build a raw HTTP/1.1 request with an explicit Content-Length.
+fn request_bytes(method: &str, path: &str, body: &[u8], extra: &[(&str, &str)]) -> Vec<u8> {
+    let mut head = format!("{method} {path} HTTP/1.1\r\nHost: mock\r\n");
+    if !body.is_empty() || method == "PUT" {
+        let _ = write!(head, "Content-Length: {}\r\n", body.len());
+    }
+    for (name, value) in extra {
+        let _ = write!(head, "{name}: {value}\r\n");
+    }
+    head.push_str("\r\n");
+    let mut bytes = head.into_bytes();
+    bytes.extend_from_slice(body);
+    bytes
+}
+
+/// Read one full response.
+fn read_response(stream: &mut TcpStream) -> io::Result<Response> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    let head_end = loop {
+        if let Some(i) = find(&buf, b"\r\n\r\n") {
+            break i;
+        }
+        let n = stream.read(&mut chunk)?;
+        if n == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "truncated response",
+            ));
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    };
+    let head = String::from_utf8_lossy(&buf[..head_end]);
+    let mut lines = head.split("\r\n");
+    let status_line = lines.next().unwrap_or_default();
+    let status: u16 = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "bad status line"))?;
+    let headers: Vec<(String, String)> = lines
+        .filter_map(|line| line.split_once(':'))
+        .map(|(name, value)| (name.trim().to_owned(), value.trim().to_owned()))
+        .collect();
+    let content_length = headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, value)| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let mut body = buf[head_end + 4..].to_vec();
+    while body.len() < content_length {
+        // With Connection: close, EOF legitimately ends a bodyless (HEAD) response.
+        let n = stream.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        body.extend_from_slice(&chunk[..n]);
+    }
+    body.truncate(content_length);
+    Ok((status, headers, body))
+}
+
+/// Send a request and read the response back.
+fn exchange(
+    addr: SocketAddr,
+    method: &str,
+    path: &str,
+    body: &[u8],
+    extra: &[(&str, &str)],
+) -> io::Result<Response> {
+    let mut stream = send(addr, &request_bytes(method, path, body, extra))?;
+    read_response(&mut stream)
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    headers
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.as_str())
+}
+
+#[test]
+fn atomic_roundtrip_put_get_head() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    assert_eq!(server.base_url(), format!("http://{}/", server.addr()));
+
+    let (status, headers, body) =
+        exchange(server.addr(), "PUT", "/1.14.0/sample.zip", b"PAYLOAD", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(header_value(&headers, "connection"), Some("close"));
+    assert!(body.is_empty());
+
+    let (status, headers, body) =
+        exchange(server.addr(), "GET", "/1.14.0/sample.zip", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"PAYLOAD");
+    assert_eq!(header_value(&headers, "content-length"), Some("7"));
+
+    // Query strings are stripped before the store lookup.
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/sample.zip?x=1", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"PAYLOAD");
+
+    // HEAD carries the same headers, including Content-Length, no body.
+    let (status, headers, body) =
+        exchange(server.addr(), "HEAD", "/1.14.0/sample.zip", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(header_value(&headers, "content-length"), Some("7"));
+    assert!(body.is_empty());
+
+    let (status, _, body) = exchange(server.addr(), "GET", "/1.14.0/missing", b"", &[]).unwrap();
+    assert_eq!(status, 404);
+    assert_eq!(body, b"not found\n");
+
+    assert_eq!(
+        server.store_get("1.14.0/sample.zip").as_deref(),
+        Some(b"PAYLOAD".as_slice())
+    );
+    assert_eq!(server.put_count("1.14.0/sample.zip"), 1);
+}
+
+#[test]
+fn partial_put_first_attempt_cut_then_stores() {
+    let server = MockNexus::start(Scenario::PartialPut {
+        first_attempt_bytes: 4,
+    })
+    .unwrap();
+
+    // First PUT: server reads 4 body bytes, closes with no response.
+    let mut stream = send(
+        server.addr(),
+        &request_bytes("PUT", "/1.14.0/big.zip", b"0123456789", &[]),
+    )
+    .unwrap();
+    let mut buf = [0u8; 64];
+    let probe = stream.read(&mut buf);
+    // Reset (Err) and premature EOF (Ok(0)) both mean "no response arrived".
+    assert!(
+        matches!(probe, Err(_) | Ok(0)),
+        "expected closed connection, got {probe:?}"
+    );
+    assert_eq!(server.store_get("1.14.0/big.zip"), None);
+
+    // Second PUT is read fully and stored.
+    let (status, _, body) =
+        exchange(server.addr(), "PUT", "/1.14.0/big.zip", b"0123456789", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert!(body.is_empty());
+    assert_eq!(
+        server.store_get("1.14.0/big.zip").as_deref(),
+        Some(b"0123456789".as_slice())
+    );
+
+    // Log: cut attempt as PartialRead{4}, retry as 201.
+    // Only the retry counts.
+    let log = server.requests();
+    assert_eq!(log[0].method, "PUT");
+    assert_eq!(log[0].path, "1.14.0/big.zip");
+    assert_eq!(log[0].outcome, Outcome::PartialRead { bytes: 4 });
+    assert_eq!(log[1].outcome, Outcome::Status(201));
+    assert_eq!(server.put_count("1.14.0/big.zip"), 1);
+}
+
+/// atomic DELETE: an existing object goes away with 204, an absent one answers 404.
+#[test]
+fn atomic_delete_removes_then_404s() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    server.insert("1.14.0/a.zip", b"PAYLOAD");
+
+    let (status, _, body) = exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+    assert_eq!(status, 204);
+    assert!(body.is_empty());
+    assert_eq!(server.store_get("1.14.0/a.zip"), None);
+
+    // The second DELETE is a normal 404: deletion stays idempotent.
+    let (status, _, body) = exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+    assert_eq!(status, 404);
+    assert_eq!(body, b"not found\n");
+}
+
+/// readonly: every DELETE is a 403 and nothing leaves the store, reads included.
+#[test]
+fn readonly_refuses_every_delete() {
+    let server = MockNexus::start(Scenario::ReadOnly).unwrap();
+    server.insert("1.14.0/a.zip", b"PAYLOAD");
+
+    let (status, _, body) = exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+    assert_eq!(status, 403);
+    assert_eq!(body, b"read-only\n");
+    assert_eq!(
+        server.store_get("1.14.0/a.zip").as_deref(),
+        Some(b"PAYLOAD".as_slice()),
+        "a refused delete must not touch the store"
+    );
+
+    // Reads behave like atomic.
+    let (status, _, body) = exchange(server.addr(), "GET", "/1.14.0/a.zip", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"PAYLOAD");
+}
+
+#[test]
+fn drop_connection_resets_first_request_per_path() {
+    let server = MockNexus::start(Scenario::DropConnection).unwrap();
+    server.insert("1.14.0/version.json", b"{}");
+
+    let mut stream = send(
+        server.addr(),
+        &request_bytes("GET", "/1.14.0/version.json", b"", &[]),
+    )
+    .unwrap();
+    let mut buf = [0u8; 64];
+    let probe = stream.read(&mut buf);
+    assert!(
+        matches!(probe, Err(_) | Ok(0)),
+        "expected reset, got {probe:?}"
+    );
+    assert_eq!(server.requests()[0].outcome, Outcome::Reset);
+
+    // Later requests on the same path are served normally.
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"{}");
+    assert_eq!(server.requests().len(), 2);
+}
+
+#[test]
+fn flaky_serves_503_for_first_k_requests() {
+    let server = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
+    server.insert("v1/a.bin", b"X");
+
+    for _ in 0..2 {
+        let (status, _, body) = exchange(server.addr(), "GET", "/v1/a.bin", b"", &[]).unwrap();
+        assert_eq!(status, 503);
+        assert_eq!(body, b"flaky\n");
+    }
+    let (status, _, body) = exchange(server.addr(), "GET", "/v1/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"X");
+
+    let outcomes: Vec<Outcome> = server
+        .requests()
+        .into_iter()
+        .map(|req| req.outcome)
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            Outcome::Status(503),
+            Outcome::Status(503),
+            Outcome::Status(200)
+        ]
+    );
+}
+
+#[test]
+fn foreign_marker_zeroes_stored_digest() {
+    let server = MockNexus::start(Scenario::ForeignMarker).unwrap();
+
+    let marker = format!("{}  sample.zip\n", "a".repeat(64));
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/1.14.0/sample.zip.sha256",
+        marker.as_bytes(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(
+        server.store_get("1.14.0/sample.zip.sha256").unwrap(),
+        format!("{}  sample.zip\n", "0".repeat(64)).into_bytes()
+    );
+
+    // insert() bypasses the scenario: stored verbatim, served verbatim.
+    server.insert("1.14.0/real.zip.sha256", marker.as_bytes());
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/real.zip.sha256", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, marker.as_bytes());
+}
+
+#[test]
+fn markerless_loses_marker_keeps_bytes() {
+    let server = MockNexus::start(Scenario::Markerless).unwrap();
+
+    let marker = format!("{}  sample.zip\n", "b".repeat(64));
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/1.14.0/sample.zip.sha256",
+        marker.as_bytes(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(server.store_get("1.14.0/sample.zip.sha256"), None);
+
+    let (status, _, _) =
+        exchange(server.addr(), "PUT", "/1.14.0/sample.zip", b"BYTES", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(
+        server.store_get("1.14.0/sample.zip").as_deref(),
+        Some(b"BYTES".as_slice())
+    );
+
+    // Both PUTs were acknowledged with 201.
+    assert_eq!(server.put_count("1.14.0/sample.zip.sha256"), 1);
+    assert_eq!(server.put_count("1.14.0/sample.zip"), 1);
+}
+
+#[test]
+fn doc_drift_synthesizes_between_enable_and_disable() {
+    let server = MockNexus::start(Scenario::DocDrift).unwrap();
+    let stored = br#"{"schema_version":1,"version":"1.14.0","artifacts":["real.zip"]}"#;
+    server.insert("1.14.0/version.json", stored);
+
+    // Before enable_drift: the store is served.
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, stored.to_vec());
+
+    // After enable_drift: synthesized document with the version from the path.
+    server.enable_drift();
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(
+        body,
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
+    );
+
+    // After disable_drift: back to the store.
+    server.disable_drift();
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/version.json", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, stored.to_vec());
+}
+
+#[test]
+fn auth_401_gate() {
+    let server = MockNexus::start(Scenario::Auth401 {
+        user: "ci".to_owned(),
+        pass: "secret".to_owned(),
+    })
+    .unwrap();
+    server.insert("v1/a", b"X");
+
+    // No credentials.
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 401);
+    assert_eq!(body, b"auth required\n");
+    assert_eq!(
+        header_value(&headers, "www-authenticate"),
+        Some("Basic realm=\"nexus\"")
+    );
+
+    // Wrong password.
+    let (status, _, _) = exchange(
+        server.addr(),
+        "GET",
+        "/v1/a",
+        b"",
+        &[("Authorization", "Basic Y2k6d3Jvbmc=")], // ci:wrong
+    )
+    .unwrap();
+    assert_eq!(status, 401);
+
+    // Valid credentials: normal behavior.
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/v1/a",
+        b"",
+        &[("Authorization", "Basic Y2k6c2VjcmV0")], // ci:secret
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"X");
+}
+
+#[test]
+fn slow_get_roundtrip() {
+    let server = MockNexus::start(Scenario::Slow {
+        chunk_delay_ms: 1,
+        chunk_size: 3,
+    })
+    .unwrap();
+    let body: Vec<u8> = (0..20u32).map(|i| b'a' + (i % 26) as u8).collect();
+    server.insert("v/slow.bin", &body);
+
+    let (status, headers, got) = exchange(server.addr(), "GET", "/v/slow.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(header_value(&headers, "content-length"), Some("20"));
+    assert_eq!(got, body);
+}
+
+#[test]
+fn get_range_serves_suffix_body_and_rejects_out_of_bounds() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+
+    // Store the object through the wire, as a resuming client would.
+    let (status, _, _) =
+        exchange(server.addr(), "PUT", "/1.14.0/blob.bin", b"0123456789", &[]).unwrap();
+    assert_eq!(status, 201);
+
+    // Resume from byte 5: 206 with a Content-Range and the suffix body.
+    let (status, headers, body) = exchange(
+        server.addr(),
+        "GET",
+        "/1.14.0/blob.bin",
+        b"",
+        &[("Range", "bytes=5-")],
+    )
+    .unwrap();
+    assert_eq!(status, 206);
+    assert_eq!(
+        header_value(&headers, "content-range"),
+        Some("bytes 5-9/10")
+    );
+    assert_eq!(header_value(&headers, "content-length"), Some("5"));
+    assert_eq!(body, b"56789");
+    // The range hit is recorded as 206.
+    assert_eq!(server.requests()[1].outcome, Outcome::Status(206));
+
+    // Start at the end: nothing to serve, 416 with the object total.
+    let (status, headers, _) = exchange(
+        server.addr(),
+        "GET",
+        "/1.14.0/blob.bin",
+        b"",
+        &[("Range", "bytes=10-")],
+    )
+    .unwrap();
+    assert_eq!(status, 416);
+    assert_eq!(header_value(&headers, "content-range"), Some("bytes */10"));
+
+    // A range on a missing object is still a plain 404.
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/1.14.0/missing",
+        b"",
+        &[("Range", "bytes=5-")],
+    )
+    .unwrap();
+    assert_eq!(status, 404);
+    assert_eq!(body, b"not found\n");
+}

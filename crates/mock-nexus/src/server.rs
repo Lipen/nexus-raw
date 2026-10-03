@@ -171,7 +171,7 @@ pub(crate) fn read_body_into<R: BufRead>(
         read_chunked(r, req)
     } else if let Some(len) = req.header("content-length") {
         match len.parse::<usize>() {
-            Ok(n) => read_exact_buf(r, &mut req.body, n).map(|_| ()),
+            Ok(n) => read_exact_buf(r, &mut req.body, n),
             Err(_) => Err(malformed("invalid content-length")),
         }
     } else {

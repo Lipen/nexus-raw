@@ -1,13 +1,77 @@
-//! Per-scenario behavior: connection handling, per-path state machines and the pure transforms (marker zeroing, document drift, auth decision).
+//! Per-scenario behavior: the scenario table, connection handling, per-path state machines and the pure transforms (marker zeroing, document drift, auth decision).
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read};
 use std::net::TcpStream;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::PoisonError;
 use std::time::Duration;
 
 use crate::server::{self, BodyError, BodyPlan, Drip, Request, Resp};
-use crate::{lock, Outcome, ReqLog, Scenario, Shared};
+use crate::store::{lock, Outcome, ReqLog, Shared};
+
+/// Scenario names understood by the `mock-nexus` binary and by test harnesses.
+pub const SCENARIOS: &[&str] = &[
+    "atomic",
+    "partial-put",
+    "drop-connection",
+    "freeze-upload",
+    "sizeless",
+    "slow",
+    "foreign-marker",
+    "markerless",
+    "auth-401",
+    "doc-drift",
+    "flaky",
+    "readonly",
+];
+
+/// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scenario {
+    /// Straight-through storage: every fully-read request is served normally.
+    Atomic,
+    /// The first PUT per path is cut off after `first_attempt_bytes` body bytes: the connection closes with no response and nothing is stored.
+    /// Later PUT attempts on that path are read fully and stored.
+    PartialPut { first_attempt_bytes: usize },
+    /// The first request per path (any method) is read fully, then answered with a TCP reset.
+    /// Later requests are served normally.
+    DropConnection,
+    /// PUT connections are held right after the head: the body is never read and no response is ever written, so the write side must detect the stall.
+    /// GET/HEAD behave like [`Scenario::Atomic`].
+    FreezeUpload,
+    /// GET/HEAD answers for present objects carry no `Content-Length`: the proxy case.
+    /// A client must refuse to treat such objects as absent (the digest comparison would be skipped).
+    /// PUTs behave like [`Scenario::Atomic`].
+    Sizeless,
+    /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping `chunk_delay_ms` between pieces.
+    /// PUT bodies are read normally.
+    Slow {
+        chunk_delay_ms: u64,
+        chunk_size: usize,
+    },
+    /// Stored `.sha256` markers get their 64-char digest replaced by 64 zeros (digest of a foreign object).
+    /// Everything else is stored verbatim.
+    ForeignMarker,
+    /// `.sha256` markers are acknowledged (201 Created) but never stored.
+    /// Non-marker bytes are stored normally.
+    Markerless,
+    /// Every request requires `Authorization: Basic base64(user:pass)`.
+    /// Otherwise 401 with `WWW-Authenticate: Basic realm="nexus"`.
+    /// Valid credentials behave like [`Scenario::Atomic`].
+    Auth401 { user: String, pass: String },
+    /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`](crate::MockNexus::enable_drift).
+    /// Afterwards every GET of a `*/version.json` path serves a synthesized version document with a ghost artifact.
+    /// PUTs keep storing verbatim, and [`MockNexus::disable_drift`](crate::MockNexus::disable_drift) restores store-backed responses.
+    DocDrift,
+    /// The first `first_failures` requests per path (any method) get 503 Service Unavailable.
+    /// Later requests are served normally.
+    Flaky { first_failures: u32 },
+    /// Every DELETE is refused with `403 Forbidden`: the read-only repository.
+    /// Nothing is ever removed from the store.
+    /// GET/HEAD/PUT behave like [`Scenario::Atomic`].
+    ReadOnly,
+}
 
 /// A single read or write may stall at most this long before we drop the peer.
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
@@ -18,10 +82,9 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let mut stream = stream;
 
-    let head = match server::read_head_raw(&mut stream) {
-        Ok(Some(head)) => head,
-        Ok(None) => return,
-        Err(_) => return, // timeout or reset mid-head: nothing sensible to answer
+    // Clean EOF and timeout or reset mid-head: nothing sensible to answer.
+    let Ok(Some(head)) = server::read_head_raw(&mut stream) else {
+        return;
     };
     let mut req = match server::parse_head(&head) {
         Ok(req) => req,
@@ -77,11 +140,11 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
         }
         return;
     }
-    handle(shared, &mut stream, req, &path);
+    handle(shared, &mut stream, &req, &path);
 }
 
 /// Apply scenario gates and serve the request.
-fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
+fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
     // auth-401: unauthenticated callers are rejected before anything else.
     let unauthenticated = shared
         .auth_b64
@@ -104,8 +167,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
     }
 
     match req.method.as_str() {
-        "GET" => match drift_or_store(shared, path) {
-            Some(payload) => {
+        "GET" => {
+            if let Some(payload) = drift_or_store(shared, path) {
                 let total = payload.len();
                 match range_start(req.header("Range")) {
                     // Start at or past the end: nothing to resume from.
@@ -147,14 +210,13 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
                         let _ = server::write_response(stream, &resp);
                     }
                 }
-            }
-            None => {
+            } else {
                 log_request(shared, &req.method, path, Outcome::Status(404));
                 let _ = server::write_response(stream, &plain(404, b"not found\n", shared.drip));
             }
-        },
+        }
         "HEAD" => {
-            let found = lock(&shared.store).get(path).map(|b| b.len());
+            let found = lock(&shared.store).get(path).map(Vec::len);
             let (status, content_length) = match found {
                 Some(len) => (200, len),
                 None => (404, b"not found\n".len()),
@@ -207,9 +269,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
 /// Under `partial-put` the first PUT per path is cut short.
 /// Consuming that "first attempt" happens here, before any bytes of the body are read.
 fn body_plan(shared: &Shared, method: &str, path: &str) -> BodyPlan {
-    let cut = match (method, shared.partial_first_put) {
-        ("PUT", Some(cut)) => cut,
-        _ => return BodyPlan::Full,
+    let ("PUT", Some(cut)) = (method, shared.partial_first_put) else {
+        return BodyPlan::Full;
     };
     let mut seq = lock(&shared.first_put);
     if bump(&mut seq, path) == 0 {
@@ -271,7 +332,7 @@ fn log_request(shared: &Shared, method: &str, path: &str, outcome: Outcome) {
     shared
         .log
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(PoisonError::into_inner)
         .push(ReqLog {
             method: method.to_owned(),
             path: path.to_owned(),

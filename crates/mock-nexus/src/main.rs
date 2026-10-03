@@ -124,8 +124,8 @@ fn parse_flags(args: &[String], flags: &mut Flags) -> Result<(), String> {
                 let Some((user, pass)) = value.split_once(':') else {
                     return Err(format!("--auth expects user:pass, got '{value}'"));
                 };
-                flags.user = user.to_owned();
-                flags.pass = pass.to_owned();
+                user.clone_into(&mut flags.user);
+                pass.clone_into(&mut flags.pass);
             }
             other => return Err(format!("unknown flag '{other}'")),
         }
@@ -175,7 +175,7 @@ mod tests {
     }
 
     fn args(items: &[&str]) -> Vec<String> {
-        items.iter().map(|s| s.to_string()).collect()
+        items.iter().map(ToString::to_string).collect()
     }
 
     #[test]
