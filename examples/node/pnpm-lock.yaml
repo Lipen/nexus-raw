@@ -9,5 +9,43 @@ importers:
   .:
     dependencies:
       nexus-raw:
-        specifier: link:../../crates/nexus-raw-napi
-        version: link:../../crates/nexus-raw-napi
+        specifier: ^0.3.0
+        version: 0.3.0
+
+packages:
+
+  nexus-raw-darwin-arm64@0.3.0:
+    resolution: {integrity: sha512-uUupIcUYYVG6sDnCMiLrNRerGR39AgeENIgZAuVCuPGBX1hOq1As0EVsmrq0jbatACYMClYBOeIiLBE/lykTQw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  nexus-raw-darwin-x64@0.3.0:
+    resolution: {integrity: sha512-z+X7+Cmje0o49ADRdnNqFHzOZijbU72J3k2OEs0M5X19jWOS3uftkEuH8LbWs6yTR+VKOjTg2ZS7CldlNCVxjw==}
+    cpu: [x64]
+    os: [darwin]
+
+  nexus-raw-linux-x64-gnu@0.3.0:
+    resolution: {integrity: sha512-DqR0Ld/Kt/5jYHtiP3D5Zfs6oslgRU//4tKq0zZ4Cmdt57TypzrsKTzMdgo26fY27U/kZfr1IUtN09quDooFaA==}
+    cpu: [x64]
+    os: [linux]
+
+  nexus-raw@0.3.0:
+    resolution: {integrity: sha512-ywFlx4QbKe0xhOwsLWreO6HPAyWoAYaj/eF4dAf5hzhJHuc2zOBeNhZFXdAdJai6ByiD5ExbxMb0R8BNTkUOPw==}
+    engines: {node: '>= 18'}
+
+snapshots:
+
+  nexus-raw-darwin-arm64@0.3.0:
+    optional: true
+
+  nexus-raw-darwin-x64@0.3.0:
+    optional: true
+
+  nexus-raw-linux-x64-gnu@0.3.0:
+    optional: true
+
+  nexus-raw@0.3.0:
+    optionalDependencies:
+      nexus-raw-darwin-arm64: 0.3.0
+      nexus-raw-darwin-x64: 0.3.0
+      nexus-raw-linux-x64-gnu: 0.3.0

@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.26.0",
-  "description": "An external npm consumer of nexus-raw via a link: dependency",
+  "description": "An external npm consumer of nexus-raw from the npm registry",
   "scripts": {
     "start": "node publish-and-consume.mjs"
   },
   "dependencies": {
-    "nexus-raw": "link:../../crates/nexus-raw-napi"
+    "nexus-raw": "^0.3.0"
   }
 }

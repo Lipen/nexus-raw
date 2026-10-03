@@ -1,19 +1,13 @@
 # Node example: an external npm consumer of `nexus-raw`
 
-A standalone npm project that pulls the package the way an outside user would:
-a `link:` dependency pointing at the bindings crate, no registry involved.
-Once the package is on npm, swap the dependency to a version.
-
-One-time setup (builds the native addon and links the dependency):
-
-```bash
-(cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
-cd examples/node && pnpm install
-```
+A standalone npm project that installs the package the way an outside user would:
+from the npm registry, which also pulls the prebuilt native addon for the platform.
+It is deliberately outside the nexus-raw workspace.
 
 Run it:
 
 ```bash
+pnpm install
 node publish-and-consume.mjs
 ```
 
@@ -24,6 +18,14 @@ To run against a real repository instead:
 ```bash
 node publish-and-consume.mjs https://nexus.example.com/repository/demo/
 ```
+
+To develop against the local addon instead of the registry build, build the addon and point the dependency back at the crate:
+
+```bash
+(cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
+```
+
+Then set `"nexus-raw": "link:../../crates/nexus-raw-napi"` in `package.json` and run `pnpm install`.
 
 `MOCK_NEXUS_BIN` overrides the mock server binary path
 (defaults to the repo's `target/debug/mock-nexus`).

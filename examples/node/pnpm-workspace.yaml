@@ -1,0 +1,5 @@
+# The demo consumes this repo's own packages, fresh releases included:
+# exempt them from pnpm's default one-day freshness gate (minimumReleaseAge, 1440 minutes since v11).
+minimumReleaseAgeExclude:
+  - nexus-raw
+  - nexus-raw-*
