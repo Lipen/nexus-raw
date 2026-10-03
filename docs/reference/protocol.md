@@ -221,6 +221,7 @@ The client sends `Range: bytes=<part-size>-` only when resuming a non-empty part
 | anything else | unexpected | retryable only if 5xx, otherwise the run fails |
 
 The `416` finalize covers the crash between the last downloaded byte and the rename: the part is complete, the server says so, and the run finishes instead of restarting.
+The resume request pins `Accept-Encoding: identity`, so its offsets always refer to the stored bytes, whatever encodings a normal download negotiates.
 The raw exchange, captured against the mock:
 
 ```console
