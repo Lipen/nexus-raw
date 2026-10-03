@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 # The version is what crates.io resolves; the path is what this workspace builds.
-nexus-raw-core = { path = "../nexus-raw-core", version = "0.1.1" }
+nexus-raw-core = { path = "../nexus-raw-core", version = "0.2.0" }
 tokio = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
