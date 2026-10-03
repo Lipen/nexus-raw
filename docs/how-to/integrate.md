@@ -34,14 +34,14 @@ The event shapes are fixed, and the [CI page](ci.md#ndjson-events) shows a `jq` 
 ## As a Rust library
 
 `nexus-raw-core` is the same protocol without a UI.
-Until it reaches crates.io (planned, not done), take it as a git or path dependency:
+It is on crates.io; take it as a version dependency:
 
 ```toml
 [dependencies]
-nexus-raw-core = { git = "https://github.com/Lipen/nexus-raw" }
-# or, for a vendored copy:
-# nexus-raw-core = { path = "vendor/nexus-raw/crates/nexus-raw-core" }
+nexus-raw-core = "0.3"
 ```
+
+A git pin or a vendored copy still works for special cases; vendoring has its own section below.
 
 The [`Nxr`](../reference/api.md#the-facade) facade is the single entry point: build it from a `Config` and an event channel, then call methods that mirror the CLI commands one-to-one.
 Progress arrives as [`Event`](../reference/api.md#events) objects over a `tokio::sync::mpsc::UnboundedReceiver` — drain it while the operation runs, or drain the buffered queue afterwards.
@@ -84,7 +84,7 @@ renderer.await?;
 ```
 
 The snippet is kept in sync by hand.
-The runnable version lives in [examples/rust](https://github.com/Lipen/nexus-raw/tree/master/examples/rust), a standalone crate outside this workspace: `just example-rust` builds the mock server and runs the whole publish-and-consume loop against it.
+The runnable version lives in [examples/rust](https://github.com/Lipen/nexus-raw/tree/master/examples/rust), a standalone crate outside this workspace: `just example-rust` builds the mock server and runs the whole publish-and-consume loop against it, on the crates.io build of the core.
 The guided tour of the API, layers included: [the Rust API](../reference/api.md).
 
 ## As Node bindings
@@ -97,13 +97,14 @@ npm install nexus-raw
 ```
 
 Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
-A from-source run lives in [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node): build the addon, then consume it as a `link:` dependency — no registry involved:
+A runnable consumer lives in [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node): it installs the package from the registry and drives the whole publish-and-consume loop against the mock server:
 
 ```bash
-(cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
 cd examples/node && pnpm install
 node publish-and-consume.mjs
 ```
+
+To consume a locally built addon instead of the registry build, build the addon, flip the dependency to `link:../../crates/nexus-raw-napi` and run `pnpm install` again.
 
 `npm run build:debug` runs the napi CLI over a cargo build of the crate and leaves the platform addon (`*.node`), the generated loader (`binding.cjs`) and the generated declarations (`binding.d.ts`) next to the crate.
 
