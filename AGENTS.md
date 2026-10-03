@@ -31,7 +31,7 @@ The canonical protocol text is kept outside this repository.
   0 ok, 1 data, 2 misuse, 3 transport.
   Every error carries a `hint:` line (`Error::hint`).
 - The failure-scenario list is the conformance contract.
-  It lives in `crates/mock-nexus/src/lib.rs` (`SCENARIOS`).
+  It lives in `crates/mock-nexus/src/scenario.rs` (`SCENARIOS`).
   A scenario added for one client implementation lands in the same PR as its test.
 - Warnings are errors: `cargo clippy --workspace --all-targets -- -D warnings`.
 - Markdown files and code comments: one sentence per line, no hard wrapping.
@@ -44,7 +44,7 @@ The canonical protocol text is kept outside this repository.
 | the wire protocol, store shape, errors, forbiddances | `crates/nexus-raw-core/src/lib.rs` crate docs |
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
 | CLI flags, credentials order, output examples | [README.md](README.md) |
-| a mock scenario's exact behavior | `crates/mock-nexus/src/lib.rs` doc comment on `Scenario` |
+| a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
 | the recorded session and the landing animation | `examples/demo/README.md` |
