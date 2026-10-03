@@ -11,6 +11,12 @@ A scenario selects a failure mode.
 The scenario list has one home: the `Scenario` enum in `crates/mock-nexus/src/scenario.rs`, with each mode's exact behavior in its doc comment.
 The Rust suites, the mock binary (`mock-nexus --print-scenarios`) and any external harness all read that one list, so it never forks.
 
+Group repositories are a separate deployment kind, not a scenario: `MockNexus::start_group` builds one over two or more running members.
+The group forwards reads to the members in order and relays the first `2xx`, so every scenario in the table above keeps applying behind a group.
+Writes are refused by the group itself with `405` and `Allow: GET,HEAD`, in the wire shape of the real Nexus group handler.
+The dispatch is faithful to the real `GroupHandler.java` (method switch at lines 103-112, the first-2xx member walk at 124-166).
+Group search is not modeled: the search API reads the metadata database rather than the group dispatch.
+
 ## The matrix
 
 Every scenario, the invariant it pins, and the tests that pin it.
@@ -47,6 +53,7 @@ Core suite, by intent:
 - **up**: `two_phase_up_recovers_after_partial_put`, `up_generates_markers_by_default`, `up_no_sha_skips_markers`, `markerless_remote_is_re_uploaded`, `second_up_is_all_skip`, `broken_local_marker_refuses_up`, `up_manifest_missing_local_name_is_data_error`, `up_claim_first_puts_the_claim_before_any_payload`, `up_claim_first_refuses_a_name_outside_the_scan`, `empty_dir_refuses_up`, `single_call_recovers_through_flaky`, `retry_events_name_the_object_they_retry`
 - **down**: `down_fetches_and_writes_local_marker`, `down_resumes_from_part_with_range`, `down_resume_of_complete_part_finalizes_without_refetch`, `down_auto_enumerates_through_manifest_convention`, `down_digest_mismatch_refuses_and_drops_part`, `down_missing_name_is_data_error`, `down_markerless_remote_writes_computed_marker`, `down_stale_part_self_heals_without_a_flag`
 - **rm and point**: `rm_removes_a_whole_version`, `second_rm_is_all_404_and_exits_clean`, `readonly_refuses_rm_and_changes_nothing`, `rm_dry_run_plans_and_touches_nothing`, `rm_without_names_refuses_with_enumeration_error`, `point_clear_is_idempotent`, `point_clear_on_readonly_refuses`
+- **group**: `down_through_group_serves_the_first_member_holding_the_object`, `down_through_group_skips_a_failing_member_without_a_client_retry`, `up_against_a_group_refuses_with_405`, `rm_against_a_group_refuses_as_read_only`
 - **auth, stall and transport**: `auth_gates_every_request`, `stalled_download_retries_then_refuses`, `stalled_upload_fails_within_the_stall_window`, `drop_connection_is_retried_through_the_client`, `sizeless_head_refuses_instead_of_overwriting`, `divergent_complete_refusal_is_wire_covered`
 - **verify, diff, channel, primitive, safety**: `verify_reports_local_state_without_network`, `diff_plan_is_deterministic_and_events_carry_lists`, `channel_set_get_and_forward_guard`, `get_primitive_resumes_with_range`, `oversized_small_get_refuses_with_the_cap`, `symlinked_part_is_never_followed_on_resume`, `symlinked_marker_is_never_followed_on_write`, `symlinked_local_marker_is_never_followed_on_up`
 
@@ -61,8 +68,8 @@ CLI suite, by intent:
 
 ## The counts
 
-41 conformance tests through the core facade, 29 CLI tests through the real binary, 35 unit tests in the core library, plus doctests.
-The mock carries its own suite of 12 tests pinning the behavior table itself.
+53 conformance tests through the core facade, 29 CLI tests through the real binary, 35 unit tests in the core library, plus doctests.
+The mock carries its own suite of 15 tests pinning the behavior table itself, the group forwarding included.
 The rule that keeps this honest: a scenario added for any client lands in the same PR as the test that needs it, in `crates/mock-nexus/src/scenario.rs`, so the list never forks.
 
 ## Driving the mock by hand
