@@ -17,14 +17,14 @@ name = "nxr"
 path = "src/main.rs"
 
 [dependencies]
+clap = { workspace = true }
+log = { workspace = true }
 # The version is what crates.io resolves; the path is what this workspace builds.
 nexus-raw-core = { path = "../nexus-raw-core", version = "0.2.0" }
-tokio = { workspace = true }
-clap = { workspace = true }
 serde_json = { workspace = true }
-log = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 mock-nexus = { path = "../mock-nexus" }
-tempfile = { workspace = true }
 sha2 = { workspace = true }
+tempfile = { workspace = true }

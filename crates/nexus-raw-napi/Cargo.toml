@@ -14,12 +14,12 @@ description = "Node bindings for nexus-raw: the nxr surface as promises, on top 
 crate-type = ["cdylib"]
 
 [dependencies]
-nexus-raw-core = { path = "../nexus-raw-core" }
 napi = { workspace = true }
 napi-derive = { workspace = true }
-tokio = { workspace = true }
+nexus-raw-core = { path = "../nexus-raw-core" }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }
