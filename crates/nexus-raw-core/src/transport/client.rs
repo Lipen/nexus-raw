@@ -465,7 +465,11 @@ impl NexusClient {
                 }
                 let mut req = this.authorize(this.http.get(url));
                 if prefix > 0 {
-                    req = req.header(reqwest::header::RANGE, format!("bytes={prefix}-"));
+                    // Byte offsets are only meaningful against the stored representation.
+                    // The resume request must not negotiate a content-encoding.
+                    req = req
+                        .header(reqwest::header::RANGE, format!("bytes={prefix}-"))
+                        .header(reqwest::header::ACCEPT_ENCODING, "identity");
                 }
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status().as_u16();
