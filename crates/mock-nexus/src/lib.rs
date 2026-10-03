@@ -18,6 +18,7 @@
 //!
 //! A group repository is a separate deployment kind, not a scenario:
 //! [`MockNexus::start_group`] aggregates two or more running members, forwarding reads in member order and refusing writes.
+//! On a group handle the store mutators ([`MockNexus::insert`], [`MockNexus::enable_drift`]) are no-ops: a group stores nothing.
 
 mod base64;
 mod group;

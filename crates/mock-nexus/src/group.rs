@@ -25,7 +25,14 @@ pub(crate) fn get_first(shared: &Shared, stream: &mut TcpStream, req: &Request, 
         }
     }
     scenario::log_request(shared, &req.method, path, Outcome::Status(404));
-    let _ = server::write_response(stream, &scenario::plain(404, b"not found\n", None));
+    // A HEAD response never carries a body (RFC 9110 §9.3.2): the miss keeps the single-repo
+    // Content-Length of 10 but puts nothing on the wire.
+    let miss_body: &[u8] = if req.method == "HEAD" {
+        b""
+    } else {
+        b"not found\n"
+    };
+    let _ = server::write_response(stream, &scenario::plain(404, miss_body, None));
 }
 
 /// Refuse a write through the group before any member is contacted.
