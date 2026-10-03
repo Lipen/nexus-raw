@@ -65,8 +65,9 @@ git push origin master --follow-tags
 The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw` with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
 The generated release notes are the changelog. There is no `CHANGELOG.md` to rot.
 
-`nexus-raw-napi` is `publish = false`.
-Publishing the npm package is a separate track: it needs the per-platform prebuilt packages and the `optionalDependencies` wiring before a linux-only package can be avoided.
+`nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.
+The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `darwin-x64`, `darwin-arm64`) through npm trusted publishing.
+`win32-x64-msvc` joins when its name clears npm's spam filter.
 
 ## License
 

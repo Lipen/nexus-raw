@@ -1,9 +1,15 @@
 # nexus-raw: Node bindings
 
 Node bindings for nexus-raw: the `nxr` command surface as promises over Nexus raw storage, built on napi-rs 3 (async exports on its tokio runtime, `@napi-rs/cli` packaging).
-The npm package name is `nexus-raw`.
-Publishing to npm is not set up.
-Today the package is consumed as a `file:` dependency or from a vendored copy: the working example is [examples/node](../../examples/node).
+Install from npm:
+
+```bash
+npm install nexus-raw
+```
+
+Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
+Any other platform builds from source (below).
+The from-source development loop lives in [examples/node](../../examples/node).
 
 ## Build locally
 

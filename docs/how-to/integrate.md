@@ -90,9 +90,14 @@ The guided tour of the API, layers included: [the Rust API](../reference/api.md)
 ## As Node bindings
 
 The `nexus-raw-napi` crate ships the same surface to Node as promises: the npm package name is `nexus-raw`, built on napi-rs 3.
+Install from the registry:
 
-npm publishing is not set up.
-Consume the package the way [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node) does, as a `link:` dependency — no registry involved:
+```bash
+npm install nexus-raw
+```
+
+Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
+A from-source run lives in [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node): build the addon, then consume it as a `link:` dependency — no registry involved:
 
 ```bash
 (cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug)
