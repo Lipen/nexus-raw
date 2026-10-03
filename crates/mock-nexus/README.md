@@ -44,6 +44,9 @@ let server = MockNexus::start(Scenario::Flaky { first_failures: 2 })?;
 
 The `SCENARIOS` list in `src/scenario.rs` is the conformance contract: a new scenario lands in the same change as the client behavior that needs it.
 
+A group repository is a separate deployment kind, not a scenario: `MockNexus::start_group(&[&first, &second])?` builds one over two or more running members.
+Reads are forwarded to the members in order and the first `2xx` is relayed, writes are refused with `405` and `Allow: GET,HEAD`.
+
 ## More
 
 - User-facing documentation: [docs/](../../docs/)

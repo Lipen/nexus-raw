@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::PoisonError;
 use std::time::Duration;
 
+use crate::group;
 use crate::server::{self, BodyError, BodyPlan, Drip, Request, Resp};
 use crate::store::{lock, Outcome, ReqLog, Shared};
 
@@ -74,7 +75,7 @@ pub enum Scenario {
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
-const IO_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Serve exactly one request on `stream`, then close the connection.
 pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
@@ -145,6 +146,16 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
 
 /// Apply scenario gates and serve the request.
 fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
+    // A group instance forwards instead of serving its own store: reads walk the members, writes refuse.
+    if !shared.members.is_empty() {
+        if matches!(req.method.as_str(), "GET" | "HEAD") {
+            group::get_first(shared, stream, req, path);
+        } else {
+            group::refuse_writes(shared, stream, req, path);
+        }
+        return;
+    }
+
     // auth-401: unauthenticated callers are rejected before anything else.
     let unauthenticated = shared
         .auth_b64
@@ -301,7 +312,7 @@ fn transform_put(shared: &Shared, path: &str, body: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-fn plain(status: u16, body: &[u8], drip: Option<Drip>) -> Resp {
+pub(crate) fn plain(status: u16, body: &[u8], drip: Option<Drip>) -> Resp {
     Resp {
         status,
         extra_headers: Vec::new(),
@@ -328,7 +339,7 @@ fn answer_bad_request(shared: &Shared, stream: &mut TcpStream, method: &str, pat
     let _ = server::write_response(stream, &plain(400, b"bad request\n", None));
 }
 
-fn log_request(shared: &Shared, method: &str, path: &str, outcome: Outcome) {
+pub(crate) fn log_request(shared: &Shared, method: &str, path: &str, outcome: Outcome) {
     shared
         .log
         .lock()

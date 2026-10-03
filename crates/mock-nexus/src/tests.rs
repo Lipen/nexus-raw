@@ -473,3 +473,125 @@ fn get_range_serves_suffix_body_and_rejects_out_of_bounds() {
     assert_eq!(status, 404);
     assert_eq!(body, b"not found\n");
 }
+
+// ---------------------------------------------------------------- group
+
+#[test]
+fn group_forwards_reads_in_order_and_refuses_writes() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+
+    // The same key in both members with different bytes: the first member's copy wins.
+    first.insert("repository/raw/1.0.0/x.bin", b"first");
+    second.insert("repository/raw/1.0.0/x.bin", b"second");
+
+    let (status, headers, body) =
+        exchange(group.addr(), "GET", "/repository/raw/1.0.0/x.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"first");
+    assert_eq!(header_value(&headers, "content-length"), Some("5"));
+
+    // Nobody holds the key: the plain single-instance miss.
+    let (status, _, body) = exchange(
+        group.addr(),
+        "GET",
+        "/repository/raw/1.0.0/missing",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 404);
+    assert_eq!(body, b"not found\n");
+
+    // Writes are refused by the group itself, in the real Nexus wire shape.
+    let (status, headers, body) = exchange(
+        group.addr(),
+        "PUT",
+        "/repository/raw/1.0.0/x.bin",
+        b"payload",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 405);
+    assert_eq!(header_value(&headers, "allow"), Some("GET,HEAD"));
+    assert_eq!(header_value(&headers, "content-length"), Some("0"));
+    assert!(body.is_empty(), "real Nexus sends no 405 body: {body:?}");
+    let (status, headers, _) = exchange(
+        group.addr(),
+        "DELETE",
+        "/repository/raw/1.0.0/x.bin",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 405);
+    assert_eq!(header_value(&headers, "allow"), Some("GET,HEAD"));
+
+    // No member ever saw a write, and both stores are intact.
+    for member in [&first, &second] {
+        assert!(
+            member
+                .requests()
+                .iter()
+                .all(|r| r.method != "PUT" && r.method != "DELETE"),
+            "a group write must not reach a member: {:?}",
+            member.requests()
+        );
+    }
+    assert_eq!(
+        first.store_get("repository/raw/1.0.0/x.bin").as_deref(),
+        Some(b"first".as_slice())
+    );
+
+    // The group's own log records the client-visible answers in order.
+    let statuses: Vec<u16> = group
+        .requests()
+        .iter()
+        .filter_map(|r| match r.outcome {
+            Outcome::Status(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(statuses, [200, 404, 405, 405]);
+    assert_eq!(group.put_count("repository/raw/1.0.0/x.bin"), 0);
+}
+
+#[test]
+fn group_walks_past_a_failing_member() {
+    let flaky = MockNexus::start(Scenario::Flaky {
+        first_failures: 999,
+    })
+    .unwrap();
+    let atomic = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&flaky, &atomic]).unwrap();
+    atomic.insert("repository/raw/1.0.0/x.bin", b"payload");
+
+    // The flaky member's 503 is skipped: atomic's bytes serve the read, and the client sees nothing of the refusal.
+    let (status, _, body) =
+        exchange(group.addr(), "GET", "/repository/raw/1.0.0/x.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"payload");
+
+    let refused = flaky
+        .requests()
+        .iter()
+        .any(|r| matches!(r.outcome, Outcome::Status(503)));
+    let served = atomic
+        .requests()
+        .iter()
+        .any(|r| matches!(r.outcome, Outcome::Status(200)));
+    assert!(
+        refused && served,
+        "the walk must reach both members: {:?} then {:?}",
+        flaky.requests(),
+        atomic.requests()
+    );
+}
+
+#[test]
+fn group_needs_at_least_two_members() {
+    let solo = MockNexus::start(Scenario::Atomic).unwrap();
+    let err = MockNexus::start_group(&[&solo]).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+}

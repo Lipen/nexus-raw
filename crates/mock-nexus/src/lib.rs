@@ -15,23 +15,26 @@
 //! let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic)?;
 //! let url = format!("{}1.14.0/version.json", server.base_url());
 //! ```
+//!
+//! A group repository is a separate deployment kind, not a scenario:
+//! [`MockNexus::start_group`] aggregates two or more running members, forwarding reads in member order and refusing writes.
 
 mod base64;
+mod group;
 mod scenario;
 mod server;
 mod store;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub use scenario::{Scenario, SCENARIOS};
 pub use store::{Outcome, ReqLog};
 
-use server::Drip;
 use store::{lock, Shared};
 
 /// Handle to a running mock server.
@@ -54,63 +57,41 @@ impl MockNexus {
     pub fn start_on(scenario: Scenario, addr: SocketAddr) -> std::io::Result<Self> {
         let listener = TcpListener::bind(addr)?;
         let bound = listener.local_addr()?;
-
-        let auth_b64 = match &scenario {
-            Scenario::Auth401 { user, pass } => {
-                Some(base64::encode(format!("{user}:{pass}").as_bytes()))
-            }
-            _ => None,
-        };
-        let drip = match &scenario {
-            Scenario::Slow {
-                chunk_delay_ms,
-                chunk_size,
-            } => Some(Drip {
-                delay_ms: *chunk_delay_ms,
-                chunk_size: *chunk_size,
-            }),
-            _ => None,
-        };
-        let sizeless = matches!(&scenario, Scenario::Sizeless);
-        let (partial_first_put, flaky_first) = match &scenario {
-            Scenario::PartialPut {
-                first_attempt_bytes,
-            } => (Some(*first_attempt_bytes), None),
-            Scenario::Flaky { first_failures } => (None, Some(*first_failures)),
-            _ => (None, None),
-        };
-
-        let shared = Arc::new(Shared {
-            scenario,
-            store: Mutex::new(HashMap::new()),
-            log: Mutex::new(Vec::new()),
-            first_request: Mutex::new(HashMap::new()),
-            first_put: Mutex::new(HashMap::new()),
-            drift: AtomicBool::new(false),
-            auth_b64,
-            drip,
-            sizeless,
-            partial_first_put,
-            flaky_first,
-        });
+        let shared = Arc::new(Shared::hosted(scenario));
         let stop = Arc::new(AtomicBool::new(false));
-        {
-            let shared = Arc::clone(&shared);
-            let stop = Arc::clone(&stop);
-            // Accept connections until `stop` is set.
-            // One thread per connection.
-            std::thread::spawn(move || loop {
-                let Ok((conn, _)) = listener.accept() else {
-                    break;
-                };
-                if stop.load(Ordering::Relaxed) {
-                    break;
-                }
-                let conn_shared = Arc::clone(&shared);
-                std::thread::spawn(move || scenario::serve(&conn_shared, conn));
-            });
-        }
+        spawn_acceptor(listener, Arc::clone(&shared), Arc::clone(&stop));
+        Ok(Self {
+            shared,
+            addr: bound,
+            stop,
+        })
+    }
 
+    /// Start a group repository over `members` (two or more running instances), listening on its own port on 127.0.0.1.
+    ///
+    /// Reads (`GET`/`HEAD`) are forwarded to the members' real HTTP endpoints in member order, and the first member answering `2xx` is relayed to the client.
+    /// Any other member answer — a `404`, a `5xx`, a broken connection — is skipped: the walk never retries a member and never surfaces a member's failure to the client.
+    /// When no member answers `2xx`, the group answers `404` with the same `not found` body as a single-instance miss (real Nexus's `notFound()` sends no body, the mock stays consistent with its own single-repo shape).
+    /// Every other method is refused with `405`, `Allow: GET,HEAD` and an empty body: a group is a read-only aggregation, and publication targets hosted members.
+    /// Member scenario gates apply to forwarded requests, because the members serve them for real: a flaky member's `503` costs the group nothing once a later member holds the object.
+    ///
+    /// Limitations, chosen to keep the mock std-only and faithful to the real `GroupHandler` dispatch: members are flat (no nested groups), every member is assumed online, the format-specific escape hatches are not modeled, and the search API is not dispatched (a separate subsystem in real Nexus, so a group URL answers `404` for it).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`io::Error`] of kind [`io::ErrorKind::InvalidInput`] for fewer than two members, and the bind error when the listener cannot open.
+    pub fn start_group(members: &[&MockNexus]) -> std::io::Result<Self> {
+        if members.len() < 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a group repository needs at least two members",
+            ));
+        }
+        let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))?;
+        let bound = listener.local_addr()?;
+        let shared = Arc::new(Shared::group(members));
+        let stop = Arc::new(AtomicBool::new(false));
+        spawn_acceptor(listener, Arc::clone(&shared), Arc::clone(&stop));
         Ok(Self {
             shared,
             addr: bound,
@@ -164,6 +145,21 @@ impl MockNexus {
     pub fn disable_drift(&self) {
         self.shared.drift.store(false, Ordering::Relaxed);
     }
+}
+
+/// Accept connections until `stop` is set.
+/// One thread per connection.
+fn spawn_acceptor(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || loop {
+        let Ok((conn, _)) = listener.accept() else {
+            break;
+        };
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+        let conn_shared = Arc::clone(&shared);
+        std::thread::spawn(move || scenario::serve(&conn_shared, conn));
+    });
 }
 
 impl Drop for MockNexus {
