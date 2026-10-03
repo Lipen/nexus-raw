@@ -421,7 +421,7 @@ jobs:
 
       - name: Publish the main package
         if: ${{ github.event_name == 'push' }}
-        run: npm publish pkg-main --provenance --access public
+        run: npm publish ./pkg-main --provenance --access public
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
 # weight, the npm registry above is the artifact channel.
