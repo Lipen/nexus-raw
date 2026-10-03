@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use mock_nexus::{MockNexus, Outcome, Scenario};
+use mock_nexus::{MockNexus, Outcome, ReqLog, Scenario};
 use nexus_raw_core::sync::down::part_path;
 use nexus_raw_core::{
     model::sibling, staging_dir, ArtifactName, Config, Digest, Enumeration, Error, Event, Manifest,
@@ -18,8 +18,13 @@ const VERSION: &str = "1.0.0";
 const CONTENT: &[u8] = b"payload-0123456789";
 
 fn config(mock: &MockNexus, auth: Option<String>) -> Config {
+    config_at(dir_url(mock), auth)
+}
+
+/// `Config` at an explicit base URL.
+fn config_at(base: String, auth: Option<String>) -> Config {
     Config {
-        base: dir_url(mock),
+        base,
         workers: 4,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(5),
@@ -1609,4 +1614,230 @@ async fn point_clear_on_readonly_refuses() {
         mock.store_get("latest").is_some(),
         "the pointer must survive"
     );
+}
+
+// ---------------------------------------------------------------- group
+
+/// A repository-shaped base: the `/repository/<name>/` prefix that a real group and its members carry.
+/// The group forwards request paths verbatim, so members must hold the objects under the same shape.
+fn repo_url(mock: &MockNexus) -> String {
+    format!("{}repository/raw/{VERSION}/", mock.base_url())
+}
+
+/// Publish one complete artifact into a member's own store under the group path shape.
+async fn seed_member(mock: &MockNexus, name: &str, content: &[u8]) {
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), name, content);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(mock), None), tx).unwrap();
+    nxr.up(src.path(), None, true, None, None).await.unwrap();
+}
+
+/// The group forwards reads to the members in order and relays the first `2xx`: the artifact lives only in the second member.
+/// The walk is visible in the member logs: the first member answers the forwarded probe with a 404, the second serves the object.
+#[tokio::test]
+async fn down_through_group_serves_the_first_member_holding_the_object() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_member(&second, "b.bin", b"second member bytes").await;
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
+    let summary = nxr
+        .down(
+            dst.path(),
+            Enumeration::Names(names(&["b.bin"])),
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1, "{summary:?}");
+    assert_eq!(
+        std::fs::read(dst.path().join("b.bin")).unwrap(),
+        b"second member bytes"
+    );
+    let marker = std::fs::read_to_string(dst.path().join("b.bin.sha256")).unwrap();
+    assert_eq!(
+        marker,
+        sibling::format_line("b.bin", &Digest::of_bytes(b"second member bytes"))
+    );
+
+    // Member order: the first member was probed and missed, the second served.
+    let missed = first
+        .requests()
+        .iter()
+        .any(|r| r.method == "GET" && matches!(r.outcome, Outcome::Status(404)));
+    let served = second
+        .requests()
+        .iter()
+        .any(|r| r.method == "GET" && matches!(r.outcome, Outcome::Status(200)));
+    assert!(
+        missed,
+        "the walk must probe the first member: {:?}",
+        first.requests()
+    );
+    assert!(
+        served,
+        "the second member must serve the object: {:?}",
+        second.requests()
+    );
+}
+
+/// A failing member is skipped inside the group walk: a flaky member's 503 never reaches the client, so the retry loop never fires.
+/// One client request per object, and both members were hit.
+#[tokio::test]
+async fn down_through_group_skips_a_failing_member_without_a_client_retry() {
+    let flaky = MockNexus::start(Scenario::Flaky {
+        first_failures: 999,
+    })
+    .unwrap();
+    let atomic = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_member(&atomic, "b.bin", CONTENT).await;
+    let group = MockNexus::start_group(&[&flaky, &atomic]).unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
+    let summary = nxr
+        .down(
+            dst.path(),
+            Enumeration::Names(names(&["b.bin"])),
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1, "{summary:?}");
+    assert_eq!(std::fs::read(dst.path().join("b.bin")).unwrap(), CONTENT);
+
+    // Exactly one client request for the object: had the 503 surfaced, the client would have retried and the log would repeat.
+    let log = group.requests();
+    let object_gets: Vec<&ReqLog> = log
+        .iter()
+        .filter(|r| r.method == "GET" && r.path == format!("repository/raw/{VERSION}/b.bin"))
+        .collect();
+    assert_eq!(
+        object_gets.len(),
+        1,
+        "no client retry may happen: {:?}",
+        log
+    );
+    assert_eq!(object_gets[0].outcome, Outcome::Status(200));
+    // The walk reached both members: flaky refused, atomic served.
+    assert!(
+        flaky
+            .requests()
+            .iter()
+            .any(|r| matches!(r.outcome, Outcome::Status(503))),
+        "{:?}",
+        flaky.requests()
+    );
+    assert!(atomic
+        .requests()
+        .iter()
+        .any(|r| r.method == "GET" && matches!(r.outcome, Outcome::Status(200))));
+}
+
+/// The group refuses uploads before any member is contacted: the PUT answers 405.
+/// The client maps the 405 to `Error::Http`, whose verdict is exit 3; only 5xx are retryable, so the refusal fails fast.
+#[tokio::test]
+async fn up_against_a_group_refuses_with_405() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, Error::Http { status: 405, .. }),
+        "got {err:?}"
+    );
+    assert_eq!(
+        err.exit_code(),
+        3,
+        "a refused PUT is the HTTP verdict: {err}"
+    );
+    assert!(
+        err.to_string().contains("405"),
+        "the status stays visible: {err}"
+    );
+
+    // The refusal is the group's own: no member saw a write, and nothing landed anywhere.
+    let path = format!("repository/raw/{VERSION}/a.zip");
+    assert_eq!(group.put_count(&path), 0);
+    assert!(group
+        .requests()
+        .iter()
+        .any(|r| r.method == "PUT" && matches!(r.outcome, Outcome::Status(405))));
+    for member in [&first, &second] {
+        assert!(
+            member
+                .requests()
+                .iter()
+                .all(|r| r.method != "PUT" && r.method != "DELETE"),
+            "a group write must not reach a member: {:?}",
+            member.requests()
+        );
+        assert!(member.store_get(&path).is_none());
+    }
+}
+
+/// A group refuses the deletion: the 405 rides the existing read-only mapping, which is a data verdict (exit 1).
+/// Every member keeps its bytes, and no member ever sees a DELETE.
+#[tokio::test]
+async fn rm_against_a_group_refuses_as_read_only() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let member = Nxr::new(config_at(repo_url(&second), None), tx).unwrap();
+    member
+        .up(local.path(), None, true, None, None)
+        .await
+        .unwrap();
+    second.insert(
+        &format!("repository/raw/{VERSION}/manifest.json"),
+        br#"{"artifacts":["a.zip"]}"#,
+    );
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let err = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap_err();
+    assert!(
+        matches!(&err, Error::ReadOnly { status: 405, .. }),
+        "got {err:?}"
+    );
+    assert_eq!(
+        err.exit_code(),
+        1,
+        "the read-only refusal is a data verdict: {err}"
+    );
+    assert!(err.to_string().contains("read-only"), "{err}");
+
+    // Nothing was deleted anywhere.
+    assert!(second
+        .store_get(&format!("repository/raw/{VERSION}/a.zip"))
+        .is_some());
+    assert!(second
+        .store_get(&format!("repository/raw/{VERSION}/a.zip.sha256"))
+        .is_some());
+    for member in [&first, &second] {
+        assert!(
+            !member.requests().iter().any(|r| r.method == "DELETE"),
+            "no DELETE may reach a member: {:?}",
+            member.requests()
+        );
+    }
 }
