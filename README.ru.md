@@ -67,13 +67,15 @@ nxr verify vendor/prebuilt
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов; 404 — норма, read-only отказывает |
+| `nxr point --clear <URL>` | DELETE файла-указателя (channel ref); отсутствие — норма |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (экспериментально) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена. `--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 
-`down` берёт перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`. Без любого из них — отказ.
+`down` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`. Без любого из них — отказ.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.

@@ -14,7 +14,7 @@ use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::state::{LocalStatus, RemoteStatus};
 use crate::primitive::{self, GetOutcome, HeadInfo, ShaSource};
-use crate::sync::{self, down, up, Action, Mode};
+use crate::sync::{self, down, rm::RmAction, up, Action, Mode};
 use crate::transport::client::NexusClient;
 
 /// How `down` learns which names to fetch (spec §5.2.1).
@@ -104,7 +104,9 @@ impl Nxr {
         markers: bool,
     ) -> Result<Vec<Action>, Error> {
         let locals = sync::local_statuses(dir, names).await;
-        let remotes = self.remote_states_for(&locals).await?;
+        let remotes = self
+            .remote_states_for(locals.iter().map(|(n, _)| n))
+            .await?;
         let dir = dir.to_owned();
         tokio::task::spawn_blocking(move || sync::classify(&dir, mode, markers, locals, remotes))
             .await
@@ -172,7 +174,9 @@ impl Nxr {
         let actions = match plan {
             Some(p) => p,
             None => {
-                let remotes = self.remote_states_for(&locals).await?;
+                let remotes = self
+                    .remote_states_for(locals.iter().map(|(n, _)| n))
+                    .await?;
                 let d = dir.to_owned();
                 let markers = gen_markers;
                 tokio::task::spawn_blocking(move || {
@@ -227,7 +231,9 @@ impl Nxr {
             Some(p) => p,
             None => {
                 let locals = sync::local_statuses(dir, names).await;
-                let remotes = self.remote_states_for(&locals).await?;
+                let remotes = self
+                    .remote_states_for(locals.iter().map(|(n, _)| n))
+                    .await?;
                 let d = dir.to_owned();
                 tokio::task::spawn_blocking(move || {
                     sync::classify(&d, Mode::Down, true, locals, remotes)
@@ -247,6 +253,56 @@ impl Nxr {
             self.workers.clone(),
         )
         .await
+    }
+
+    /// Delete the enumerated names from the remote directory (§5.4).
+    ///
+    /// The enumeration source is mandatory, like `down`.
+    /// Divergence is never checked: `rm` deletes names, not content.
+    /// Markers go before bytes, so nobody ever sees a complete object mid-delete.
+    pub async fn rm(&self, enum_src: Enumeration) -> Result<Summary, Error> {
+        let names = self.rm_names(enum_src).await?;
+        sync::rm::execute(self.client.clone(), self.base.clone(), names).await
+    }
+
+    /// The deletion plan without deleting anything (`rm --dry-run`).
+    ///
+    /// Existence only: a diverging or broken remote copy still plans as `Remove`,
+    /// because deletion is about names, never about content.
+    pub async fn rm_plan(&self, enum_src: Enumeration) -> Result<Vec<RmAction>, Error> {
+        let names = self.rm_names(enum_src).await?;
+        let remotes = self.remote_states_for(&names).await?;
+        Ok(names
+            .into_iter()
+            .map(|name| match &remotes[&name] {
+                RemoteStatus::Absent => RmAction::Missing { name },
+                RemoteStatus::Complete { size, .. } | RemoteStatus::Markerless { size } => {
+                    RmAction::Remove { name, size: *size }
+                }
+                RemoteStatus::Broken(_) => RmAction::Remove { name, size: None },
+            })
+            .collect())
+    }
+
+    /// Resolve the enumeration source into names, refusing an empty result like `down`.
+    async fn rm_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
+        let names = match enum_src {
+            Enumeration::Manifest(m) => m.names,
+            Enumeration::Names(v) => v,
+            Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
+        };
+        if names.is_empty() {
+            return Err(Error::Enumerate {
+                url: self.base.clone(),
+                reason: "enumeration produced no names; the URL is probably wrong".into(),
+            });
+        }
+        Ok(names)
+    }
+
+    /// DELETE a pointer file (`point --clear`, §5.4): absence is a normal outcome.
+    pub async fn point_clear(&self, url: &str) -> Result<layout::ClearOutcome, Error> {
+        layout::pointer_clear(&self.client, url).await
     }
 
     /// Local verification of a directory: bytes + marker + digest, no network.
@@ -323,12 +379,12 @@ impl Nxr {
 
     // ---- internals ---------------------------------------------------------
 
-    /// Remote states for the given local (name, _) pairs, in order.
-    async fn remote_states_for(
+    /// Remote states for the given names, in order.
+    async fn remote_states_for<'a>(
         &self,
-        locals: &[(ArtifactName, LocalStatus)],
+        names: impl IntoIterator<Item = &'a ArtifactName>,
     ) -> Result<BTreeMap<ArtifactName, RemoteStatus>, Error> {
-        let names: Vec<ArtifactName> = locals.iter().map(|(n, _)| n.clone()).collect();
+        let names: Vec<ArtifactName> = names.into_iter().cloned().collect();
         let mut set = tokio::task::JoinSet::new();
         for (i, n) in names.iter().enumerate() {
             let permit = self

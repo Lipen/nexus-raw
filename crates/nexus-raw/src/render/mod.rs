@@ -125,11 +125,32 @@ fn human(ev: &Event, quiet: bool, verbose: bool) {
                 println!("↻ {name}: retry {attempt} ({reason})");
             }
         }
+        Event::Removing { name } => {
+            if verbose && !quiet {
+                println!("× {name}");
+            }
+        }
+        Event::Removed { name } => {
+            if quiet {
+                return;
+            }
+            println!("× {name} removed");
+        }
+        Event::Missing { name } => {
+            if quiet {
+                return;
+            }
+            println!("○ {name} missing");
+        }
         Event::Summary(s) => {
-            println!(
-                "uploaded {}, downloaded {}, skipped {}",
-                s.uploaded, s.downloaded, s.skipped
-            );
+            if s.removed > 0 {
+                println!("removed {}, skipped {}", s.removed, s.skipped);
+            } else {
+                println!(
+                    "uploaded {}, downloaded {}, skipped {}",
+                    s.uploaded, s.downloaded, s.skipped
+                );
+            }
             if !s.failed.is_empty() {
                 println!("failed: {}", s.failed.join(", "));
             }

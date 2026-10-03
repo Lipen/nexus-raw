@@ -6,5 +6,7 @@ pub mod channel;
 pub mod ls;
 pub mod manifest;
 
-pub use channel::{get as channel_get, set as channel_set, ChannelOutcome};
+pub use channel::{
+    clear as pointer_clear, get as channel_get, set as channel_set, ChannelOutcome, ClearOutcome,
+};
 pub use manifest::Manifest;

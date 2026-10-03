@@ -2,7 +2,7 @@
 
 Every failure names its kind, the object and both sides of a disagreement.
 Every error also prints one `hint:` line on stderr telling you what to check next.
-The taxonomy has ten variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+The taxonomy has eleven variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 
 ## The taxonomy
 
@@ -19,6 +19,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
 | `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
+| `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
 | `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
 | `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route |

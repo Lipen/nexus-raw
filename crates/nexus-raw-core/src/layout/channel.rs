@@ -55,6 +55,26 @@ pub async fn set(
     Ok(ChannelOutcome::Written { from: current })
 }
 
+/// The `point --clear` result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClearOutcome {
+    /// The pointer existed and is deleted.
+    Cleared,
+    /// The pointer was already absent: 404, and clearing stays idempotent.
+    Absent,
+}
+
+/// DELETE a pointer file (`point --clear`, §5.4).
+///
+/// Clearing is not a comparison: there is no `--if-forward` semantics here.
+/// An already-absent pointer is a normal outcome, so the call is idempotent.
+pub async fn clear(client: &NexusClient, url: &str) -> Result<ClearOutcome, Error> {
+    Ok(match client.delete_url(url).await? {
+        crate::transport::client::DeleteOutcome::Deleted => ClearOutcome::Cleared,
+        crate::transport::client::DeleteOutcome::Missing => ClearOutcome::Absent,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

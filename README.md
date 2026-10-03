@@ -67,13 +67,15 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | enumerate → DELETE each marker, then its bytes; 404 is fine, read-only refuses |
+| `nxr point --clear <URL>` | DELETE a pointer file (channel ref); absent is fine |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token. `--if-forward` accepts only forward moves in dotted-numeric order |
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 
-`down` enumerates explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`. With none of them it refuses.
+`down` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`. With none of them they refuse.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.

@@ -240,6 +240,8 @@ pub struct NxrSummary {
     pub uploaded: u32,
     pub downloaded: u32,
     pub skipped: u32,
+    /// Names the call deleted (`rm`); transfers never delete and stay at 0.
+    pub removed: u32,
     pub failed: Vec<String>,
 }
 
@@ -249,6 +251,7 @@ impl From<&Summary> for NxrSummary {
             uploaded: u32::try_from(s.uploaded).unwrap_or(u32::MAX),
             downloaded: u32::try_from(s.downloaded).unwrap_or(u32::MAX),
             skipped: u32::try_from(s.skipped).unwrap_or(u32::MAX),
+            removed: u32::try_from(s.removed).unwrap_or(u32::MAX),
             failed: s.failed.clone(),
         }
     }

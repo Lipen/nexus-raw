@@ -97,6 +97,9 @@ Every method mirrors a CLI command one-to-one.
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
 | `up(dir, names, gen_markers, claim, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
 | `down(dst, enum_src, fresh, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `rm(enum_src)` | `Summary` | `nxr rm` | DELETE the enumerated names, marker before bytes: 404 is success, divergence is never checked |
+| `rm_plan(enum_src)` | `Vec<RmAction>` | `rm --dry-run` | `Remove`/`Missing` per name by remote existence, nothing deleted |
+| `point_clear(url)` | `ClearOutcome` | `nxr point --clear` | DELETE the pointer: `Cleared` or `Absent` |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
@@ -217,7 +220,10 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 | `ArtifactBytes { name, dir, done, total }` | coalesced: at most one per 200 ms per name | `{"event":"artifact","name":"a.zip","state":"downloading","done":12,"total":38}` |
 | `ArtifactDone { name, dir, skipped, done, total }` | when a name settles | `{"event":"artifact","name":"a.zip","state":"done","done":38,"total":38}` |
 | `Retrying { name, attempt, reason }` | before each replayed attempt | `{"event":"retrying","name":"a.zip","attempt":2,"reason":"transport: …"}` |
-| `Summary(Summary)` | last event of every transfer | `{"event":"summary","uploaded":1,"downloaded":0,"skipped":2,"failed":[]}` |
+| `Removing { name }` | before a name's DELETEs go out | `{"event":"removing","name":"a.zip"}` |
+| `Removed { name }` | when at least one of the name's objects was deleted | `{"event":"removed","name":"a.zip"}` |
+| `Missing { name }` | when every DELETE of the name answered 404 | `{"event":"missing","name":"a.zip"}` |
+| `Summary(Summary)` | last event of every transfer | `{"event":"summary","uploaded":1,"downloaded":0,"skipped":2,"removed":0,"failed":[]}` |
 
 `dir` renders as the state prefix: `Dir::Up` → `"uploading"`, `Dir::Down` → `"downloading"`.
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
@@ -238,7 +244,7 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `Transport`, `Http`, `Misuse`, `Io`.
+`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `Misuse`, `Io`.
 `Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint.
 Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`, `LocalIncomplete`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.

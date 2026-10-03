@@ -100,6 +100,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "flaky" => Some(Scenario::Flaky {
             first_failures: flags.flaky,
         }),
+        "readonly" => Some(Scenario::ReadOnly),
         _ => None,
     }
 }

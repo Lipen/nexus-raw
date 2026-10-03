@@ -89,6 +89,15 @@ pub struct HeadInfo {
     pub content_type: Option<String>,
 }
 
+/// The result of a DELETE (§5.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteOutcome {
+    /// The object existed and is gone.
+    Deleted,
+    /// The server answered 404: the object was already absent.
+    Missing,
+}
+
 pub struct NexusClient {
     http: reqwest::Client,
     retry: RetryPolicy,
@@ -297,6 +306,33 @@ impl NexusClient {
                 match status {
                     s if s.is_success() => Ok(()),
                     s => Err(this.status_failure(url, s)),
+                }
+            })
+        })
+        .await
+    }
+
+    /// DELETE a URL (§5.4): 2xx is deleted, 404 is already gone.
+    ///
+    /// Deletion is idempotent: the 404 of a rerun is a normal result, not an error.
+    /// A 403/405 is the read-only repository: refused as [`Error::ReadOnly`] (exit 1), never retried.
+    pub async fn delete_url(&self, url: &str) -> Result<DeleteOutcome, Error> {
+        self.with_retries(None, url, |this: &Self, url: &str| {
+            Box::pin(async move {
+                let req = this.authorize(this.http.delete(url));
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status();
+                match status.as_u16() {
+                    s if (200..300).contains(&s) => Ok(DeleteOutcome::Deleted),
+                    404 => Ok(DeleteOutcome::Missing),
+                    s @ (403 | 405) => Err(AttemptFailure {
+                        retryable: false,
+                        error: Error::ReadOnly {
+                            url: url.to_owned(),
+                            status: s,
+                        },
+                    }),
+                    s => Err(this.status_failure(url, reqwest::StatusCode::from_u16(s).unwrap())),
                 }
             })
         })

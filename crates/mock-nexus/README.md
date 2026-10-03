@@ -16,7 +16,7 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 
 | Scenario | Behavior |
 |:---------|:---------|
-| `atomic` | the correct server: PUT/GET/HEAD, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
+| `atomic` | the correct server: PUT/GET/HEAD, DELETE with 204/404, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
 | `partial-put` | cuts the first PUT body short and closes the connection |
 | `drop-connection` | resets the first request per path after reading its headers |
 | `freeze-upload` | accepts a PUT connection and then never reads or answers, so the client's stall detection must fire |
@@ -27,6 +27,7 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 | `auth-401` | requires `Authorization: Basic <base64 user:pass>` |
 | `doc-drift` | diverges `GET version.json` once drift is enabled by the test |
 | `flaky` | answers 503 for the first K requests per path |
+| `readonly` | answers 403 to every DELETE: the read-only repository, the store never shrinks |
 
 Scenario-specific flags: `--partial-bytes N`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--auth user:pass` (default `ci:secret`).
 

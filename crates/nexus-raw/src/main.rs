@@ -126,6 +126,33 @@ pub(crate) enum Cmd {
         #[arg(long)]
         fresh: bool,
     },
+    /// Delete the enumerated names from a remote directory (§5.4).
+    Rm {
+        /// The remote directory URL.
+        #[arg(value_name = "SRC_URL")]
+        src: String,
+        /// Enumeration source: a manifest file, URL or `-` for stdin.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// One explicit name (repeatable).
+        #[arg(long, value_name = "NAME")]
+        name: Vec<String>,
+        /// Best-effort enumeration through the server search API.
+        #[arg(long)]
+        ls: bool,
+        /// Print the plan without deleting anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete a pointer file (§5.4).
+    Point {
+        /// Delete the pointer file the URL names.
+        #[arg(long)]
+        clear: bool,
+        /// The pointer file URL.
+        #[arg(value_name = "URL")]
+        url: String,
+    },
     /// List versions or the objects of a version directory (experimental).
     Ls {
         /// A repository/group URL (versions) or a directory URL (--assets).

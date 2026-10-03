@@ -3,6 +3,7 @@
 `nxr` moves files to and from a Nexus raw repository.
 Single-object commands: `get`, `put`, `head`, `sha`.
 Directory transfers with sha-sibling verification: `up`, `down`.
+Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 
 Every invocation is self-sufficient: the URL is a command-line argument and credentials come from `-u` or the environment.
@@ -381,6 +382,135 @@ Part files are named `.nxr-part-<16 hex>` and are stable per artifact name, so a
 A resumed part that belongs to an older remote version fails the digest check and is discarded once: the name restarts from zero under the same digest check.
 A fresh download that still diverges refuses the run (exit 1), so nothing divergent is ever written.
 
+## nxr rm
+
+```
+nxr rm <SRC_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--dry-run]
+```
+
+Delete a version, name by name: the `.sha256` marker of every enumerated name goes first, then the bytes, so nobody ever sees a complete object mid-delete ([the protocol](protocol.md#deletion)).
+The enumeration source is mandatory and shared with `down`: a `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+Without any source the run refuses with `cannot enumerate` (exit 1).
+
+Deletion is by name, not by content.
+Divergence is never checked: a diverging or broken remote copy is deleted like any other, because deletion is irreversible by definition.
+404 is a normal answer, so `rm` is idempotent: the rerun re-enumerates, collects only 404s and still exits 0.
+The `manifest.json` that named the list survives it, because it is the source that keeps the rerun working.
+
+| Flag | Meaning |
+|:-----|:--------|
+| `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
+| `--name <NAME>` | one explicit name, repeat as needed |
+| `--ls` | best-effort enumeration through the server search API |
+| `--dry-run` | probe and print the plan: `rm <name>` for present names, `missing <name>` for absent ones, nothing deleted |
+
+A full version goes away in one call:
+
+```console
+$ nxr rm --dry-run https://nexus.example.com/repository/raw-main/1.14.0/
+rm a.zip
+rm b.bin
+rm version.json
+$ echo $?
+0
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+× a.zip removed
+× b.bin removed
+× version.json removed
+removed 3, skipped 0
+$ echo $?
+0
+```
+
+The rerun is a normal 404 walk:
+
+```console
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+○ a.zip missing
+○ b.bin missing
+○ version.json missing
+uploaded 0, downloaded 0, skipped 3
+$ echo $?
+0
+```
+
+A read-only repository refuses before anything moves:
+
+```console
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+uploaded 0, downloaded 0, skipped 0
+failed: a.zip
+error: read-only: https://nexus.example.com/repository/raw-main/1.14.0/a.zip.sha256: HTTP 403
+hint: the repository answered 403 to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed
+$ echo $?
+1
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | every name deleted or already absent; also the `--dry-run` plan |
+| `1` | data refusal: `cannot enumerate`, the read-only repository (403/405); local I/O failures |
+| `2` | misuse: an unsafe `--name` |
+| `3` | transport or auth failure: the `failed:` list names where the run stopped |
+
+`--json` prints one event per name and the summary last; a rerun emits `missing` events and still exits 0:
+
+```json
+{"event":"removing","name":"a.zip"}
+{"event":"removed","name":"a.zip"}
+{"event":"removing","name":"b.bin"}
+{"event":"missing","name":"b.bin"}
+{"downloaded":0,"event":"summary","failed":[],"removed":1,"skipped":1,"uploaded":0}
+```
+
+`--dry-run --json` prints one object per plan line:
+
+```json
+{"action":"rm","name":"a.zip","size":23}
+{"action":"missing","name":"ghost.bin"}
+```
+
+## nxr point --clear
+
+```
+nxr point --clear <URL>
+```
+
+DELETE the pointer file the URL names: the channel ref, retired.
+There is no `--if-forward` here and no comparison at all: clearing is an action, not a move in version order.
+An already-absent pointer is a normal outcome (`absent`, exit 0), so the command is idempotent.
+`point` without `--clear` is misuse (exit 2): deleting is the only operation the command has.
+
+```console
+$ nxr channel set https://nexus.example.com/repository/raw-main/stable 1.4.0
+channel: set https://nexus.example.com/repository/raw-main/stable → 1.4.0
+$ nxr point --clear https://nexus.example.com/repository/raw-main/stable
+point: cleared https://nexus.example.com/repository/raw-main/stable
+$ echo $?
+0
+$ nxr point --clear https://nexus.example.com/repository/raw-main/stable
+point: absent https://nexus.example.com/repository/raw-main/stable
+$ echo $?
+0
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the pointer is deleted, or was already absent |
+| `1` | the read-only repository refused (403/405) |
+| `2` | misuse: `point` without `--clear`, a non-http URL |
+| `3` | transport or auth failure |
+
+`--json` prints one object per outcome:
+
+```json
+{"outcome":"cleared","url":"https://nexus.example.com/repository/raw-main/stable"}
+```
+
+```json
+{"outcome":"absent","url":"https://nexus.example.com/repository/raw-main/stable"}
+```
+
 ## nxr ls (experimental)
 
 ```
@@ -590,8 +720,10 @@ The line vocabulary:
 
 - `plan: N to upload, N to download, N up to date`, once per transfer.
 - `↑ name ok`, `↓ name ok`, `○ name skipped` when a name settles.
+- `× name removed`, `○ name missing` when `rm` settles a name (`× name` in `-v` before the DELETEs go out).
 - `↻ name: retry N (reason)` when an attempt is replayed.
 - `uploaded N, downloaded N, skipped N`, the final summary of every transfer.
+- `removed N, skipped K`, the final summary of `rm`, replacing the upload/download line when something was deleted.
 - `failed: name, name` after the summary, when names did not land.
 
 `-q` trims to the final summary line.
@@ -615,8 +747,8 @@ Artifact lines arrive in worker completion order, not plan order.
 
 `--json` switches stdout to NDJSON:
 
-- `up`, `down`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `retrying`, `summary`).
-- `head`, `sha`, `channel` and `doctor` print their objects described in their sections above.
+- `up`, `down`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
+- `head`, `sha`, `channel`, `point` and `doctor` print their objects described in their sections above.
 - the body of `get` without `-o` is raw bytes on stdout, so do not mix it with `--json`.
 
 A captured transfer stream:
@@ -643,9 +775,9 @@ Four codes cover every failure, and the mapping from error to code has one home,
 
 | Code | Class | Representative causes |
 |:----:|:------|:----------------------|
-| `0` | ok | transfer converged, digest verified, status reported, channel written or kept |
-| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, local I/O failures |
-| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs |
+| `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
+| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures |
+| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear` |
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, 404 and other unexpected statuses |
 
 `verify` is offline and cannot produce `3`.

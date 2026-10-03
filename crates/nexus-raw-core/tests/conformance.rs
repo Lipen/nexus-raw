@@ -1051,3 +1051,251 @@ async fn up_claim_first_refuses_a_name_outside_the_scan() {
     let log = mock.requests();
     assert_eq!(log.iter().filter(|r| r.method == "PUT").count(), 0);
 }
+
+// ---------------------------------------------------------------- rm
+
+/// A version published for the rm tests: two artifacts plus the version document, manifest at the base.
+async fn publish_version(nxr: &Nxr, mock: &MockNexus, local: &TempDir) {
+    seed_complete(local.path(), "a.zip", CONTENT);
+    seed_complete(local.path(), "b.bin", b"other bytes");
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
+    mock.insert(
+        &format!("{VERSION}/version.json"),
+        br#"{"version":"1.0.0","artifacts":["a.zip","b.bin"]}"#,
+    );
+    mock.insert(
+        &format!("{VERSION}/manifest.json"),
+        br#"{"artifacts":["a.zip","b.bin","version.json"]}"#,
+    );
+}
+
+/// rm deletes a whole version: every enumerated name with its marker, the version document included, the enumeration manifest excluded.
+#[tokio::test]
+async fn rm_removes_a_whole_version() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    publish_version(&nxr, &mock, &local).await;
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let summary = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+    assert_eq!(summary.removed, 3);
+    assert_eq!(summary.skipped, 0);
+    assert!(summary.failed.is_empty());
+
+    // Everything enumerated is gone, down to the markers; the manifest survives as the enumeration source of a rerun.
+    for name in [
+        "a.zip",
+        "a.zip.sha256",
+        "b.bin",
+        "b.bin.sha256",
+        "version.json",
+    ] {
+        assert!(
+            mock.store_get(&format!("{VERSION}/{name}")).is_none(),
+            "{name} must be gone"
+        );
+    }
+    assert!(mock
+        .store_get(&format!("{VERSION}/manifest.json"))
+        .is_some());
+
+    // The wire order is the reverse of publishing: the marker DELETE precedes the bytes DELETE of the same name.
+    let log = mock.requests();
+    for name in ["a.zip", "b.bin"] {
+        let marker_at = log
+            .iter()
+            .position(|r| r.method == "DELETE" && r.path == format!("{VERSION}/{name}.sha256"))
+            .unwrap();
+        let bytes_at = log
+            .iter()
+            .position(|r| r.method == "DELETE" && r.path == format!("{VERSION}/{name}"))
+            .unwrap();
+        assert!(
+            marker_at < bytes_at,
+            "the marker of {name} must be deleted first"
+        );
+    }
+
+    let events = collect_events(&mut rx);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, Event::Removing { .. }))
+            .count(),
+        3,
+        "one removing event per name: {events:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, Event::Removed { .. }))
+            .count(),
+        3
+    );
+    assert!(matches!(events.last(), Some(Event::Summary(_))));
+    drop(rx);
+}
+
+/// Deletion is idempotent: the second rm sees only 404s and still succeeds.
+#[tokio::test]
+async fn second_rm_is_all_404_and_exits_clean() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    publish_version(&nxr, &mock, &local).await;
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let requests_before = mock.requests().len();
+    let summary = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+    assert_eq!(summary.removed, 0);
+    assert_eq!(summary.skipped, 3, "every name reports missing");
+
+    let deletes: Vec<Outcome> = mock.requests()[requests_before..]
+        .iter()
+        .filter(|r| r.method == "DELETE")
+        .map(|r| r.outcome.clone())
+        .collect();
+    assert_eq!(deletes.len(), 6, "marker + bytes per name");
+    assert!(
+        deletes.iter().all(|o| matches!(o, Outcome::Status(404))),
+        "the rerun must see only 404s: {deletes:?}"
+    );
+}
+
+/// The read-only repository refuses the deletion: exit 1, and nothing ever left the store.
+#[tokio::test]
+async fn readonly_refuses_rm_and_changes_nothing() {
+    let mock = MockNexus::start(Scenario::ReadOnly).unwrap();
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    publish_version(&nxr, &mock, &local).await;
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let err = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap_err();
+    assert_eq!(
+        err.exit_code(),
+        1,
+        "read-only refusal is a data verdict: {err}"
+    );
+    assert!(
+        err.to_string().contains("read-only"),
+        "the error names the refusal: {err}"
+    );
+    assert!(err.hint().is_some());
+
+    // The refusal fired on the first request, so the store still holds everything.
+    for name in [
+        "a.zip",
+        "a.zip.sha256",
+        "b.bin",
+        "b.bin.sha256",
+        "version.json",
+    ] {
+        assert!(
+            mock.store_get(&format!("{VERSION}/{name}")).is_some(),
+            "{name} must survive a refused rm"
+        );
+    }
+    assert!(
+        !mock
+            .requests()
+            .iter()
+            .any(|r| r.method == "DELETE" && matches!(r.outcome, Outcome::Status(200..=300))),
+        "no DELETE may succeed against a read-only repository"
+    );
+}
+
+/// `rm --dry-run` probes and plans, but the mock never sees a DELETE and the bytes never move.
+#[tokio::test]
+async fn rm_dry_run_plans_and_touches_nothing() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    publish_version(&nxr, &mock, &local).await;
+    mock.insert(
+        &format!("{VERSION}/manifest.json"),
+        br#"{"artifacts":["a.zip","b.bin","version.json","ghost.bin"]}"#,
+    );
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let plan = nxr.rm_plan(Enumeration::Manifest(manifest)).await.unwrap();
+    let planned: Vec<String> = plan
+        .iter()
+        .map(|a| match a {
+            nexus_raw_core::RmAction::Remove { name, .. } => format!("rm {name}"),
+            nexus_raw_core::RmAction::Missing { name } => format!("missing {name}"),
+        })
+        .collect();
+    assert_eq!(
+        planned,
+        [
+            "rm a.zip",
+            "rm b.bin",
+            "rm version.json",
+            "missing ghost.bin"
+        ],
+        "the plan separates present names from absent ones: {planned:?}"
+    );
+
+    assert!(
+        !mock.requests().iter().any(|r| r.method == "DELETE"),
+        "a dry run must not DELETE anything"
+    );
+    // Probes are reads; the store itself is untouched.
+    assert!(mock.store_get(&format!("{VERSION}/a.zip")).is_some());
+    assert!(mock.store_get(&format!("{VERSION}/ghost.bin")).is_none());
+}
+
+/// An enumeration that produces no names refuses, exactly like `down`.
+#[tokio::test]
+async fn rm_without_names_refuses_with_enumeration_error() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr.rm(Enumeration::Names(vec![])).await.unwrap_err();
+    assert!(matches!(err, Error::Enumerate { .. }), "{err}");
+    assert_eq!(err.exit_code(), 1);
+}
+
+/// `point --clear` deletes the pointer, and the rerun is a normal `absent`.
+#[tokio::test]
+async fn point_clear_is_idempotent() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}latest", mock.base_url());
+
+    nxr.channel_set(&url, "1.0.0", false).await.unwrap();
+    assert!(mock.store_get("latest").is_some());
+
+    use nexus_raw_core::ClearOutcome;
+    assert_eq!(nxr.point_clear(&url).await.unwrap(), ClearOutcome::Cleared);
+    assert!(mock.store_get("latest").is_none());
+    assert_eq!(nxr.point_clear(&url).await.unwrap(), ClearOutcome::Absent);
+}
+
+/// A read-only repository refuses the pointer deletion and keeps the file.
+#[tokio::test]
+async fn point_clear_on_readonly_refuses() {
+    let mock = MockNexus::start(Scenario::ReadOnly).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    mock.insert("latest", b"1.0.0\n");
+
+    let url = format!("{}latest", mock.base_url());
+    let err = nxr.point_clear(&url).await.unwrap_err();
+    assert_eq!(err.exit_code(), 1);
+    assert!(
+        mock.store_get("latest").is_some(),
+        "the pointer must survive"
+    );
+}

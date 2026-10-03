@@ -36,6 +36,9 @@ pub enum Error {
     /// Any other unexpected status.
     #[error("http {status}: {url}")]
     Http { status: u16, url: String },
+    /// The repository refuses the deletion: a read-only deployment answers 403/405 to DELETE (§5.4).
+    #[error("read-only: {url}: HTTP {status}")]
+    ReadOnly { url: String, status: u16 },
     /// Bad flags, missing file or directory.
     #[error("misuse: {0}")]
     Misuse(String),
@@ -52,7 +55,8 @@ impl Error {
             Error::Mismatch { .. }
             | Error::Incomplete { .. }
             | Error::Missing { .. }
-            | Error::Enumerate { .. } => 1,
+            | Error::Enumerate { .. }
+            | Error::ReadOnly { .. } => 1,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
             Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. } => 3,
             Error::Io { .. } => 1,
@@ -77,6 +81,11 @@ impl Error {
                 Some("pass -u user:pass or export NXR_AUTH (base64 user:pass)".into())
             }
             Error::Transport { .. } => Some("check the network; transfers are resumable, rerunning is safe".into()),
+            Error::ReadOnly { status, .. } => Some(
+                format!(
+                    "the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed"
+                ),
+            ),
             Error::Http { status: 404, .. } => {
                 Some("check the URL path and that the version or object exists".into())
             }
@@ -182,6 +191,10 @@ mod tests {
             Error::Auth {
                 url: "http://x/".into(),
                 reason: "401".into(),
+            },
+            Error::ReadOnly {
+                url: "http://x/".into(),
+                status: 403,
             },
             Error::Transport {
                 url: "http://x/".into(),

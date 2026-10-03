@@ -33,6 +33,15 @@
 //! `--no-sha` opts out.
 //! `down` requires an enumeration source: a manifest, explicit names, or the best-effort search API.
 //!
+//! Deletion (`rm`, `point --clear`) is the one deliberate extension (§5.4).
+//! DELETE is allowed for the objects of the enumerated version only: bytes, markers,
+//! the version document, the pointer file.
+//! The order is the reverse of publishing: the marker first, then the bytes,
+//! so nobody ever sees a complete object mid-delete.
+//! 404 is a normal answer: deletion is idempotent.
+//! A 403/405 is the read-only repository: refused with a hint, exit 1.
+//! Divergence is never checked when deleting: names, not content.
+//!
 //! Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse, 3 transport) and [`Error::hint`], the human hint the CLI renders.
 
 pub mod config;
@@ -50,12 +59,11 @@ pub mod transport;
 pub use crate::config::Config;
 pub use crate::error::{Error, Verdict};
 pub use crate::events::{Dir, Event, Progress, Summary};
-pub use crate::layout::{ChannelOutcome, Manifest};
+pub use crate::layout::{ChannelOutcome, ClearOutcome, Manifest};
 pub use crate::model::digest::Digest;
 pub use crate::model::name::ArtifactName;
 pub use crate::model::state::{LocalStatus, RemoteStatus};
 pub use crate::nxr::{Enumeration, Nxr};
 pub use crate::primitive::{GetOutcome, ShaSource};
-pub use crate::sync::{Action, Mode};
-pub use crate::transport::client::HeadInfo;
-pub use crate::transport::client::NexusClient;
+pub use crate::sync::{Action, Mode, RmAction};
+pub use crate::transport::client::{DeleteOutcome, HeadInfo, NexusClient};

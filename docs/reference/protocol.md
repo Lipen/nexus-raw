@@ -15,16 +15,16 @@ Everything `nxr` writes fits four object kinds:
 <base>/<channel>         a token file: "<token>\n", any name (latest, stable, …)
 ```
 
-Only three methods exist: `GET`, `HEAD` and `PUT`.
-There is no delete, no rename, no server-side computation.
+Four methods exist: `GET`, `HEAD`, `PUT` and `DELETE`.
+DELETE is the one deliberate extension, restricted to the objects of the enumerated version ([Deletion](#deletion)); there is no rename, no server-side computation.
 A version is just a directory, and a channel is just a file.
 
-| Object kind | Path | Written by | Read by |
-|:------------|:-----|:-----------|:--------|
-| bytes | `<base>/<name>` | `put`, `up`, `down` | `get`, `sha`, `head`, `down` |
-| sha-sibling | `<base>/<name>.sha256` | `put --sha`, `up`, `down` | `up`, `down`, `verify` |
-| manifest | `<base>/manifest.json` | `up` (as an ordinary artifact) | `down`, `up --manifest` |
-| channel ref | `<base>/<channel>` | `channel set` | `channel get` |
+| Object kind | Path | Written by | Read by | Deleted by |
+|:------------|:-----|:-----------|:--------|:-----------|
+| bytes | `<base>/<name>` | `put`, `up`, `down` | `get`, `sha`, `head`, `down` | `rm` |
+| sha-sibling | `<base>/<name>.sha256` | `put --sha`, `up`, `down` | `up`, `down`, `verify` | `rm`, before the bytes |
+| manifest | `<base>/manifest.json` | `up` (as an ordinary artifact) | `down`, `up --manifest`, `rm` | enumerated by name, else it survives |
+| channel ref | `<base>/<channel>` | `channel set` | `channel get` | `point --clear` |
 
 Example: base `https://nexus.example.com/repository/raw-main/`, artifact `bom/linux-x86_64.json`:
 
@@ -164,6 +164,7 @@ Three rules bind the whole matrix:
 - `Missing` is collected across all names and fires only when no other refusal exists.
 - A refusal never transfers, never overwrites, and exits `1` (see [errors](errors.md#the-refusal-rule)).
 - `up` treats "remote has what local lacks" as a refusal, because the only way to act on it would be deletion.
+  Deletion exists, but as its own command: [Deletion](#deletion).
 
 `--no-sha` does not change the classification (the diff still reads remote siblings) and only skips marker generation and marker uploads, so the server keeps `Markerless` objects.
 
@@ -207,6 +208,35 @@ A claim name outside the scanned directory is misuse (exit 2).
 
 The `down` part name is a stable hash of the artifact name, so a repeated run finds its fuel without a state file.
 `get` in stdout mode is different again: one body attempt and no retries after the body starts, since a retry would duplicate bytes on the terminal.
+
+## Deletion
+
+`rm` and `point --clear` are the one deliberate extension of the write-only protocol.
+DELETE is allowed for the objects of the enumerated version only:
+
+| Object | Deleted by |
+|:-------|:-----------|
+| `<base>/<name>` bytes | `rm`, one DELETE per enumerated name |
+| `<base>/<name>.sha256` marker | `rm`, before the bytes of the same name |
+| the version document | `rm`, when the manifest lists it: `version.json` is an ordinary name |
+| the pointer file | `point --clear <URL>` |
+
+The rules the protocol fixes:
+
+- The deletion order is the reverse of publishing: the marker goes first, then the bytes.
+  Between the two DELETEs the object is incomplete, so nobody ever observes a complete object mid-delete.
+- 404 is a normal answer, not an error: deletion is idempotent.
+  A rerun of the same `rm` re-enumerates and collects only 404s, still with exit 0.
+- 403/405 refuse the run as a read-only repository: exit 1 with a hint.
+  The refusal fires on the first DELETE, so a refused run has deleted nothing.
+- Divergence is never checked when deleting.
+  `rm` removes names, not content: a diverging or broken remote copy is deleted like any other.
+  This is a deliberate simplification: the digest comparison belongs to transfers, which refuse instead of overwriting, while deletion is irreversible by definition.
+- `rm` removes exactly the enumerated names and their markers.
+  Other versions, other names and other pointers are not touched.
+  The `manifest.json` that named the list survives it: it is the enumeration source that keeps a rerun idempotent, and deleting it is an explicit `--name manifest.json` decision.
+- A transport failure stops the run.
+  The names already deleted stay deleted, and a rerun finishes the rest.
 
 ## Resume: the Range contract
 
@@ -273,7 +303,7 @@ $ nxr put https://nexus.example.com/repository/raw-main/pp/app.bin -f dist/1.4.0
 ## Enumeration
 
 `up` never needs to enumerate: it scans the local directory.
-`down` must learn the name list from an explicit source, because Nexus raw has no guaranteed directory listing.
+`down` and `rm` must learn the name list from an explicit source, because Nexus raw has no guaranteed directory listing.
 
 | Source | Flag | Guarantee |
 |:-------|:-----|:----------|
@@ -282,7 +312,7 @@ $ nxr put https://nexus.example.com/repository/raw-main/pp/app.bin -f dist/1.4.0
 | explicit names | `--name` (repeatable) | exact |
 | server search API | `--ls` | best-effort, depends on the server release |
 
-Without any source and without `manifest.json` at the directory URL, `down` refuses with `cannot enumerate` and does no guessing or HEAD-probing for likely names.
+Without any source and without `manifest.json` at the directory URL, `down` and `rm` refuse with `cannot enumerate` and do no guessing or HEAD-probing for likely names.
 The search API walks `/service/rest/v1/search/assets` with continuation tokens.
 It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
 Treat `--ls` output as a hint only, and take the plan of record from a manifest or from explicit names.
@@ -298,7 +328,7 @@ Treat `--ls` output as a hint only, and take the plan of record from a manifest 
 | stall | no bytes for `--stall-secs` aborts the attempt as retryable (default 30 s) |
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |
 | parallelism | 8 workers by default (`--workers`), one name per worker at a time |
-| idempotency | PUTs are byte-exact repeats, and a resumed download replays the same bytes |
+| idempotency | PUTs are byte-exact repeats, a resumed download replays the same bytes, and DELETE of an absent object is a normal 404 |
 | compression | a GET body with `Content-Encoding: zstd` decodes transparently, and the client may send `Accept-Encoding: zstd` |
 
 Auth failures bypass the retry loop: a 401/403 is answered once and reported.

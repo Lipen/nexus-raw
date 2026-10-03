@@ -1,7 +1,7 @@
 //! Mock Nexus raw-storage server with a failure-scenario table.
 //!
 //! Implements just enough HTTP/1.1 (std only) to exercise the nexus-raw transport contract.
-//! `GET`/`HEAD`/`PUT` with `Content-Length` or chunked bodies.
+//! `GET`/`HEAD`/`PUT` with `Content-Length` or chunked bodies, `DELETE` with 204/404.
 //! Percent-encoded paths stored verbatim.
 //! One request per connection, `Connection: close` on every response.
 //! GET honors resumable downloads: a single open `Range: bytes=N-` is answered with `206` and `Content-Range`, out-of-range starts get `416`.
@@ -40,6 +40,7 @@ pub const SCENARIOS: &[&str] = &[
     "auth-401",
     "doc-drift",
     "flaky",
+    "readonly",
 ];
 
 /// Failure scenario a [`MockNexus`] server simulates.
@@ -83,6 +84,10 @@ pub enum Scenario {
     /// The first `first_failures` requests per path (any method) get 503 Service Unavailable.
     /// Later requests are served normally.
     Flaky { first_failures: u32 },
+    /// Every DELETE is refused with `403 Forbidden`: the read-only repository.
+    /// Nothing is ever removed from the store.
+    /// GET/HEAD/PUT behave like [`Scenario::Atomic`].
+    ReadOnly,
 }
 
 /// Outcome of one request recorded in the request log.
@@ -465,6 +470,47 @@ mod tests {
         assert_eq!(log[0].outcome, Outcome::PartialRead { bytes: 4 });
         assert_eq!(log[1].outcome, Outcome::Status(201));
         assert_eq!(server.put_count("1.14.0/big.zip"), 1);
+    }
+
+    /// atomic DELETE: an existing object goes away with 204, an absent one answers 404.
+    #[test]
+    fn atomic_delete_removes_then_404s() {
+        let server = MockNexus::start(Scenario::Atomic).unwrap();
+        server.insert("1.14.0/a.zip", b"PAYLOAD");
+
+        let (status, _, body) =
+            exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+        assert_eq!(status, 204);
+        assert!(body.is_empty());
+        assert_eq!(server.store_get("1.14.0/a.zip"), None);
+
+        // The second DELETE is a normal 404: deletion stays idempotent.
+        let (status, _, body) =
+            exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+        assert_eq!(status, 404);
+        assert_eq!(body, b"not found\n");
+    }
+
+    /// readonly: every DELETE is a 403 and nothing leaves the store, reads included.
+    #[test]
+    fn readonly_refuses_every_delete() {
+        let server = MockNexus::start(Scenario::ReadOnly).unwrap();
+        server.insert("1.14.0/a.zip", b"PAYLOAD");
+
+        let (status, _, body) =
+            exchange(server.addr(), "DELETE", "/1.14.0/a.zip", b"", &[]).unwrap();
+        assert_eq!(status, 403);
+        assert_eq!(body, b"read-only\n");
+        assert_eq!(
+            server.store_get("1.14.0/a.zip").as_deref(),
+            Some(b"PAYLOAD".as_slice()),
+            "a refused delete must not touch the store"
+        );
+
+        // Reads behave like atomic.
+        let (status, _, body) = exchange(server.addr(), "GET", "/1.14.0/a.zip", b"", &[]).unwrap();
+        assert_eq!(status, 200);
+        assert_eq!(body, b"PAYLOAD");
     }
 
     #[test]

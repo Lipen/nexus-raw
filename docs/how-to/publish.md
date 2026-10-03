@@ -145,7 +145,7 @@ hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a d
 
 Both refuse with exit 1.
 Fix the cause (rebuild, or republish under a new version directory) and run again.
-`nxr` never deletes and never overwrites a diverging object.
+A transfer never deletes and never overwrites a diverging object; deletion is the explicit `nxr rm`.
 
 ## Restrict the transfer with a manifest
 
@@ -216,9 +216,10 @@ nxr channel set "$BASE/nightly" "$V"          # (2)!
 
 Version directories are never reused, which is what keeps re-runs, resume and forward-only channels cheap.
 
-!!! note "Deleting is out of scope"
+!!! note "Retiring a version"
 
-    `nxr` never deletes: version cleanup stays a manual, server-side operation.
+    Transfers never delete; `nxr rm` is the deliberate exception ([the CLI reference](../reference/cli.md#nxr-rm)).
+    Retire a version explicitly: `rm` the enumerated names, then move the channel forward or `nxr point --clear` it.
 
 ## Next steps
 

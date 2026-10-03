@@ -44,12 +44,12 @@ export interface NxrCommonOpts {
 
 /** One NDJSON event of the core, as parsed JSON. */
 export interface NxrEvent {
-  event?: 'plan' | 'artifact' | 'retrying' | 'summary'
+  event?: 'plan' | 'artifact' | 'retrying' | 'removing' | 'removed' | 'missing' | 'summary'
   /** `plan` only: the name lists of the diff. */
   upload?: string[]
   download?: string[]
   skip?: string[]
-  /** `artifact` and `retrying` only. */
+  /** `artifact`, `retrying`, `removing`, `removed` and `missing` only. */
   name?: string
   /** `artifact` only: uploading, downloading, done or skipped. */
   state?: 'uploading' | 'downloading' | 'done' | 'skipped'
@@ -64,6 +64,8 @@ export interface NxrEvent {
   uploaded?: number
   downloaded?: number
   skipped?: number
+  /** `summary` only: names the call deleted (`rm`). */
+  removed?: number
   failed?: string[]
 }
 
@@ -72,6 +74,8 @@ export interface NxrSummary {
   uploaded: number
   downloaded: number
   skipped: number
+  /** Names the call deleted (`rm`); transfers never delete and stay at 0. */
+  removed: number
   failed: string[]
 }
 

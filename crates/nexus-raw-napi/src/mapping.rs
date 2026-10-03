@@ -270,12 +270,13 @@ mod tests {
             uploaded: 1,
             downloaded: 2,
             skipped: 3,
+            removed: 0,
             failed: vec!["c".into()],
         };
         let line = event_to_json(&Event::Summary(summary));
         assert_eq!(
             line,
-            serde_json::json!({"event": "summary", "uploaded": 1, "downloaded": 2, "skipped": 3, "failed": ["c"]})
+            serde_json::json!({"event": "summary", "uploaded": 1, "downloaded": 2, "skipped": 3, "removed": 0, "failed": ["c"]})
         );
     }
 

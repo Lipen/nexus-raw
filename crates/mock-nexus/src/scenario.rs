@@ -177,6 +177,24 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: Request, path: &str) {
             log_request(shared, &req.method, path, Outcome::Status(201));
             let _ = server::write_response(stream, &plain(201, b"", None));
         }
+        "DELETE" => {
+            // readonly: the repository refuses every deletion before the store is touched.
+            if matches!(shared.scenario, Scenario::ReadOnly) {
+                log_request(shared, &req.method, path, Outcome::Status(403));
+                let _ = server::write_response(stream, &plain(403, b"read-only\n", None));
+                return;
+            }
+            // Straight-through storage: an existing object is removed with 204,
+            // an absent one answers 404, which keeps deletion idempotent.
+            let existed = lock(&shared.store).remove(path).is_some();
+            let (status, body): (u16, &[u8]) = if existed {
+                (204, b"")
+            } else {
+                (404, b"not found\n")
+            };
+            log_request(shared, &req.method, path, Outcome::Status(status));
+            let _ = server::write_response(stream, &plain(status, body, None));
+        }
         _ => {
             log_request(shared, &req.method, path, Outcome::Status(405));
             let _ = server::write_response(stream, &plain(405, b"method not allowed\n", None));

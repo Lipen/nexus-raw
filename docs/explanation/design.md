@@ -193,7 +193,8 @@ The full mapping is in [errors and exit codes](../reference/errors.md), and [whe
 
 ## What was deliberately left out
 
-Config files and profiles, deletion, repacking, unarchiving, a daemon, a server component.
+Config files and profiles, repacking, unarchiving, a daemon, a server component.
+Deletion is the one deliberate extension, and it stays narrow: `rm` deletes exactly the enumerated names of one version, `point --clear` deletes exactly one pointer ([the protocol](../reference/protocol.md#deletion)).
 The repository stays a dumb, verifiable object store.
 The client stays a static binary whose dependencies of consequence are reqwest and tokio.
 Working within those walls: [publishing a version](../how-to/publish.md), [consuming artifacts](../how-to/consume.md), [CI recipes](../how-to/ci.md).

@@ -31,6 +31,8 @@ pub struct Summary {
     pub uploaded: usize,
     pub downloaded: usize,
     pub skipped: usize,
+    /// Names this call deleted (`rm`): transfers never delete, so they stay at 0.
+    pub removed: usize,
     pub failed: Vec<String>,
 }
 
@@ -67,6 +69,18 @@ pub enum Event {
         name: String,
         attempt: u32,
         reason: String,
+    },
+    /// Deletion progress (§5.4): the name's objects are about to be DELETEd, marker first.
+    Removing {
+        name: String,
+    },
+    /// The name is gone: at least one of its objects was deleted by this call.
+    Removed {
+        name: String,
+    },
+    /// The name was already absent: every DELETE of it answered 404.
+    Missing {
+        name: String,
     },
     Summary(Summary),
 }
@@ -135,11 +149,24 @@ impl Event {
                 "attempt": attempt,
                 "reason": reason,
             }),
+            Event::Removing { name } => serde_json::json!({
+                "event": "removing",
+                "name": name,
+            }),
+            Event::Removed { name } => serde_json::json!({
+                "event": "removed",
+                "name": name,
+            }),
+            Event::Missing { name } => serde_json::json!({
+                "event": "missing",
+                "name": name,
+            }),
             Event::Summary(s) => serde_json::json!({
                 "event": "summary",
                 "uploaded": s.uploaded,
                 "downloaded": s.downloaded,
                 "skipped": s.skipped,
+                "removed": s.removed,
                 "failed": s.failed,
             }),
         }
@@ -202,6 +229,27 @@ impl Progress {
             skipped,
             done,
             total,
+        });
+    }
+
+    /// Deletion progress: the name's objects are about to be DELETEd.
+    pub async fn removing(&self, name: &str) {
+        let _ = self.tx.send(Event::Removing {
+            name: name.to_owned(),
+        });
+    }
+
+    /// The name is gone: at least one of its objects was deleted by this call.
+    pub async fn removed(&self, name: &str) {
+        let _ = self.tx.send(Event::Removed {
+            name: name.to_owned(),
+        });
+    }
+
+    /// The name was already absent: every DELETE of it answered 404.
+    pub async fn missing(&self, name: &str) {
+        let _ = self.tx.send(Event::Missing {
+            name: name.to_owned(),
         });
     }
 

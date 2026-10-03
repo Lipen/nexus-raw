@@ -785,3 +785,252 @@ fn doctor_json_lines() {
         "secrets never reach json output"
     );
 }
+
+// ---- rm and point ---------------------------------------------------------
+
+/// Seed the version directory through `up` and install the enumeration manifest plus the version document.
+fn publish_for_rm(srv: &MockNexus, manifest: &str) -> String {
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "up for rm",
+    );
+    srv.insert("1.14.0/version.json", br#"{"version":"1.14.0"}"#);
+    srv.insert("1.14.0/manifest.json", manifest.as_bytes());
+    base
+}
+
+/// rm deletes the whole enumerated version: names, markers and the version document, manifest excluded; a rerun sees only 404s and exits 0.
+#[test]
+fn rm_removes_whole_version_and_reruns_clean() {
+    let srv = server(Scenario::Atomic);
+    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin","version.json"]}"#);
+
+    let rm = nxr(&["rm", &base]);
+    expect_exit(&rm, 0, "first rm");
+    for name in [
+        "a.zip",
+        "a.zip.sha256",
+        "b.bin",
+        "b.bin.sha256",
+        "version.json",
+    ] {
+        assert!(
+            srv.store_get(&format!("1.14.0/{name}")).is_none(),
+            "{name} must be gone"
+        );
+    }
+    assert!(
+        srv.store_get("1.14.0/manifest.json").is_some(),
+        "the enumeration manifest survives: the rerun needs it"
+    );
+    let out = stdout(&rm);
+    assert!(out.contains("× a.zip removed"), "per-name lines: {out}");
+    assert!(out.contains("removed 3, skipped 0"), "summary: {out}");
+
+    // Marker before bytes, the reverse of publishing.
+    let log = srv.requests();
+    for name in ["a.zip", "b.bin"] {
+        let marker_at = log
+            .iter()
+            .position(|r| r.method == "DELETE" && r.path == format!("1.14.0/{name}.sha256"))
+            .unwrap();
+        let bytes_at = log
+            .iter()
+            .position(|r| r.method == "DELETE" && r.path == format!("1.14.0/{name}"))
+            .unwrap();
+        assert!(marker_at < bytes_at, "{name}: marker first");
+    }
+
+    let second = nxr(&["rm", &base]);
+    expect_exit(&second, 0, "the rerun is a normal 404 walk");
+    assert!(
+        stdout(&second).contains("○ version.json missing"),
+        "the rerun reports missing names: {}",
+        stdout(&second)
+    );
+    assert!(
+        stdout(&second).contains("skipped 3"),
+        "summary: {}",
+        stdout(&second)
+    );
+    let deletes: Vec<u16> = srv
+        .requests()
+        .iter()
+        .skip(log.len())
+        .filter(|r| r.method == "DELETE")
+        .filter_map(|r| match r.outcome {
+            mock_nexus::Outcome::Status(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !deletes.is_empty() && deletes.iter().all(|s| *s == 404),
+        "{deletes:?}"
+    );
+}
+
+/// The read-only scenario refuses rm: exit 1, a hint, and the mock counts zero successful deletes.
+#[test]
+fn rm_readonly_refuses_and_keeps_bytes() {
+    let srv = server(Scenario::ReadOnly);
+    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin"]}"#);
+
+    let rm = nxr(&["rm", &base]);
+    expect_exit(&rm, 1, "read-only refusal is exit 1");
+    let err = stderr(&rm);
+    assert!(
+        err.contains("read-only"),
+        "the error names the refusal: {err}"
+    );
+    assert!(err.contains("hint:"), "a hint line is required: {err}");
+
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert_eq!(
+        srv.store_get("1.14.0/a.zip.sha256").as_deref(),
+        Some(marker_line("a.zip", ALPHA).as_bytes()),
+    );
+    let successful = srv.requests().iter().any(|r| {
+        r.method == "DELETE" && matches!(r.outcome, mock_nexus::Outcome::Status(200..=300))
+    });
+    assert!(!successful, "no DELETE may succeed");
+}
+
+/// rm --dry-run prints the plan and the mock counts zero DELETEs.
+#[test]
+fn rm_dry_run_touches_no_bytes() {
+    let srv = server(Scenario::Atomic);
+    let base = publish_for_rm(
+        &srv,
+        r#"{"artifacts":["a.zip","b.bin","version.json","ghost.bin"]}"#,
+    );
+
+    let dry = nxr(&["rm", "--dry-run", &base]);
+    expect_exit(&dry, 0, "rm --dry-run");
+    let out = stdout(&dry);
+    assert!(out.contains("rm a.zip"), "plan line: {out}");
+    assert!(
+        out.contains("missing ghost.bin"),
+        "absent names plan as missing: {out}"
+    );
+    assert!(
+        !srv.requests().iter().any(|r| r.method == "DELETE"),
+        "a dry run must not DELETE"
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+}
+
+/// rm without any enumeration source refuses like down: exit 1 with the enumeration hint.
+#[test]
+fn rm_without_a_source_refuses() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+
+    let rm = nxr(&["rm", &dir_url(&srv)]);
+    expect_exit(&rm, 1, "rm without a source");
+    let err = stderr(&rm);
+    assert!(
+        err.contains("enumerat"),
+        "the error names enumeration: {err}"
+    );
+    assert!(err.contains("hint:"), "{err}");
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+}
+
+/// rm --json: NDJSON events removing/removed/missing per name, the summary line last.
+#[test]
+fn rm_json_events_parse_and_summarize() {
+    let srv = server(Scenario::Atomic);
+    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin","version.json"]}"#);
+
+    let rm = nxr(&["--json", "rm", &base]);
+    expect_exit(&rm, 0, "rm --json");
+    let events = ndjson(&rm);
+    assert!(
+        events
+            .iter()
+            .any(|e| e["event"] == "removing" && e["name"] == "a.zip"),
+        "removing events are required: {events:?}"
+    );
+    assert_eq!(
+        events.iter().filter(|e| e["event"] == "removed").count(),
+        3,
+        "one removed event per name: {events:?}"
+    );
+    let summary = events.last().expect("at least the summary line");
+    assert_eq!(summary["event"], "summary", "summary comes last");
+    assert_eq!(summary["removed"], 3);
+    assert_eq!(summary["skipped"], 0);
+    assert_eq!(summary["uploaded"], 0);
+
+    // The second run emits missing events and still succeeds.
+    let second = nxr(&["--json", "rm", &base]);
+    expect_exit(&second, 0, "rm --json rerun");
+    let events = ndjson(&second);
+    assert_eq!(
+        events.iter().filter(|e| e["event"] == "missing").count(),
+        3,
+        "missing events for an empty version: {events:?}"
+    );
+    assert_eq!(events.last().unwrap()["removed"], 0);
+}
+
+/// Exit-code matrix rows for rm: unsafe name 2, dead base 3 (readonly and no-source are 1, covered above).
+#[test]
+fn rm_exit_matrix_rows() {
+    let srv = server(Scenario::Atomic);
+    let bad = nxr(&["rm", &dir_url(&srv), "--name", "bad!name"]);
+    expect_exit(&bad, 2, "unsafe name is misuse");
+    assert!(stderr(&bad).contains("hint:"));
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let dead = nxr(&[
+        "rm",
+        &format!("http://127.0.0.1:{port}/1.0.0/"),
+        "--name",
+        "a.zip",
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&dead, 3, "a dead base is transport");
+}
+
+/// point --clear deletes a channel ref and stays idempotent; the read-only scenario refuses it.
+#[test]
+fn point_clear_roundtrip_and_readonly() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}stable", root_url(&srv));
+    expect_exit(&nxr(&["channel", "set", &url, "1.4.0"]), 0, "channel set");
+
+    let clear = nxr(&["point", "--clear", &url]);
+    expect_exit(&clear, 0, "first clear");
+    assert!(stdout(&clear).contains("cleared"), "{}", stdout(&clear));
+    assert!(srv.store_get("stable").is_none());
+
+    let again = nxr(&["point", "--clear", &url]);
+    expect_exit(&again, 0, "clearing an absent pointer is exit 0");
+    assert!(stdout(&again).contains("absent"), "{}", stdout(&again));
+
+    // `point` without --clear is misuse.
+    let bare = nxr(&["point", &url]);
+    expect_exit(&bare, 2, "point without --clear is misuse");
+    assert!(stderr(&bare).contains("hint:"));
+
+    let ro = server(Scenario::ReadOnly);
+    ro.insert("stable", b"1.4.0\n");
+    let ro_url = format!("{}stable", root_url(&ro));
+    let refused = nxr(&["point", "--clear", &ro_url]);
+    expect_exit(&refused, 1, "read-only refusal");
+    assert!(
+        stderr(&refused).contains("read-only"),
+        "{}",
+        stderr(&refused)
+    );
+    assert!(ro.store_get("stable").is_some(), "the pointer must survive");
+}

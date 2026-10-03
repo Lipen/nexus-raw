@@ -8,7 +8,7 @@ mod transfer;
 use std::path::Path;
 use std::time::Duration;
 
-use nexus_raw_core::{creds, ArtifactName, Config, Error, Manifest, Nxr};
+use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Manifest, Nxr};
 
 use crate::render::{Mode, Session};
 use crate::{ChannelOp, Cli, Cmd};
@@ -41,6 +41,22 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             ls,
             fresh,
         } => transfer::down(cli, src, dst, manifest.as_deref(), name, *ls, *fresh).await,
+        Cmd::Rm {
+            src,
+            manifest,
+            name,
+            ls,
+            dry_run,
+        } => transfer::rm(cli, src, manifest.as_deref(), name, *ls, *dry_run).await,
+        Cmd::Point { clear, url } => {
+            if !clear {
+                return Err(Error::Misuse(
+                    "point needs --clear: deleting the pointer is the only operation it has"
+                        .to_owned(),
+                ));
+            }
+            layout::point_clear(cli, url).await
+        }
         Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
         Cmd::Channel { op } => match op {
             ChannelOp::Get { url } => layout::channel_get(cli, url).await,
@@ -113,6 +129,33 @@ fn split_user(user: Option<&str>) -> Result<Option<(&str, &str)>, Error> {
 /// Parse explicit `--name` values through the grammar (exit 2 on bad names).
 pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> {
     names.iter().map(|s| ArtifactName::parse(s)).collect()
+}
+
+/// Resolve the enumeration source of `down` and `rm`: `--ls`, `--manifest`, repeatable `--name`, or the conventional `manifest.json` at the directory URL.
+/// Without any source the call refuses (exit 1) with the enumeration hint.
+pub(crate) async fn enumeration_source(
+    ctx: &Ctx,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+) -> Result<Enumeration, Error> {
+    if ls {
+        return Ok(Enumeration::Search);
+    }
+    if let Some(spec) = manifest {
+        return Ok(Enumeration::Manifest(load_manifest(&ctx.nxr, spec).await?));
+    }
+    if !names.is_empty() {
+        return Ok(Enumeration::Names(parse_names(names)?));
+    }
+    // The convention: a manifest.json in the version directory.
+    match ctx.nxr.manifest_at_base().await? {
+        Some(m) => Ok(Enumeration::Manifest(m)),
+        None => Err(Error::Enumerate {
+            url: ctx.nxr.base().to_owned(),
+            reason: "no manifest.json on the server and no --manifest/--name/--ls given".into(),
+        }),
+    }
 }
 
 /// Resolve a `--manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file.

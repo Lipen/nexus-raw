@@ -41,6 +41,30 @@ pub(crate) async fn channel_get(cli: &Cli, url: &str) -> Result<(), Error> {
     result
 }
 
+/// `point --clear <URL>`: DELETE the pointer file.
+pub(crate) async fn point_clear(cli: &Cli, url: &str) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let result = run_point_clear(&ctx, url).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_point_clear(ctx: &Ctx, url: &str) -> Result<(), Error> {
+    match ctx.nxr.point_clear(url).await? {
+        nexus_raw_core::ClearOutcome::Cleared => print_line(
+            ctx.json,
+            format!("point: cleared {url}"),
+            serde_json::json!({"url": url, "outcome": "cleared"}),
+        ),
+        nexus_raw_core::ClearOutcome::Absent => print_line(
+            ctx.json,
+            format!("point: absent {url}"),
+            serde_json::json!({"url": url, "outcome": "absent"}),
+        ),
+    }
+    Ok(())
+}
+
 async fn run_channel_get(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let token = ctx.nxr.channel_get(url).await?;
     match token {

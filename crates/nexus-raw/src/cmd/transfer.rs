@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{ArtifactName, Enumeration, Error};
+use nexus_raw_core::{ArtifactName, Error};
 
-use crate::cmd::{finish, load_manifest, make_ctx, parse_names, Ctx};
+use crate::cmd::{enumeration_source, finish, load_manifest, make_ctx, Ctx};
 use crate::Cli;
 
 #[allow(clippy::too_many_arguments)]
@@ -84,27 +84,60 @@ async fn run_down(
     ls: bool,
     fresh: bool,
 ) -> Result<(), Error> {
-    let enum_src = if ls {
-        Enumeration::Search
-    } else if let Some(spec) = manifest {
-        Enumeration::Manifest(load_manifest(&ctx.nxr, spec).await?)
-    } else if !names.is_empty() {
-        Enumeration::Names(parse_names(names)?)
-    } else {
-        // The convention: a manifest.json in the version directory.
-        match ctx.nxr.manifest_at_base().await? {
-            Some(m) => Enumeration::Manifest(m),
-            None => {
-                return Err(Error::Enumerate {
-                    url: ctx.nxr.base().to_owned(),
-                    reason: "no manifest.json on the server and no --manifest/--name/--ls given"
-                        .into(),
-                })
-            }
-        }
-    };
+    let enum_src = enumeration_source(ctx, manifest, names, ls).await?;
     ctx.nxr.down(dst, enum_src, fresh, None).await?;
     Ok(())
+}
+
+/// Delete the enumerated names from a remote directory: marker first, then bytes.
+pub(crate) async fn rm(
+    cli: &Cli,
+    src: &str,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    dry_run: bool,
+) -> Result<(), Error> {
+    let ctx = make_ctx(cli, src)?;
+    let result = run_rm(&ctx, manifest, names, ls, dry_run).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_rm(
+    ctx: &Ctx,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    dry_run: bool,
+) -> Result<(), Error> {
+    let enum_src = enumeration_source(ctx, manifest, names, ls).await?;
+    if dry_run {
+        for a in ctx.nxr.rm_plan(enum_src).await? {
+            crate::cmd::print_line(ctx.json, rm_plan_line(&a), rm_action_json(&a));
+        }
+        return Ok(());
+    }
+    ctx.nxr.rm(enum_src).await?;
+    Ok(())
+}
+
+fn rm_plan_line(a: &nexus_raw_core::RmAction) -> String {
+    match a {
+        nexus_raw_core::RmAction::Remove { name, .. } => format!("rm {name}"),
+        nexus_raw_core::RmAction::Missing { name } => format!("missing {name}"),
+    }
+}
+
+fn rm_action_json(a: &nexus_raw_core::RmAction) -> serde_json::Value {
+    match a {
+        nexus_raw_core::RmAction::Remove { name, size } => {
+            serde_json::json!({"action": "rm", "name": name.to_string(), "size": size})
+        }
+        nexus_raw_core::RmAction::Missing { name } => {
+            serde_json::json!({"action": "missing", "name": name.to_string()})
+        }
+    }
 }
 
 fn plan_line(a: &nexus_raw_core::Action) -> String {
