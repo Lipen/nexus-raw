@@ -359,6 +359,16 @@ fn action_name(action: &MirrorAction) -> ArtifactName {
     }
 }
 
+/// The version document to claim first, when the enumeration leads with it.
+pub(crate) fn claim_first(actions: &[MirrorAction]) -> Option<ArtifactName> {
+    match actions.first() {
+        Some(MirrorAction::Copy { name, .. }) if name.as_str() == VERSION_DOCUMENT => {
+            Some(name.clone())
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

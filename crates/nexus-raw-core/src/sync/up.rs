@@ -1,6 +1,6 @@
 //! The upload executor: PUT bytes → PUT canonical marker, worker semaphore (§5.2).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::sync::Semaphore;
@@ -9,7 +9,7 @@ use crate::error::Error;
 use crate::events::{Dir, Summary};
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
-use crate::model::state::bytes_path;
+use crate::model::state::{bytes_path, sibling_path, LocalStatus};
 use crate::sync::diff::Action;
 use crate::transport::client::NexusClient;
 
@@ -160,6 +160,57 @@ pub(crate) async fn upload_one(
             .progress()
             .done(name.as_str(), Dir::Up, false, size, Some(size))
             .await;
+    }
+    Ok(())
+}
+
+/// Give every markerless local file its sibling: hash the bytes, write the canonical marker (§5.2 "markers are mandatory where we write").
+/// Broken markers refuse early.
+/// The file is never touched.
+pub(crate) async fn generate_markers(
+    dir: &Path,
+    locals: &mut [(ArtifactName, LocalStatus)],
+) -> Result<(), Error> {
+    let dir = dir.to_owned();
+    let mut jobs: Vec<(ArtifactName, LocalStatus)> = Vec::new();
+    for (name, st) in locals.iter_mut() {
+        match st {
+            LocalStatus::Broken(detail) => {
+                return Err(Error::Mismatch {
+                    name: name.to_string(),
+                    detail: format!("local object is broken and must not be overwritten: {detail}"),
+                })
+            }
+            LocalStatus::Markerless => jobs.push((name.clone(), st.clone())),
+            _ => {}
+        }
+    }
+    if jobs.is_empty() {
+        return Ok(());
+    }
+    let made = tokio::task::spawn_blocking(move || {
+        let mut made: Vec<(ArtifactName, crate::model::digest::Digest)> = Vec::new();
+        for (name, _) in jobs {
+            let bytes = crate::model::state::bytes_path(&dir, &name);
+            let d = crate::model::digest::sha256_file(&bytes).map_err(|e| Error::io(&bytes, e))?;
+            let sib = sibling_path(&dir, &name);
+            // The marker path derives from the object name: never follow a symlink planted there (same rule as the download side).
+            let mut f = crate::transport::client::write_options_blocking(false)
+                .open(&sib)
+                .map_err(|e| Error::io(&sib, e))?;
+            use std::io::Write as _;
+            f.write_all(crate::model::sibling::format_line(name.as_str(), &d).as_bytes())
+                .map_err(|e| Error::io(&sib, e))?;
+            made.push((name, d));
+        }
+        Ok::<Vec<_>, Error>(made)
+    })
+    .await
+    .map_err(|e| Error::misuse(format!("task panicked: {e}")))??;
+    for (name, st) in locals.iter_mut() {
+        if let Some((_, d)) = made.iter().find(|(n, _)| n == name) {
+            *st = LocalStatus::Complete(d.clone());
+        }
     }
     Ok(())
 }

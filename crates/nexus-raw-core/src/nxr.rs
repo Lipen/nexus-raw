@@ -159,7 +159,7 @@ impl Nxr {
         };
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
-            generate_markers(dir, &mut locals).await?;
+            up::generate_markers(dir, &mut locals).await?;
         }
         if let Some(claim) = &claim {
             let known = locals.iter().any(|(n, _)| n == claim);
@@ -216,17 +216,7 @@ impl Nxr {
             .await
             .map_err(|e| Error::io(dir, e))?;
         down::cleanup_orphans(dir)?;
-        let names = match enum_src {
-            Enumeration::Manifest(m) => m.names,
-            Enumeration::Names(v) => v,
-            Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
-        };
-        if names.is_empty() {
-            return Err(Error::Enumerate {
-                url: self.base.clone(),
-                reason: "enumeration produced no names; the URL is probably wrong".into(),
-            });
-        }
+        let names = self.resolve_names(enum_src).await?;
         let actions = match plan {
             Some(p) => p,
             None => {
@@ -261,7 +251,7 @@ impl Nxr {
     /// Divergence is never checked: `rm` deletes names, not content.
     /// Markers go before bytes, so nobody ever sees a complete object mid-delete.
     pub async fn rm(&self, enum_src: Enumeration) -> Result<Summary, Error> {
-        let names = self.rm_names(enum_src).await?;
+        let names = self.resolve_names(enum_src).await?;
         sync::rm::execute(self.client.clone(), self.base.clone(), names).await
     }
 
@@ -270,7 +260,7 @@ impl Nxr {
     /// Existence only: a diverging or broken remote copy still plans as `Remove`,
     /// because deletion is about names, never about content.
     pub async fn rm_plan(&self, enum_src: Enumeration) -> Result<Vec<RmAction>, Error> {
-        let names = self.rm_names(enum_src).await?;
+        let names = self.resolve_names(enum_src).await?;
         let remotes = self.remote_states_for(&names).await?;
         Ok(names
             .into_iter()
@@ -285,7 +275,7 @@ impl Nxr {
     }
 
     /// Resolve the enumeration source into names, refusing an empty result like `down`.
-    async fn rm_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
+    async fn resolve_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
         let names = match enum_src {
             Enumeration::Manifest(m) => m.names,
             Enumeration::Names(v) => v,
@@ -316,17 +306,7 @@ impl Nxr {
     /// it transfers alone before any other name, and a failed claim aborts the run with
     /// nothing else sent.
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
-        let names = match enum_src {
-            Enumeration::Manifest(m) => m.names,
-            Enumeration::Names(v) => v,
-            Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
-        };
-        if names.is_empty() {
-            return Err(Error::Enumerate {
-                url: self.base.clone(),
-                reason: "enumeration produced no names; the URL is probably wrong".into(),
-            });
-        }
+        let names = self.resolve_names(enum_src).await?;
         let srcs = self.remote_states_for(&names).await?;
         let dsts = dst.remote_states_for(&names).await?;
         let actions = tokio::task::spawn_blocking(move || mirror::classify(names, srcs, dsts))
@@ -335,14 +315,7 @@ impl Nxr {
             .map_err(Error::from)?;
         self.events.plan_mirror(&actions);
         // Claim-first: the version document, when the enumeration leads with it.
-        let claim = match actions.first() {
-            Some(mirror::MirrorAction::Copy { name, .. })
-                if name.as_str() == mirror::VERSION_DOCUMENT =>
-            {
-                Some(name.clone())
-            }
-            _ => None,
-        };
+        let claim = mirror::claim_first(&actions);
         let staging = mirror::staging_dir(&self.base, &dst.base);
         tokio::fs::create_dir_all(&staging)
             .await
@@ -473,55 +446,4 @@ impl Nxr {
             .map(|s| s.expect("all slots filled"))
             .collect())
     }
-}
-
-/// Give every markerless local file its sibling: hash the bytes, write the canonical marker (§5.2 "markers are mandatory where we write").
-/// Broken markers refuse early.
-/// The file is never touched.
-async fn generate_markers(
-    dir: &Path,
-    locals: &mut [(ArtifactName, LocalStatus)],
-) -> Result<(), Error> {
-    let dir = dir.to_owned();
-    let mut jobs: Vec<(ArtifactName, LocalStatus)> = Vec::new();
-    for (name, st) in locals.iter_mut() {
-        match st {
-            LocalStatus::Broken(detail) => {
-                return Err(Error::Mismatch {
-                    name: name.to_string(),
-                    detail: format!("local object is broken and must not be overwritten: {detail}"),
-                })
-            }
-            LocalStatus::Markerless => jobs.push((name.clone(), st.clone())),
-            _ => {}
-        }
-    }
-    if jobs.is_empty() {
-        return Ok(());
-    }
-    let made = tokio::task::spawn_blocking(move || {
-        let mut made: Vec<(ArtifactName, crate::model::digest::Digest)> = Vec::new();
-        for (name, _) in jobs {
-            let bytes = crate::model::state::bytes_path(&dir, &name);
-            let d = crate::model::digest::sha256_file(&bytes).map_err(|e| Error::io(&bytes, e))?;
-            let sib = crate::model::state::sibling_path(&dir, &name);
-            // The marker path derives from the object name: never follow a symlink planted there (same rule as the download side).
-            let mut f = crate::transport::client::write_options_blocking(false)
-                .open(&sib)
-                .map_err(|e| Error::io(&sib, e))?;
-            use std::io::Write as _;
-            f.write_all(crate::model::sibling::format_line(name.as_str(), &d).as_bytes())
-                .map_err(|e| Error::io(&sib, e))?;
-            made.push((name, d));
-        }
-        Ok::<Vec<_>, Error>(made)
-    })
-    .await
-    .map_err(|e| Error::misuse(format!("task panicked: {e}")))??;
-    for (name, st) in locals.iter_mut() {
-        if let Some((_, d)) = made.iter().find(|(n, _)| n == name) {
-            *st = LocalStatus::Complete(d.clone());
-        }
-    }
-    Ok(())
 }
