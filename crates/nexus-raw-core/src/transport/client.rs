@@ -108,6 +108,11 @@ pub struct NexusClient {
 }
 
 impl NexusClient {
+    /// Build the client from `cfg`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when [`Config::validate`] refuses the config or the HTTP client cannot be built.
     pub fn new(cfg: &Config, events: Progress) -> Result<Self, Error> {
         cfg.validate()?;
         let mut builder = reqwest::Client::builder()
@@ -227,6 +232,10 @@ impl NexusClient {
     /// HEAD with full metadata.
     /// 404 is `HeadInfo { status: 404, .. }`.
     /// The size comes from the raw header: hyper reports a zero body size hint for HEAD responses regardless of Content-Length.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
     pub async fn head_info(&self, url: &str) -> Result<HeadInfo, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -258,6 +267,10 @@ impl NexusClient {
     /// GET a small object (sibling, manifest, channel): None on 404.
     ///
     /// The response is capped at `SMALL_CAP`: these objects are KiB-scale by protocol, and an unbounded slurp would turn a runaway or hostile server into a memory event.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the GET and [`Error::Misuse`] when the body exceeds the small-object cap.
     pub async fn get_small(&self, url: &str) -> Result<Option<Vec<u8>>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -299,6 +312,10 @@ impl NexusClient {
     }
 
     /// PUT a small object whole.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
     pub async fn put_small(&self, url: &str, bytes: Vec<u8>) -> Result<(), Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             let bytes = bytes.clone();
@@ -319,6 +336,10 @@ impl NexusClient {
     ///
     /// Deletion is idempotent: the 404 of a rerun is a normal result, not an error.
     /// A 403/405 is the read-only repository: refused as [`Error::ReadOnly`] (exit 1), never retried.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ReadOnly`] on a 403/405 and transport, auth or HTTP errors otherwise.
     pub async fn delete_url(&self, url: &str) -> Result<DeleteOutcome, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -348,6 +369,10 @@ impl NexusClient {
     /// Classification of the HEAD: 404 is [`RemoteStatus::Absent`], 401/403 surface as [`Error::Auth`].
     /// A 2xx without `Content-Length` (and any other answered-but-unverifiable status) is [`RemoteStatus::Broken`] — never [`RemoteStatus::Absent`], or a proxy could skip the digest comparison and the never-overwrite rule.
     /// Transient statuses (5xx, connection breaks) ride the shared retry loop like any other request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Auth`] on a 401/403 and transport or HTTP errors after the retry loop is exhausted; an unparseable sibling is the [`RemoteStatus::Broken`] result, not an error.
     pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
         let bytes_url = self.object_url(dir, name);
         let info = self
@@ -431,6 +456,10 @@ impl NexusClient {
     /// GET a URL body as a chunk stream: no hashing, no completion decision.
     ///
     /// The single-attempt body stream for stdout mode: once the body started arriving, a retry would duplicate bytes, so breaks surface as errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors for the request; body breaks after the headers surface when the caller reads the stream.
     pub async fn get_stream(&self, url: &str) -> Result<reqwest::Response, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {
@@ -454,6 +483,10 @@ impl NexusClient {
     /// Verifying the finalized bytes is the caller's duty: `down` digest-checks against the sibling, the `get` primitive trusts the part.
     /// The digest covers the whole file, prefix included.
     /// Returns the final file size and digest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the part file cannot be opened, read or written, and transport, auth or HTTP errors after the retry loop is exhausted.
     pub async fn download_resumable(
         &self,
         subject: (&str, Dir),
@@ -576,6 +609,10 @@ impl NexusClient {
 
     /// PUT the bytes of a file: streamed body with Content-Length.
     /// Stall detection is attempt-level: no chunk pulled for `stall` fails the attempt as retryable transport, so a frozen socket surfaces even after the producer has finished reading the file.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
     pub async fn upload_file(
         &self,
         subject: (&str, Dir),

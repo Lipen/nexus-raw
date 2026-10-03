@@ -19,6 +19,10 @@ impl std::fmt::Debug for Creds {
 }
 
 /// Order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when only one of `NXR_USERNAME` and `NXR_PASSWORD` is set.
 pub fn resolve(explicit: Option<(&str, &str)>) -> Result<Option<Creds>, Error> {
     if let Some((user, pass)) = explicit {
         return Ok(Some(Creds {

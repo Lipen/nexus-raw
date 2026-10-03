@@ -44,6 +44,10 @@ impl std::fmt::Debug for Config {
 
 impl Config {
     /// The sane check: workers in 1..=64, positive timeouts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when `workers` is outside `1..=64`, `retry_attempts` is zero, or a timeout is zero.
     pub fn validate(&self) -> Result<(), Error> {
         if self.workers == 0 || self.workers > 64 {
             return Err(Error::misuse(format!(
@@ -61,6 +65,10 @@ impl Config {
     }
 
     /// The base URL, normalized (trailing `/`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when [`Self::base`] is not a valid http(s) base URL (see [`normalize_base`]).
     pub fn normalized_base(&self) -> Result<String, Error> {
         normalize_base(&self.base)
     }
@@ -78,6 +86,10 @@ impl Config {
 /// // Credentials in the userinfo are rejected: they leak into output.
 /// assert!(normalize_base("https://user:pass@host/raw/").is_err());
 /// ```
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `base` is not an http(s) URL with a host and without userinfo, query or fragment.
 pub fn normalize_base(base: &str) -> Result<String, Error> {
     let err = || {
         Error::misuse(format!(

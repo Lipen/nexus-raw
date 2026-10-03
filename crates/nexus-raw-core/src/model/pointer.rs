@@ -1,6 +1,10 @@
 //! Pointer files: the token format and the dotted-numeric comparison (§4.3, §6.3).
 
 /// A version token: one line, trailing newline, non-empty, never CRLF.
+///
+/// # Errors
+///
+/// Returns the reason string when `raw` lacks the trailing newline, carries a CR, spans several lines, or is empty.
 pub fn parse_token(raw: &str) -> Result<String, String> {
     let body = raw.strip_suffix('\n').ok_or("missing trailing newline")?;
     if body.contains('\r') {
@@ -22,6 +26,10 @@ pub fn format_token(version: &str) -> String {
 }
 
 /// A token must be exactly one non-empty line, no CR.
+///
+/// # Errors
+///
+/// Returns the reason string when `token` is empty, spans several lines, or carries a CR.
 pub fn validate_token(token: &str) -> Result<(), String> {
     if token.is_empty() {
         return Err("empty token".into());

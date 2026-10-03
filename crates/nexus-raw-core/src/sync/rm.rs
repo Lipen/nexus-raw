@@ -30,6 +30,10 @@ pub enum RmAction {
 ///
 /// 404 counts as done: deletion is idempotent.
 /// The Summary event goes out before the error returns, and `failed` names the run stopper.
+///
+/// # Errors
+///
+/// Returns the failure that stopped the run: [`Error::ReadOnly`] on a 403/405, otherwise the transport/auth/HTTP error of the refused request.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir_url: String,

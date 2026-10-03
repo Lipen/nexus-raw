@@ -36,6 +36,10 @@ impl ArtifactName {
     /// assert!(ArtifactName::parse("x.sha256").is_err()); // reserved suffix
     /// # Ok::<(), nexus_raw_core::Error>(())
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsafeName`] when `name` violates the grammar: empty, absolute, a `.`/`..` segment, a character outside `[A-Za-z0-9._-]`, a segment over 255 bytes, or the reserved `.sha256` suffix.
     pub fn parse(name: &str) -> Result<Self, Error> {
         let err = |reason: &str| Error::UnsafeName {
             name: name.to_owned(),
@@ -115,6 +119,10 @@ impl Deref for ArtifactName {
 }
 
 /// Version segment validation (§4.1 sane check): same grammar as a name segment.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `version` is not a valid name segment: empty, too long, a character outside `[A-Za-z0-9._-]`, or `.`/`..`.
 pub fn validate_version(version: &str) -> Result<(), Error> {
     if valid_segment(version) {
         Ok(())

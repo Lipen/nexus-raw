@@ -16,6 +16,10 @@ pub enum ChannelOutcome {
 }
 
 /// Read a channel: None on 404, the token otherwise.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors from the underlying GET, and [`Error::Misuse`] when the body exceeds the small-object cap.
 pub async fn get(client: &NexusClient, url: &str) -> Result<Option<String>, Error> {
     match client.get_small(url).await? {
         None => Ok(None),
@@ -31,6 +35,10 @@ pub async fn get(client: &NexusClient, url: &str) -> Result<Option<String>, Erro
 /// Write a channel token with the optional forward-only guard (`--if-forward`).
 ///
 /// A current value that cannot be read (404, garbage) never blocks the write.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `token` is not one line, and transport, auth or HTTP errors when reading the current value or writing the new one.
 pub async fn set(
     client: &NexusClient,
     url: &str,
@@ -68,6 +76,10 @@ pub enum ClearOutcome {
 ///
 /// Clearing is not a comparison: there is no `--if-forward` semantics here.
 /// An already-absent pointer is a normal outcome, so the call is idempotent.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors from the DELETE; a 403/405 surfaces as [`Error::ReadOnly`].
 pub async fn clear(client: &NexusClient, url: &str) -> Result<ClearOutcome, Error> {
     Ok(match client.delete_url(url).await? {
         crate::transport::client::DeleteOutcome::Deleted => ClearOutcome::Cleared,

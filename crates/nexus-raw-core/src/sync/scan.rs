@@ -10,6 +10,10 @@ use crate::model::name::ArtifactName;
 /// Every regular file becomes a candidate name (relative path, `/` separated).
 /// Hidden path segments (starting with `.`) and `*.sha256` siblings are skipped: a sibling is the marker of its bytes, never an artifact of its own.
 /// Names that fail the grammar are a misuse error (exit 2), never silently skipped.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when a directory cannot be listed and [`Error::Misuse`] (or [`Error::UnsafeName`]) when a file path violates the name grammar.
 pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
     let mut names = Vec::new();
     let mut stack = vec![dir.to_owned()];

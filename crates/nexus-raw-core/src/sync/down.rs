@@ -45,6 +45,10 @@ pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
 /// The Summary event goes out before the error returns.
 /// Part files resume by default.
 /// `fresh` starts every name from zero.
+///
+/// # Errors
+///
+/// Returns the first transport/auth/HTTP failure of the run and [`Error::Incomplete`] listing the failed names (digest mismatches included).
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
@@ -218,6 +222,10 @@ pub(crate) async fn download_one(
 /// On start, orphans of dead pids from the pre-resume temp scheme are cleaned.
 /// Live process temps are untouched.
 /// Part files never clean here: they are the resume state of a rerun.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when `dir` cannot be listed.
 pub fn cleanup_orphans(dir: &Path) -> Result<(), Error> {
     let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
     for entry in entries {

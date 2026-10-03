@@ -12,6 +12,10 @@ use crate::transport::client::NexusClient;
 /// Versions under a repository/group base: the path segment right after the group prefix of every asset, collected and sorted.
 ///
 /// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any number of group segments, including none.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `base` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
 pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
     let (repo, group) = split_prefix(base)?;
     let paths = paginate(client, base, &repo, &group).await?;
@@ -28,6 +32,10 @@ pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<Str
 }
 
 /// Artifact names under a version directory URL: every asset path that starts with `<group>/<version>/`, mapped to the relative name.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `dir_url` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
 pub async fn search_assets(
     client: &NexusClient,
     dir_url: &str,

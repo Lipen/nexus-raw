@@ -24,6 +24,10 @@ impl Digest {
     /// assert!(Digest::from_hex(digest.as_str()).is_ok());
     /// assert!(Digest::from_hex("DEADBEEF").is_err()); // lowercase only
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns the reason string when `s` is not exactly 64 lowercase hex characters.
     pub fn from_hex(s: &str) -> Result<Self, String> {
         if s.len() != HEX_LEN || !s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
             return Err(format!("expected {HEX_LEN} lowercase hex chars, got {s:?}"));
@@ -70,6 +74,10 @@ pub fn hex(bytes: &[u8]) -> String {
 }
 
 /// Streaming sha256 of a file with a 256 KiB buffer.
+///
+/// # Errors
+///
+/// Returns the `std::io::Error` when the file cannot be opened or read.
 pub fn sha256_file(path: &Path) -> std::io::Result<Digest> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();

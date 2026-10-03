@@ -32,6 +32,10 @@ pub struct GetOutcome {
 ///
 /// With `out`: stream into `<out>.part` (resuming from it when `cont`), verify nothing, then rename to `out`.
 /// Without `out`: stream to stdout in a single body attempt, because a retry after the body started would duplicate bytes.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors from the GET, [`Error::Io`] when the part file cannot be written or renamed, and [`Error::Misuse`] when stdout cannot be written.
 pub async fn get(
     client: &NexusClient,
     url: &str,
@@ -101,6 +105,10 @@ pub async fn get(
 ///
 /// `--sha` hashes the file (one extra local pass) and PUTs `<url>.sha256` right after the bytes.
 /// Returns `(bytes sent, digest when --sha)`.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when `src` cannot be read or hashed, [`Error::Misuse`] when `src` is not a file, and transport, auth or HTTP errors from the uploads.
 pub async fn put(
     client: &NexusClient,
     url: &str,
@@ -132,6 +140,10 @@ pub async fn put(
 }
 
 /// HEAD a URL: status, size, content type. 404 is a normal result.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors after the retry loop is exhausted.
 pub async fn head(client: &NexusClient, url: &str) -> Result<HeadInfo, Error> {
     client.head_info(url).await
 }
@@ -144,6 +156,10 @@ pub enum ShaSource {
 }
 
 /// Stream a source through sha256 (spec §5.1 `sha <file|url>`).
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when a file source cannot be read and transport, auth or HTTP errors for a URL source.
 pub async fn sha(client: &NexusClient, src: ShaSource) -> Result<Digest, Error> {
     match src {
         ShaSource::File(path) => digest::sha256_file(&path).map_err(|e| Error::io(&path, e)),

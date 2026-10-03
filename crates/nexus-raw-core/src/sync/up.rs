@@ -18,6 +18,10 @@ use crate::transport::client::NexusClient;
 /// `dir_url` is the normalized remote directory.
 /// Per-name failures (after retries) are collected into `Summary.failed`.
 /// The Summary event goes out first, then [`Error::Incomplete`] is returned.
+///
+/// # Errors
+///
+/// Returns the first transport/auth/HTTP failure of the run, [`Error::Incomplete`] listing the failed names, and [`Error::Misuse`] for internal plan-shape violations.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,

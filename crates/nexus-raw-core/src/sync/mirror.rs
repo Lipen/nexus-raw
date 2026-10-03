@@ -57,6 +57,10 @@ pub enum MirrorAction {
 /// The plan follows `names` order (the enumeration's), not map order.
 /// A refusal is a [`Verdict`]: the first violation in name order.
 /// `Missing` is collected across all names and fires only when no other refusal exists.
+///
+/// # Errors
+///
+/// Returns the first [`Verdict`] refusal in name order: a broken source or foreign destination sibling, an overwrite refusal, or a collected [`Verdict::Missing`] when a name exists nowhere.
 pub fn classify(
     names: Vec<ArtifactName>,
     srcs: BTreeMap<ArtifactName, RemoteStatus>,
@@ -164,6 +168,10 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
 ///
 /// Per-name failures land in `Summary.failed`; a diverging digest refuses the run as
 /// [`Error::Mismatch`], a transport failure surfaces as its own error after retries.
+///
+/// # Errors
+///
+/// Returns [`Error::Mismatch`] on a source/destination digest divergence, [`Error::Incomplete`] listing the failed names, and the first transport/auth/HTTP failure of the run.
 pub(crate) async fn execute(
     client: Arc<NexusClient>,
     staging: PathBuf,

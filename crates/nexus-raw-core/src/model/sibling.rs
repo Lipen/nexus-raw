@@ -25,6 +25,10 @@ pub struct Sibling {
 }
 
 /// Strict single-line parse: no CRLF, no extra lines, exactly two spaces.
+///
+/// # Errors
+///
+/// Returns the reason string when the line format is violated or the digest is not 64 lowercase hex characters.
 pub fn parse_line(s: &str) -> Result<Sibling, String> {
     let body = s.strip_suffix('\n').ok_or("missing trailing newline")?;
     if body.contains('\n') {

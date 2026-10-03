@@ -17,6 +17,10 @@ impl Manifest {
     ///
     /// The version-document fields are tolerated: `schema_version` must be 1 when present, `version` is ignored.
     /// Every name passes the grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when the bytes are not a JSON object with an `artifacts` string array or carry an unsupported `schema_version`, and [`Error::UnsafeName`] when a name violates the grammar.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
         let value: serde_json::Value = serde_json::from_slice(bytes)
             .map_err(|e| Error::misuse(format!("manifest is not JSON: {e}")))?;
@@ -50,12 +54,21 @@ impl Manifest {
         Ok(Self { names })
     }
 
+    /// Read a manifest from a local file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the file cannot be read and the [`Self::from_slice`] parse errors.
     pub fn from_file(path: &Path) -> Result<Self, Error> {
         let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
         Self::from_slice(&bytes)
     }
 
     /// Fetch a manifest from the server.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the GET (a missing object is [`Error::Http`] 404) and the [`Self::from_slice`] parse errors.
     pub async fn from_url(client: &NexusClient, url: &str) -> Result<Self, Error> {
         match client.get_small(url).await? {
             None => Err(Error::Http {
@@ -67,6 +80,10 @@ impl Manifest {
     }
 
     /// Read a manifest from stdin (`--manifest -`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when stdin cannot be read and the [`Self::from_slice`] parse errors.
     pub fn from_stdin() -> Result<Self, Error> {
         use std::io::Read;
         let mut buf = Vec::new();

@@ -63,6 +63,10 @@ pub async fn local_statuses(
 /// `Missing` is collected across all names and fires only when no other refusal exists.
 ///
 /// The §5.2 gap "local Markerless, remote Absent" counts as Missing for down: no completed copy exists anywhere.
+///
+/// # Errors
+///
+/// Returns the first [`Verdict`] refusal in name order: a digest divergence, a shape that must not overwrite, or a collected [`Verdict::Missing`] when nothing exists to transfer.
 pub fn classify(
     dir: &Path,
     mode: Mode,
