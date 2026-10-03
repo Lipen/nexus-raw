@@ -95,9 +95,7 @@ pub fn classify(
             }
             (LocalStatus::Complete(d), RemoteStatus::Absent) => match mode {
                 Mode::Up => {
-                    let size = std::fs::metadata(bytes_path(dir, &name))
-                        .map(|m| m.len())
-                        .unwrap_or(0);
+                    let size = std::fs::metadata(bytes_path(dir, &name)).map_or(0, |m| m.len());
                     actions.push(Action::Upload {
                         name,
                         size,
@@ -112,9 +110,7 @@ pub fn classify(
             (LocalStatus::Complete(d), RemoteStatus::Markerless { .. }) => match mode {
                 // The remote copy was never finished: send the finished one.
                 Mode::Up => {
-                    let size = std::fs::metadata(bytes_path(dir, &name))
-                        .map(|m| m.len())
-                        .unwrap_or(0);
+                    let size = std::fs::metadata(bytes_path(dir, &name)).map_or(0, |m| m.len());
                     actions.push(Action::Upload {
                         name,
                         size,
@@ -159,9 +155,7 @@ pub fn classify(
             }
             (LocalStatus::Markerless, RemoteStatus::Absent) => match mode {
                 Mode::Up => {
-                    let size = std::fs::metadata(bytes_path(dir, &name))
-                        .map(|m| m.len())
-                        .unwrap_or(0);
+                    let size = std::fs::metadata(bytes_path(dir, &name)).map_or(0, |m| m.len());
                     let d = local_digest(dir, &name)?;
                     actions.push(Action::Upload {
                         name,
@@ -233,6 +227,7 @@ fn local_digest(dir: &Path, name: &ArtifactName) -> Result<Digest, Verdict> {
 }
 
 /// The canonical marker line for a name and digest: `<hex>  <name>\n`.
+#[must_use]
 pub fn marker_line(name: &ArtifactName, digest: &Digest) -> String {
     sibling::format_line(name.as_str(), digest)
 }

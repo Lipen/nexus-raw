@@ -13,6 +13,7 @@ use super::digest::Digest;
 /// assert_eq!(sibling::parse_line(&line)?.digest, digest);
 /// # Ok::<(), String>(())
 /// ```
+#[must_use]
 pub fn format_line(name: &str, digest: &Digest) -> String {
     format!("{}  {name}\n", digest.as_str())
 }

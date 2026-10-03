@@ -34,16 +34,19 @@ pub enum RemoteStatus {
     Broken(String),
 }
 
+#[must_use]
 pub fn bytes_path(dir: &Path, name: &ArtifactName) -> PathBuf {
     dir.join(name.as_str())
 }
 
+#[must_use]
 pub fn sibling_path(dir: &Path, name: &ArtifactName) -> PathBuf {
     dir.join(name.sibling())
 }
 
 /// Local state classification.
 /// Bytes decide: a sibling without bytes is Absent.
+#[must_use]
 pub fn local_status(dir: &Path, name: &ArtifactName) -> LocalStatus {
     let bytes = bytes_path(dir, name);
     if !bytes.is_file() {

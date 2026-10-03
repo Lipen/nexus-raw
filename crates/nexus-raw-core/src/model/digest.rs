@@ -31,10 +31,12 @@ impl Digest {
         Ok(Self(s.to_owned()))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    #[must_use]
     pub fn of_bytes(bytes: &[u8]) -> Self {
         Self(hex(&Sha256::digest(bytes)))
     }
@@ -44,6 +46,7 @@ impl Digest {
     }
 
     /// The "foreign object" digest used by the foreign-marker scenario.
+    #[must_use]
     pub fn zero() -> Self {
         Self("0".repeat(HEX_LEN))
     }
@@ -55,6 +58,7 @@ impl fmt::Display for Digest {
     }
 }
 
+#[must_use]
 pub fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -81,6 +85,7 @@ pub fn sha256_file(path: &Path) -> std::io::Result<Digest> {
 }
 
 /// A fresh hasher seeded with `bytes`, for incremental hashing.
+#[must_use]
 pub fn sha256_bytes(bytes: &[u8]) -> Sha256 {
     let mut h = Sha256::new();
     h.update(bytes);

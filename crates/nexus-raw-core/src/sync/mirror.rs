@@ -30,6 +30,7 @@ pub const VERSION_DOCUMENT: &str = "version.json";
 /// The staging directory of a (source, destination) pair: a stable temp location, so the part files of a killed run are the rerun's resume fuel.
 /// The name is a 128-bit truncation of the SHA-256 over both bases: two pairs sharing a staging dir would interleave part writes, and the space stays far beyond birthday reach.
 /// The directory is removed on a fully successful run and kept otherwise.
+#[must_use]
 pub fn staging_dir(src_base: &str, dst_base: &str) -> PathBuf {
     let digest = sha2::Sha256::digest(format!("{src_base}\n{dst_base}").as_bytes());
     let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();

@@ -51,7 +51,7 @@ pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     options
 }
 
-/// The blocking counterpart of `write_options` for spawn_blocking code.
+/// The blocking counterpart of `write_options` for `spawn_blocking` code.
 #[cfg(unix)]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     use std::os::unix::fs::OpenOptionsExt;
@@ -132,18 +132,22 @@ impl NexusClient {
         })
     }
 
+    #[must_use]
     pub fn workers(&self) -> Arc<Semaphore> {
         self.workers.clone()
     }
 
+    #[must_use]
     pub fn progress(&self) -> &Progress {
         &self.events
     }
 
+    #[must_use]
     pub fn object_url(&self, dir: &str, name: &ArtifactName) -> String {
         format!("{dir}{}", name.encoded())
     }
 
+    #[must_use]
     pub fn sibling_url(&self, dir: &str, name: &ArtifactName) -> String {
         format!("{dir}{}.sha256", name.encoded())
     }
@@ -173,8 +177,7 @@ impl NexusClient {
                     log::warn!("retry {n}/{} for {url}: {reason}", self.retry.attempts);
                     let _ = self.events.sender().send(Event::Retrying {
                         name: subject
-                            .map(|(name, _)| name.to_owned())
-                            .unwrap_or_else(|| Self::object_label(url)),
+                            .map_or_else(|| Self::object_label(url), |(name, _)| name.to_owned()),
                         attempt: n + 1,
                         reason,
                     });
@@ -660,7 +663,7 @@ impl NexusClient {
                         result = &mut send => {
                             break result.map_err(|e| this.wrap_send_err(url, e));
                         }
-                        _ = tokio::time::sleep(stall.saturating_sub(since_progress)) => {
+                        () = tokio::time::sleep(stall.saturating_sub(since_progress)) => {
                             if last.lock().expect("progress lock").elapsed() >= stall {
                                 producer.abort();
                                 break Err(AttemptFailure {

@@ -16,7 +16,7 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
     while let Some(d) = stack.pop() {
         let entries = std::fs::read_dir(&d).map_err(|e| Error::io(&d, e))?;
         let mut items: Vec<_> = entries
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| (e.file_name(), e.path()))
             .collect();
         items.sort();
@@ -63,7 +63,7 @@ mod tests {
         fs::write(root.join("sub").join("b.json"), b"y").unwrap();
         fs::write(root.join(".hidden"), b"z").unwrap();
         let names = scan_dir(root).unwrap();
-        let pretty: Vec<_> = names.iter().map(|n| n.to_string()).collect();
+        let pretty: Vec<_> = names.iter().map(std::string::ToString::to_string).collect();
         assert_eq!(pretty, ["a.zip", "sub/b.json"]);
     }
 

@@ -38,66 +38,62 @@ pub async fn get(
     out: Option<PathBuf>,
     cont: bool,
 ) -> Result<GetOutcome, Error> {
-    match out {
-        Some(out) => {
-            let part = part_of(&out);
-            let resumed_from = if cont {
-                tokio::fs::symlink_metadata(&part)
-                    .await
-                    .map(|m| m.len())
-                    .unwrap_or(0)
-            } else {
-                0
-            };
-            let name = out
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let (size, digest) = match client
-                .download_resumable((&name, Dir::Down), url, &part, cont, None)
+    if let Some(out) = out {
+        let part = part_of(&out);
+        let resumed_from = if cont {
+            tokio::fs::symlink_metadata(&part)
                 .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    tokio::fs::remove_file(&part).await.ok();
-                    return Err(e);
-                }
-            };
-            tokio::fs::rename(&part, &out)
-                .await
-                .map_err(|e| Error::io(&out, e))?;
-            Ok(GetOutcome {
-                size,
-                digest: Some(digest),
-                resumed_from,
-            })
-        }
-        None => {
-            let resp = client.get_stream(url).await?;
-            let total = resp.content_length();
-            // The contract: Started precedes the body it announces, even in stdout mode where nothing else is written.
-            client.progress().started("", Dir::Down, total).await;
-            let mut body = resp.bytes_stream();
-            let mut stdout = tokio::io::stdout();
-            let mut size: u64 = 0;
-            while let Some(chunk) = body.next().await {
-                let chunk = chunk.map_err(|e| Error::transport(url, e))?;
-                stdout
-                    .write_all(&chunk)
-                    .await
-                    .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
-                size += chunk.len() as u64;
+                .map_or(0, |m| m.len())
+        } else {
+            0
+        };
+        let name = out
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let (size, digest) = match client
+            .download_resumable((&name, Dir::Down), url, &part, cont, None)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tokio::fs::remove_file(&part).await.ok();
+                return Err(e);
             }
+        };
+        tokio::fs::rename(&part, &out)
+            .await
+            .map_err(|e| Error::io(&out, e))?;
+        Ok(GetOutcome {
+            size,
+            digest: Some(digest),
+            resumed_from,
+        })
+    } else {
+        let resp = client.get_stream(url).await?;
+        let total = resp.content_length();
+        // The contract: Started precedes the body it announces, even in stdout mode where nothing else is written.
+        client.progress().started("", Dir::Down, total).await;
+        let mut body = resp.bytes_stream();
+        let mut stdout = tokio::io::stdout();
+        let mut size: u64 = 0;
+        while let Some(chunk) = body.next().await {
+            let chunk = chunk.map_err(|e| Error::transport(url, e))?;
             stdout
-                .flush()
+                .write_all(&chunk)
                 .await
                 .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
-            Ok(GetOutcome {
-                size,
-                digest: None,
-                resumed_from: 0,
-            })
+            size += chunk.len() as u64;
         }
+        stdout
+            .flush()
+            .await
+            .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
+        Ok(GetOutcome {
+            size,
+            digest: None,
+            resumed_from: 0,
+        })
     }
 }
 

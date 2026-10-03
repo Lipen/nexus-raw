@@ -63,17 +63,20 @@ impl ArtifactName {
         Ok(Self(name.to_owned()))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// The sha-sibling name: `<name>.sha256`.
+    #[must_use]
     pub fn sibling(&self) -> String {
         format!("{name}{SIBLING_SUFFIX}", name = self.0)
     }
 
     /// Percent-encoding per segment.
     /// `/` stays the path separator (§3).
+    #[must_use]
     pub fn encoded(&self) -> String {
         const HEX: &[u8; 16] = b"0123456789ABCDEF";
         let mut out = String::with_capacity(self.0.len());
@@ -84,7 +87,7 @@ impl ArtifactName {
             for &b in seg.as_bytes() {
                 match b {
                     b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'.' | b'_' | b'-' | b'~' => {
-                        out.push(b as char)
+                        out.push(b as char);
                     }
                     _ => {
                         out.push('%');

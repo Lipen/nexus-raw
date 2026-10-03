@@ -46,6 +46,7 @@ pub fn resolve(explicit: Option<(&str, &str)>) -> Result<Option<Creds>, Error> {
 }
 
 /// `user:pass` → standard base64.
+#[must_use]
 pub fn basic(user: &str, pass: &str) -> String {
     use base64::engine::general_purpose::STANDARD;
     STANDARD.encode(format!("{user}:{pass}"))

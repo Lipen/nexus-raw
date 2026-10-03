@@ -32,6 +32,7 @@ pub(crate) enum Failure {
 /// The stable part-file path for a name inside `dir`.
 ///
 /// The digest is a 128-bit truncation of SHA-256 over the encoded name: two distinct names colliding into one part file would interleave writes, so the space stays far beyond birthday reach for any plausible directory.
+#[must_use]
 pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
     let digest = sha2::Sha256::digest(name.encoded().as_bytes());
     let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();
@@ -145,10 +146,8 @@ pub(crate) async fn download_one(
     let resume = expected.is_some() && !fresh;
     // symlink_metadata, not metadata: a symlink at the part path must not be read for the prefix nor trusted for the resume decision.
     // The NOFOLLOW write open would refuse it anyway, so fail the same way before any read.
-    let resumed = resume
-        && std::fs::symlink_metadata(&part)
-            .map(|m| m.is_file() && m.len() > 0)
-            .unwrap_or(false);
+    let resumed =
+        resume && std::fs::symlink_metadata(&part).is_ok_and(|m| m.is_file() && m.len() > 0);
     let fetched = client
         .download_resumable(
             (name.as_str(), Dir::Down),
@@ -169,7 +168,7 @@ pub(crate) async fn download_one(
             if resumed {
                 // A stale part, not a diverging server: one clean restart decides.
                 // The fresh attempt is digest-guarded as usual.
-                log::warn!("{}: part file was stale, restarting from zero", name);
+                log::warn!("{name}: part file was stale, restarting from zero");
                 let expected = Some(expected.clone());
                 return Box::pin(download_one(
                     client, dir, dir_url, name, size_hint, expected, true, emit_done,

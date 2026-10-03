@@ -50,6 +50,7 @@ pub enum Error {
 
 impl Error {
     /// Exit code: 0 ok, 1 data, 2 misuse, 3 transport.
+    #[must_use]
     pub fn exit_code(&self) -> u8 {
         match self {
             Error::Mismatch { .. }
@@ -65,6 +66,7 @@ impl Error {
 
     /// The human hint for this error class: what to check next.
     /// Rendered to stderr and into the JSON `hint` field (§5.4).
+    #[must_use]
     pub fn hint(&self) -> Option<String> {
         match self {
             Error::Mismatch { .. } => Some(

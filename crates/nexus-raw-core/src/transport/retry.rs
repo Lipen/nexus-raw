@@ -26,6 +26,7 @@ impl Default for RetryPolicy {
 impl RetryPolicy {
     /// Pause before attempt `attempt` (1-based): base × 2^(attempt−1) + jitter.
     /// Hash-based jitter, no external rand.
+    #[must_use]
     pub fn delay(&self, attempt: u32) -> Duration {
         let factor = 2u32.saturating_pow(attempt.saturating_sub(1)).min(64);
         let exp = self
@@ -38,8 +39,7 @@ impl RetryPolicy {
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.subsec_nanos())
-                .unwrap_or(0),
+                .map_or(0, |d| d.subsec_nanos()),
         )
             .hash(&mut h);
         let jitter = h.finish() % (self.jitter.as_millis().max(1) as u64 + 1);
@@ -56,8 +56,9 @@ pub struct AttemptFailure {
 
 /// Connect errors, timeouts, body breaks are retried.
 /// 4xx are not (protocol §7).
-/// Statuses are matched manually (error_for_status is never called), so
+/// Statuses are matched manually (`error_for_status` is never called), so
 /// `is_status` never shows up here.
+#[must_use]
 pub fn is_retryable(e: &reqwest::Error) -> bool {
     !(e.is_builder() || e.is_redirect())
 }

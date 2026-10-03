@@ -16,6 +16,7 @@ pub fn parse_token(raw: &str) -> Result<String, String> {
 }
 
 /// The pointer body: token + `\n`.
+#[must_use]
 pub fn format_token(version: &str) -> String {
     format!("{version}\n")
 }
@@ -45,6 +46,7 @@ pub fn validate_token(token: &str) -> Result<(), String> {
 /// assert!(version_ge("1.0.0", "1.0.0-rc1"));
 /// assert!(!version_ge("1.4.0", "1.14.0"));
 /// ```
+#[must_use]
 pub fn version_ge(a: &str, b: &str) -> bool {
     compare(a, b) != std::cmp::Ordering::Less
 }

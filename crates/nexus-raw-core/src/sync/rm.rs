@@ -10,7 +10,7 @@ use crate::transport::client::{DeleteOutcome, NexusClient};
 /// One planned deletion, as `rm --dry-run` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RmAction {
-    /// The remote copy exists: marker then bytes would be DELETEd.
+    /// The remote copy exists: marker then bytes would be `DELETEd`.
     Remove {
         name: ArtifactName,
         size: Option<u64>,

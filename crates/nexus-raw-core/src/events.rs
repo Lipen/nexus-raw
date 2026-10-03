@@ -17,6 +17,7 @@ pub enum Dir {
 }
 
 impl Dir {
+    #[must_use]
     pub fn as_state(self) -> &'static str {
         match self {
             Dir::Up => "uploading",
@@ -70,7 +71,7 @@ pub enum Event {
         attempt: u32,
         reason: String,
     },
-    /// Deletion progress (§5.4): the name's objects are about to be DELETEd, marker first.
+    /// Deletion progress (§5.4): the name's objects are about to be `DELETEd`, marker first.
     Removing {
         name: String,
     },
@@ -95,6 +96,7 @@ impl Event {
     /// let line = event.to_json().to_string();
     /// assert!(line.contains(r#""event":"summary""#));
     /// ```
+    #[must_use]
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             Event::Plan {
@@ -173,7 +175,7 @@ impl Event {
     }
 }
 
-/// Coalescing progress sender: at most one byte event per MIN_INTERVAL per (name, dir).
+/// Coalescing progress sender: at most one byte event per `MIN_INTERVAL` per (name, dir).
 #[derive(Clone)]
 pub struct Progress {
     tx: mpsc::UnboundedSender<Event>,
@@ -183,6 +185,7 @@ pub struct Progress {
 const MIN_INTERVAL: Duration = Duration::from_millis(200);
 
 impl Progress {
+    #[must_use]
     pub fn new(tx: mpsc::UnboundedSender<Event>) -> Self {
         Self {
             tx,
@@ -190,6 +193,7 @@ impl Progress {
         }
     }
 
+    #[must_use]
     pub fn sender(&self) -> mpsc::UnboundedSender<Event> {
         self.tx.clone()
     }
@@ -232,7 +236,7 @@ impl Progress {
         });
     }
 
-    /// Deletion progress: the name's objects are about to be DELETEd.
+    /// Deletion progress: the name's objects are about to be `DELETEd`.
     pub async fn removing(&self, name: &str) {
         let _ = self.tx.send(Event::Removing {
             name: name.to_owned(),

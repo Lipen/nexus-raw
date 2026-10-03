@@ -52,6 +52,7 @@ impl Nxr {
     }
 
     /// The normalized base URL of this invocation.
+    #[must_use]
     pub fn base(&self) -> &str {
         &self.base
     }
@@ -132,30 +133,27 @@ impl Nxr {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
-        let names = match names {
-            Some(list) => {
-                let scanned = self.scan(dir)?;
-                let have: std::collections::HashSet<&ArtifactName> = scanned.iter().collect();
-                let absent: Vec<String> = list
-                    .iter()
-                    .filter(|n| !have.contains(n))
-                    .map(|n| n.to_string())
-                    .collect();
-                if !absent.is_empty() {
-                    return Err(Error::Missing { names: absent });
-                }
-                list
+        let names = if let Some(list) = names {
+            let scanned = self.scan(dir)?;
+            let have: std::collections::HashSet<&ArtifactName> = scanned.iter().collect();
+            let absent: Vec<String> = list
+                .iter()
+                .filter(|n| !have.contains(n))
+                .map(std::string::ToString::to_string)
+                .collect();
+            if !absent.is_empty() {
+                return Err(Error::Missing { names: absent });
             }
-            None => {
-                let scanned = self.scan(dir)?;
-                if scanned.is_empty() {
-                    return Err(Error::misuse(format!(
-                        "nothing to upload: {} holds no artifacts",
-                        dir.display()
-                    )));
-                }
-                scanned
+            list
+        } else {
+            let scanned = self.scan(dir)?;
+            if scanned.is_empty() {
+                return Err(Error::misuse(format!(
+                    "nothing to upload: {} holds no artifacts",
+                    dir.display()
+                )));
             }
+            scanned
         };
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
@@ -171,21 +169,20 @@ impl Nxr {
                 )));
             }
         }
-        let actions = match plan {
-            Some(p) => p,
-            None => {
-                let remotes = self
-                    .remote_states_for(locals.iter().map(|(n, _)| n))
-                    .await?;
-                let d = dir.to_owned();
-                let markers = gen_markers;
-                tokio::task::spawn_blocking(move || {
-                    sync::classify(&d, Mode::Up, markers, locals, remotes)
-                })
-                .await
-                .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
-                .map_err(Error::from)?
-            }
+        let actions = if let Some(p) = plan {
+            p
+        } else {
+            let remotes = self
+                .remote_states_for(locals.iter().map(|(n, _)| n))
+                .await?;
+            let d = dir.to_owned();
+            let markers = gen_markers;
+            tokio::task::spawn_blocking(move || {
+                sync::classify(&d, Mode::Up, markers, locals, remotes)
+            })
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+            .map_err(Error::from)?
         };
         self.events.plan(&actions, Dir::Up);
         up::execute(
@@ -217,21 +214,20 @@ impl Nxr {
             .map_err(|e| Error::io(dir, e))?;
         down::cleanup_orphans(dir)?;
         let names = self.resolve_names(enum_src).await?;
-        let actions = match plan {
-            Some(p) => p,
-            None => {
-                let locals = sync::local_statuses(dir, names).await;
-                let remotes = self
-                    .remote_states_for(locals.iter().map(|(n, _)| n))
-                    .await?;
-                let d = dir.to_owned();
-                tokio::task::spawn_blocking(move || {
-                    sync::classify(&d, Mode::Down, true, locals, remotes)
-                })
-                .await
-                .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
-                .map_err(Error::from)?
-            }
+        let actions = if let Some(p) = plan {
+            p
+        } else {
+            let locals = sync::local_statuses(dir, names).await;
+            let remotes = self
+                .remote_states_for(locals.iter().map(|(n, _)| n))
+                .await?;
+            let d = dir.to_owned();
+            tokio::task::spawn_blocking(move || {
+                sync::classify(&d, Mode::Down, true, locals, remotes)
+            })
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+            .map_err(Error::from)?
         };
         self.events.plan(&actions, Dir::Down);
         down::execute(
