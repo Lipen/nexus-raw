@@ -1,7 +1,7 @@
 # Rust example: an external consumer of `nexus-raw-core`
 
 A standalone crate that pulls the library the way an outside user would:
-a path dependency today, a crates.io version once published.
+from crates.io, pinned to the compatible minor (`"0.3"`).
 It is deliberately outside the nexus-raw workspace.
 
 Run it:
@@ -16,6 +16,12 @@ To run against a real repository instead:
 
 ```bash
 cargo run --manifest-path examples/rust/Cargo.toml -- https://nexus.example.com/repository/demo/
+```
+
+To develop against the workspace instead of the published crate, flip the dependency back to the path and run the same way:
+
+```toml
+nexus-raw-core = { path = "../../crates/nexus-raw-core" }
 ```
 
 `MOCK_NEXUS_BIN` overrides the mock server binary path
