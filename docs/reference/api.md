@@ -40,7 +40,7 @@ flowchart BT
 
 ```toml
 [dependencies]
-nexus-raw-core = { path = "crates/nexus-raw-core" }   # inside this workspace
+nexus-raw-core = "0.3"
 ```
 
 ## The facade
