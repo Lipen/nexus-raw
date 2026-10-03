@@ -375,25 +375,34 @@ jobs:
 
       # Platform packages first: the main package declares them as its
       # optionalDependencies, and a consumer must never hit a missing one.
+      # A re-run after a partial publish must skip what is already out,
+      # or the loop can never go green.
       - name: Publish the platform packages
         if: ${{ github.event_name == 'push' }}
         run: |
+          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           for d in npm/npm-*/; do
-            npm publish "$d" --provenance --access public
+            name="$(node -p "require('./$d/package.json').name")"
+            if npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "$name@$version is already on the registry, skipping"
+            else
+              npm publish "$d" --provenance --access public
+            fi
           done
 
       # The dev manifest stays free of version pins: the platform packages
       # do not exist between releases, and a frozen pnpm install would fail
       # on them, so the release manifest is composed here from the tag.
+      # Staging is pure local file ops and runs on dispatch too: the dry
+      # run must exercise the step that once burned a release.
+      # The version comes from the manifest, which the tag check has
+      # already matched against the ref.
       - name: Stage the main package
-        if: ${{ github.event_name == 'push' }}
-        env:
-          VERSION: ${{ github.ref_name }}
         run: |
-          VERSION="${VERSION#v}" node <<'EOF'
+          node <<'EOF'
           const fs = require("fs");
-          const version = process.env.VERSION;
           const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
+          const version = main.version;
           const pkg = {
             ...main,
             optionalDependencies: {
