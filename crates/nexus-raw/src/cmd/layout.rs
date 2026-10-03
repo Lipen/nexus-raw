@@ -21,14 +21,14 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
         for n in &names {
             print_line(
                 ctx.json,
-                n.to_string(),
-                serde_json::json!({"name": n.to_string()}),
+                n.as_str(),
+                &serde_json::json!({"name": n.to_string()}),
             );
         }
     } else {
         let versions = ctx.nxr.ls_versions().await?;
         for v in &versions {
-            print_line(ctx.json, v.clone(), serde_json::json!({"version": v}));
+            print_line(ctx.json, v.as_str(), &serde_json::json!({"version": v}));
         }
     }
     Ok(())
@@ -53,13 +53,13 @@ async fn run_point_clear(ctx: &Ctx, url: &str) -> Result<(), Error> {
     match ctx.nxr.point_clear(url).await? {
         nexus_raw_core::ClearOutcome::Cleared => print_line(
             ctx.json,
-            format!("point: cleared {url}"),
-            serde_json::json!({"url": url, "outcome": "cleared"}),
+            &format!("point: cleared {url}"),
+            &serde_json::json!({"url": url, "outcome": "cleared"}),
         ),
         nexus_raw_core::ClearOutcome::Absent => print_line(
             ctx.json,
-            format!("point: absent {url}"),
-            serde_json::json!({"url": url, "outcome": "absent"}),
+            &format!("point: absent {url}"),
+            &serde_json::json!({"url": url, "outcome": "absent"}),
         ),
     }
     Ok(())
@@ -68,15 +68,14 @@ async fn run_point_clear(ctx: &Ctx, url: &str) -> Result<(), Error> {
 async fn run_channel_get(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let token = ctx.nxr.channel_get(url).await?;
     match token {
-        Some(t) => print_line(
-            ctx.json,
-            t.clone(),
-            serde_json::json!({"url": url, "token": t}),
-        ),
+        Some(t) => {
+            let payload = serde_json::json!({"url": url, "token": t});
+            print_line(ctx.json, &t, &payload);
+        }
         None => print_line(
             ctx.json,
-            "unset".to_owned(),
-            serde_json::json!({"url": url, "token": serde_json::Value::Null}),
+            "unset",
+            &serde_json::json!({"url": url, "token": serde_json::Value::Null}),
         ),
     }
     Ok(())
@@ -99,13 +98,13 @@ async fn run_channel_set(ctx: &Ctx, url: &str, token: &str, if_forward: bool) ->
     match outcome {
         nexus_raw_core::ChannelOutcome::Written { from } => print_line(
             ctx.json,
-            format!("channel: set {url} → {token}"),
-            serde_json::json!({"url": url, "outcome": "written", "token": token, "from": from}),
+            &format!("channel: set {url} → {token}"),
+            &serde_json::json!({"url": url, "outcome": "written", "token": token, "from": from}),
         ),
         nexus_raw_core::ChannelOutcome::Skipped { current } => print_line(
             ctx.json,
-            format!("channel: kept {url} at {current} (forward-only)"),
-            serde_json::json!({"url": url, "outcome": "skipped", "current": current}),
+            &format!("channel: kept {url} at {current} (forward-only)"),
+            &serde_json::json!({"url": url, "outcome": "skipped", "current": current}),
         ),
     }
     Ok(())

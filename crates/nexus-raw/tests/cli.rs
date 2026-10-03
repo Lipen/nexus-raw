@@ -2,6 +2,7 @@
 //!
 //! Covers: up/down happy path and skip detection, marker generation (default, `--no-sha`), enumeration sources (`--name`, `--manifest`, none), Range resume, the put/get/sha/head primitives, channel refs, offline verify, auth gating, NDJSON events and the exit-code matrix.
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -80,7 +81,7 @@ fn hex_digest(bytes: &[u8]) -> String {
     let sum = Sha256::digest(bytes);
     let mut hex = String::with_capacity(64);
     for b in sum {
-        hex.push_str(&format!("{b:02x}"));
+        let _ = write!(hex, "{b:02x}");
     }
     hex
 }

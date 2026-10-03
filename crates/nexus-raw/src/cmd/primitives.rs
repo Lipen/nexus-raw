@@ -33,13 +33,13 @@ async fn run_put(ctx: &Ctx, url: &str, file: &Path, sha: bool) -> Result<(), Err
     match digest {
         Some(d) => print_line(
             ctx.json,
-            format!("put: {size} bytes + marker {d} → {url}"),
-            serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": d.as_str()}),
+            &format!("put: {size} bytes + marker {d} → {url}"),
+            &serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": d.as_str()}),
         ),
         None => print_line(
             ctx.json,
-            format!("put: {size} bytes → {url} (no marker)"),
-            serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": serde_json::Value::Null}),
+            &format!("put: {size} bytes → {url} (no marker)"),
+            &serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": serde_json::Value::Null}),
         ),
     }
     Ok(())
@@ -56,15 +56,13 @@ async fn run_head(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let info = ctx.nxr.head(url).await?;
     print_line(
         ctx.json,
-        format!(
+        &format!(
             "head: {} {} {}",
             info.status,
-            info.size
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "-".into()),
+            info.size.map_or("-".into(), |s| s.to_string()),
             info.content_type.clone().unwrap_or_else(|| "-".into()),
         ),
-        serde_json::json!({
+        &serde_json::json!({
             "url": url,
             "status": info.status,
             "size": info.size,
@@ -82,8 +80,8 @@ pub(crate) async fn sha(cli: &Cli, target: &str) -> Result<(), Error> {
             .map_err(|e| Error::Misuse(format!("{}: {e}", path.display())))?;
         print_line(
             cli.json,
-            d.as_str().to_owned(),
-            serde_json::json!({"sha256": d.as_str(), "source": target}),
+            d.as_str(),
+            &serde_json::json!({"sha256": d.as_str(), "source": target}),
         );
         return Ok(());
     }
@@ -97,8 +95,8 @@ async fn run_sha(ctx: &Ctx, target: &str) -> Result<(), Error> {
     let d = ctx.nxr.sha(ShaSource::Url(target.to_owned())).await?;
     print_line(
         ctx.json,
-        d.as_str().to_owned(),
-        serde_json::json!({"sha256": d.as_str(), "source": target}),
+        d.as_str(),
+        &serde_json::json!({"sha256": d.as_str(), "source": target}),
     );
     Ok(())
 }
@@ -113,8 +111,8 @@ fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core
             };
             print_line(
                 ctx.json,
-                format!("get: {} bytes → {}{}", outcome.size, p.display(), resumed),
-                serde_json::json!({
+                &format!("get: {} bytes → {}{}", outcome.size, p.display(), resumed),
+                &serde_json::json!({
                     "ok": true,
                     "url": url,
                     "out": p.display().to_string(),

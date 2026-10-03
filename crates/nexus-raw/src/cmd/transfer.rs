@@ -52,7 +52,7 @@ async fn run_up(
             )
             .await?;
         for a in &actions {
-            crate::cmd::print_line(ctx.json, plan_line(a), action_json(a));
+            crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
         }
         return Ok(());
     }
@@ -115,7 +115,7 @@ async fn run_rm(
     let enum_src = enumeration_source(ctx, manifest, names, ls).await?;
     if dry_run {
         for a in ctx.nxr.rm_plan(enum_src).await? {
-            crate::cmd::print_line(ctx.json, rm_plan_line(&a), rm_action_json(&a));
+            crate::cmd::print_line(ctx.json, &rm_plan_line(&a), &rm_action_json(&a));
         }
         return Ok(());
     }

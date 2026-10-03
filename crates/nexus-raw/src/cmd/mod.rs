@@ -185,7 +185,7 @@ pub(crate) async fn load_manifest(nxr: &Nxr, spec: &str) -> Result<Manifest, Err
 }
 
 /// One JSON line for the simple (non-event) results.
-pub(crate) fn print_line(json: bool, human: String, value: serde_json::Value) {
+pub(crate) fn print_line(json: bool, human: &str, value: &serde_json::Value) {
     if json {
         println!("{value}");
     } else {

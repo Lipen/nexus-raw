@@ -95,9 +95,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool) {
             if verbose && !quiet {
                 println!(
                     "→ {name} ({})",
-                    (*total)
-                        .map(|t| t.to_string())
-                        .unwrap_or_else(|| "?".into())
+                    (*total).map_or("?".into(), |t| t.to_string())
                 );
             }
         }
