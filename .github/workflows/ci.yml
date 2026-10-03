@@ -118,7 +118,7 @@ jobs:
           cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Build the Node addon
-        run: cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug
+        run: cd crates/nexus-raw-napi && pnpm ci && pnpm run build:debug
 
       # index.d.ts is hand-maintained; the build above regenerated
       # binding.d.ts from the Rust source, so this fails when the two drift.
@@ -131,7 +131,7 @@ jobs:
         run: cargo build -q -p mock-nexus
 
       - name: Run the Node smoke
-        run: cd examples/node && pnpm install && node publish-and-consume.mjs
+        run: cd examples/node && pnpm ci && node publish-and-consume.mjs
 
   # macOS builds the addon for the host triple (no prebuilt packages are
   # involved in a local build) and the demo is plain Node plus a spawned
@@ -165,13 +165,13 @@ jobs:
           cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Build the Node addon
-        run: cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug
+        run: cd crates/nexus-raw-napi && pnpm ci && pnpm run build:debug
 
       - name: Build the mock server
         run: cargo build -q -p mock-nexus
 
       - name: Run the Node smoke
-        run: cd examples/node && pnpm install && node publish-and-consume.mjs
+        run: cd examples/node && pnpm ci && node publish-and-consume.mjs
 
   # Windows stays at compile-and-load: the demo spawns the mock binary by a
   # POSIX-style path (target/debug/mock-nexus), which a Windows process
@@ -209,7 +209,7 @@ jobs:
         run: cargo check -p nexus-raw-napi
 
       - name: Build the Node addon
-        run: cd crates/nexus-raw-napi && pnpm install && pnpm run build:debug
+        run: cd crates/nexus-raw-napi && pnpm ci && pnpm run build:debug
 
       # Requiring the built addon proves the generated loader finds the
       # platform binary and the wrapper exports the whole surface.

@@ -260,7 +260,7 @@ jobs:
           cache-dependency-path: crates/nexus-raw-napi/pnpm-lock.yaml
 
       - name: Install the dependencies
-        run: cd crates/nexus-raw-napi && pnpm install
+        run: cd crates/nexus-raw-napi && pnpm ci
 
       - name: Build the release addon
         run: cd crates/nexus-raw-napi && pnpm exec napi build --platform --release --target ${{ matrix.target }} --js binding.cjs --dts binding.d.ts
