@@ -154,8 +154,8 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Misuse`] when `dir` is not a directory, the scan is empty, a requested name is absent from the scan, or the claim is unknown.
-    /// Returns [`Error::Mismatch`] when a local object is broken, the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure or [`Error::Incomplete`] listing failed names from the upload.
+    /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the scan, [`Error::Misuse`] when `dir` is not a directory, the scan is empty, or the claim is unknown, and [`Error::Missing`] when a requested name is absent from the scan.
+    /// Returns [`Error::Mismatch`] when a local object is broken or as the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure or [`Error::Io`] from marker generation.
     pub async fn up(
         &self,
         dir: &Path,
@@ -239,7 +239,7 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] when `dir` cannot be created or its orphans cleaned, [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure or [`Error::Incomplete`] listing failed names from the download.
+    /// Returns [`Error::Io`] when `dir` cannot be created or its orphans cleaned, [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure of the download.
     pub async fn down(
         &self,
         dir: &Path,
@@ -354,7 +354,7 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff, [`Error::Mismatch`] on a staged-body divergence, [`Error::Incomplete`] listing failed names, and [`Error::Io`] when the staging directory cannot be managed.
+    /// Returns [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff, [`Error::Mismatch`] on a staged-body divergence, [`Error::Misuse`] if a task panicked, and [`Error::Io`] when the staging directory cannot be managed.
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
         let names = self.resolve_names(enum_src).await?;
         let srcs = self.remote_states_for(&names).await?;

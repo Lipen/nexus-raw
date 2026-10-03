@@ -1,8 +1,8 @@
 //! The mirror executor: pour enumerated names from a source directory URL to a destination one.
 //!
 //! Mirror is `up` whose byte source is a GET instead of the local disk.
-//! Each copied name rides the existing machinery twice: [`down`](crate::sync::down) stages it
-//! (Range-aware GET into a part file, digest check, rename, marker) and [`up`](crate::sync::up)
+//! Each copied name rides the existing machinery twice: [`down`] stages it
+//! (Range-aware GET into a part file, digest check, rename, marker) and [`up`]
 //! pushes it (PUT bytes, then PUT marker).
 //! Workers, retries, stall detection and resume are the clients', not ours.
 
@@ -171,7 +171,7 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
 ///
 /// # Errors
 ///
-/// Returns [`Error::Mismatch`] on a source/destination digest divergence, [`Error::Incomplete`] listing the failed names, and the first transport/auth/HTTP failure of the run.
+/// Returns [`Error::Mismatch`] on a source/destination digest divergence, [`Error::Misuse`] if a task panicked, and the first transport/auth/HTTP failure of the run.
 pub(crate) async fn execute(
     client: Arc<NexusClient>,
     staging: PathBuf,

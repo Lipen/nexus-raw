@@ -48,7 +48,7 @@ pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
 ///
 /// # Errors
 ///
-/// Returns the first transport/auth/HTTP failure of the run and [`Error::Incomplete`] listing the failed names (digest mismatches included).
+/// Returns the first transport/auth/HTTP failure of the run and [`Error::Mismatch`] on a digest divergence.
 pub async fn execute(
     client: Arc<NexusClient>,
     dir: PathBuf,
