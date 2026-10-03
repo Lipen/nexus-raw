@@ -31,5 +31,7 @@ libc = { workspace = true }
 
 [dev-dependencies]
 mock-nexus = { path = "../mock-nexus" }
+zstd = "0.13"
+sha2 = { workspace = true }
 tempfile = { workspace = true }
 parking_lot = { workspace = true }

@@ -298,6 +298,7 @@ Treat `--ls` output as a hint only, and take the plan of record from a manifest 
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |
 | parallelism | 8 workers by default (`--workers`), one name per worker at a time |
 | idempotency | PUTs are byte-exact repeats, and a resumed download replays the same bytes |
+| compression | a GET body with `Content-Encoding: zstd` decodes transparently, and the client may send `Accept-Encoding: zstd` |
 
 Auth failures bypass the retry loop: a 401/403 is answered once and reported.
 5xx responses retry with backoff, which the output makes visible:
@@ -308,5 +309,9 @@ $ nxr put https://nexus.example.com/repository/raw-main/flaky/app.bin -f extra.t
 ↻ extra.txt: retry 3 (transport: https://nexus.example.com/repository/raw-main/flaky/app.bin: HTTP 503)
 put: 13 bytes → https://nexus.example.com/repository/raw-main/flaky/app.bin (no marker)
 ```
+
+Compression is GET-side only, and `zstd` is the only encoding the client understands: PUT bodies never carry `Content-Encoding`, and a store that never compresses sees no behavior change.
+Markers and digests always describe the original, decoded bytes, so the marker check is the same check it always was.
+Decoding is streaming: a frame that declares its content size fails once the output passes it, and an undeclared frame is bounded by the digest check and the stall timeout rather than by the decoder.
 
 How the layers expose this protocol to Rust callers: [the Rust API](api.md).
