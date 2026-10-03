@@ -281,6 +281,27 @@ impl Progress {
             skip,
         });
     }
+
+    /// Plan event for a mirror: copies are destination-facing writes and land in `upload`, so the event keeps the transfer schema untouched.
+    pub fn plan_mirror(&self, actions: &[crate::sync::mirror::MirrorAction]) {
+        let mut upload = Vec::new();
+        let mut skip = Vec::new();
+        for a in actions {
+            match a {
+                crate::sync::mirror::MirrorAction::Copy { name, .. } => {
+                    upload.push(name.to_string());
+                }
+                crate::sync::mirror::MirrorAction::Skip { name, .. } => {
+                    skip.push(name.to_string());
+                }
+            }
+        }
+        let _ = self.tx.send(Event::Plan {
+            upload,
+            download: Vec::new(),
+            skip,
+        });
+    }
 }
 
 #[cfg(test)]

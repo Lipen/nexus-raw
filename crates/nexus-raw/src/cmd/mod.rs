@@ -8,7 +8,7 @@ mod transfer;
 use std::path::Path;
 use std::time::Duration;
 
-use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Manifest, Nxr};
+use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Manifest, Nxr};
 
 use crate::render::{Mode, Session};
 use crate::{ChannelOp, Cli, Cmd};
@@ -57,6 +57,13 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             }
             layout::point_clear(cli, url).await
         }
+        Cmd::Mirror {
+            src,
+            dst,
+            manifest,
+            name,
+            ls,
+        } => transfer::mirror(cli, src, dst, manifest.as_deref(), name, *ls).await,
         Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
         Cmd::Channel { op } => match op {
             ChannelOp::Get { url } => layout::channel_get(cli, url).await,
@@ -80,6 +87,22 @@ pub(crate) struct Ctx {
 
 /// Build the facade for `base`: creds from `-u` or env, renderer attached.
 pub(crate) fn make_ctx(cli: &Cli, base: &str) -> Result<Ctx, Error> {
+    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let nxr = make_nxr(cli, base, session.sender())?;
+    Ok(Ctx {
+        nxr,
+        session,
+        json: cli.json,
+    })
+}
+
+/// Build the facade for `base` against an existing event sender.
+/// Mirror builds two of these (source and destination) on one session.
+pub(crate) fn make_nxr(
+    cli: &Cli,
+    base: &str,
+    sender: tokio::sync::mpsc::UnboundedSender<Event>,
+) -> Result<Nxr, Error> {
     let auth = match split_user(cli.user.as_deref())? {
         Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
         None => creds::resolve(None)?.map(|c| c.header),
@@ -93,13 +116,7 @@ pub(crate) fn make_ctx(cli: &Cli, base: &str) -> Result<Ctx, Error> {
         stall_timeout: Duration::from_secs(cli.stall_secs),
         auth,
     };
-    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
-    let nxr = Nxr::new(cfg, session.sender())?;
-    Ok(Ctx {
-        nxr,
-        session,
-        json: cli.json,
-    })
+    Nxr::new(cfg, sender)
 }
 
 /// Close the event channel and wait for the renderer to drain.

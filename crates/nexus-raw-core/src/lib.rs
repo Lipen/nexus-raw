@@ -8,8 +8,9 @@
 //!
 //! - **L0 transport + primitives**: [`transport`] (retries, stall, TLS, auth)
 //!   and [`primitive`] (`get`/`put`/`head`/`sha`), curl-grade, no verification.
-//! - **L1 transfer**: [`sync`], directory up/down with the symmetric diff,
-//!   sha-sibling markers, parallel workers and Range-resume (`.part` files).
+//! - **L1 transfer**: [`sync`], directory up/down and repository-to-repository mirror
+//!   with the symmetric diff, sha-sibling markers, parallel workers and Range-resume
+//!   (`.part` files).
 //! - **L2 layout helpers**: [`layout`], channels (token refs with any name),
 //!   manifests (the enumeration source for down), search-based listings.
 //! - **L3 UX** lives in the CLI: doctor, logs, hints, NDJSON.
@@ -65,5 +66,6 @@ pub use crate::model::name::ArtifactName;
 pub use crate::model::state::{LocalStatus, RemoteStatus};
 pub use crate::nxr::{Enumeration, Nxr};
 pub use crate::primitive::{GetOutcome, ShaSource};
+pub use crate::sync::mirror::{staging_dir, MirrorAction, VERSION_DOCUMENT};
 pub use crate::sync::{Action, Mode, RmAction};
 pub use crate::transport::client::{DeleteOutcome, HeadInfo, NexusClient};

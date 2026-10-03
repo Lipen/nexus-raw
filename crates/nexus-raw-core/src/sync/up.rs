@@ -45,7 +45,7 @@ pub async fn execute(
     }
     if let Some(Action::Upload { name, size, digest }) = claim_action {
         // Inline, not spawned: the claim must finish before anything starts.
-        if let Err(e) = upload_one(&client, &dir, &dir_url, &name, size, digest).await {
+        if let Err(e) = upload_one(&client, &dir, &dir_url, &name, size, digest, true).await {
             client.progress().summary(&Summary {
                 uploaded: 0,
                 failed: vec![name.to_string()],
@@ -75,7 +75,7 @@ pub async fn execute(
                 let dir_url = dir_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    match upload_one(&client, &dir, &dir_url, &name, size, digest).await {
+                    match upload_one(&client, &dir, &dir_url, &name, size, digest, true).await {
                         Ok(()) => Ok(name),
                         Err(e) => Err((name.to_string(), e)),
                     }
@@ -131,13 +131,15 @@ pub async fn execute(
 
 /// PUT the bytes, then the canonical marker of the same name (§5.2).
 /// The marker strictly follows the bytes: a crash in between leaves a Markerless object, which every reader refuses to trust.
-async fn upload_one(
+/// `emit_done == false` hands the settle event to the caller: the mirror reports one done line for the whole copy, not one per phase.
+pub(crate) async fn upload_one(
     client: &NexusClient,
     dir: &std::path::Path,
     dir_url: &str,
     name: &crate::model::name::ArtifactName,
     size: u64,
     digest: Option<crate::model::digest::Digest>,
+    emit_done: bool,
 ) -> Result<(), Error> {
     let bytes_url = client.object_url(dir_url, name);
     let src = bytes_path(dir, name);
@@ -153,9 +155,11 @@ async fn upload_one(
             )
             .await?;
     }
-    client
-        .progress()
-        .done(name.as_str(), Dir::Up, false, size, Some(size))
-        .await;
+    if emit_done {
+        client
+            .progress()
+            .done(name.as_str(), Dir::Up, false, size, Some(size))
+            .await;
+    }
     Ok(())
 }

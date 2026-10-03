@@ -1,0 +1,7 @@
+{"download":[],"event":"plan","skip":[],"upload":["a.zip"]}
+{"done":0,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":0,"event":"artifact","name":"a.zip","state":"uploading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"uploading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"done","total":35}
+{"downloaded":0,"event":"summary","failed":[],"removed":0,"skipped":0,"uploaded":1}

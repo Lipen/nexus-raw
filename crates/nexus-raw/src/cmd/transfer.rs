@@ -1,10 +1,11 @@
-//! The L1 commands: up and down.
+//! The L1 commands: up, down and mirror.
 
 use std::path::Path;
 
-use nexus_raw_core::{ArtifactName, Error};
+use nexus_raw_core::{ArtifactName, Enumeration, Error, Nxr};
 
-use crate::cmd::{enumeration_source, finish, load_manifest, make_ctx, Ctx};
+use crate::cmd::{enumeration_source, finish, load_manifest, make_ctx, make_nxr, parse_names, Ctx};
+use crate::render::{Mode, Session};
 use crate::Cli;
 
 #[allow(clippy::too_many_arguments)]
@@ -160,4 +161,59 @@ fn action_json(a: &nexus_raw_core::Action) -> serde_json::Value {
             serde_json::json!({"action": "download", "name": name.to_string(), "size": size})
         }
     }
+}
+
+/// Mirror: pour enumerated names from a source repository into a destination one.
+///
+/// Two facades, one session: enumeration and bytes come from the source, the diff and
+/// the writes follow the destination.
+pub(crate) async fn mirror(
+    cli: &Cli,
+    src: &str,
+    dst: &str,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+) -> Result<(), Error> {
+    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
+    let src_nxr = make_nxr(cli, src, session.sender())?;
+    let dst_nxr = make_nxr(cli, dst, session.sender())?;
+    let result = run_mirror(&src_nxr, &dst_nxr, manifest, names, ls).await;
+    // Both facades must die before the renderer drains: each holds a sender clone.
+    drop(src_nxr);
+    drop(dst_nxr);
+    session.finish().await;
+    result
+}
+
+async fn run_mirror(
+    src: &Nxr,
+    dst: &Nxr,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+) -> Result<(), Error> {
+    // Enumeration only from the source: the same three sources as down.
+    let enum_src = if ls {
+        Enumeration::Search
+    } else if let Some(spec) = manifest {
+        Enumeration::Manifest(load_manifest(src, spec).await?)
+    } else if !names.is_empty() {
+        Enumeration::Names(parse_names(names)?)
+    } else {
+        // The convention: a manifest.json at the source directory URL.
+        match src.manifest_at_base().await? {
+            Some(m) => Enumeration::Manifest(m),
+            None => {
+                return Err(Error::Enumerate {
+                    url: src.base().to_owned(),
+                    reason: "no manifest.json at the source and no --manifest/--name/--ls given"
+                        .into(),
+                })
+            }
+        }
+    };
+    src.mirror(dst, enum_src).await?;
+    Ok(())
 }

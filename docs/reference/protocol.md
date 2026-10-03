@@ -317,6 +317,27 @@ The search API walks `/service/rest/v1/search/assets` with continuation tokens.
 It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
 Treat `--ls` output as a hint only, and take the plan of record from a manifest or from explicit names.
 
+## Mirroring
+
+`nxr mirror` pours enumerated names from a source directory into a destination one.
+The enumeration is the source's (the same table as above), and the destination diff is `up`'s, with the source in the local column:
+
+| Source | Destination | `mirror` does |
+|:-------|:------------|:--------------|
+| `Complete` | `Complete`, equal digests | skip |
+| `Complete` | `Complete`, different digests | **mismatch: refuse** |
+| `Complete` | `Markerless` or `Absent` | copy: PUT bytes, then PUT marker |
+| `Markerless` | `Complete` | stage the bytes and compare digests: equal skips, different **refuses** |
+| `Markerless` | `Markerless` | **mismatch: refuse, nothing to verify against** |
+| `Markerless` | `Absent` | copy the bytes, write the marker computed from them |
+| `Broken` at either side | | **mismatch: refuse** |
+| `Absent` | `Absent` | **missing** |
+| `Absent` | anything present | **mismatch: mirroring never deletes** |
+
+Reads are GETs: every copied name is staged through the `down` machinery — a Range-aware GET into a part file, hashed on the fly, verified against the source marker when one exists — and then pushed through the `up` machinery, so the write order is exactly up's and a refusal never reaches the destination.
+The staging parts live in a per-(source, destination) directory under the system temp dir; a rerun resumes them through `206`, and a clean run removes the directory.
+When the enumeration leads with the conventional version document `version.json`, it is claimed: it transfers first and alone, and a failed claim aborts the run with nothing else sent.
+
 ## Transport
 
 | Aspect | Behavior |

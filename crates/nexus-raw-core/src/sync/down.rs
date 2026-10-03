@@ -23,7 +23,7 @@ const PART_PREFIX: &str = ".nxr-part-";
 /// Cleaned up when the owning pid is dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
 
-enum Failure {
+pub(crate) enum Failure {
     /// The digest diverges from the remote sibling: refuse without overwriting (§5.1).
     Mismatch(String),
     Failed(Error),
@@ -75,7 +75,9 @@ pub async fn execute(
                 let dir_url = dir_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    match download_one(&client, &dir, &dir_url, &name, size, digest, fresh).await {
+                    match download_one(&client, &dir, &dir_url, &name, size, digest, fresh, true)
+                        .await
+                    {
                         Ok(()) => Ok(name),
                         Err((name, failure)) => Err((name, failure)),
                     }
@@ -123,7 +125,9 @@ pub async fn execute(
 /// GET the bytes into the stable part file (hash on the fly, Range resume) → compare with the sibling → rename → write the local marker (§5.2).
 ///
 /// A refused or failed name leaves only the part file: the bytes and the marker never appear at the destination until the digest checked out.
-async fn download_one(
+/// `emit_done == false` hands the settle event to the caller: the mirror reports one done line for the whole copy, not one per phase.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn download_one(
     client: &NexusClient,
     dir: &Path,
     dir_url: &str,
@@ -131,6 +135,7 @@ async fn download_one(
     size_hint: Option<u64>,
     expected: Option<Digest>,
     fresh: bool,
+    emit_done: bool,
 ) -> Result<(), (ArtifactName, Failure)> {
     let bytes_url = client.object_url(dir_url, name);
     let part = part_path(dir, name);
@@ -167,7 +172,7 @@ async fn download_one(
                 log::warn!("{}: part file was stale, restarting from zero", name);
                 let expected = Some(expected.clone());
                 return Box::pin(download_one(
-                    client, dir, dir_url, name, size_hint, expected, true,
+                    client, dir, dir_url, name, size_hint, expected, true, emit_done,
                 ))
                 .await;
             }
@@ -202,10 +207,12 @@ async fn download_one(
     if let Err(e) = marker_write.await {
         return Err((name.clone(), Failure::Failed(Error::io(&sib_final, e))));
     }
-    client
-        .progress()
-        .done(name.as_str(), Dir::Down, false, done, size_hint)
-        .await;
+    if emit_done {
+        client
+            .progress()
+            .done(name.as_str(), Dir::Down, false, done, size_hint)
+            .await;
+    }
     Ok(())
 }
 

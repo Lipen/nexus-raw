@@ -6,8 +6,8 @@ use std::time::Duration;
 use mock_nexus::{MockNexus, Outcome, Scenario};
 use nexus_raw_core::sync::down::part_path;
 use nexus_raw_core::{
-    model::sibling, ArtifactName, Config, Digest, Enumeration, Error, Event, Manifest, Mode, Nxr,
-    Summary,
+    model::sibling, staging_dir, ArtifactName, Config, Digest, Enumeration, Error, Event, Manifest,
+    Mode, Nxr, Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -742,6 +742,317 @@ async fn down_markerless_remote_writes_computed_marker() {
         marker,
         sibling::format_line("a.zip", &Digest::of_bytes(CONTENT))
     );
+}
+
+// ---------------------------------------------------------------- mirror
+
+/// The version document the fixtures pour.
+const DOC: &[u8] = br#"{"schema_version":1,"version":"1.0.0","artifacts":["a.zip","b.bin"]}"#;
+
+/// Seed a source repository through `up`: two payloads, the version document and the manifest enumerating them, every name with its marker.
+/// The manifest lists the version document first, the convention the mirror's claim-first rule reads.
+async fn seed_source(mock: &MockNexus) -> Nxr {
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    seed_complete(local.path(), "b.bin", b"second payload");
+    seed_complete(local.path(), "version.json", DOC);
+    std::fs::write(
+        local.path().join("manifest.json"),
+        br#"{"artifacts":["version.json","a.zip","b.bin","manifest.json"]}"#,
+    )
+    .unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(mock, None), tx).unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
+    nxr
+}
+
+/// Every object the fixture puts into a repository: bytes and markers, in manifest order.
+const FIXTURE: &[&str] = &["version.json", "a.zip", "b.bin", "manifest.json"];
+
+#[tokio::test]
+async fn mirror_pours_byte_equal_trees_through_a_manifest() {
+    // The base conformance scenario: atomic on both sides, `--manifest` as the enumeration.
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    let manifest = src.manifest_at_base().await.unwrap().unwrap();
+    let summary = src
+        .mirror(&dst, Enumeration::Manifest(manifest))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, FIXTURE.len());
+    assert_eq!(summary.skipped, 0);
+    assert!(summary.failed.is_empty());
+
+    // Byte-equal trees: every object and every marker.
+    for name in FIXTURE {
+        let path = format!("{VERSION}/{name}");
+        assert_eq!(
+            dst_mock.store_get(&path),
+            src_mock.store_get(&path),
+            "{name} bytes"
+        );
+        let marker = format!("{path}.sha256");
+        assert_eq!(
+            dst_mock.store_get(&marker),
+            src_mock.store_get(&marker),
+            "{name} marker"
+        );
+        assert!(
+            dst_mock.store_get(&marker).is_some(),
+            "{name} keeps a marker"
+        );
+    }
+
+    // The enumeration led with the version document, so it claimed the run:
+    // its bytes and its marker land before any other name's writes.
+    let puts: Vec<String> = dst_mock
+        .requests()
+        .iter()
+        .filter(|r| r.method == "PUT")
+        .map(|r| r.path.clone())
+        .collect();
+    assert_eq!(
+        puts.first().map(String::as_str),
+        Some(format!("{VERSION}/version.json").as_str()),
+        "the version document is claimed first: {puts:?}"
+    );
+    assert_eq!(
+        puts.get(1).map(String::as_str),
+        Some(format!("{VERSION}/version.json.sha256").as_str()),
+        "the claim marker precedes the other names: {puts:?}"
+    );
+
+    // A clean run consumes its staging dir.
+    assert!(!staging_dir(src.base(), dst.base()).exists());
+}
+
+#[tokio::test]
+async fn second_mirror_skips_with_zero_content_gets() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    // Explicit names keep the enumeration read out of the way: any GET to a bytes path
+    // in the window below is a content fetch.
+    let fixture_names = names(FIXTURE);
+    src.mirror(&dst, Enumeration::Names(fixture_names.clone()))
+        .await
+        .unwrap();
+    let puts_after_first = dst_mock.put_count(&format!("{VERSION}/a.zip"));
+
+    // The rerun skips everything and fetches no content: the probes are a HEAD on the
+    // bytes and a GET on the sibling.
+    let after_first = src_mock.requests().len();
+    let summary = src
+        .mirror(&dst, Enumeration::Names(fixture_names))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 0);
+    assert_eq!(summary.skipped, FIXTURE.len());
+    let content_gets = src_mock.requests()[after_first..]
+        .iter()
+        .filter(|r| {
+            r.method == "GET"
+                && FIXTURE
+                    .iter()
+                    .any(|name| r.path == format!("{VERSION}/{name}"))
+        })
+        .count();
+    assert_eq!(content_gets, 0, "no content GETs on a converged mirror");
+    assert_eq!(
+        dst_mock.put_count(&format!("{VERSION}/a.zip")),
+        puts_after_first,
+        "a converged mirror writes nothing"
+    );
+}
+
+#[tokio::test]
+async fn mirror_refuses_diverged_destination_untouched() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    // The destination holds a complete object under the same name with a different digest.
+    let foreign = b"foreign bytes";
+    dst_mock.insert(&format!("{VERSION}/a.zip"), foreign);
+    dst_mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(foreign)).as_bytes(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    let err = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Mismatch { .. }), "got {err:?}");
+    assert_eq!(err.exit_code(), 1, "divergence is a data error");
+    // The destination is untouched: no rewrite, bytes and marker as seeded.
+    assert_eq!(
+        dst_mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        foreign
+    );
+    assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip")), 0);
+    assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip.sha256")), 0);
+}
+
+#[tokio::test]
+async fn mirror_recovers_through_flaky() {
+    // The first two requests per destination path answer 503; the default four attempts
+    // absorb them, so one invocation pours the version and the repeat is a pure skip.
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    let enum_names = || names(&["a.zip", "b.bin"]);
+    let summary = src
+        .mirror(&dst, Enumeration::Names(enum_names()))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 2);
+    assert_eq!(
+        dst_mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        CONTENT
+    );
+    assert_eq!(
+        dst_mock.store_get(&format!("{VERSION}/b.bin")).unwrap(),
+        b"second payload"
+    );
+    assert!(dst_mock
+        .store_get(&format!("{VERSION}/a.zip.sha256"))
+        .is_some());
+    assert!(dst_mock
+        .store_get(&format!("{VERSION}/b.bin.sha256"))
+        .is_some());
+
+    // The same command again: everything skipped, nothing rewritten.
+    let summary = src
+        .mirror(&dst, Enumeration::Names(enum_names()))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 0);
+    assert_eq!(summary.skipped, 2);
+    assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip")), 1);
+}
+
+#[tokio::test]
+async fn mirror_resumes_staged_part_with_range() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    // Pre-seed the staging part with the first bytes, as a killed run left it.
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let staging = staging_dir(src.base(), dst.base());
+    std::fs::create_dir_all(&staging).unwrap();
+    let part = part_path(&staging, &name);
+    std::fs::write(&part, &CONTENT[..5]).unwrap();
+
+    let summary = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 1);
+    // The source answered 206 Partial Content for the resumed object.
+    let hit = src_mock.requests().iter().any(|r| {
+        r.method == "GET"
+            && r.path == format!("{VERSION}/a.zip")
+            && matches!(r.outcome, Outcome::Status(206))
+    });
+    assert!(
+        hit,
+        "expected a 206 range response, log: {:?}",
+        src_mock.requests()
+    );
+    assert_eq!(
+        dst_mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        CONTENT
+    );
+    assert!(dst_mock
+        .store_get(&format!("{VERSION}/a.zip.sha256"))
+        .is_some());
+}
+
+#[tokio::test]
+async fn mirror_completes_a_markerless_source() {
+    // The Markerless scenario never stores markers: the source holds bare bytes.
+    // The mirror stages them, computes the digest and writes the marker at the destination.
+    let src_mock = MockNexus::start(Scenario::Markerless).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    assert!(src_mock
+        .store_get(&format!("{VERSION}/a.zip.sha256"))
+        .is_none());
+    let summary = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 1);
+    assert_eq!(
+        dst_mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        CONTENT
+    );
+    assert_eq!(
+        dst_mock
+            .store_get(&format!("{VERSION}/a.zip.sha256"))
+            .unwrap(),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).into_bytes()
+    );
+}
+
+#[tokio::test]
+async fn mirror_skips_when_a_markerless_source_matches_a_complete_destination() {
+    // No marker at the source: the staged digest is compared against the destination
+    // marker. Equal: the destination is left alone, nothing is rewritten.
+    let src_mock = MockNexus::start(Scenario::Markerless).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    dst_mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    dst_mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    let summary = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 0);
+    assert_eq!(summary.skipped, 1);
+    assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip")), 0);
+    assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip.sha256")), 0);
+}
+
+#[tokio::test]
+async fn mirror_missing_name_is_data_error() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    let err = src
+        .mirror(&dst, Enumeration::Names(names(&["ghost.bin"])))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Missing { .. }), "got {err:?}");
+    assert_eq!(err.exit_code(), 1);
 }
 
 // ---------------------------------------------------------------- auth, stall

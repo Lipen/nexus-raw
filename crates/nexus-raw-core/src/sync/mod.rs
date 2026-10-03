@@ -1,7 +1,8 @@
-//! L1 transfer: scan, classify, up, down, rm.
+//! L1 transfer: scan, classify, up, down, rm, mirror.
 
 pub mod diff;
 pub mod down;
+pub mod mirror;
 pub mod rm;
 pub mod scan;
 pub mod up;

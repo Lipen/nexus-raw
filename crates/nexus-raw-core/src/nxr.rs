@@ -14,7 +14,7 @@ use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::state::{LocalStatus, RemoteStatus};
 use crate::primitive::{self, GetOutcome, HeadInfo, ShaSource};
-use crate::sync::{self, down, rm::RmAction, up, Action, Mode};
+use crate::sync::{self, down, mirror, rm::RmAction, up, Action, Mode};
 use crate::transport::client::NexusClient;
 
 /// How `down` learns which names to fetch (spec §5.2.1).
@@ -303,6 +303,67 @@ impl Nxr {
     /// DELETE a pointer file (`point --clear`, §5.4): absence is a normal outcome.
     pub async fn point_clear(&self, url: &str) -> Result<layout::ClearOutcome, Error> {
         layout::pointer_clear(&self.client, url).await
+    }
+
+    /// Pour enumerated names from this repository into `dst` (mirror).
+    ///
+    /// The enumeration lives at the source; the destination diff rules are up's:
+    /// same digest skips, a different digest refuses, an unfinished copy is completed.
+    /// Each copied name is staged through the down machinery (Range-aware GET, digest
+    /// check) and pushed through the up machinery (PUT bytes, then PUT marker).
+    /// When the enumeration lists the conventional version document
+    /// ([`VERSION_DOCUMENT`](crate::sync::mirror::VERSION_DOCUMENT)) first, it is claimed:
+    /// it transfers alone before any other name, and a failed claim aborts the run with
+    /// nothing else sent.
+    pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
+        let names = match enum_src {
+            Enumeration::Manifest(m) => m.names,
+            Enumeration::Names(v) => v,
+            Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
+        };
+        if names.is_empty() {
+            return Err(Error::Enumerate {
+                url: self.base.clone(),
+                reason: "enumeration produced no names; the URL is probably wrong".into(),
+            });
+        }
+        let srcs = self.remote_states_for(&names).await?;
+        let dsts = dst.remote_states_for(&names).await?;
+        let actions = tokio::task::spawn_blocking(move || mirror::classify(names, srcs, dsts))
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+            .map_err(Error::from)?;
+        self.events.plan_mirror(&actions);
+        // Claim-first: the version document, when the enumeration leads with it.
+        let claim = match actions.first() {
+            Some(mirror::MirrorAction::Copy { name, .. })
+                if name.as_str() == mirror::VERSION_DOCUMENT =>
+            {
+                Some(name.clone())
+            }
+            _ => None,
+        };
+        let staging = mirror::staging_dir(&self.base, &dst.base);
+        tokio::fs::create_dir_all(&staging)
+            .await
+            .map_err(|e| Error::io(&staging, e))?;
+        let result = mirror::execute(
+            self.client.clone(),
+            staging.clone(),
+            self.base.clone(),
+            dst.base.clone(),
+            actions,
+            claim,
+            self.workers.clone(),
+        )
+        .await;
+        // A clean run consumes its staging dir; a failed one keeps the parts as the rerun's resume fuel.
+        if result.is_ok() {
+            if let Err(e) = tokio::fs::remove_dir_all(&staging).await {
+                log::warn!("staging dir cleanup failed: {}", Error::io(&staging, e));
+            }
+        }
+        result
     }
 
     /// Local verification of a directory: bytes + marker + digest, no network.

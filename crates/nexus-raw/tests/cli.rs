@@ -352,6 +352,123 @@ fn get_resumes_from_part_with_range() {
     );
 }
 
+// ---- mirror ---------------------------------------------------------------
+
+/// The version document the mirror fixtures pour.
+const DOC: &[u8] = br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#;
+
+/// Seed a source repository the way a publisher leaves it: bytes, markers, the version document and the manifest enumerating all three.
+fn seed_publish(base: &str) {
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "version.json", DOC);
+    write_file(
+        src.path(),
+        "manifest.json",
+        br#"{"artifacts":["version.json","a.zip","manifest.json"]}"#,
+    );
+    let up = nxr(&["up", src.path().to_str().unwrap(), base]);
+    expect_exit(&up, 0, "seeding up");
+}
+
+/// mirror with the default enumeration pours the whole version, the version document first; a rerun is a pure skip with zero content GETs.
+#[test]
+fn mirror_pours_the_version_and_reruns_are_pure_skips() {
+    let src_srv = server(Scenario::Atomic);
+    let dst_srv = server(Scenario::Atomic);
+    let src_base = dir_url(&src_srv);
+    let dst_base = dir_url(&dst_srv);
+    seed_publish(&src_base);
+
+    let first = nxr(&["mirror", &src_base, &dst_base]);
+    expect_exit(&first, 0, "mirror with the default enumeration");
+    for name in ["a.zip", "version.json", "manifest.json"] {
+        assert_eq!(
+            dst_srv.store_get(&format!("1.14.0/{name}")),
+            src_srv.store_get(&format!("1.14.0/{name}")),
+            "{name} bytes are byte-equal"
+        );
+        assert_eq!(
+            dst_srv.store_get(&format!("1.14.0/{name}.sha256")),
+            src_srv.store_get(&format!("1.14.0/{name}.sha256")),
+            "{name} keeps its marker"
+        );
+    }
+    // The enumeration led with the version document: it lands before the payloads.
+    let puts: Vec<String> = dst_srv
+        .requests()
+        .iter()
+        .filter(|r| r.method == "PUT")
+        .map(|r| r.path.clone())
+        .collect();
+    assert_eq!(
+        puts.first().map(String::as_str),
+        Some("1.14.0/version.json"),
+        "the version document is claimed first: {puts:?}"
+    );
+
+    // The same command again: every name skipped, no content fetched, nothing rewritten.
+    let after_first = src_srv.requests().len();
+    let puts_after_first = dst_srv.put_count("1.14.0/a.zip");
+    let second = nxr(&["mirror", &src_base, &dst_base]);
+    expect_exit(&second, 0, "the repeated mirror");
+    assert!(
+        stdout(&second).contains("uploaded 0, downloaded 0, skipped 3"),
+        "the rerun is a pure skip: {}",
+        stdout(&second)
+    );
+    let content_gets = src_srv.requests()[after_first..]
+        .iter()
+        .filter(|r| {
+            r.method == "GET"
+                && ["a.zip", "version.json"]
+                    .iter()
+                    .any(|name| r.path == format!("1.14.0/{name}"))
+        })
+        .count();
+    assert_eq!(content_gets, 0, "no content GETs on a converged mirror");
+    assert_eq!(
+        dst_srv.put_count("1.14.0/a.zip"),
+        puts_after_first,
+        "a converged mirror writes nothing"
+    );
+}
+
+/// a complete destination object with a different digest refuses the run: exit 1, the destination is untouched.
+#[test]
+fn mirror_refuses_a_diverged_destination() {
+    let src_srv = server(Scenario::Atomic);
+    let dst_srv = server(Scenario::Atomic);
+    let src_base = dir_url(&src_srv);
+    let dst_base = dir_url(&dst_srv);
+    seed_publish(&src_base);
+
+    // The destination holds a complete object under the same name with other bytes.
+    let foreign = TempDir::new().unwrap();
+    write_file(foreign.path(), "a.zip", BETA);
+    let put = nxr(&[
+        "put",
+        &format!("{dst_base}a.zip"),
+        "-f",
+        foreign.path().join("a.zip").to_str().unwrap(),
+        "--sha",
+    ]);
+    expect_exit(&put, 0, "seeding the diverged destination");
+
+    let out = nxr(&["mirror", &src_base, &dst_base, "--name", "a.zip"]);
+    expect_exit(&out, 1, "divergence is a data refusal");
+    assert!(
+        stderr(&out).contains("mismatch") && stderr(&out).contains("hint:"),
+        "the refusal names the divergence and carries a hint: {stderr}",
+        stderr = stderr(&out)
+    );
+    assert_eq!(
+        dst_srv.store_get("1.14.0/a.zip").unwrap(),
+        BETA,
+        "the destination bytes survive the refused run"
+    );
+}
+
 // ---- primitives -----------------------------------------------------------
 
 /// put → get roundtrip, put --sha stores the sibling, sha prints the digest of the remote bytes.
@@ -636,6 +753,27 @@ fn golden_ndjson_up_down_hold() {
         stdout(&down),
         include_str!("golden/down.ndjson"),
         "the down ndjson changed: update tests/golden/down.ndjson deliberately"
+    );
+}
+
+/// The mirror shares the transfer event schema: the same shapes, one stream, pinned byte-exact.
+#[test]
+fn golden_ndjson_mirror_holds() {
+    let src_srv = server(Scenario::Atomic);
+    let dst_srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let src_base = dir_url(&src_srv);
+    let dst_base = dir_url(&dst_srv);
+    let up = nxr(&["up", src.path().to_str().unwrap(), &src_base]);
+    expect_exit(&up, 0, "seeding the mirror golden");
+
+    let mirror = nxr(&["--json", "mirror", &src_base, &dst_base, "--name", "a.zip"]);
+    expect_exit(&mirror, 0, "golden mirror");
+    assert_eq!(
+        stdout(&mirror),
+        include_str!("golden/mirror.ndjson"),
+        "the mirror ndjson changed: update tests/golden/mirror.ndjson deliberately"
     );
 }
 

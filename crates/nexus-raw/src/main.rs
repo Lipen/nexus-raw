@@ -153,6 +153,24 @@ pub(crate) enum Cmd {
         #[arg(value_name = "URL")]
         url: String,
     },
+    /// Pour a version from one repository into another: bytes, markers, the version document.
+    Mirror {
+        /// The source directory URL: enumeration and bytes come from here.
+        #[arg(value_name = "SRC_URL")]
+        src: String,
+        /// The destination directory URL.
+        #[arg(value_name = "DST_URL")]
+        dst: String,
+        /// Enumeration source: a manifest file, URL or `-` for stdin.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// One explicit name (repeatable).
+        #[arg(long, value_name = "NAME")]
+        name: Vec<String>,
+        /// Best-effort enumeration through the server search API.
+        #[arg(long)]
+        ls: bool,
+    },
     /// List versions or the objects of a version directory (experimental).
     Ls {
         /// A repository/group URL (versions) or a directory URL (--assets).
