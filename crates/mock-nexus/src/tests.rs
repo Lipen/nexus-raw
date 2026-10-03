@@ -595,3 +595,24 @@ fn group_needs_at_least_two_members() {
     let err = MockNexus::start_group(&[&solo]).unwrap_err();
     assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
 }
+
+#[test]
+fn group_head_miss_sends_no_body() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+
+    // A HEAD miss must not put a body on the wire (RFC 9110 §9.3.2), while the
+    // Content-Length still mirrors the single-repo miss.
+    let (status, headers, body) = exchange(
+        group.addr(),
+        "HEAD",
+        "/repository/raw/1.0.0/missing",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 404);
+    assert_eq!(header_value(&headers, "content-length"), Some("10"));
+    assert!(body.is_empty(), "a HEAD response carries no body: {body:?}");
+}

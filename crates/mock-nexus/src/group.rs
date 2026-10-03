@@ -27,12 +27,20 @@ pub(crate) fn get_first(shared: &Shared, stream: &mut TcpStream, req: &Request, 
     scenario::log_request(shared, &req.method, path, Outcome::Status(404));
     // A HEAD response never carries a body (RFC 9110 §9.3.2): the miss keeps the single-repo
     // Content-Length of 10 but puts nothing on the wire.
-    let miss_body: &[u8] = if req.method == "HEAD" {
-        b""
+    let resp = if req.method == "HEAD" {
+        // The wire mirrors the single-repo miss: Content-Length 10, no body bytes on a HEAD.
+        server::Resp {
+            status: 404,
+            extra_headers: Vec::new(),
+            content_length: b"not found\n".len(),
+            body: Vec::new(),
+            drip: shared.drip,
+            hide_length: false,
+        }
     } else {
-        b"not found\n"
+        scenario::plain(404, b"not found\n", None)
     };
-    let _ = server::write_response(stream, &scenario::plain(404, miss_body, None));
+    let _ = server::write_response(stream, &resp);
 }
 
 /// Refuse a write through the group before any member is contacted.
