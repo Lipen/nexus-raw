@@ -124,8 +124,8 @@ fn parse_flags(args: &[String], flags: &mut Flags) -> Result<(), String> {
                 let Some((user, pass)) = value.split_once(':') else {
                     return Err(format!("--auth expects user:pass, got '{value}'"));
                 };
-                user.clone_into(&mut flags.user);
-                pass.clone_into(&mut flags.pass);
+                flags.user = user.to_owned();
+                flags.pass = pass.to_owned();
             }
             other => return Err(format!("unknown flag '{other}'")),
         }

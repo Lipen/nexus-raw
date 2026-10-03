@@ -8,7 +8,7 @@ The design reasoning behind these guarantees lives in [Design](design.md), the w
 
 `crates/mock-nexus` is a std-only HTTP/1.1 server implementing exactly enough of the protocol to exercise the transport contract: `GET`/`HEAD`/`PUT` with `Content-Length` or chunked bodies, resumable GET through `Range: bytes=N-` (a `206` with `Content-Range`, a `416` on out-of-range starts), and Basic-auth gating.
 A scenario selects a failure mode.
-The scenario list has one home: the `Scenario` enum in `crates/mock-nexus/src/lib.rs`, with each mode's exact behavior in its doc comment.
+The scenario list has one home: the `Scenario` enum in `crates/mock-nexus/src/scenario.rs`, with each mode's exact behavior in its doc comment.
 The Rust suites, the mock binary (`mock-nexus --print-scenarios`) and any external harness all read that one list, so it never forks.
 
 ## The matrix
