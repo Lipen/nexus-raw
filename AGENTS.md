@@ -73,7 +73,7 @@ New fields are additive.
 
 | Path | Role |
 |:-----|:-----|
-| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
+| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
 | `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
 |`crates/mock-nexus/`|the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites|
 |`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|
