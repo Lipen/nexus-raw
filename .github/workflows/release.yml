@@ -16,6 +16,10 @@ on:
         description: Build and checksum the binaries, publish nothing
         type: boolean
         default: true
+      publish-npm:
+        description: Publish the npm main package from this ref (recovery for a failed tag run)
+        type: boolean
+        default: false
 
 # The release notes are written with the repository token.
 permissions:
@@ -420,8 +424,14 @@ jobs:
           EOF
 
       - name: Publish the main package
-        if: ${{ github.event_name == 'push' }}
-        run: npm publish ./pkg-main --provenance --access public
+        if: ${{ github.event_name == 'push' || inputs.publish-npm == true }}
+        run: |
+          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
+          if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
+            echo "nexus-raw@$version is already on the registry, skipping"
+          else
+            npm publish ./pkg-main --provenance --access public
+          fi
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
 # weight, the npm registry above is the artifact channel.
