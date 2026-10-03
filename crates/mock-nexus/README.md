@@ -42,7 +42,7 @@ let server = MockNexus::start(Scenario::Flaky { first_failures: 2 })?;
 // ... run the client against server.base_url(), assert on server.requests()
 ```
 
-The `SCENARIOS` list in `src/lib.rs` is the conformance contract: a new scenario lands in the same change as the client behavior that needs it.
+The `SCENARIOS` list in `src/scenario.rs` is the conformance contract: a new scenario lands in the same change as the client behavior that needs it.
 
 ## More
 

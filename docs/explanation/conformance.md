@@ -63,7 +63,7 @@ CLI suite, by intent:
 
 41 conformance tests through the core facade, 29 CLI tests through the real binary, 35 unit tests in the core library, plus doctests.
 The mock carries its own suite of 12 tests pinning the behavior table itself.
-The rule that keeps this honest: a scenario added for any client lands in the same PR as the test that needs it, in `crates/mock-nexus/src/lib.rs`, so the list never forks.
+The rule that keeps this honest: a scenario added for any client lands in the same PR as the test that needs it, in `crates/mock-nexus/src/scenario.rs`, so the list never forks.
 
 ## Driving the mock by hand
 
