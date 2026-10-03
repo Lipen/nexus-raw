@@ -1,0 +1,6 @@
+# Worktrunk project config: the merge gate.
+# Every `wt merge` runs the whole workspace gate before fast-forwarding master:
+# fmt, clippy -D warnings, prek, tests, doctests, version agreement.
+# First run asks for one-time approval of each command (trust gate).
+[[pre-merge]]
+check = "just check"
