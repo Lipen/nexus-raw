@@ -1,6 +1,6 @@
 // The publish-and-consume flow through the npm package: publish a version directory with a claim, name it through a channel, download it back, verify offline.
 //
-// Without arguments the demo spawns the repo's mock server on :8091.
+// Without arguments the demo spawns the repo's mock server on a free port (`--port 0`).
 // Pass a base URL to run against a real repository instead:
 //
 //   node publish-and-consume.mjs https://nexus.example.com/repository/demo/
