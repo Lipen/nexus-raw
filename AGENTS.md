@@ -3,7 +3,7 @@
 This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, and the `mock-nexus` failure-scenario server that the conformance tests run against.
 `nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, no config file, no profiles.
 [README.md](README.md) is the user-facing entry.
-The protocol summary lives in the `crates/nexus-raw-core/src/lib.rs` crate docs.
+The protocol summary lives in the `crates/nexus-raw-core/src/protocol.md` crate docs.
 The canonical protocol text is kept outside this repository.
 
 ## Know before you change anything
@@ -41,7 +41,7 @@ The canonical protocol text is kept outside this repository.
 
 | Changing | Read |
 |:---------|:-----|
-| the wire protocol, store shape, errors, forbiddances | `crates/nexus-raw-core/src/lib.rs` crate docs |
+| the wire protocol, store shape, errors, forbiddances|`crates/nexus-raw-core/src/protocol.md` (the crate docs)|
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
 | CLI flags, credentials order, output examples | [README.md](README.md) |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |

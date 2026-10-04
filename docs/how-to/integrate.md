@@ -137,7 +137,7 @@ The typed surface is `crates/nexus-raw-napi/index.d.ts`, maintained by hand.
 When a copy must live in your tree, vendor the whole workspace (or at least `crates/nexus-raw-core` and `crates/nexus-raw-napi`) and build the addon for your own platform targets.
 Two artifacts of this repository are the contract a vendored copy inherits:
 
-- the crate docs of `nexus-raw-core` (`crates/nexus-raw-core/src/lib.rs`) are the behavioral summary of the protocol;
+- the crate docs of `nexus-raw-core` (`crates/nexus-raw-core/src/protocol.md`) are the behavioral summary of the protocol;
 - the [conformance suites](../explanation/conformance.md) are its contract tests, and the scenario list in `crates/mock-nexus` is the single table they run against.
 
 A vendored copy is expected to keep those suites green: `cargo test --workspace` runs them, and a scenario added upstream lands in the same change as its test.
