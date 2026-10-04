@@ -47,7 +47,12 @@ pub async fn set(
 ) -> Result<ChannelOutcome, Error> {
     pointer::validate_token(token)
         .map_err(|e| Error::misuse(format!("channel token {token:?} is not one line: {e}")))?;
-    let current = get(client, url).await?;
+    // A current value that cannot be parsed reads as absent: this command is the tool
+    // that repairs a broken channel, so garbage on the file must not block the write.
+    let current = get(client, url).await.or_else(|e| match e {
+        Error::Mismatch { .. } => Ok(None),
+        other => Err(other),
+    })?;
     if if_forward {
         if let Some(cur) = &current {
             if pointer::version_ge(cur, token) {

@@ -1909,3 +1909,35 @@ async fn rm_against_a_group_refuses_as_read_only() {
         );
     }
 }
+
+// ---------------------------------------------------------------- wave 1: channel repair, marker validation
+
+#[tokio::test]
+async fn channel_set_repairs_a_garbage_file() {
+    // The set command is the tool that repairs a broken channel: garbage on the
+    // current file must not block the write, with or without --if-forward.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let garbage = local.path().join("garbage.bin");
+    std::fs::write(&garbage, b"not a token\nsecond line\n").unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let channel_url = format!("{}latest", mock.base_url());
+    nxr.put(&channel_url, &garbage, false).await.unwrap();
+
+    // Reading the garbage still reports a data problem for `channel get`.
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let reader = Nxr::new(config(&mock, None), tx2).unwrap();
+    assert!(reader.channel_get(&channel_url).await.is_err());
+
+    // But the write goes through and repairs the channel, forward guard included.
+    let outcome = nxr.channel_set(&channel_url, "1.2.3", true).await.unwrap();
+    assert!(matches!(
+        outcome,
+        nexus_raw_core::ChannelOutcome::Written { .. }
+    ));
+    assert_eq!(
+        nxr.channel_get(&channel_url).await.unwrap().as_deref(),
+        Some("1.2.3")
+    );
+}
