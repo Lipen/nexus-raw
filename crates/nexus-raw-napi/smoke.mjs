@@ -1,6 +1,8 @@
 // Smoke test for the built addon: `npm run build` first, then `node smoke.mjs`.
 // It stays offline: the mapping, the summary event and the error paths all
 // run through `verify` and the local `sha`, which need no network.
+// The new commands are covered at the export level plus one parse-only `rm`
+// rejection, and the onEvent throw contract runs through `verify`.
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,6 +60,37 @@ try {
   // The sha of a local file needs no client at all.
   const hex = createHash('sha256').update('hello\n').digest('hex')
   assert.equal(await nxr.sha(join(dir, 'a.txt')), hex)
+
+  // The new exports exist and are callable: the surface is at parity with the CLI.
+  for (const name of ['rm', 'mirror', 'pointClear', 'lsAssets', 'lsVersions']) {
+    assert.equal(typeof nxr[name], 'function', `${name} is exported`)
+  }
+
+  // rm parses the names before any network: a grammar violation is a misuse rejection.
+  await assert.rejects(
+    nxr.rm('http://127.0.0.1:9/raw/', { names: ['../escape'] }),
+    (err) => err.exitCode === 2 && err.hint.includes('names must be relative paths'),
+  )
+
+  // A throw inside onEvent rejects the command promise instead of crashing the process.
+  // The command itself succeeds here, so the rejection carries the callback failure only.
+  await assert.rejects(
+    nxr.verify(dir, { names: ['a.txt'], onEvent: () => { throw new Error('callback boom') } }),
+    (err) =>
+      err instanceof Error &&
+      err.exitCode === undefined &&
+      err.message.includes('onEvent callback failed') &&
+      err.message.includes('callback boom'),
+  )
+
+  // The command failing and the callback throwing: the exit code and hint stay the command's.
+  await assert.rejects(
+    nxr.verify(dir, { names: ['b.txt'], onEvent: () => { throw new Error('callback boom') } }),
+    (err) =>
+      err.exitCode === 1 &&
+      typeof err.hint === 'string' &&
+      err.message.includes('onEvent callback also failed'),
+  )
 
   console.log('smoke ok')
 } finally {

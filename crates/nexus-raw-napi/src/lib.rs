@@ -15,12 +15,13 @@ mod mapping;
 use std::path::{Path, PathBuf};
 
 use napi::bindgen_prelude::{Buffer, Either};
-use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::threadsafe_function::ThreadsafeFunction;
 use napi::{Error, Result, Status};
 use napi_derive::napi;
 use nexus_raw_core::model::digest;
 use nexus_raw_core::{
-    ArtifactName, ChannelOutcome, Enumeration, GetOutcome, Manifest, Mode, Nxr, ShaSource, Summary,
+    ArtifactName, ChannelOutcome, ClearOutcome, Enumeration, GetOutcome, Manifest, Mode, Nxr,
+    RmAction, ShaSource, Summary,
 };
 use tokio::sync::mpsc;
 
@@ -28,6 +29,10 @@ use crate::mapping::CommonOpts;
 
 /// The parsed JSON event the `onEvent` callback receives.
 type EventCallback = ThreadsafeFunction<serde_json::Value, (), serde_json::Value, Status, false>;
+
+/// The drain handle of a started event pump.
+/// The pump ends with the first callback failure, if one happens.
+type Pump = tokio::task::JoinHandle<Result<()>>;
 
 // ---- Node-facing option objects -----------------------------------------
 
@@ -205,6 +210,69 @@ pub struct NxrDownOpts {
     pub fresh: Option<bool>,
 }
 
+/// `rm` options: how the remote directory is enumerated, and whether anything is deleted.
+#[derive(Default)]
+#[napi(object, object_to_js = false)]
+pub struct NxrRmOpts {
+    /// Explicit credentials.
+    /// They win over the env fallback.
+    pub auth: Option<NxrAuth>,
+    /// Parallel artifact transfers, 1..=64, default 8.
+    pub workers: Option<u32>,
+    /// Attempts per HTTP request, default 4.
+    pub retry: Option<u32>,
+    /// TCP connect timeout in milliseconds, default 15000.
+    pub connect_timeout_ms: Option<u32>,
+    /// Fail a transfer when no bytes move for this long, default 30000.
+    pub stall_ms: Option<u32>,
+    /// Skip TLS certificate verification, default false.
+    pub tls_insecure: Option<bool>,
+    /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
+    #[napi(ts_type = "(event: object) => void")]
+    pub on_event: Option<EventCallback>,
+    /// Enumeration source: a manifest file, URL or `-` for stdin.
+    pub manifest: Option<String>,
+    /// Explicit names to delete.
+    pub names: Option<Vec<String>>,
+    /// Best-effort enumeration through the server search API (`--ls`).
+    pub ls: Option<bool>,
+    /// Resolve to the plan without deleting anything (`rm --dry-run`).
+    pub dry_run: Option<bool>,
+}
+
+/// `mirror` options: the enumeration lives at the source, credentials are per side.
+#[derive(Default)]
+#[napi(object, object_to_js = false)]
+pub struct NxrMirrorOpts {
+    /// Explicit credentials for both sides when the per-side overrides are absent.
+    pub auth: Option<NxrAuth>,
+    /// Parallel artifact transfers, 1..=64, default 8.
+    pub workers: Option<u32>,
+    /// Attempts per HTTP request, default 4.
+    pub retry: Option<u32>,
+    /// TCP connect timeout in milliseconds, default 15000.
+    pub connect_timeout_ms: Option<u32>,
+    /// Fail a transfer when no bytes move for this long, default 30000.
+    pub stall_ms: Option<u32>,
+    /// Skip TLS certificate verification, default false.
+    pub tls_insecure: Option<bool>,
+    /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
+    #[napi(ts_type = "(event: object) => void")]
+    pub on_event: Option<EventCallback>,
+    /// Explicit credentials for the source repository.
+    /// They win over `auth` and the env fallback.
+    pub src_auth: Option<NxrAuth>,
+    /// Explicit credentials for the destination repository.
+    /// They win over `auth` and the env fallback.
+    pub dst_auth: Option<NxrAuth>,
+    /// Enumeration source: a manifest file, URL or `-` for stdin.
+    pub manifest: Option<String>,
+    /// Explicit names to copy.
+    pub names: Option<Vec<String>>,
+    /// Best-effort enumeration through the server search API (`--ls`).
+    pub ls: Option<bool>,
+}
+
 /// `verify` options: restrict what is checked.
 #[derive(Default)]
 #[napi(object, object_to_js = false)]
@@ -272,6 +340,39 @@ pub struct NxrPlan {
     pub actions: Vec<NxrPlanAction>,
 }
 
+/// One planned deletion, shaped like the CLI `rm --dry-run` lines.
+#[napi(object)]
+pub struct NxrRmPlanAction {
+    /// `rm` when the remote copy exists and would be deleted, `missing` when it is already absent.
+    pub action: String,
+    pub name: String,
+    /// Byte size when the remote copy exists.
+    pub size: Option<f64>,
+}
+
+impl From<&RmAction> for NxrRmPlanAction {
+    fn from(a: &RmAction) -> Self {
+        match a {
+            RmAction::Remove { name, size } => Self {
+                action: "rm".into(),
+                name: name.to_string(),
+                size: size.map(|s| s as f64),
+            },
+            RmAction::Missing { name } => Self {
+                action: "missing".into(),
+                name: name.to_string(),
+                size: None,
+            },
+        }
+    }
+}
+
+/// The plan an `rm` dry run resolves to.
+#[napi(object)]
+pub struct NxrRmPlan {
+    pub actions: Vec<NxrRmPlanAction>,
+}
+
 impl From<&nexus_raw_core::Action> for NxrPlanAction {
     fn from(a: &nexus_raw_core::Action) -> Self {
         match a {
@@ -332,54 +433,116 @@ pub struct NxrChannelSetResult {
     pub current: Option<String>,
 }
 
+/// The `pointClear` result, the CLI `--json` shape.
+#[napi(object)]
+pub struct NxrPointClearResult {
+    /// `cleared` when the pointer existed and is deleted, `absent` when it was already gone.
+    pub outcome: String,
+}
+
 // ---- helpers ---------------------------------------------------------------
 
 /// Map a core error onto the rejection message: the CLI-style text with the exit line and the hint appended.
 /// `index.js` promotes them to `.exitCode` and `.hint` on the rejected Error.
 fn js_error(e: nexus_raw_core::Error) -> Error {
     let payload = mapping::error_payload(&e);
-    Error::new(Status::GenericFailure, payload.message)
+    js_error_message(e.to_string(), &payload)
+}
+
+/// Build the rejection from a text plus the trailing machine lines of a payload.
+fn js_error_message(text: String, payload: &mapping::ErrorPayload) -> Error {
+    let mut message = text;
+    message.push_str(&format!("\nnxr:exit {}", payload.exit_code));
+    if let Some(hint) = &payload.hint {
+        message.push_str("\nhint: ");
+        message.push_str(hint);
+    }
+    Error::new(Status::GenericFailure, message)
 }
 
 /// Drain the core event stream into the JS callback.
 ///
-/// The pump ends when the facade drops and the channel closes, so the promise resolves only after every event has been handed to JS.
+/// Every event is awaited through `call_async_catch`: a throw inside the callback ends the pump with that error instead of becoming a global uncaught exception.
+/// The pump ends when the facade drops and the channel closes, so the promise settles only after every event has been handed to JS.
 fn spawn_pump(
     mut rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
     on_event: Option<EventCallback>,
-) -> Option<tokio::task::JoinHandle<()>> {
+) -> Option<Pump> {
     on_event.map(|tsfn| {
         // tokio::spawn, not the napi re-export: the re-export disappears under the noop feature that unit tests need for linking.
         // Inside a napi async fn the current runtime is napi's own tokio RT, so both calls land on the same workers (napi-3.13 tokio_runtime.rs: `spawn` is `RT.spawn`).
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
-                tsfn.call(
-                    mapping::event_to_json(&event),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
+                if let Err(callback) = tsfn.call_async_catch(mapping::event_to_json(&event)).await {
+                    return Err(Error::new(
+                        Status::GenericFailure,
+                        format!("the onEvent callback failed: {callback}"),
+                    ));
+                }
             }
+            Ok(())
         })
     })
 }
 
 /// Wait for the pump to drain before the promise settles.
-async fn finish_pump(pump: Option<tokio::task::JoinHandle<()>>) -> Result<()> {
+///
+/// A callback failure rejects the command promise even when the command itself succeeded.
+async fn finish_pump(pump: Option<Pump>) -> Result<()> {
     match pump {
         None => Ok(()),
-        Some(handle) => handle
-            .await
-            .map_err(|e| Error::new(Status::GenericFailure, format!("event pump failed: {e}"))),
+        Some(handle) => match handle.await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(callback)) => Err(callback),
+            Err(join) => Err(Error::new(
+                Status::GenericFailure,
+                format!("event pump failed: {join}"),
+            )),
+        },
     }
 }
 
 /// Drain the event pump, then map `error` for JS.
 /// The caller must see the events that led to the failure before the promise rejects.
-async fn finish_pump_err(
-    pump: Option<tokio::task::JoinHandle<()>>,
-    error: nexus_raw_core::Error,
-) -> Error {
-    let _ = finish_pump(pump).await;
-    js_error(error)
+/// The command's exit code and hint stay untouched: a callback failure only adds a note above the machine lines.
+async fn finish_pump_err(pump: Option<Pump>, error: nexus_raw_core::Error) -> Error {
+    let payload = mapping::error_payload(&error);
+    let mut text = error.to_string();
+    if let Some(handle) = pump {
+        if let Ok(Err(callback)) = handle.await {
+            text.push_str("\nonEvent callback also failed: ");
+            text.push_str(&callback.reason);
+        }
+    }
+    js_error_message(text, &payload)
+}
+
+/// Resolve the enumeration source the way the CLI does: `ls`, a `manifest` spec, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// The caller must drop the facade before draining the pump on the error path.
+async fn resolve_enumeration(
+    nxr: &Nxr,
+    manifest: &Option<String>,
+    parsed_names: Option<Vec<ArtifactName>>,
+    ls: bool,
+    no_manifest_reason: &'static str,
+) -> std::result::Result<Enumeration, nexus_raw_core::Error> {
+    if ls {
+        return Ok(Enumeration::Search);
+    }
+    if let Some(spec) = manifest {
+        return load_manifest(nxr, spec).await.map(Enumeration::Manifest);
+    }
+    if let Some(v) = parsed_names {
+        return Ok(Enumeration::Names(v));
+    }
+    match nxr.manifest_at_base().await {
+        Ok(Some(m)) => Ok(Enumeration::Manifest(m)),
+        Ok(None) => Err(nexus_raw_core::Error::Enumerate {
+            url: nxr.base().to_owned(),
+            reason: no_manifest_reason.to_owned(),
+        }),
+        Err(e) => Err(e),
+    }
 }
 
 /// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file — the CLI rules.
@@ -640,9 +803,7 @@ pub async fn up(
             actions: actions.iter().map(NxrPlanAction::from).collect(),
         }));
     }
-    let summary = nxr
-        .up(Path::new(&src_dir), names, gen_markers, claim, None)
-        .await;
+    let summary = nxr.up(Path::new(&src_dir), names, gen_markers, claim).await;
     drop(nxr);
     let summary = match summary {
         Ok(v) => v,
@@ -680,47 +841,150 @@ pub async fn down(
     // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
     // Every early return from here drops the facade before draining the pump — the pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
-    let enum_src = if o.ls.unwrap_or(false) {
-        Enumeration::Search
-    } else if let Some(spec) = &o.manifest {
-        let m = match load_manifest(&nxr, spec).await {
-            Ok(m) => m,
-            Err(e) => {
-                drop(nxr);
-                return Err(finish_pump_err(pump, e).await);
-            }
-        };
-        Enumeration::Manifest(m)
-    } else {
-        match parsed_names {
-            Some(v) => Enumeration::Names(v),
-            None => match nxr.manifest_at_base().await {
-                Ok(Some(m)) => Enumeration::Manifest(m),
-                Ok(None) => {
-                    let error = nexus_raw_core::Error::Enumerate {
-                        url: nxr.base().to_owned(),
-                        reason: "no manifest.json on the server and no manifest/names/ls given"
-                            .into(),
-                    };
-                    drop(nxr);
-                    return Err(finish_pump_err(pump, error).await);
-                }
-                Err(e) => {
-                    drop(nxr);
-                    return Err(finish_pump_err(pump, e).await);
-                }
-            },
+    let enum_src = match resolve_enumeration(
+        &nxr,
+        &o.manifest,
+        parsed_names,
+        o.ls.unwrap_or(false),
+        "no manifest.json on the server and no manifest/names/ls given",
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            drop(nxr);
+            return Err(finish_pump_err(pump, e).await);
         }
     };
     let summary = nxr
-        .down(
-            Path::new(&dst_dir),
-            enum_src,
-            o.fresh.unwrap_or(false),
-            None,
-        )
+        .down(Path::new(&dst_dir), enum_src, o.fresh.unwrap_or(false))
         .await;
     drop(nxr);
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(NxrSummary::from(&summary))
+}
+
+/// Delete the enumerated names from the remote directory.
+///
+/// The enumeration source is mandatory, like `down`: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// Divergence is never checked: `rm` deletes names, not content.
+/// With `dryRun` the promise resolves to the plan instead of a summary and nothing is deleted, like `rm --dry-run`.
+#[napi]
+pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSummary, NxrRmPlan>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    // Pure parsing first: no events can precede the pump.
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
+    let pump = spawn_pump(rx, on_event);
+    let enum_src = match resolve_enumeration(
+        &nxr,
+        &o.manifest,
+        parsed_names,
+        o.ls.unwrap_or(false),
+        "no manifest.json on the server and no manifest/names/ls given",
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            drop(nxr);
+            return Err(finish_pump_err(pump, e).await);
+        }
+    };
+    if o.dry_run.unwrap_or(false) {
+        let plan = nxr.rm_plan(enum_src).await;
+        drop(nxr);
+        let actions = match plan {
+            Ok(a) => a,
+            Err(e) => return Err(finish_pump_err(pump, e).await),
+        };
+        finish_pump(pump).await?;
+        return Ok(Either::B(NxrRmPlan {
+            actions: actions.iter().map(NxrRmPlanAction::from).collect(),
+        }));
+    }
+    let summary = nxr.rm(enum_src).await;
+    drop(nxr);
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(Either::A(NxrSummary::from(&summary)))
+}
+
+/// Pour enumerated names from a source repository into a destination one.
+///
+/// Two facades on one event stream: enumeration and bytes come from the source, the diff and the writes follow the destination.
+/// The enumeration source is mandatory and lives at the source: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` there.
+#[napi]
+pub async fn mirror(
+    src_url: String,
+    dst_url: String,
+    opts: Option<NxrMirrorOpts>,
+) -> Result<NxrSummary> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let side_auth = |side: &Option<NxrAuth>| match side {
+        Some(a) => CommonOpts {
+            auth_user: Some(a.user.clone()),
+            auth_pass: Some(a.pass.clone()),
+            ..common.clone()
+        },
+        None => common.clone(),
+    };
+    let src_cfg = mapping::build_config(&src_url, &side_auth(&o.src_auth)).map_err(js_error)?;
+    let dst_cfg = mapping::build_config(&dst_url, &side_auth(&o.dst_auth)).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
+    let src_nxr = Nxr::new(src_cfg, tx.clone()).map_err(js_error)?;
+    let dst_nxr = Nxr::new(dst_cfg, tx).map_err(js_error)?;
+    // Pure parsing first: no events can precede the pump.
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
+    let pump = spawn_pump(rx, on_event);
+    let enum_src = match resolve_enumeration(
+        &src_nxr,
+        &o.manifest,
+        parsed_names,
+        o.ls.unwrap_or(false),
+        "no manifest.json at the source and no manifest/names/ls given",
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            drop(src_nxr);
+            drop(dst_nxr);
+            return Err(finish_pump_err(pump, e).await);
+        }
+    };
+    let summary = src_nxr.mirror(&dst_nxr, enum_src).await;
+    // Both facades must die before the pump drains: each holds a sender clone.
+    drop(src_nxr);
+    drop(dst_nxr);
     let summary = match summary {
         Ok(v) => v,
         Err(e) => return Err(finish_pump_err(pump, e).await),
@@ -839,6 +1103,92 @@ pub async fn channel_set(
             current: Some(current),
         },
     })
+}
+
+/// DELETE a pointer file: absence is a normal outcome, like the CLI `point --clear`.
+#[napi]
+pub async fn point_clear(url: String, opts: Option<NxrCommonOpts>) -> Result<NxrPointClearResult> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let outcome = nxr.point_clear(&url).await;
+    drop(nxr);
+    let outcome = match outcome {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(NxrPointClearResult {
+        outcome: match outcome {
+            ClearOutcome::Cleared => "cleared".into(),
+            ClearOutcome::Absent => "absent".into(),
+        },
+    })
+}
+
+/// List the asset names the server search API reports for this directory, like `ls --assets`.
+#[napi]
+pub async fn ls_assets(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<String>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let names = nxr.ls_assets().await;
+    drop(nxr);
+    let names = match names {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(names.iter().map(|n| n.as_str().to_owned()).collect())
+}
+
+/// List the version tokens the server search API reports for this directory, like `ls`.
+#[napi]
+pub async fn ls_versions(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<String>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let versions = nxr.ls_versions().await;
+    drop(nxr);
+    let versions = match versions {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(versions)
 }
 
 #[cfg(test)]

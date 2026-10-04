@@ -15,8 +15,13 @@
 // Granularity: function names and full signatures, interface names, and the
 // field names of every interface. A renamed parameter or a dropped field
 // fails; a pure type rewording inside one field may not.
+// On top of the two .d.ts files, the named exports of the runtime entry
+// (`index.js`) must match the declared functions exactly.
 
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
 
 const INDEX_ONLY_INTERFACES = new Set(['NxrEvent'])
 const BINDING_ONLY_EXPORTS = new Set(['__napiBindingTarget'])
@@ -108,9 +113,30 @@ for (const name of indexIfaces.keys()) {
   }
 }
 
+// The runtime entry must export exactly the functions index.d.ts declares:
+// cjs-module-lexer only promotes this dot-assignment shape to named ESM imports,
+// so one forgotten `exports.<name> = ...` line silently hides a command.
+function loadEntry() {
+  try {
+    return require('./index.js')
+  } catch {
+    console.error('check-dts: cannot load index.js; build the addon first (npm run build:debug)')
+    process.exit(1)
+  }
+}
+
+const entryExports = Object.keys(loadEntry())
+const declaredFns = [...indexFns.keys()]
+for (const name of declaredFns) {
+  if (!entryExports.includes(name)) problems.push(`index.js: export ${name} is missing`)
+}
+for (const name of entryExports) {
+  if (!declaredFns.includes(name)) problems.push(`index.js: export ${name} is not declared in index.d.ts`)
+}
+
 if (problems.length > 0) {
   console.error(`check-dts: index.d.ts drifted from the generated binding.d.ts:\n`)
   for (const problem of problems) console.error(`- ${problem}`)
   process.exit(1)
 }
-console.log('dts ok: index.d.ts matches the generated binding.d.ts')
+console.log('dts ok: index.d.ts matches the generated binding.d.ts and the index.js exports')

@@ -35,14 +35,19 @@ export interface NxrCommonOpts {
   tlsInsecure?: boolean
   /**
    * Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
-   * Events cross threads: they may arrive after the promise settles.
+   * Events cross threads; every event has reached the callback by the time the
+   * promise settles.
    * Shapes: `plan`, `artifact` (states uploading/downloading/done/skipped),
-   * `retrying`, `summary`.
+   * `retrying`, `summary`, and `removing`/`removed`/`missing` from `rm`.
    */
   onEvent?: (event: NxrEvent) => void
 }
 
-/** One NDJSON event of the core, as parsed JSON. */
+/**
+ * One NDJSON event of the core, as parsed JSON.
+ * `plan`/`artifact`/`retrying` come from transfers (`up`, `down`, `mirror`),
+ * `removing`/`removed`/`missing` from `rm`, `summary` from everything that moves or deletes bytes.
+ */
 export interface NxrEvent {
   event?: 'plan' | 'artifact' | 'retrying' | 'removing' | 'removed' | 'missing' | 'summary'
   /** `plan` only: the name lists of the diff. */
@@ -149,6 +154,49 @@ export interface NxrDownOpts extends NxrCommonOpts {
   fresh?: boolean
 }
 
+export interface NxrRmOpts extends NxrCommonOpts {
+  /** Enumeration source: a manifest file, URL or `-` for stdin. */
+  manifest?: string
+  /** Explicit names to delete. */
+  names?: string[]
+  /** Best-effort enumeration through the server search API (`--ls`). */
+  ls?: boolean
+  /** Resolve to the plan without deleting anything (`rm --dry-run`). */
+  dryRun?: boolean
+}
+
+/** One planned deletion, shaped like the CLI `rm --dry-run` lines. */
+export interface NxrRmPlanAction {
+  /** `rm` when the remote copy exists and would be deleted, `missing` when it is already absent. */
+  action: 'rm' | 'missing'
+  name: string
+  /** Byte size when the remote copy exists. */
+  size?: number
+}
+
+/** The plan an `rm` dry run resolves to. */
+export interface NxrRmPlan {
+  actions: NxrRmPlanAction[]
+}
+
+export interface NxrMirrorOpts extends NxrCommonOpts {
+  /** Explicit credentials for the source; they win over `auth` and the environment fallback. */
+  srcAuth?: NxrAuth
+  /** Explicit credentials for the destination; they win over `auth` and the environment fallback. */
+  dstAuth?: NxrAuth
+  /** Enumeration source at the source repository: a manifest file, URL or `-` for stdin. */
+  manifest?: string
+  /** Explicit names to copy. */
+  names?: string[]
+  /** Best-effort enumeration through the server search API (`--ls`). */
+  ls?: boolean
+}
+
+export interface NxrPointClearResult {
+  /** `cleared` when the pointer existed and is deleted, `absent` when it was already gone. */
+  outcome: 'cleared' | 'absent'
+}
+
 export interface NxrVerifyOpts extends NxrCommonOpts {
   /** Check exactly these names: a manifest file, URL or `-` for stdin. */
   manifest?: string
@@ -193,6 +241,22 @@ export function up(srcDir: string, dstUrl: string, opts?: NxrUpOpts): Promise<Nx
  */
 export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promise<NxrSummary>
 
+/**
+ * Delete the enumerated names from the remote directory (`rm`).
+ * Divergence is never checked: `rm` deletes names, not content.
+ * The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
+ * or the conventional `manifest.json` at the directory URL.
+ * With `dryRun` the promise resolves to the plan instead of a summary.
+ */
+export function rm(srcUrl: string, opts?: NxrRmOpts): Promise<NxrSummary | NxrRmPlan>
+
+/**
+ * Pour enumerated names from a source repository into a destination one (`mirror`).
+ * Two facades on one event stream: enumeration and bytes come from the source,
+ * the diff and the writes follow the destination.
+ */
+export function mirror(srcUrl: string, dstUrl: string, opts?: NxrMirrorOpts): Promise<NxrSummary>
+
 /** Check local bytes, markers and digests. No network. */
 export function verify(dir: string, opts?: NxrVerifyOpts): Promise<NxrSummary>
 
@@ -206,3 +270,12 @@ export function channelSet(
   ifForward: boolean,
   opts?: NxrCommonOpts,
 ): Promise<NxrChannelSetResult>
+
+/** DELETE a pointer file: absence is a normal outcome, like `point --clear`. */
+export function pointClear(url: string, opts?: NxrCommonOpts): Promise<NxrPointClearResult>
+
+/** List the asset names the server search API reports for this directory (`ls --assets`). */
+export function lsAssets(url: string, opts?: NxrCommonOpts): Promise<Array<string>>
+
+/** List the version tokens the server search API reports for this directory (`ls`). */
+export function lsVersions(url: string, opts?: NxrCommonOpts): Promise<Array<string>>

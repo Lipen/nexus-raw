@@ -1,6 +1,6 @@
 'use strict'
 
-// nexus-raw Node bindings: a subset of the `nxr` surface as promises over Nexus raw storage.
+// nexus-raw Node bindings: the `nxr` surface as promises over Nexus raw storage.
 // The generated loader (`binding.cjs`) picks the native addon: a local crate
 // build first, then the per-platform prebuilt package.
 //
@@ -74,6 +74,11 @@ exports.head = withEnrichedRejection(raw.head)
 exports.sha = withEnrichedRejection(raw.sha)
 exports.up = withEnrichedRejection(raw.up)
 exports.down = withEnrichedRejection(raw.down)
+exports.rm = withEnrichedRejection(raw.rm)
+exports.mirror = withEnrichedRejection(raw.mirror)
 exports.verify = withEnrichedRejection(raw.verify)
 exports.channelGet = withEnrichedRejection(raw.channelGet)
 exports.channelSet = withEnrichedRejection(raw.channelSet)
+exports.pointClear = withEnrichedRejection(raw.pointClear)
+exports.lsAssets = withEnrichedRejection(raw.lsAssets)
+exports.lsVersions = withEnrichedRejection(raw.lsVersions)

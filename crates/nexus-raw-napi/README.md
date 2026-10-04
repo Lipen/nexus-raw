@@ -1,6 +1,6 @@
 # nexus-raw: Node bindings
 
-Node bindings for nexus-raw: a subset of the `nxr` command surface as promises over Nexus raw storage, built on napi-rs 3 (async exports on its tokio runtime, `@napi-rs/cli` packaging).
+Node bindings for nexus-raw: the `nxr` command surface as promises over Nexus raw storage, built on napi-rs 3 (async exports on its tokio runtime, `@napi-rs/cli` packaging).
 Install from npm:
 
 ```bash
@@ -8,7 +8,7 @@ npm install nexus-raw
 ```
 
 Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
-Any other platform builds the addon from a repository checkout (below).
+There is no win32 prebuilt package: the addon builds from a repository checkout (below), like any other platform.
 The from-source development loop lives in [examples/node](../../examples/node).
 
 ## Build locally
