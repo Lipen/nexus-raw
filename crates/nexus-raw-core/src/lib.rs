@@ -18,6 +18,7 @@ pub mod transport;
 pub use crate::config::Config;
 pub use crate::error::{Error, Verdict};
 pub use crate::events::{Dir, Event, Progress, Summary};
+pub use crate::layout::ls::{Entry, EntryKind};
 pub use crate::layout::{ChannelOutcome, ClearOutcome, Manifest};
 pub use crate::model::digest::Digest;
 pub use crate::model::name::{ArtifactName, NamePrefix};

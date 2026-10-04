@@ -10,6 +10,80 @@ use crate::model::name::validate_version;
 use crate::model::name::ArtifactName;
 use crate::transport::client::NexusClient;
 
+/// One immediate child of a raw directory: a folder or a file.
+///
+/// A raw repository is an arbitrary tree: there are no version or object
+/// concepts here, just names with an optional subtree below them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    /// The child segment name.
+    pub name: String,
+    /// Whether the child has a subtree below it.
+    pub kind: EntryKind,
+}
+
+/// Whether an entry is a folder or a leaf file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    /// The child has more path segments below it.
+    Dir,
+    /// The child is a leaf object.
+    File,
+}
+
+/// The immediate children of a raw directory URL: folders first, then files, each sorted.
+///
+/// Works at any depth, because the raw tree has no fixed shape: the search runs in the
+/// repository scope and the prefix filter is applied client-side. The `group` search
+/// parameter is deliberately not used: on a real Nexus release it matched Maven
+/// coordinates rather than raw path prefixes, which made nested listings lie.
+/// Leaf `.sha256` siblings are hidden: they are derived data the protocol generates.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `dir_url` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
+pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<Entry>, Error> {
+    let (repo, prefix) = split_prefix(dir_url)?;
+    let paths = paginate(client, dir_url, &repo, &[]).await?;
+    let mut dirs = std::collections::BTreeSet::new();
+    let mut files = std::collections::BTreeSet::new();
+    for path in paths {
+        let segs: Vec<String> = path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(percent_decode)
+            .collect();
+        if segs.len() <= prefix.len() || segs[..prefix.len()] != prefix[..] {
+            continue;
+        }
+        let rel = &segs[prefix.len()..];
+        let first = &rel[0];
+        if first.is_empty() {
+            continue;
+        }
+        if rel.len() == 1 {
+            // A leaf marker is derived data, not a tree member: hidden, like `--assets` skips it.
+            if first.ends_with(".sha256") {
+                continue;
+            }
+            files.insert(first.clone());
+        } else {
+            dirs.insert(first.clone());
+        }
+    }
+    Ok(dirs
+        .into_iter()
+        .map(|name| Entry {
+            name,
+            kind: EntryKind::Dir,
+        })
+        .chain(files.into_iter().map(|name| Entry {
+            name,
+            kind: EntryKind::File,
+        }))
+        .collect())
+}
+
 /// Versions under a repository/group base: the path segment right after the group prefix of every asset, collected and sorted.
 ///
 /// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any number of group segments, including none.

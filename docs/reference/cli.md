@@ -610,45 +610,46 @@ $ echo $?
 {"outcome":"absent","url":"https://nexus.example.com/repository/raw-main/stable"}
 ```
 
-## nxr ls (experimental)
+## nxr ls
 
 ```
 nxr ls <URL> [--assets]
 ```
 
-List versions under a repository or group URL, or objects under a directory URL.
-Both go through the Nexus search API, which is not guaranteed to exist or to behave uniformly across server releases.
+A raw repository is an arbitrary tree, and `ls` treats it as one: it lists the entries of a directory URL (folders first, then files, each sorted) at any depth.
+Folders carry a trailing `/`.
+Leaf `.sha256` siblings are hidden: they are derived data the protocol generates.
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--assets` | list the object names under a directory URL instead of versions |
+| `--assets` | flat artifact names under the directory URL instead of the entry tree |
 
-At a repository root the command lists the first path segment of every indexed asset, which on a well-formed store is the version directory.
-Loose files at the root appear as names too.
+The listing goes through the Nexus search API in the repository scope, and the tree is cut client-side, so nested folders work on every server release.
 This capture was taken against a live Nexus Repository with a neutralized host:
 
 ```console
 $ nxr ls https://nexus.example.com/repository/raw-main/
-_docs
-_docs-ref
-latest
-nxr-ct-test.bin
-p1.bin
-p1.bin.sha256
-v0.1
+app/
+bom/
+release-notes.txt
+$ nxr ls https://nexus.example.com/repository/raw-main/app/
+1.4.0/
+README.txt
 $ echo $?
 0
 ```
 
-Measured caveat from the same live server: for a group URL the search request filters by `group`, and on that Nexus release the parameter matched Maven coordinates rather than raw path prefixes, so a group-scoped `ls` returned an empty list with exit 0.
-Treat `ls` as a convenience only.
+`--assets` lists the artifact names under a directory URL, the enumeration `down --ls` consumes.
+Its server request filters by path group, and on one measured Nexus release that parameter matched Maven coordinates rather than raw path prefixes, so nested `--assets` listings could come back empty there.
+The entry listing above does not use that parameter and does not have the problem.
+Treat both as conveniences only.
 `down` takes its names from manifests instead of from listings, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
 
 | Exit | When |
 |:----:|:-----|
-| `0` | the search endpoint answered (including an empty result) |
+| `0` | the search endpoint answered (including an empty directory) |
 | `1` | the search endpoint answered 404 (`cannot enumerate`) |
-| `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/<group…>/` |
+| `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/...` |
 | `3` | transport or auth failure |
 
 `--json` prints one object per line: `{"version":"1.4.0"}` or `{"name":"app.zip"}`.

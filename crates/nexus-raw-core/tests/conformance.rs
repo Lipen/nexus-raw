@@ -6,8 +6,8 @@ use std::time::Duration;
 use mock_nexus::{MockNexus, Outcome, ReqLog, Scenario};
 use nexus_raw_core::sync::down::part_path;
 use nexus_raw_core::{
-    model::sibling, staging_dir, ArtifactName, Config, Digest, Enumeration, Error, Event, Manifest,
-    Mode, Nxr, Summary,
+    model::sibling, staging_dir, ArtifactName, Config, Digest, EntryKind, Enumeration, Error,
+    Event, Manifest, Mode, Nxr, Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -2179,4 +2179,49 @@ async fn service_repos_missing_refuses_with_the_root_hint() {
     let hint = err.hint().unwrap();
     assert!(hint.contains("server root"), "{hint}");
     assert!(hint.contains(&mock.base_url()), "{hint}");
+}
+
+// ---------------------------------------------------------------- ls entries
+
+/// `ls_entries` walks the raw tree at any depth: folders first, files second, markers hidden.
+#[tokio::test]
+async fn ls_entries_walks_the_raw_tree() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let page = concat!(
+        r#"{"continuationToken":null,"items":["#,
+        r#"{"path":"app/core/lib.rs"},"#,
+        r#"{"path":"app/core/lib.rs.sha256"},"#,
+        r#"{"path":"app/README.md"},"#,
+        r#"{"path":"bom/x.bin"},"#,
+        r#"{"path":"root.txt"},"#,
+        r#"{"path":"root.txt.sha256"}]}"#
+    );
+    mock.insert("service/rest/v1/search/assets", page.as_bytes());
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let root = format!("{}repository/raw/", mock.base_url());
+    let nxr = Nxr::new(config_at(root, None), tx).unwrap();
+
+    let entries = nxr.ls_entries().await.unwrap();
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["app", "bom", "root.txt"],
+        "folders first, then files"
+    );
+    assert_eq!(entries[0].kind, EntryKind::Dir);
+    assert_eq!(entries[2].kind, EntryKind::File);
+    assert!(
+        !names.iter().any(|n| n.ends_with(".sha256")),
+        "markers are derived data, not tree members"
+    );
+
+    // The same walk one level deeper: nested folders are ordinary directories.
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let deep = format!("{}repository/raw-main/app/", mock.base_url());
+    let nxr = Nxr::new(config_at(deep, None), tx).unwrap();
+    let entries = nxr.ls_entries().await.unwrap();
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["core", "README.md"]);
+    assert_eq!(entries[0].kind, EntryKind::Dir);
+    assert_eq!(entries[1].kind, EntryKind::File);
 }

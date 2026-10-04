@@ -291,3 +291,13 @@ export interface NxrRepoInfo {
 
 /** List the repositories of the server behind `url` (the service REST API, not the storage protocol). */
 export function serviceRepos(url: string, opts?: NxrCommonOpts): Promise<Array<NxrRepoInfo>>
+
+/** One immediate child of a raw directory: a folder or a file. */
+export interface NxrLsEntry {
+  name: string
+  /** `"dir"` when the child has a subtree below it, `"file"` when it is a leaf. */
+  kind: string
+}
+
+/** The immediate children of a raw directory URL, at any tree depth: folders first, then files. */
+export function lsEntries(url: string, opts?: NxrCommonOpts): Promise<Array<NxrLsEntry>>

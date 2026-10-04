@@ -86,7 +86,7 @@ nxr verify vendor/prebuilt
 | `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror в приёмник, затем удаление в источнике (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point --clear <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
-| `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (экспериментально) |
+| `nxr ls <URL> [--assets]` | листинг raw-дерева каталога на любой глубине (папки с `/`); `--assets`: плоские имена артефактов |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена (`--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке) |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |

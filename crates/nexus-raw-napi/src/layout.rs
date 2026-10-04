@@ -140,6 +140,52 @@ pub async fn ls_assets(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<S
     Ok(names.iter().map(|n| n.as_str().to_owned()).collect())
 }
 
+/// One immediate child of a raw directory: a folder or a file.
+#[napi(object)]
+pub struct NxrLsEntry {
+    /// The child segment name.
+    pub name: String,
+    /// `"dir"` when the child has a subtree below it, `"file"` when it is a leaf.
+    pub kind: String,
+}
+
+/// The immediate children of a raw directory URL, at any tree depth: folders first, then files.
+/// A raw repository is an arbitrary tree; leaf `.sha256` siblings are hidden as derived data.
+#[napi]
+pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<NxrLsEntry>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let entries = nxr.ls_entries().await;
+    drop(nxr);
+    let entries = match entries {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(entries
+        .into_iter()
+        .map(|e| NxrLsEntry {
+            name: e.name,
+            kind: match e.kind {
+                nexus_raw_core::EntryKind::Dir => "dir".to_owned(),
+                nexus_raw_core::EntryKind::File => "file".to_owned(),
+            },
+        })
+        .collect())
+}
+
 /// List the version tokens the server search API reports for this directory, like `ls`.
 #[napi]
 pub async fn ls_versions(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<String>> {

@@ -26,9 +26,25 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
             );
         }
     } else {
-        let versions = ctx.nxr.ls_versions().await?;
-        for v in &versions {
-            print_line(ctx.json, v.as_str(), &serde_json::json!({"version": v}));
+        let entries = ctx.nxr.ls_entries().await?;
+        for e in &entries {
+            match e.kind {
+                nexus_raw_core::EntryKind::Dir => {
+                    let name = format!("{}/", e.name);
+                    print_line(
+                        ctx.json,
+                        &name,
+                        &serde_json::json!({"entry": e.name, "kind": "dir"}),
+                    );
+                }
+                nexus_raw_core::EntryKind::File => {
+                    print_line(
+                        ctx.json,
+                        &e.name,
+                        &serde_json::json!({"entry": e.name, "kind": "file"}),
+                    );
+                }
+            }
         }
     }
     Ok(())

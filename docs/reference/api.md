@@ -107,7 +107,8 @@ Every method mirrors a CLI command one-to-one.
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
 | `manifest_at_base()` | `Option<Manifest>` | `down`'s default | the `manifest.json` convention at the facade's base |
 | `manifest_from(url)` | `Manifest` | `--manifest <url>` | fetch and parse a manifest from an arbitrary URL |
-| `ls_versions()` | `Vec<String>` | `nxr ls` | search-API traversal, experimental |
+| `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden |
+| `ls_versions()` | `Vec<String>` | - | the version view through the search API, experimental |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 
 Two parameters deserve their one-liners:

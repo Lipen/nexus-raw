@@ -1971,3 +1971,43 @@ fn no_color_forces_plain_output() {
         "NO_COLOR wins over FORCE_COLOR"
     );
 }
+
+// ---- ls: the raw tree listing ----------------------------------------------
+
+/// `nxr ls` prints the entries of a raw directory at any depth: folders carry the slash.
+#[test]
+fn ls_prints_the_raw_tree_entries() {
+    let srv = server(Scenario::Atomic);
+    let page = concat!(
+        r#"{"continuationToken":null,"items":["#,
+        r#"{"path":"app/core/lib.rs"},"#,
+        r#"{"path":"app/README.md"},"#,
+        r#"{"path":"root.txt"}]}"#
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+
+    let out = nxr(&["ls", &format!("{}repository/raw-main/", srv.base_url())]);
+    expect_exit(&out, 0, "the tree lists from the repository root");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines, ["app/", "root.txt"], "folders first, slash-marked");
+
+    // One level deeper: an ordinary folder behaves like any other.
+    let out = nxr(&["ls", &format!("{}repository/raw-main/app/", srv.base_url())]);
+    expect_exit(&out, 0, "a nested folder lists the same way");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines, ["core/", "README.md"]);
+
+    // The JSON shape carries the kind.
+    let out = nxr(&[
+        "ls",
+        &format!("{}repository/raw-main/", srv.base_url()),
+        "--json",
+    ]);
+    expect_exit(&out, 0, "the json listing resolves");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[0], r#"{"entry":"app","kind":"dir"}"#);
+    assert_eq!(lines[1], r#"{"entry":"root.txt","kind":"file"}"#);
+}

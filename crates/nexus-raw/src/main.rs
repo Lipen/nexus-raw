@@ -224,9 +224,9 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
     },
-    /// List versions or the objects of a version directory (experimental).
+    /// List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names).
     Ls {
-        /// A repository/group URL (versions) or a directory URL (--assets).
+        /// A directory URL inside a raw repository, the repository root included.
         #[arg(value_name = "URL")]
         url: String,
         /// List the object names under a directory URL.

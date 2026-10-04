@@ -583,7 +583,19 @@ impl Nxr {
         Manifest::from_url(&self.client, url).await
     }
 
-    /// Versions under this base via the search API (experimental).
+    /// The immediate children of a raw directory URL (`nxr ls`): folders first, then files.
+    ///
+    /// A raw repository is an arbitrary tree: this is the navigation primitive,
+    /// usable at any depth. Leaf `.sha256` siblings are hidden as derived data.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when the base URL is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable.
+    pub async fn ls_entries(&self) -> Result<Vec<layout::ls::Entry>, Error> {
+        layout::ls::search_entries(&self.client, &self.base).await
+    }
+
+    /// Version tokens under this base via the search API (experimental, the version view).
     ///
     /// # Errors
     ///
