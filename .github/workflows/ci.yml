@@ -22,18 +22,39 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
       - name: Run tests
         run: cargo test --workspace
+
+  # The manifest pins the minimum supported Rust version; this proves the
+  # pinned toolchain still builds the workspace, cheaply and early.
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Rust 1.85
+        uses: dtolnay/rust-toolchain@a9ac24949e6152c2fbb076542fe97615b2b7db9f # 1.85
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Check the workspace on the MSRV
+        run: cargo check --workspace --all-targets
 
   # The release number lives in one place; a second copy that drifted would
   # ship a number nobody wrote down.
@@ -43,7 +64,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Check the version agrees everywhere
         run: scripts/version-check.sh
@@ -54,10 +75,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           components: rustfmt
 
@@ -70,15 +91,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           components: clippy
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
@@ -95,23 +116,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: crates/nexus-raw-napi/package.json
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
@@ -124,6 +145,19 @@ jobs:
       # binding.d.ts from the Rust source, so this fails when the two drift.
       - name: Guard index.d.ts against drift
         run: node crates/nexus-raw-napi/check-dts.mjs
+
+      # The addon has to run before it ships: the smoke drives verify and
+      # sha on a local directory, so it needs nothing but the build above.
+      - name: Smoke the built addon
+        run: node crates/nexus-raw-napi/smoke.mjs
+
+      # The documented consumer style is a named ESM import; the CJS
+      # wrapper only exposes those when the lexer sees dot assignments, so
+      # this fails exactly when an `import { up } from 'nexus-raw'` would.
+      - name: Named ESM imports resolve
+        working-directory: crates/nexus-raw-napi
+        run: |
+          node --eval "import('./index.js').then((m) => { const missing = ['get', 'put', 'head', 'sha', 'up', 'down', 'verify', 'channelGet', 'channelSet'].filter((f) => typeof m[f] !== 'function'); if (missing.length > 0) { throw new Error('named ESM exports missing: ' + missing.join(', ')) } })"
 
       # The demo spawns the mock itself (`mock-nexus --port 0`) and reads the
       # URL from its stdout, so a fresh build of the binary is all it needs.
@@ -142,23 +176,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: crates/nexus-raw-napi/package.json
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
@@ -166,6 +200,19 @@ jobs:
 
       - name: Build the Node addon
         run: cd crates/nexus-raw-napi && pnpm ci && pnpm run build:debug
+
+      # The addon has to run before it ships: the smoke drives verify and
+      # sha on a local directory, so it needs nothing but the build above.
+      - name: Smoke the built addon
+        run: node crates/nexus-raw-napi/smoke.mjs
+
+      # The documented consumer style is a named ESM import; the CJS
+      # wrapper only exposes those when the lexer sees dot assignments, so
+      # this fails exactly when an `import { up } from 'nexus-raw'` would.
+      - name: Named ESM imports resolve
+        working-directory: crates/nexus-raw-napi
+        run: |
+          node --eval "import('./index.js').then((m) => { const missing = ['get', 'put', 'head', 'sha', 'up', 'down', 'verify', 'channelGet', 'channelSet'].filter((f) => typeof m[f] !== 'function'); if (missing.length > 0) { throw new Error('named ESM exports missing: ' + missing.join(', ')) } })"
 
       - name: Build the mock server
         run: cargo build -q -p mock-nexus
@@ -183,23 +230,23 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: crates/nexus-raw-napi/package.json
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm

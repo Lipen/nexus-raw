@@ -4,26 +4,25 @@ name: Release
 # workspace version, publishes the crates in dependency order, builds the
 # platform binaries, and attaches them to the GitHub release whose generated
 # notes are the changelog.
-# `workflow_dispatch` with `dry_run` runs the binary matrix alone: the same
-# build jobs, no crates.io, no release - the way to test this workflow
-# without spending a tag or a version number.
+# `workflow_dispatch` runs the binary matrix alone: the same build jobs, no
+# crates.io, no release - the way to test this workflow without spending a
+# tag or a version number.
+# The `publish-npm` input is the recovery hatch for a failed tag run: it
+# publishes the npm main package from the dispatched ref.
 on:
   push:
     tags: [v*]
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: Build and checksum the binaries, publish nothing
-        type: boolean
-        default: true
       publish-npm:
         description: Publish the npm main package from this ref (recovery for a failed tag run)
         type: boolean
         default: false
 
-# The release notes are written with the repository token.
+# Least privilege: builds only read; the two jobs that touch the GitHub
+# release (publish opens it, attach uploads to it) grant the write locally.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish:
@@ -31,15 +30,18 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # The job opens the GitHub release the binaries later ride on.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
@@ -62,10 +64,18 @@ jobs:
         run: scripts/version-check.sh
 
       # Order matters: nexus-raw depends on nexus-raw-core by version.
+      # A re-run after a transient failure mid-run must skip what is already
+      # out, or one bad moment would poison every retry forever.
       - name: Publish nexus-raw-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked -p nexus-raw-core
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-core@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p nexus-raw-core
+          fi
 
       # crates.io resolves a dependent only after the index carries the
       # dependency, which takes a moment after the upload.
@@ -77,12 +87,24 @@ jobs:
       - name: Publish mock-nexus
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked -p mock-nexus
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
+            echo "mock-nexus@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p mock-nexus
+          fi
 
       - name: Publish nexus-raw
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked -p nexus-raw
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p nexus-raw
+          fi
 
       - name: Open the GitHub release
         env:
@@ -111,15 +133,15 @@ jobs:
             target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
           key: ${{ matrix.target }}
@@ -164,7 +186,7 @@ jobs:
           fi
 
       - name: Upload the archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bins-${{ matrix.name }}
           path: |
@@ -176,13 +198,17 @@ jobs:
     name: Attach the binaries
     needs: [publish, build]
     # On a tag the archives ride on the release the publish job opened; a
-    # dry run has no release, so the files stop at the workflow artifacts.
+    # dispatch run has no release, so the files stop at the workflow
+    # artifacts.
     if: ${{ always() && needs.build.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.publish.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The only job that writes to the GitHub release.
+    permissions:
+      contents: write
     steps:
       - name: Collect the archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: bins-*
           path: dist
@@ -196,7 +222,7 @@ jobs:
 
       - name: Stop at the workflow artifacts
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: binaries
           path: dist/*
@@ -238,26 +264,26 @@ jobs:
             platform-cpu: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
           key: node-${{ matrix.target }}
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: crates/nexus-raw-napi/package.json
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -294,7 +320,7 @@ jobs:
           ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}"
 
       - name: Upload the staged package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: npm-${{ matrix.name }}
           path: crates/nexus-raw-napi/npm/nexus-raw-${{ matrix.name }}
@@ -307,7 +333,7 @@ jobs:
       # The loader is platform-independent, and one job uploads it.
       - name: Upload the generated main-package files
         if: matrix.name == 'linux-x64-gnu'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: main-generated
           path: |
@@ -328,30 +354,30 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # npm >= 11.5 speaks trusted publishing.
       # Node 24 carries it.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
 
       # No merge-multiple: every artifact carries a package.json of its own,
       # a flat merge would keep only the last one downloaded.
       - name: Collect the staged packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: npm-*
           path: npm
 
       - name: Collect the generated main-package files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: main-generated
           path: crates/nexus-raw-napi
 
-      # Runs on dispatch too: the dry run must exercise the same collection
+      # Runs on dispatch too: a rehearsal must exercise the same collection
       # and validation a real release would, or it rehearses nothing.
       - name: Validate the staged packages
         run: |
@@ -397,8 +423,8 @@ jobs:
       # The dev manifest stays free of version pins: the platform packages
       # do not exist between releases, and a frozen pnpm install would fail
       # on them, so the release manifest is composed here from the tag.
-      # Staging is pure local file ops and runs on dispatch too: the dry
-      # run must exercise the step that once burned a release.
+      # Staging is pure local file ops and runs on dispatch too: the
+      # rehearsal must exercise the step that once burned a release.
       # The version comes from the manifest, which the tag check has
       # already matched against the ref.
       - name: Stage the main package
@@ -422,6 +448,23 @@ jobs:
           fs.copyFileSync("crates/nexus-raw-napi/README.md", "pkg-main/README.md");
           fs.writeFileSync("pkg-main/package.json", JSON.stringify(pkg, null, 2) + "\n");
           EOF
+
+      # The main package declares the platform packages as its
+      # optionalDependencies: publishing it while one of them is missing
+      # would silently break `require` for every consumer of this version.
+      # The guard runs wherever the main package does, so a recovery
+      # dispatch cannot outpace the packages it depends on.
+      - name: The platform packages are on the registry
+        if: ${{ github.event_name == 'push' || inputs.publish-npm == true }}
+        run: |
+          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
+          for name in nexus-raw-linux-x64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
+            if ! npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "refusing to publish nexus-raw@$version: $name@$version is not on the registry, its optionalDependencies entry would fail to resolve" >&2
+              exit 1
+            fi
+            echo "$name@$version is on the registry"
+          done
 
       - name: Publish the main package
         if: ${{ github.event_name == 'push' || inputs.publish-npm == true }}
