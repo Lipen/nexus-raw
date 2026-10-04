@@ -1208,3 +1208,53 @@ mod tests {
         );
     }
 }
+
+/// One repository of a Nexus server, as the service REST API reports it.
+#[napi(object)]
+pub struct NxrRepoInfo {
+    /// Repository name.
+    pub name: String,
+    /// Repository format (`raw`, `maven2`, ...), spelled as the server spells it.
+    pub format: String,
+    /// Repository kind (`hosted`, `proxy`, `group`).
+    pub kind: String,
+    /// Repository URL.
+    pub url: String,
+}
+
+/// List the repositories of the server behind `url`: the service REST API (the management surface).
+/// The URL may be the server root or any repository URL: both root to the same server.
+/// Storage invariants never touch this endpoint; it exists for humans and panels.
+#[napi]
+pub async fn service_repos(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<NxrRepoInfo>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let repos = nxr.service_repos().await;
+    drop(nxr);
+    let repos = match repos {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(repos
+        .into_iter()
+        .map(|r| NxrRepoInfo {
+            name: r.name,
+            format: r.format,
+            kind: r.kind,
+            url: r.url,
+        })
+        .collect())
+}
