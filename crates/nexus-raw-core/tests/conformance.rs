@@ -556,6 +556,32 @@ async fn down_fetches_and_writes_local_marker() {
 }
 
 #[tokio::test]
+async fn duplicate_explicit_names_download_once() {
+    // A repeated name is one artifact: two workers racing on one part file would
+    // land a corrupt object behind a valid marker.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    nxr.up(local.path(), None, true, None, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let summary = nxr
+        .down(
+            dst.path(),
+            Enumeration::Names(names(&["a.zip", "a.zip"])),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert!(summary.failed.is_empty());
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+}
+
+#[tokio::test]
 async fn down_resumes_from_part_with_range() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();

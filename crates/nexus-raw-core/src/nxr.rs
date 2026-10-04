@@ -317,10 +317,15 @@ impl Nxr {
     }
 
     /// Resolve the enumeration source into names, refusing an empty result like `down`.
+    /// A repeated explicit name collapses to its first occurrence: one artifact, one worker.
     async fn resolve_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
         let names = match enum_src {
             Enumeration::Manifest(m) => m.names,
-            Enumeration::Names(v) => v,
+            Enumeration::Names(mut v) => {
+                let mut seen = std::collections::HashSet::with_capacity(v.len());
+                v.retain(|n| seen.insert(n.clone()));
+                v
+            }
             Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
         };
         if names.is_empty() {
