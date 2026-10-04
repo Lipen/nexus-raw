@@ -77,7 +77,24 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             name,
             ls,
             dry_run,
-        } => transfer::mirror(cli, src, dst, manifest.as_deref(), name, *ls, *dry_run).await,
+            src_user,
+            dst_user,
+        } => {
+            transfer::mirror(
+                cli,
+                transfer::MirrorArgs {
+                    src,
+                    dst,
+                    src_user: src_user.as_deref(),
+                    dst_user: dst_user.as_deref(),
+                },
+                manifest.as_deref(),
+                name,
+                *ls,
+                *dry_run,
+            )
+            .await
+        }
         Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
         Cmd::Channel { op } => match op {
             ChannelOp::Get { url } => layout::channel_get(cli, url).await,
@@ -117,7 +134,18 @@ pub(crate) fn make_nxr(
     base: &str,
     sender: tokio::sync::mpsc::UnboundedSender<Event>,
 ) -> Result<Nxr, Error> {
-    let auth = match split_user(cli.user.as_deref())? {
+    make_nxr_with(cli, base, sender, cli.user.as_deref())
+}
+
+/// The same, with an explicit credentials override (`mirror --src-user/--dst-user`):
+/// the override replaces `-u` for that one side, the env fallback stays last.
+pub(crate) fn make_nxr_with(
+    cli: &Cli,
+    base: &str,
+    sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    explicit_user: Option<&str>,
+) -> Result<Nxr, Error> {
+    let auth = match split_user(explicit_user)? {
         Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
         None => creds::resolve(None)?.map(|c| c.header),
     };

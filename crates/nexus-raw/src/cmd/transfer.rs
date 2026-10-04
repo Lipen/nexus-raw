@@ -4,11 +4,20 @@ use std::path::Path;
 
 use nexus_raw_core::{ArtifactName, Enumeration, Error, Nxr};
 
-use crate::cmd::{enumeration_source, finish, load_manifest, make_ctx, make_nxr, parse_names, Ctx};
+use crate::cmd::{
+    enumeration_source, finish, load_manifest, make_ctx, make_nxr_with, parse_names, Ctx,
+};
 use crate::render::{Mode, Session};
 use crate::Cli;
 
-#[allow(clippy::too_many_arguments)]
+/// The mirror pair with per-side credential overrides.
+pub(crate) struct MirrorArgs<'a> {
+    pub(crate) src: &'a str,
+    pub(crate) dst: &'a str,
+    pub(crate) src_user: Option<&'a str>,
+    pub(crate) dst_user: Option<&'a str>,
+}
+
 pub(crate) async fn up(
     cli: &Cli,
     src: &Path,
@@ -182,8 +191,7 @@ fn action_json(a: &nexus_raw_core::Action) -> serde_json::Value {
 /// the writes follow the destination.
 pub(crate) async fn mirror(
     cli: &Cli,
-    src: &str,
-    dst: &str,
+    args: MirrorArgs<'_>,
     manifest: Option<&str>,
     names: &[String],
     ls: bool,
@@ -191,8 +199,10 @@ pub(crate) async fn mirror(
 ) -> Result<(), Error> {
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
     // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
-    let src_nxr = make_nxr(cli, src, session.sender())?;
-    let dst_nxr = make_nxr(cli, dst, session.sender())?;
+    // Per-side credentials override the shared `-u`: a mirror between different servers
+    // must not leak one server's secret to the other.
+    let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
+    let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
     // Enumeration only from the source: the same three sources as down.
     let enum_src = if ls {
         Enumeration::Search

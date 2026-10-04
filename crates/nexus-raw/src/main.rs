@@ -176,6 +176,12 @@ pub(crate) enum Cmd {
         /// Print the plan without transferring anything.
         #[arg(long)]
         dry_run: bool,
+        /// Credentials for the source only, overriding the shared `-u`.
+        #[arg(long, value_name = "USER:PASS")]
+        src_user: Option<String>,
+        /// Credentials for the destination only, overriding the shared `-u`.
+        #[arg(long, value_name = "USER:PASS")]
+        dst_user: Option<String>,
     },
     /// List versions or the objects of a version directory (experimental).
     Ls {

@@ -180,6 +180,18 @@ Three rules bind the whole matrix:
 
 `--no-sha` does not change the classification (the diff still reads remote siblings) and only skips marker generation and marker uploads, so the server keeps `Markerless` objects.
 
+## Concurrent writers
+
+The never-overwrite rule is decided per run: the diff reads the remote state, then the run writes.
+Between that read and the write there is no server-side guard (raw storage carries no conditional PUT contract this tool can rely on), so two writers racing on the same name can still overwrite each other.
+
+The contract is therefore: **one writer per destination prefix**.
+In practice this means one CI job (or one mutex, or disjoint `--prefix` ranges) owns each destination tree.
+nxr never claims multi-writer safety on a shared prefix, and no mock scenario promises it.
+
+A server that honors conditional PUTs would close this window at the wire level.
+That is a protocol change with a compatibility story, not a client fix, and it is deliberately out of scope until a real deployment asks for it.
+
 ## The write order
 
 Upload:

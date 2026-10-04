@@ -405,6 +405,13 @@ Without any source the run refuses with `cannot enumerate` (exit 1).
 | `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
+| `--dry-run` | probe both sides and print the plan without writing to the destination |
+| `--src-user USER:PASS` | credentials for the source only, overriding the shared `-u` |
+| `--dst-user USER:PASS` | credentials for the destination only, overriding the shared `-u` |
+
+Per-side credentials exist for cross-server moves: a mirror between different servers
+must not leak one server's secret to the other.
+Without the overrides the shared `-u` (or env) applies to both sides.
 
 Every name travels through a staging directory: a Range-aware GET from the source, a digest check against the source marker, then a PUT of the bytes and of the `<name>.sha256` marker on the destination.
 The destination diff follows `up`'s rules: an identical complete copy is skipped, a diverging complete copy refuses the run, an unfinished copy is completed.
