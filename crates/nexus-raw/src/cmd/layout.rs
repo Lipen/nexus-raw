@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{Error, Manifest};
+use nexus_raw_core::{Error, Manifest, Summary};
 
 use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
@@ -114,11 +114,19 @@ pub(crate) async fn verify(cli: &Cli, dir: &Path, manifest: Option<&str>) -> Res
     // verify needs no network: the base is only a placeholder for the client.
     let ctx = make_ctx(cli, "http://localhost/")?;
     let result = run_verify(&ctx, dir, manifest).await;
+    // The verdict prints after the renderer drained: the summary line always
+    // precedes it, in both failure and success, no task race.
     finish(ctx).await;
-    result
+    // The core returns Err(Incomplete) naming the failures on any verdict but clean:
+    // that path surfaces through the error rendering, the line here is the clean verdict.
+    let summary = result?;
+    if !cli.json {
+        println!("verify: {} ok, FAILED: none", summary.skipped);
+    }
+    Ok(())
 }
 
-async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<(), Error> {
+async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<Summary, Error> {
     let names = match manifest {
         Some(spec) => {
             let m: Manifest = if spec == "-" {
@@ -130,17 +138,6 @@ async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<(),
         }
         None => None,
     };
-    let summary = ctx.nxr.verify(dir, names).await?;
-    if !ctx.json {
-        println!(
-            "verify: {} ok, FAILED: {}",
-            summary.skipped,
-            if summary.failed.is_empty() {
-                "none".to_owned()
-            } else {
-                summary.failed.join(", ")
-            }
-        );
-    }
-    Ok(())
+    // The verdict line is printed by the caller, after the renderer drained.
+    ctx.nxr.verify(dir, names).await
 }
