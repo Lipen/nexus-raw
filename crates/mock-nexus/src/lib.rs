@@ -6,7 +6,7 @@
 //! One request per connection, `Connection: close` on every response.
 //! GET honors resumable downloads: a single open `Range: bytes=N-` is answered with `206` and `Content-Range`, out-of-range starts get `416`.
 //! Any other `Range` form is ignored.
-//! A [`Scenario`] selects a failure mode: partial PUT bodies, connection resets, slow links, drifted documents, flaky 503s, Basic-auth gating.
+//! A [`Scenario`] selects a failure mode: truncated PUT and GET bodies, connection resets, held uploads, missing `Content-Length`, slow links, drifted documents, flaky 503s, rate-limit 429s with `Retry-After`, redirects, and Basic-auth gating.
 //!
 //! Rust conformance tests use the library API directly.
 //! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:
@@ -71,7 +71,7 @@ impl MockNexus {
     /// Start a group repository over `members` (two or more running instances), listening on its own port on 127.0.0.1.
     ///
     /// Reads (`GET`/`HEAD`) are forwarded to the members' real HTTP endpoints in member order, and the first member answering `2xx` is relayed to the client.
-    /// Any other member answer — a `404`, a `5xx`, a broken connection — is skipped: the walk never retries a member and never surfaces a member's failure to the client.
+    /// Any other member answer (a `404`, a `5xx`, a broken connection) is skipped: the walk never retries a member and never surfaces a member's failure to the client.
     /// When no member answers `2xx`, the group answers `404` with the same `not found` body as a single-instance miss (real Nexus's `notFound()` sends no body, the mock stays consistent with its own single-repo shape).
     /// Every other method is refused with `405`, `Allow: GET,HEAD` and an empty body: a group is a read-only aggregation, and publication targets hosted members.
     /// Member scenario gates apply to forwarded requests, because the members serve them for real: a flaky member's `503` costs the group nothing once a later member holds the object.
@@ -132,7 +132,7 @@ impl MockNexus {
             .filter(|req| {
                 req.method == "PUT"
                     && req.path == path
-                    && matches!(req.outcome, Outcome::Status(200..=300))
+                    && matches!(req.outcome, Outcome::Status(200..=299))
             })
             .count()
     }

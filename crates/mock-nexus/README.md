@@ -10,7 +10,7 @@ cargo run -p mock-nexus -- atomic --port 8080
 # prints: listening http://127.0.0.1:8080
 ```
 
-Point any client at the printed address — `nxr`, your own code, a curl loop.
+Point any client at the printed address: `nxr`, your own code, a curl loop.
 
 ## Scenarios
 
@@ -18,18 +18,22 @@ Point any client at the printed address — `nxr`, your own code, a curl loop.
 |:---------|:---------|
 | `atomic` | the correct server: PUT/GET/HEAD, DELETE with 204/404, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
 | `partial-put` | cuts the first PUT body short and closes the connection |
-| `drop-connection` | resets the first request per path after reading its headers |
-| `freeze-upload` | accepts a PUT connection and then never reads or answers, so the client's stall detection must fire |
-| `sizeless` | omits `Content-Length` on GET responses (chunked/streamed bodies of unknown size) |
+| `cut-body` | the first success GET per path ships honest status and headers, then only `--cut-after` body bytes and closes; `--fake-length` makes the declared `Content-Length` lie 1024 bytes high |
+| `drop-connection` | resets the first request per path right after its request line and headers are read: the body is never read, nothing is answered or stored |
+| `freeze-upload` | accepts a PUT connection and then never reads or answers, so the client's stall detection must fire; the hold is bounded (about 15 minutes), then the connection is dropped |
+| `sizeless` | omits `Content-Length` on success (200) GET and HEAD answers for present objects; 206, 416 and misses keep it |
 | `slow` | writes response bodies in small delayed chunks |
 | `foreign-marker` | stores markers with a foreign digest |
 | `markerless` | accepts markers but silently drops them |
-| `auth-401` | requires `Authorization: Basic <base64 user:pass>` |
+| `auth-401` | requires `Authorization: Basic <base64 user:pass>`, refuses the rest with 401 and a `WWW-Authenticate` challenge |
+| `auth-403` | requires `Authorization: Basic <base64 user:pass>`, refuses the rest with 403 and a `forbidden` body, on any method |
 | `doc-drift` | diverges `GET version.json` once drift is enabled by the test |
 | `flaky` | answers 503 for the first K requests per path |
+| `rate-limit` | answers 429 with a `Retry-After: <secs>` header and an empty body for the first N requests per path, then serves like atomic |
+| `redirect` | answers GET and HEAD with 301 and `Location: <path>` (same host, the path from the repository root); writes stay atomic |
 | `readonly` | answers 403 to every DELETE: the read-only repository, the store never shrinks |
 
-Scenario-specific flags: `--partial-bytes N`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--auth user:pass` (default `ci:secret`).
+Scenario-specific flags: `--partial-bytes N`, `--cut-after N`, `--fake-length`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--rate-429s N`, `--retry-after-secs N`, `--location PATH`, `--auth user:pass` (default `ci:secret`).
 
 ## As a library
 

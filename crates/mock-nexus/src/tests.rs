@@ -250,7 +250,7 @@ fn drop_connection_resets_first_request_per_path() {
 
 #[test]
 fn flaky_serves_503_for_first_k_requests() {
-    let server = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
+    let server = MockNexus::start(Scenario::Flaky { first_failures: 3 }).unwrap();
     server.insert("v1/a.bin", b"X");
 
     for _ in 0..2 {
@@ -258,6 +258,11 @@ fn flaky_serves_503_for_first_k_requests() {
         assert_eq!(status, 503);
         assert_eq!(body, b"flaky\n");
     }
+    // The third 503 lands on a HEAD: Content-Length mirrors the body, no body bytes ride the wire.
+    let (status, headers, body) = exchange(server.addr(), "HEAD", "/v1/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 503);
+    assert_eq!(header_value(&headers, "content-length"), Some("6"));
+    assert!(body.is_empty(), "a HEAD response carries no body: {body:?}");
     let (status, _, body) = exchange(server.addr(), "GET", "/v1/a.bin", b"", &[]).unwrap();
     assert_eq!(status, 200);
     assert_eq!(body, b"X");
@@ -270,6 +275,7 @@ fn flaky_serves_503_for_first_k_requests() {
     assert_eq!(
         outcomes,
         vec![
+            Outcome::Status(503),
             Outcome::Status(503),
             Outcome::Status(503),
             Outcome::Status(200)
@@ -381,6 +387,12 @@ fn auth_401_gate() {
         Some("Basic realm=\"nexus\"")
     );
 
+    // The same verdict on a HEAD: Content-Length stays, no body bytes ride the wire.
+    let (status, headers, body) = exchange(server.addr(), "HEAD", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 401);
+    assert_eq!(header_value(&headers, "content-length"), Some("14"));
+    assert!(body.is_empty(), "a HEAD response carries no body: {body:?}");
+
     // Wrong password.
     let (status, _, _) = exchange(
         server.addr(),
@@ -403,6 +415,193 @@ fn auth_401_gate() {
     .unwrap();
     assert_eq!(status, 200);
     assert_eq!(body, b"X");
+}
+
+/// auth-403: everything but the valid Basic token answers 403 `forbidden`, on any method; valid credentials behave like atomic.
+#[test]
+fn auth_403_gate() {
+    let server = MockNexus::start(Scenario::Auth403 {
+        user: "ci".to_owned(),
+        pass: "secret".to_owned(),
+    })
+    .unwrap();
+    server.insert("v1/a", b"X");
+
+    // No credentials: 403 on a GET.
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 403);
+    assert_eq!(body, b"forbidden\n");
+    assert_eq!(header_value(&headers, "www-authenticate"), None);
+
+    // A HEAD carries the same verdict with no body bytes (RFC 9110 §9.3.2).
+    let (status, headers, body) = exchange(server.addr(), "HEAD", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 403);
+    assert_eq!(header_value(&headers, "content-length"), Some("10"));
+    assert!(body.is_empty(), "a HEAD response carries no body: {body:?}");
+
+    // Wrong password is still just a 403, on PUT too: the seeded bytes are never overwritten.
+    let (status, _, body) = exchange(
+        server.addr(),
+        "PUT",
+        "/v1/a",
+        b"BYTES",
+        &[("Authorization", "Basic Y2k6d3Jvbmc=")], // ci:wrong
+    )
+    .unwrap();
+    assert_eq!(status, 403);
+    assert_eq!(body, b"forbidden\n");
+    assert_eq!(server.store_get("v1/a").as_deref(), Some(b"X".as_slice()));
+
+    // Valid credentials: normal behavior.
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/v1/a",
+        b"",
+        &[("Authorization", "Basic Y2k6c2VjcmV0")], // ci:secret
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"X");
+}
+
+/// rate-limit: the first N requests per path answer 429 with `Retry-After` and an empty body, then the path serves like atomic.
+#[test]
+fn rate_limit_serves_429_then_atomic() {
+    let server = MockNexus::start(Scenario::RateLimit {
+        first_429s: 2,
+        retry_after_secs: 7,
+    })
+    .unwrap();
+    server.insert("v1/a", b"X");
+
+    for _ in 0..2 {
+        let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+        assert_eq!(status, 429);
+        assert_eq!(header_value(&headers, "retry-after"), Some("7"));
+        assert!(body.is_empty());
+    }
+    let (status, _, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"X");
+
+    // The gate counts per path, any method: a first PUT on a fresh path is throttled too, the retry burns the second 429 and the third attempt lands.
+    let (status, headers, _) = exchange(server.addr(), "PUT", "/v1/b", b"Y", &[]).unwrap();
+    assert_eq!(status, 429);
+    assert_eq!(header_value(&headers, "retry-after"), Some("7"));
+    assert_eq!(server.store_get("v1/b"), None);
+
+    let (status, _, _) = exchange(server.addr(), "PUT", "/v1/b", b"Y", &[]).unwrap();
+    assert_eq!(status, 429);
+    assert_eq!(server.store_get("v1/b"), None);
+
+    let (status, _, _) = exchange(server.addr(), "PUT", "/v1/b", b"Y", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(server.store_get("v1/b").as_deref(), Some(b"Y".as_slice()));
+
+    let outcomes: Vec<Outcome> = server
+        .requests()
+        .into_iter()
+        .map(|req| req.outcome)
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            Outcome::Status(429),
+            Outcome::Status(429),
+            Outcome::Status(200),
+            Outcome::Status(429),
+            Outcome::Status(429),
+            Outcome::Status(201)
+        ]
+    );
+}
+
+/// redirect: GET and HEAD answer 301 with `Location` and an empty body, writes stay atomic.
+#[test]
+fn redirect_answers_301_on_reads_only() {
+    let server = MockNexus::start(Scenario::Redirect {
+        location_path: "/repository/raw/moved".to_owned(),
+    })
+    .unwrap();
+    server.insert("v1/a", b"X");
+
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 301);
+    assert_eq!(
+        header_value(&headers, "location"),
+        Some("/repository/raw/moved")
+    );
+    assert_eq!(header_value(&headers, "content-length"), Some("0"));
+    assert!(body.is_empty());
+
+    let (status, _, body) = exchange(server.addr(), "HEAD", "/v1/a", b"", &[]).unwrap();
+    assert_eq!(status, 301);
+    assert!(body.is_empty());
+
+    // Writes ignore the redirect and behave like atomic.
+    let (status, _, _) = exchange(server.addr(), "PUT", "/v1/b", b"Y", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(server.store_get("v1/b").as_deref(), Some(b"Y".as_slice()));
+    let (status, _, _) = exchange(server.addr(), "DELETE", "/v1/b", b"", &[]).unwrap();
+    assert_eq!(status, 204);
+    assert_eq!(server.store_get("v1/b"), None);
+}
+
+/// cut-body with an honest length: the first GET breaks after honest headers and a short body, a fresh GET serves the object whole.
+#[test]
+fn cut_body_first_get_truncated_then_honest() {
+    let server = MockNexus::start(Scenario::CutBody {
+        after_bytes: 4,
+        fake_length: false,
+    })
+    .unwrap();
+    server.insert("v1/big.bin", b"0123456789");
+
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/big.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    // Honest Content-Length, fewer bytes than promised: a short read for the client.
+    assert_eq!(header_value(&headers, "content-length"), Some("10"));
+    assert_eq!(body, b"0123");
+
+    // The retry serves the object whole.
+    let (status, _, body) = exchange(server.addr(), "GET", "/v1/big.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"0123456789");
+}
+
+/// cut-body with a lying length: the first GET promises `total + 1024` and breaks after `after_bytes`; the retry is honest.
+#[test]
+fn cut_body_fake_length_lies_high() {
+    let server = MockNexus::start(Scenario::CutBody {
+        after_bytes: 4,
+        fake_length: true,
+    })
+    .unwrap();
+    server.insert("v1/big.bin", b"0123456789");
+
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/big.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(header_value(&headers, "content-length"), Some("1034"));
+    assert_eq!(body, b"0123");
+
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/big.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(header_value(&headers, "content-length"), Some("10"));
+    assert_eq!(body, b"0123456789");
+}
+
+/// A head past the 64 KiB bound is answered with 400, not a silent hang-up.
+#[test]
+fn oversized_head_is_answered_with_400() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    let long_header = "X".repeat(70 * 1024);
+    let request = request_bytes("GET", "/v1/a", b"", &[("X-Long", &long_header)]);
+    let mut stream = send(server.addr(), &request).unwrap();
+    let (status, _, body) = read_response(&mut stream).unwrap();
+    assert_eq!(status, 400);
+    assert_eq!(body, b"bad request\n");
+    assert_eq!(server.requests()[0].outcome, Outcome::Status(400));
 }
 
 #[test]

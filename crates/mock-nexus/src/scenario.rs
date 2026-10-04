@@ -15,6 +15,7 @@ use crate::store::{lock, Outcome, ReqLog, Shared};
 pub const SCENARIOS: &[&str] = &[
     "atomic",
     "partial-put",
+    "cut-body",
     "drop-connection",
     "freeze-upload",
     "sizeless",
@@ -22,8 +23,11 @@ pub const SCENARIOS: &[&str] = &[
     "foreign-marker",
     "markerless",
     "auth-401",
+    "auth-403",
     "doc-drift",
     "flaky",
+    "rate-limit",
+    "redirect",
     "readonly",
 ];
 
@@ -35,14 +39,23 @@ pub enum Scenario {
     /// The first PUT per path is cut off after `first_attempt_bytes` body bytes: the connection closes with no response and nothing is stored.
     /// Later PUT attempts on that path are read fully and stored.
     PartialPut { first_attempt_bytes: usize },
-    /// The first request per path (any method) is read fully, then answered with a TCP reset.
+    /// The first success (200) GET per path writes honest status and headers, then only `after_bytes` body bytes and closes the connection.
+    /// With `fake_length` the `Content-Length` header lies [`FAKE_LENGTH_LIE`] bytes high, so the honest-looking answer still breaks mid-body.
+    /// Later GETs serve the object whole, so a retry resuming from the part file completes the download.
+    CutBody {
+        after_bytes: usize,
+        fake_length: bool,
+    },
+    /// The first request per path (any method) is reset right after its head (request line and headers) is read: the body is never read, nothing is answered and nothing is stored.
     /// Later requests are served normally.
     DropConnection,
     /// PUT connections are held right after the head: the body is never read and no response is ever written, so the write side must detect the stall.
+    /// The hold is bounded (about 15 minutes), then the connection is dropped.
     /// GET/HEAD behave like [`Scenario::Atomic`].
     FreezeUpload,
-    /// GET/HEAD answers for present objects carry no `Content-Length`: the proxy case.
+    /// Success (200) GET and HEAD answers for present objects carry no `Content-Length`: the proxy case.
     /// A client must refuse to treat such objects as absent (the digest comparison would be skipped).
+    /// Every other answer (206, 416, 404) keeps `Content-Length`.
     /// PUTs behave like [`Scenario::Atomic`].
     Sizeless,
     /// GET/HEAD bodies are written in `chunk_size` pieces, sleeping `chunk_delay_ms` between pieces.
@@ -61,6 +74,10 @@ pub enum Scenario {
     /// Otherwise 401 with `WWW-Authenticate: Basic realm="nexus"`.
     /// Valid credentials behave like [`Scenario::Atomic`].
     Auth401 { user: String, pass: String },
+    /// Every request requires `Authorization: Basic base64(user:pass)`.
+    /// Anything else answers `403 Forbidden` with a `forbidden` body, on any method (unlike [`Scenario::Auth401`], which answers `401`).
+    /// Valid credentials behave like [`Scenario::Atomic`].
+    Auth403 { user: String, pass: String },
     /// Behaves like [`Scenario::Atomic`] until [`MockNexus::enable_drift`](crate::MockNexus::enable_drift).
     /// Afterwards every GET of a `*/version.json` path serves a synthesized version document with a ghost artifact.
     /// PUTs keep storing verbatim, and [`MockNexus::disable_drift`](crate::MockNexus::disable_drift) restores store-backed responses.
@@ -68,6 +85,15 @@ pub enum Scenario {
     /// The first `first_failures` requests per path (any method) get 503 Service Unavailable.
     /// Later requests are served normally.
     Flaky { first_failures: u32 },
+    /// The first `first_429s` requests per path (any method) answer `429 Too Many Requests` with a `Retry-After: <retry_after_secs>` header and an empty body.
+    /// Later requests are served like [`Scenario::Atomic`].
+    RateLimit {
+        first_429s: usize,
+        retry_after_secs: u64,
+    },
+    /// GET and HEAD requests answer `301 Moved Permanently` with `Location: <location_path>` (same host, the path from the repository root) and an empty body.
+    /// Every other method behaves like [`Scenario::Atomic`].
+    Redirect { location_path: String },
     /// Every DELETE is refused with `403 Forbidden`: the read-only repository.
     /// Nothing is ever removed from the store.
     /// GET/HEAD/PUT behave like [`Scenario::Atomic`].
@@ -77,15 +103,33 @@ pub enum Scenario {
 /// A single read or write may stall at most this long before we drop the peer.
 pub(crate) const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How long the freeze-upload handler holds a PUT connection before dropping it.
+/// A bounded hold keeps a long-lived hosted instance from leaking threads and sockets.
+const FREEZE_HORIZON_SECS: u64 = 900;
+
+/// How far the cut-body `Content-Length` lies high under `fake_length`.
+const FAKE_LENGTH_LIE: usize = 1024;
+
+/// How far the oversized-head drain may read before giving the peer no further courtesy.
+const DRAIN_CAP: usize = 256 * 1024;
+
 /// Serve exactly one request on `stream`, then close the connection.
 pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let mut stream = stream;
 
-    // Clean EOF and timeout or reset mid-head: nothing sensible to answer.
-    let Ok(Some(head)) = server::read_head_raw(&mut stream) else {
-        return;
+    let head = match server::read_head_raw(&mut stream) {
+        Ok(Some(head)) => head,
+        // An oversized head (past the bound in `read_head_raw`) is a recognizable refusal: answer 400 instead of hanging up silently.
+        Err(e) if e.kind() == io::ErrorKind::InvalidData => {
+            answer_bad_request(shared, &mut stream, "", "");
+            // The head's tail still sits unread in the receive queue: closing now would reset the connection and destroy the queued 400, so drain first.
+            drain(&mut stream);
+            return;
+        }
+        // Clean EOF, timeout or reset mid-head: nothing sensible to answer.
+        _ => return,
     };
     let mut req = match server::parse_head(&head) {
         Ok(req) => req,
@@ -98,13 +142,14 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     let path = normalize_path(&req.target);
 
     // freeze-upload: a PUT connection is held without reading the body or answering, so the write side must detect the stall.
-    // The handler thread parks for good.
-    // Parked handlers die with the test process.
+    // The handler parks in one-second steps for a bounded window, then drops the socket: a long-lived hosted instance must not leak threads and file descriptors forever.
+    // Parked handlers die with the test process long before the horizon.
     if matches!(shared.scenario, Scenario::FreezeUpload) && req.method == "PUT" {
         log_request(shared, &req.method, &path, Outcome::Stalled);
-        loop {
-            std::thread::sleep(Duration::from_secs(3600));
+        for _ in 0..FREEZE_HORIZON_SECS {
+            std::thread::sleep(Duration::from_secs(1));
         }
+        return;
     }
 
     // drop-connection: the first request per path is reset.
@@ -144,6 +189,20 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     handle(shared, &mut stream, &req, &path);
 }
 
+/// Read the leftover request bytes up to [`DRAIN_CAP`] so the close is a clean FIN and the peer can read the answer.
+/// The read timeout drops to half a second: once the queue is empty the peer sends nothing more, and waiting out the full [`IO_TIMEOUT`] would stall the test for nothing.
+fn drain(stream: &mut TcpStream) {
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    let mut sink = [0u8; 8192];
+    let mut drained = 0usize;
+    while drained < DRAIN_CAP {
+        match stream.read(&mut sink) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => drained += n,
+        }
+    }
+}
+
 /// Apply scenario gates and serve the request.
 fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
     // A group instance forwards instead of serving its own store: reads walk the members, writes refuse.
@@ -156,14 +215,21 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         return;
     }
 
-    // auth-401: unauthenticated callers are rejected before anything else.
+    // auth-401/auth-403: unauthenticated callers are rejected before anything else.
     let unauthenticated = shared
         .auth_b64
         .as_ref()
         .is_some_and(|expected| !auth_decision(req.header("Authorization"), expected));
     if unauthenticated {
-        log_request(shared, &req.method, path, Outcome::Status(401));
-        let _ = server::write_response(stream, &unauthorized());
+        // auth-401 challenges with 401, auth-403 refuses with 403; neither body rides a HEAD.
+        let forbidden403 = matches!(shared.scenario, Scenario::Auth403 { .. });
+        let resp = if forbidden403 {
+            forbidden()
+        } else {
+            unauthorized()
+        };
+        log_request(shared, &req.method, path, Outcome::Status(resp.status));
+        let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
         return;
     }
 
@@ -173,8 +239,38 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         bump(&mut seq, path) < k
     }) {
         log_request(shared, &req.method, path, Outcome::Status(503));
-        let _ = server::write_response(stream, &plain(503, b"flaky\n", None));
+        let _ = server::write_response(
+            stream,
+            &bodyless_for_head(&req.method, plain(503, b"flaky\n", None)),
+        );
         return;
+    }
+
+    // rate-limit: the first N requests per path get 429 with a Retry-After hint and an empty body.
+    if let Some((first_429s, retry_after_secs)) = shared.rate_first {
+        let seen = {
+            let mut seq = lock(&shared.first_request);
+            bump(&mut seq, path)
+        };
+        if seen < first_429s as u32 {
+            log_request(shared, &req.method, path, Outcome::Status(429));
+            let mut resp = plain(429, b"", None);
+            resp.extra_headers
+                .push(("Retry-After", retry_after_secs.to_string()));
+            let _ = server::write_response(stream, &resp);
+            return;
+        }
+    }
+
+    // redirect: reads point elsewhere with an empty 301, writes stay atomic.
+    if let Scenario::Redirect { location_path } = &shared.scenario {
+        if matches!(req.method.as_str(), "GET" | "HEAD") {
+            log_request(shared, &req.method, path, Outcome::Status(301));
+            let mut resp = plain(301, b"", None);
+            resp.extra_headers.push(("Location", location_path.clone()));
+            let _ = server::write_response(stream, &resp);
+            return;
+        }
     }
 
     match req.method.as_str() {
@@ -210,6 +306,18 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                     // No (recognized) Range: the whole object.
                     None => {
                         log_request(shared, &req.method, path, Outcome::Status(200));
+                        // cut-body: the first success GET per path ships honest headers, a truncated body, then closes.
+                        if let Some((after_bytes, fake_length)) = cut_plan(shared, path) {
+                            let taken = after_bytes.min(total);
+                            let mut resp = plain(200, &payload[..taken], shared.drip);
+                            resp.content_length = if fake_length {
+                                total + FAKE_LENGTH_LIE
+                            } else {
+                                total
+                            };
+                            let _ = server::write_response(stream, &resp);
+                            return;
+                        }
                         let resp = Resp {
                             status: 200,
                             extra_headers: Vec::new(),
@@ -270,7 +378,10 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         }
         _ => {
             log_request(shared, &req.method, path, Outcome::Status(405));
-            let _ = server::write_response(stream, &plain(405, b"method not allowed\n", None));
+            let _ = server::write_response(
+                stream,
+                &bodyless_for_head(&req.method, plain(405, b"method not allowed\n", None)),
+            );
         }
     }
 }
@@ -289,6 +400,22 @@ fn body_plan(shared: &Shared, method: &str, path: &str) -> BodyPlan {
     } else {
         BodyPlan::Full
     }
+}
+
+/// cut-body gate: `Some((after_bytes, fake_length))` for the first success GET per path, `None` afterwards.
+/// Like the partial-put gate, the attempt is consumed when it fires, before the response is written.
+fn cut_plan(shared: &Shared, path: &str) -> Option<(usize, bool)> {
+    let (cut, fake) = shared.cut_first_get?;
+    let mut seq = lock(&shared.first_get);
+    (bump(&mut seq, path) == 0).then_some((cut, fake))
+}
+
+/// Strip the body bytes off a response aimed at a HEAD request (RFC 9110 §9.3.2): the wire keeps `Content-Length` at the body length but sends nothing after the head.
+fn bodyless_for_head(method: &str, mut resp: Resp) -> Resp {
+    if method == "HEAD" {
+        resp.body = Vec::new();
+    }
+    resp
 }
 
 /// GET payload: the synthesized drifting version document once drift is enabled, otherwise whatever is in the store.
@@ -332,6 +459,11 @@ fn unauthorized() -> Resp {
         drip: None,
         hide_length: false,
     }
+}
+
+/// The auth-403 refusal: a plain verdict with no challenge.
+fn forbidden() -> Resp {
+    plain(403, b"forbidden\n", None)
 }
 
 fn answer_bad_request(shared: &Shared, stream: &mut TcpStream, method: &str, path: &str) {

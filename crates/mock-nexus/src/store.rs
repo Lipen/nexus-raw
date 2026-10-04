@@ -42,6 +42,8 @@ pub(crate) struct Shared {
     pub(crate) first_request: Mutex<HashMap<String, u32>>,
     /// PUT-only counter per path (partial-put gate).
     pub(crate) first_put: Mutex<HashMap<String, u32>>,
+    /// GET-success counter per path (cut-body gate).
+    pub(crate) first_get: Mutex<HashMap<String, u32>>,
     pub(crate) drift: AtomicBool,
     /// Expected `Authorization` token when the scenario requires Basic auth.
     pub(crate) auth_b64: Option<String>,
@@ -51,6 +53,10 @@ pub(crate) struct Shared {
     pub(crate) sizeless: bool,
     /// Bytes served of the first PUT per path before cutting it (partial-put).
     pub(crate) partial_first_put: Option<usize>,
+    /// Bytes served of the first success GET per path before cutting it, with the `Content-Length` lie flag (cut-body).
+    pub(crate) cut_first_get: Option<(usize, bool)>,
+    /// Number of initial 429s per path with their `Retry-After` seconds (rate-limit).
+    pub(crate) rate_first: Option<(usize, u64)>,
     /// Number of initial 503s per path (flaky).
     pub(crate) flaky_first: Option<u32>,
     /// Member addresses of a group instance, in member order.
@@ -62,7 +68,7 @@ impl Shared {
     /// Shared state for a hosted instance running `scenario`: an empty store plus every scenario-derived knob.
     pub(crate) fn hosted(scenario: Scenario) -> Self {
         let auth_b64 = match &scenario {
-            Scenario::Auth401 { user, pass } => {
+            Scenario::Auth401 { user, pass } | Scenario::Auth403 { user, pass } => {
                 Some(crate::base64::encode(format!("{user}:{pass}").as_bytes()))
             }
             _ => None,
@@ -78,12 +84,20 @@ impl Shared {
             _ => None,
         };
         let sizeless = matches!(&scenario, Scenario::Sizeless);
-        let (partial_first_put, flaky_first) = match &scenario {
+        let (partial_first_put, cut_first_get, rate_first, flaky_first) = match &scenario {
             Scenario::PartialPut {
                 first_attempt_bytes,
-            } => (Some(*first_attempt_bytes), None),
-            Scenario::Flaky { first_failures } => (None, Some(*first_failures)),
-            _ => (None, None),
+            } => (Some(*first_attempt_bytes), None, None, None),
+            Scenario::CutBody {
+                after_bytes,
+                fake_length,
+            } => (None, Some((*after_bytes, *fake_length)), None, None),
+            Scenario::RateLimit {
+                first_429s,
+                retry_after_secs,
+            } => (None, None, Some((*first_429s, *retry_after_secs)), None),
+            Scenario::Flaky { first_failures } => (None, None, None, Some(*first_failures)),
+            _ => (None, None, None, None),
         };
         Self {
             scenario,
@@ -91,11 +105,14 @@ impl Shared {
             log: Mutex::new(Vec::new()),
             first_request: Mutex::new(HashMap::new()),
             first_put: Mutex::new(HashMap::new()),
+            first_get: Mutex::new(HashMap::new()),
             drift: AtomicBool::new(false),
             auth_b64,
             drip,
             sizeless,
             partial_first_put,
+            cut_first_get,
+            rate_first,
             flaky_first,
             members: Vec::new(),
         }
