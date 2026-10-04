@@ -66,7 +66,7 @@ pub(crate) struct Shared {
 
 impl Shared {
     /// Shared state for a hosted instance running `scenario`: an empty store plus every scenario-derived knob.
-    pub(crate) fn hosted(scenario: Scenario) -> Self {
+    pub(crate) fn hosted(scenario: Scenario, base_url: String) -> Self {
         let auth_b64 = match &scenario {
             Scenario::Auth401 { user, pass } | Scenario::Auth403 { user, pass } => {
                 Some(crate::base64::encode(format!("{user}:{pass}").as_bytes()))
@@ -100,8 +100,8 @@ impl Shared {
             _ => (None, None, None, None),
         };
         Self {
+            store: Mutex::new(initial_store(&scenario, &base_url)),
             scenario,
-            store: Mutex::new(HashMap::new()),
             log: Mutex::new(Vec::new()),
             first_request: Mutex::new(HashMap::new()),
             first_put: Mutex::new(HashMap::new()),
@@ -119,10 +119,11 @@ impl Shared {
     }
 
     /// Shared state for a group over `members`: a plain hosted base plus the member addresses, in member order.
+    /// The group's own service document is irrelevant: reads forward to the members, whose stores carry it.
     pub(crate) fn group(members: &[&MockNexus]) -> Self {
         Self {
             members: members.iter().map(|m| m.addr()).collect(),
-            ..Self::hosted(Scenario::Atomic)
+            ..Self::hosted(Scenario::Atomic, String::new())
         }
     }
 }
@@ -130,4 +131,26 @@ impl Shared {
 /// Lock a mutex, surviving poisoning: a panicking test thread must not take unrelated assertions down with it.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The store a hosted instance starts with: empty, except the server metadata
+/// the service REST API reports (the repositories document).
+/// A [`Scenario::NoService`] instance predates the management API: nothing is seeded.
+fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>> {
+    let mut store = HashMap::new();
+    if matches!(scenario, Scenario::NoService) {
+        return store;
+    }
+    let doc = format!(
+        concat!(
+            "[",
+            r#"{{"name":"raw-main","format":"raw","type":"hosted","url":"{base}repository/raw-main/","attributes":{{}}}}"#,
+            ",",
+            r#"{{"name":"raw-all","format":"raw","type":"group","url":"{base}repository/raw-all/","attributes":{{}}}}"#,
+            "]"
+        ),
+        base = base_url
+    );
+    store.insert("service/rest/v1/repositories".to_owned(), doc.into_bytes());
+    store
 }

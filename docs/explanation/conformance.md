@@ -42,6 +42,7 @@ Every scenario, the invariant it pins, and the tests that pin it.
 | `rate-limit` | the first N requests per path answer `429` with a `Retry-After` header and an empty body, then serve like atomic | the client honors the `Retry-After` pause, spends attempts on the 429s and still lands the transfer in one invocation | core: `rate_limited_up_recovers_in_one_invocation` · CLI: `rate_limit_up_retries_and_succeeds`, `golden_ndjson_retrying_holds` · mock: `rate_limit_serves_429_then_atomic` |
 | `redirect` | GET and HEAD answer `301` with `Location` and an empty body; writes stay atomic | redirects are never followed: a 301 surfaces as the plain HTTP error (exit 3) | core: `redirect_refuses_reads_with_http_301` · CLI: `redirect_exit_3` · mock: `redirect_answers_301_on_reads_only` |
 | `readonly` | every DELETE answers `403`, the store keeps everything | the read-only repository refuses `rm` and `point --clear` with exit 1, and a refused run has deleted nothing | core: `readonly_refuses_rm_and_changes_nothing`, `point_clear_on_readonly_refuses` · CLI: `rm_readonly_refuses_and_keeps_bytes` · mock: `readonly_refuses_every_delete` |
+| `no-service` | the service REST endpoint answers `404` like a store miss; storage is `atomic` | `service repos` refuses with exit 3 and the server-root hint; every storage invariant is unaffected | core: `service_repos_missing_refuses_with_the_root_hint` · CLI: `service_repos_missing_prints_the_root_hint` · mock: the seeded document is simply absent |
 
 ## The suites
 

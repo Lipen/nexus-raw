@@ -128,6 +128,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
             location_path: flags.location.clone(),
         }),
         "readonly" => Some(Scenario::ReadOnly),
+        "no-service" => Some(Scenario::NoService),
         _ => None,
     }
 }

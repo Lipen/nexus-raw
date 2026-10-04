@@ -11,7 +11,7 @@ use std::time::Duration;
 use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Manifest, Nxr};
 
 use crate::render::{Mode, Session};
-use crate::{ChannelOp, Cli, Cmd};
+use crate::{ChannelOp, Cli, Cmd, ServiceOp};
 
 pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
     match &cli.command {
@@ -41,6 +41,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             ls,
             fresh,
             dry_run,
+            prefix,
         } => {
             transfer::down(
                 cli,
@@ -51,6 +52,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
                 *ls,
                 *fresh,
                 *dry_run,
+                prefix,
             )
             .await
         }
@@ -60,7 +62,8 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             name,
             ls,
             dry_run,
-        } => transfer::rm(cli, src, manifest.as_deref(), name, *ls, *dry_run).await,
+            prefix,
+        } => transfer::rm(cli, src, manifest.as_deref(), name, *ls, *dry_run, prefix).await,
         Cmd::Point { clear, url } => {
             if !clear {
                 return Err(Error::Misuse(
@@ -79,6 +82,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             dry_run,
             src_user,
             dst_user,
+            prefix,
         } => {
             transfer::mirror(
                 cli,
@@ -92,6 +96,34 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
                 name,
                 *ls,
                 *dry_run,
+                prefix,
+            )
+            .await
+        }
+        Cmd::Mv {
+            src,
+            dst,
+            manifest,
+            name,
+            ls,
+            dry_run,
+            src_user,
+            dst_user,
+            prefix,
+        } => {
+            transfer::mv(
+                cli,
+                transfer::MirrorArgs {
+                    src,
+                    dst,
+                    src_user: src_user.as_deref(),
+                    dst_user: dst_user.as_deref(),
+                },
+                manifest.as_deref(),
+                name,
+                *ls,
+                *dry_run,
+                prefix,
             )
             .await
         }
@@ -105,6 +137,9 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             } => layout::channel_set(cli, url, token, *if_forward).await,
         },
         Cmd::Verify { dir, manifest } => layout::verify(cli, dir, manifest.as_deref()).await,
+        Cmd::Service { op } => match op {
+            ServiceOp::Repos { url } => layout::service_repos(cli, url).await,
+        },
         Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
     }
 }

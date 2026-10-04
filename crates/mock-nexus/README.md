@@ -32,6 +32,7 @@ Point any client at the printed address: `nxr`, your own code, a curl loop.
 | `rate-limit` | answers 429 with a `Retry-After: <secs>` header and an empty body for the first N requests per path, then serves like atomic |
 | `redirect` | answers GET and HEAD with 301 and `Location: <path>` (same host, the path from the repository root); writes stay atomic |
 | `readonly` | answers 403 to every DELETE: the read-only repository, the store never shrinks |
+| `no-service` | the service REST endpoint (`/service/rest/v1/repositories`) answers 404 like a store miss: an installation without the management API; storage behaves like `atomic` |
 
 Scenario-specific flags: `--partial-bytes N`, `--cut-after N`, `--fake-length`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--rate-429s N`, `--retry-after-secs N`, `--location PATH`, `--auth user:pass` (default `ci:secret`).
 

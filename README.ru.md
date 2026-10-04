@@ -84,12 +84,14 @@ nxr verify vendor/prebuilt
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
 | `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
 | `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
+| `nxr mv <SRC_URL> <DST_URL>` | mirror в приёмник, затем удаление в источнике (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point --clear <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (экспериментально) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена (`--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке) |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
+| `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
 
 `down`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 Без любого из них команда отказывает.

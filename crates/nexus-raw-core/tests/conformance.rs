@@ -2034,3 +2034,149 @@ async fn fake_length_down_recovers_through_a_short_read() {
         mock.requests()
     );
 }
+
+// ---------------------------------------------------------------- prefix filter
+
+/// Seed a two-subtree version: `bom/a.zip` and `lib/c.bin`, with a manifest naming both.
+fn seed_subtrees(mock: &MockNexus) {
+    mock.insert(&format!("{VERSION}/bom/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/bom/a.zip.sha256"),
+        sibling::format_line("bom/a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    mock.insert(&format!("{VERSION}/lib/c.bin"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/lib/c.bin.sha256"),
+        sibling::format_line("lib/c.bin", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    mock.insert(
+        &format!("{VERSION}/manifest.json"),
+        br#"{"schema_version":1,"version":"1.0.0","artifacts":["bom/a.zip","lib/c.bin"]}"#,
+    );
+}
+
+/// `--prefix bom/` delivers exactly the subtree and nothing else.
+#[tokio::test]
+async fn prefix_filter_narrows_down_to_the_subtree() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_subtrees(&mock);
+    let local = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let filtered = Enumeration::Manifest(manifest)
+        .with_prefixes(&["bom/".to_owned()])
+        .unwrap();
+    nxr.down(local.path(), filtered, false).await.unwrap();
+
+    assert!(local.path().join("bom/a.zip").is_file());
+    assert!(local.path().join("bom/a.zip.sha256").is_file());
+    assert!(
+        !local.path().join("lib/c.bin").exists(),
+        "the lib subtree stays untouched"
+    );
+}
+
+/// Two prefixes union: either subtree survives the filter.
+#[tokio::test]
+async fn prefix_filter_unions_multiple_prefixes() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_subtrees(&mock);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let names = nxr
+        .enumerate(
+            Enumeration::Manifest(manifest)
+                .with_prefixes(&["bom/".to_owned(), "lib/".to_owned()])
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let mut got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+    got.sort();
+    assert_eq!(got, vec!["bom/a.zip", "lib/c.bin"]);
+}
+
+/// A filter that keeps nothing refuses with the enumeration error (exit 1), naming the counts.
+#[tokio::test]
+async fn prefix_filter_that_keeps_nothing_refuses() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_subtrees(&mock);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let filtered = Enumeration::Manifest(manifest)
+        .with_prefixes(&["etc/".to_owned()])
+        .unwrap();
+    let err = nxr.rm(filtered).await.unwrap_err();
+    match &err {
+        Error::Enumerate { reason, .. } => {
+            assert!(reason.contains("kept none of 2 names"), "{reason}");
+        }
+        other => panic!("expected Enumerate, got {other:?}"),
+    }
+    // Nothing was deleted.
+    assert!(mock.store_get(&format!("{VERSION}/bom/a.zip")).is_some());
+}
+
+/// A prefix outside the grammar is misuse (exit 2) before any request flies.
+#[tokio::test]
+async fn prefix_grammar_is_misuse() {
+    let names = vec![ArtifactName::parse("bom/a.zip").unwrap()];
+    let err = Enumeration::Names(names)
+        .with_prefixes(&["bom".to_owned()])
+        .unwrap_err();
+    assert!(matches!(err, Error::Misuse(ref m) if m.contains("whole segments")));
+}
+
+// ---------------------------------------------------------------- service repos
+
+/// `service repos` reads the repositories document through any URL of the server.
+#[tokio::test]
+async fn service_repos_lists_the_server() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let repos = nxr.service_repos().await.unwrap();
+    assert_eq!(repos.len(), 2);
+    assert_eq!(repos[0].name, "raw-main");
+    assert_eq!(repos[0].format, "raw");
+    assert_eq!(repos[0].kind, "hosted");
+    assert_eq!(
+        repos[1].name, "raw-all",
+        "the group repository is listed too"
+    );
+    assert_eq!(repos[1].kind, "group");
+    assert!(repos[0].url.starts_with(&mock.base_url()));
+}
+
+/// A repository URL roots to the server: the service API is found from anywhere inside it.
+#[tokio::test]
+async fn service_repos_roots_any_repository_url() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let deep = format!("{}repository/raw-main/{VERSION}/", mock.base_url());
+    let nxr = Nxr::new(config_at(deep, None), tx).unwrap();
+
+    let repos = nxr.service_repos().await.unwrap();
+    assert_eq!(repos.len(), 2);
+}
+
+/// A server without the service API refuses with exit 3 and the server-root hint.
+#[tokio::test]
+async fn service_repos_missing_refuses_with_the_root_hint() {
+    let mock = MockNexus::start(Scenario::NoService).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr.service_repos().await.unwrap_err();
+    assert_eq!(err.exit_code(), 3);
+    let hint = err.hint().unwrap();
+    assert!(hint.contains("server root"), "{hint}");
+    assert!(hint.contains(&mock.base_url()), "{hint}");
+}

@@ -82,9 +82,12 @@ pub(crate) async fn down(
     ls: bool,
     fresh: bool,
     dry_run: bool,
+    prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let enum_src = enumeration_source(&ctx, manifest, names, ls).await?;
+    let enum_src = enumeration_source(&ctx, manifest, names, ls)
+        .await?
+        .with_prefixes(prefixes)?;
     let result = run_down(&ctx, dst, enum_src, fresh, dry_run).await;
     finish(ctx).await;
     result
@@ -120,9 +123,10 @@ pub(crate) async fn rm(
     names: &[String],
     ls: bool,
     dry_run: bool,
+    prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let result = run_rm(&ctx, manifest, names, ls, dry_run).await;
+    let result = run_rm(&ctx, manifest, names, ls, dry_run, prefixes).await;
     finish(ctx).await;
     result
 }
@@ -133,8 +137,11 @@ async fn run_rm(
     names: &[String],
     ls: bool,
     dry_run: bool,
+    prefixes: &[String],
 ) -> Result<(), Error> {
-    let enum_src = enumeration_source(ctx, manifest, names, ls).await?;
+    let enum_src = enumeration_source(ctx, manifest, names, ls)
+        .await?
+        .with_prefixes(prefixes)?;
     if dry_run {
         for a in ctx.nxr.rm_plan(enum_src).await? {
             crate::cmd::print_line(ctx.json, &rm_plan_line(&a), &rm_action_json(&a));
@@ -196,6 +203,7 @@ pub(crate) async fn mirror(
     names: &[String],
     ls: bool,
     dry_run: bool,
+    prefixes: &[String],
 ) -> Result<(), Error> {
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
     // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
@@ -203,32 +211,101 @@ pub(crate) async fn mirror(
     // must not leak one server's secret to the other.
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
-    // Enumeration only from the source: the same three sources as down.
-    let enum_src = if ls {
-        Enumeration::Search
-    } else if let Some(spec) = manifest {
-        Enumeration::Manifest(load_manifest(&src_nxr, spec).await?)
-    } else if !names.is_empty() {
-        Enumeration::Names(parse_names(names)?)
-    } else {
-        // The convention: a manifest.json at the source directory URL.
-        match src_nxr.manifest_at_base().await? {
-            Some(m) => Enumeration::Manifest(m),
-            None => {
-                return Err(Error::Enumerate {
-                    url: src_nxr.base().to_owned(),
-                    reason: "no manifest.json at the source and no --manifest/--name/--ls given"
-                        .into(),
-                })
-            }
-        }
-    };
+    let enum_src = source_enumeration(&src_nxr, manifest, names, ls)
+        .await?
+        .with_prefixes(prefixes)?;
     let result = run_mirror(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
     // Both facades must die before the renderer drains: each holds a sender clone.
     drop(src_nxr);
     drop(dst_nxr);
     session.finish().await;
     result
+}
+
+/// Move: mirror the enumerated names into the destination, then delete them at the source.
+///
+/// Nothing is deleted until the pour converged: a failed mirror leaves the source untouched,
+/// and a failed delete after a converged pour leaves a duplicate, never a loss.
+pub(crate) async fn mv(
+    cli: &Cli,
+    args: MirrorArgs<'_>,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    dry_run: bool,
+    prefixes: &[String],
+) -> Result<(), Error> {
+    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
+    let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
+    let enum_src = source_enumeration(&src_nxr, manifest, names, ls)
+        .await?
+        .with_prefixes(prefixes)?;
+    let result = run_mv(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
+    drop(src_nxr);
+    drop(dst_nxr);
+    session.finish().await;
+    result
+}
+
+/// The enumeration of a source repository: `--ls`, `--manifest`, repeatable `--name`, or the conventional `manifest.json` at the source directory URL.
+async fn source_enumeration(
+    src: &Nxr,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+) -> Result<Enumeration, Error> {
+    if ls {
+        return Ok(Enumeration::Search);
+    }
+    if let Some(spec) = manifest {
+        return Ok(Enumeration::Manifest(load_manifest(src, spec).await?));
+    }
+    if !names.is_empty() {
+        return Ok(Enumeration::Names(parse_names(names)?));
+    }
+    match src.manifest_at_base().await? {
+        Some(m) => Ok(Enumeration::Manifest(m)),
+        None => Err(Error::Enumerate {
+            url: src.base().to_owned(),
+            reason: "no manifest.json at the source and no --manifest/--name/--ls given".into(),
+        }),
+    }
+}
+
+async fn run_mv(
+    src: &Nxr,
+    dst: &Nxr,
+    enum_src: Enumeration,
+    dry_run: bool,
+    json: bool,
+) -> Result<(), Error> {
+    // One resolution feeds both phases: the delete removes exactly what the pour poured.
+    let names = src.enumerate(enum_src).await?;
+    if dry_run {
+        println!("will move:");
+        for a in src
+            .mirror_plan(dst, Enumeration::Names(names.clone()))
+            .await?
+        {
+            let (line, json_shape) = mirror_plan_line(&a);
+            crate::cmd::print_line(json, &line, &json_shape);
+        }
+        println!("will delete:");
+        for a in src.rm_plan(Enumeration::Names(names)).await? {
+            crate::cmd::print_line(json, &rm_plan_line(&a), &rm_action_json(&a));
+        }
+        return Ok(());
+    }
+    // Phase one: the pour, exactly like `mirror`.
+    src.mirror(dst, Enumeration::Names(names.clone())).await?;
+    // Phase two: the delete, exactly like `rm` (marker first, bytes follow).
+    // A refusal here is a duplicate across repositories, never a loss: the destination holds every name.
+    if !json {
+        eprintln!("delete phase:");
+    }
+    src.rm(Enumeration::Names(names)).await?;
+    Ok(())
 }
 
 async fn run_mirror(

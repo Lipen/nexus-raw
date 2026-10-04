@@ -192,6 +192,12 @@ nxr never claims multi-writer safety on a shared prefix, and no mock scenario pr
 A server that honors conditional PUTs would close this window at the wire level.
 That is a protocol change with a compatibility story, not a client fix, and it is deliberately out of scope until a real deployment asks for it.
 
+## Server metadata
+
+The service REST API (`/service/rest/v1/repositories`, the search endpoints behind `ls --ls`) is server metadata, not part of the storage protocol.
+A server without it serves every invariant in this document; `nxr` reads it only for human convenience (listing what exists, `service repos`).
+The storage contract lives entirely in the sections above.
+
 ## The write order
 
 Upload:

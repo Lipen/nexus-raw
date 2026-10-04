@@ -53,6 +53,7 @@ pub mod layout;
 pub mod model;
 pub mod nxr;
 pub mod primitive;
+pub mod service;
 pub mod sync;
 pub mod transport;
 
@@ -62,7 +63,7 @@ pub use crate::error::{Error, Verdict};
 pub use crate::events::{Dir, Event, Progress, Summary};
 pub use crate::layout::{ChannelOutcome, ClearOutcome, Manifest};
 pub use crate::model::digest::Digest;
-pub use crate::model::name::ArtifactName;
+pub use crate::model::name::{ArtifactName, NamePrefix};
 pub use crate::model::state::{LocalStatus, RemoteStatus};
 pub use crate::nxr::{Enumeration, Nxr};
 pub use crate::primitive::{GetOutcome, ShaSource};

@@ -141,3 +141,24 @@ async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<Sum
     // The verdict line is printed by the caller, after the renderer drained.
     ctx.nxr.verify(dir, names).await
 }
+
+/// List the repositories of the server behind `url`: the service REST API, not storage protocol.
+/// The URL may be the server root or any repository URL: both root to the same server.
+pub(crate) async fn service_repos(cli: &Cli, url: &str) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
+    let result = run_service_repos(&ctx).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_service_repos(ctx: &Ctx) -> Result<(), Error> {
+    let repos = ctx.nxr.service_repos().await?;
+    let human = repos
+        .iter()
+        .map(|r| format!("{} {} {} {}", r.name, r.format, r.kind, r.url))
+        .collect::<Vec<_>>()
+        .join("\n");
+    print_line(ctx.json, &human, &serde_json::json!({ "repos": repos }));
+    Ok(())
+}

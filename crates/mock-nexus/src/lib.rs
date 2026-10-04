@@ -58,7 +58,7 @@ impl MockNexus {
     pub fn start_on(scenario: Scenario, addr: SocketAddr) -> std::io::Result<Self> {
         let listener = TcpListener::bind(addr)?;
         let bound = listener.local_addr()?;
-        let shared = Arc::new(Shared::hosted(scenario));
+        let shared = Arc::new(Shared::hosted(scenario, format!("http://{bound}/")));
         let stop = Arc::new(AtomicBool::new(false));
         spawn_acceptor(listener, Arc::clone(&shared), Arc::clone(&stop));
         Ok(Self {

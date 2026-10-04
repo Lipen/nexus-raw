@@ -228,3 +228,81 @@ mod tests {
         assert!(validate_version("a b").is_err());
     }
 }
+
+/// A name-prefix filter: whole grammar segments followed by `/` (`bom/`, `a/b/`).
+/// The empty prefix matches every name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamePrefix(String);
+
+impl NamePrefix {
+    /// Parses and validates a prefix: the name grammar for every segment plus the trailing `/`.
+    ///
+    /// ```rust
+    /// # use nexus_raw_core::NamePrefix;
+    /// assert!(NamePrefix::parse("bom/").is_ok());
+    /// assert!(NamePrefix::parse("a/b/").is_ok());
+    /// assert!(NamePrefix::parse("").is_ok()); // the whole list
+    /// assert!(NamePrefix::parse("bom").is_err()); // prefixes match whole segments
+    /// # Ok::<(), nexus_raw_core::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when a segment fails the grammar or the trailing `/` is missing.
+    pub fn parse(raw: &str) -> Result<Self, Error> {
+        if raw.is_empty() {
+            return Ok(Self(String::new()));
+        }
+        let Some(segments) = raw.strip_suffix('/') else {
+            return Err(Error::misuse(format!(
+                "prefixes match whole segments: use {raw}/"
+            )));
+        };
+        for seg in segments.split('/') {
+            if !valid_segment(seg) {
+                return Err(Error::misuse(format!(
+                    "bad prefix segment {seg:?}: names are [A-Za-z0-9._-] segments"
+                )));
+            }
+        }
+        Ok(Self(raw.to_owned()))
+    }
+
+    /// The prefix text as given.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether a name lives under this prefix; the empty prefix matches everything.
+    #[must_use]
+    pub fn matches(&self, name: &ArtifactName) -> bool {
+        name.as_str().starts_with(&self.0)
+    }
+}
+
+#[cfg(test)]
+mod prefix_tests {
+    use super::*;
+
+    #[test]
+    fn prefix_grammar() {
+        assert_eq!(NamePrefix::parse("bom/").unwrap().as_str(), "bom/");
+        assert_eq!(NamePrefix::parse("a/b/").unwrap().as_str(), "a/b/");
+        assert_eq!(NamePrefix::parse("").unwrap().as_str(), "");
+        assert!(NamePrefix::parse("bom").is_err());
+        assert!(NamePrefix::parse("/").is_err());
+        assert!(NamePrefix::parse("bom//").is_err());
+        assert!(NamePrefix::parse("bo m/").is_err());
+        assert!(NamePrefix::parse("bom/.//").is_err());
+    }
+
+    #[test]
+    fn prefix_matches_whole_names() {
+        let p = NamePrefix::parse("bom/").unwrap();
+        assert!(p.matches(&ArtifactName::parse("bom/x.json").unwrap()));
+        assert!(!p.matches(&ArtifactName::parse("bomx.json").unwrap()));
+        let all = NamePrefix::parse("").unwrap();
+        assert!(all.matches(&ArtifactName::parse("anything").unwrap()));
+    }
+}

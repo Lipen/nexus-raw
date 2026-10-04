@@ -279,3 +279,15 @@ export function lsAssets(url: string, opts?: NxrCommonOpts): Promise<Array<strin
 
 /** List the version tokens the server search API reports for this directory (`ls`). */
 export function lsVersions(url: string, opts?: NxrCommonOpts): Promise<Array<string>>
+
+/** One repository of a Nexus server, as the service REST API reports it. */
+export interface NxrRepoInfo {
+  name: string
+  format: string
+  /** Repository kind: `hosted`, `proxy` or `group`. */
+  kind: string
+  url: string
+}
+
+/** List the repositories of the server behind `url` (the service REST API, not the storage protocol). */
+export function serviceRepos(url: string, opts?: NxrCommonOpts): Promise<Array<NxrRepoInfo>>

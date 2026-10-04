@@ -128,6 +128,9 @@ pub(crate) enum Cmd {
         /// Print the plan without transferring anything.
         #[arg(long)]
         dry_run: bool,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
     },
     /// Delete the enumerated names from a remote directory (§5.4).
     Rm {
@@ -146,6 +149,9 @@ pub(crate) enum Cmd {
         /// Print the plan without deleting anything.
         #[arg(long)]
         dry_run: bool,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
     },
     /// Delete a pointer file (§5.4).
     Point {
@@ -182,6 +188,41 @@ pub(crate) enum Cmd {
         /// Credentials for the destination only, overriding the shared `-u`.
         #[arg(long, value_name = "USER:PASS")]
         dst_user: Option<String>,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
+    },
+    /// Move a version: mirror it into the destination, then delete the same names at the source.
+    ///
+    /// Nothing is deleted until the pour converged: a failed move leaves a duplicate, never a loss.
+    Mv {
+        /// The source directory URL.
+        #[arg(value_name = "SRC_URL")]
+        src: String,
+        /// The destination directory URL.
+        #[arg(value_name = "DST_URL")]
+        dst: String,
+        /// Enumeration source: a manifest file, URL or `-` for stdin.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// One explicit name (repeatable).
+        #[arg(long, value_name = "NAME")]
+        name: Vec<String>,
+        /// Best-effort enumeration through the server search API.
+        #[arg(long)]
+        ls: bool,
+        /// Print both plans (the pour and the delete) without moving anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// Credentials for the source only, overriding the shared `-u`.
+        #[arg(long, value_name = "USER:PASS")]
+        src_user: Option<String>,
+        /// Credentials for the destination only, overriding the shared `-u`.
+        #[arg(long, value_name = "USER:PASS")]
+        dst_user: Option<String>,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
     },
     /// List versions or the objects of a version directory (experimental).
     Ls {
@@ -211,6 +252,21 @@ pub(crate) enum Cmd {
         /// A base URL to probe (checks without it stay local).
         #[arg(value_name = "URL")]
         url: Option<String>,
+    },
+    /// Server metadata through the Sonatype service REST API (not part of the storage protocol).
+    Service {
+        #[command(subcommand)]
+        op: ServiceOp,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum ServiceOp {
+    /// List the repositories of the server behind `url` (a server root or any repository URL).
+    Repos {
+        /// A server root URL or a URL anywhere inside the server.
+        #[arg(value_name = "URL")]
+        url: String,
     },
 }
 

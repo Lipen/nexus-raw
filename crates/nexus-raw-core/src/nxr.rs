@@ -14,6 +14,7 @@ use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::state::{LocalStatus, RemoteStatus};
 use crate::primitive::{self, GetOutcome, HeadInfo, ShaSource};
+use crate::service;
 use crate::sync::{
     self, down,
     mirror::{self, MirrorAction},
@@ -31,6 +32,36 @@ pub enum Enumeration {
     Names(Vec<ArtifactName>),
     /// Best-effort search-API traversal (`--ls`).
     Search,
+    /// An enumeration narrowed to whole-segment prefixes (the `--prefix` filter).
+    /// The filter applies after the inner source resolves and dedups.
+    Filtered {
+        /// The enumeration the filter applies to.
+        inner: Box<Enumeration>,
+        /// Prefixes; a name survives when it matches at least one.
+        prefixes: Vec<crate::model::name::NamePrefix>,
+    },
+}
+
+impl Enumeration {
+    /// Keep only the names under one of `prefixes` (the `--prefix` filter).
+    /// Applied after resolution and dedup: the inner source stays the single place enumeration happens.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when a prefix fails the name grammar.
+    pub fn with_prefixes(self, prefixes: &[String]) -> Result<Self, Error> {
+        if prefixes.is_empty() {
+            return Ok(self);
+        }
+        let parsed = prefixes
+            .iter()
+            .map(|p| crate::model::name::NamePrefix::parse(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::Filtered {
+            inner: Box::new(self),
+            prefixes: parsed,
+        })
+    }
 }
 
 /// Facade over the transport and the operation executors.
@@ -328,6 +359,21 @@ impl Nxr {
                 v
             }
             Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
+            Enumeration::Filtered { inner, prefixes } => {
+                let all = Box::pin(self.resolve_names(*inner)).await?;
+                let total = all.len();
+                let kept: Vec<_> = all
+                    .into_iter()
+                    .filter(|n| prefixes.iter().any(|p| p.matches(n)))
+                    .collect();
+                if kept.is_empty() {
+                    return Err(Error::Enumerate {
+                        url: self.base.clone(),
+                        reason: format!("the prefix filter kept none of {total} names"),
+                    });
+                }
+                kept
+            }
         };
         if names.is_empty() {
             return Err(Error::Enumerate {
@@ -345,6 +391,18 @@ impl Nxr {
     /// Returns transport, auth or HTTP errors from the DELETE; a 403/405 surfaces as [`Error::ReadOnly`].
     pub async fn point_clear(&self, url: &str) -> Result<layout::ClearOutcome, Error> {
         layout::pointer_clear(&self.client, url).await
+    }
+
+    /// List the repositories of the server this directory belongs to (`nxr service repos`).
+    ///
+    /// The service REST API is server metadata, not storage protocol: the call reads
+    /// `<server-root>/service/rest/v1/repositories` with the same credentials as everything else.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when the base URL is not a URL, [`Error::ServiceMissing`] when the endpoint answers 404 (not a Nexus, or a version without it), and [`Error::Mismatch`] when the body is not a repository list.
+    pub async fn service_repos(&self) -> Result<Vec<service::RepoInfo>, Error> {
+        service::repositories(&self.client, &self.base).await
     }
 
     /// The mirror plan: probes both sides and classifies, moves nothing.

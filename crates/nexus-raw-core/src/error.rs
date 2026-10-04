@@ -36,6 +36,10 @@ pub enum Error {
     /// Any other unexpected status.
     #[error("http {status}: {url}")]
     Http { status: u16, url: String },
+    /// The server's service REST API answered 404: not a Nexus, or a version without the endpoint.
+    /// Storage invariants are unaffected; only `service repos` needs this surface.
+    #[error("http 404: {url}: the service API is absent")]
+    ServiceMissing { url: String, root: String },
     /// The repository refuses the deletion: a read-only deployment answers 403/405 to DELETE (§5.4).
     #[error("read-only: {url}: HTTP {status}")]
     ReadOnly { url: String, status: u16 },
@@ -60,6 +64,7 @@ impl Error {
             | Error::ReadOnly { .. } => 1,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
             Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. } => 3,
+            Error::ServiceMissing { .. } => 3,
             Error::Io { .. } => 1,
         }
     }
@@ -91,6 +96,9 @@ impl Error {
             Error::Http { status: 404, .. } => {
                 Some("check the URL path and that the version or object exists".into())
             }
+            Error::ServiceMissing { root, .. } => Some(
+                format!("the service API lives at the server root: try {root}/service/rest/v1/repositories"),
+            ),
             Error::Http { status, .. } => Some(
                 format!("the server answered {status}; check the URL path and the server health"),
             ),

@@ -335,6 +335,10 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
+| `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
+
+The prefix filter applies after the enumeration resolves: a name survives when it matches at least one prefix, and a filter that keeps nothing refuses the run (exit 1).
+A prefix without the trailing slash is misuse (exit 2).
 
 Resuming is the default: a rerun picks up the part files of a killed run through `Range` requests.
 `down` must know what to fetch, and Nexus raw has no guaranteed directory listing.
@@ -408,6 +412,7 @@ Without any source the run refuses with `cannot enumerate` (exit 1).
 | `--dry-run` | probe both sides and print the plan without writing to the destination |
 | `--src-user USER:PASS` | credentials for the source only, overriding the shared `-u` |
 | `--dst-user USER:PASS` | credentials for the destination only, overriding the shared `-u` |
+| `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 
 Per-side credentials exist for cross-server moves: a mirror between different servers
 must not leak one server's secret to the other.
@@ -457,6 +462,7 @@ The `manifest.json` that named the list survives it, because it is the source th
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--dry-run` | probe and print the plan: `rm <name>` for present names, `missing <name>` for absent ones, nothing deleted |
+| `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 
 A full version goes away in one call:
 
@@ -524,6 +530,44 @@ A rerun emits `missing` events and still exits 0:
 {"action":"rm","name":"a.zip","size":23}
 {"action":"missing","name":"ghost.bin"}
 ```
+
+## nxr mv
+
+Move a version between repositories: `mirror` pours it into the destination, then `rm` deletes the same names at the source.
+
+```console
+$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
+```
+
+The enumeration lives at the source, with the same sources as `mirror`: a `manifest.json` by convention, or `--manifest`, repeatable `--name`, `--ls`, `--prefix`.
+The conventional version document transfers first (the claim), exactly like `mirror`.
+Per-side credentials work here too: `--src-user` and `--dst-user` override the shared `-u`.
+
+The safety rule is the point of the command: nothing is deleted until the pour converged.
+A failed mirror leaves the source untouched and the destination empty.
+A failed delete after a converged pour leaves a duplicate, never a loss: the destination holds every name the source still has.
+The stderr line `delete phase:` separates the two halves of the run in human output.
+
+A read-only source (a group repository, for example) pours fine and then refuses the delete with exit 1: the result is the duplicate above, and `mirror` without deletion is the right tool for read-only sources.
+
+`mv --dry-run` prints two plans and moves nothing:
+
+```console
+$ nxr mv --dry-run https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
+will move:
+copy a.zip
+will delete:
+rm a.zip
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the pour converged and the delete finished |
+| `1` | data refusal: `cannot enumerate`, the delete phase refused on a read-only source |
+| `2` | misuse: a bad URL, name or prefix |
+| `3` | transport or auth failure of either phase |
+
+`--json` streams the events of both phases; the summary of the pour is followed by the summary of the delete.
 
 ## nxr point --clear
 
@@ -718,6 +762,32 @@ $ echo $?
 | `0` | every checked name is complete |
 | `1` | at least one name is incomplete, or a local I/O failure such as a missing directory |
 | `2` | misuse: the manifest is not JSON |
+
+## nxr service repos
+
+List the repositories of a Nexus server: `GET <server-root>/service/rest/v1/repositories`, the same service REST API the web console uses.
+
+```console
+$ nxr service repos https://nexus.example.com/repository/raw-main/1.14.0/
+raw-main raw hosted https://nexus.example.com/repository/raw-main/
+raw-all raw group https://nexus.example.com/repository/raw-all/
+```
+
+The URL may be the server root or any repository URL: both root to the same server.
+This endpoint is not part of the storage protocol: a server without it still serves every storage invariant, and the refusal is exit 3 with a hint naming the server root to try.
+Credentials work like everywhere else (`-u`, `NXR_AUTH`, `NXR_USERNAME` + `NXR_PASSWORD`).
+
+`--json` prints one object, not NDJSON:
+
+```json
+{"repos":[{"name":"raw-main","format":"raw","type":"hosted","url":"https://nexus.example.com/repository/raw-main/"},{"name":"raw-all","format":"raw","type":"group","url":"https://nexus.example.com/repository/raw-all/"}]}
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the document parsed |
+| `2` | misuse: the URL is not a URL |
+| `3` | transport or auth failure; a 404 means the service API is absent (not a Nexus, or a version without it) |
 
 ## nxr doctor
 

@@ -1700,3 +1700,197 @@ fn mirror_src_user_authenticates_the_source() {
     expect_exit(&bad, 3, "a wrong source secret fails the reads");
     assert!(dst2.store_get("1.14.0/a.zip").is_none());
 }
+
+// ---- mv --------------------------------------------------------------------
+
+/// `mv` pours the version into the destination and then empties the source, markers included.
+#[test]
+fn mv_moves_and_empties_the_source() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Atomic);
+
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    expect_exit(&out, 0, "a converged move is exit 0");
+
+    // The destination holds the whole poured name.
+    assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+    assert!(dst.store_get("1.14.0/a.zip.sha256").is_some());
+    // The source lost the bytes and the marker; the manifest survives as the enumeration source.
+    assert!(src.store_get("1.14.0/a.zip").is_none());
+    assert!(src.store_get("1.14.0/a.zip.sha256").is_none());
+    assert!(src.store_get("1.14.0/manifest.json").is_some());
+}
+
+/// `mv --dry-run` prints both plans and moves nothing.
+#[test]
+fn mv_dry_run_prints_both_plans() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Atomic);
+
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--dry-run"]);
+    expect_exit(&out, 0, "a plan is exit 0");
+    let text = stdout(&out);
+    assert!(text.contains("will move:"), "{text}");
+    assert!(text.contains("copy a.zip"), "{text}");
+    assert!(text.contains("will delete:"), "{text}");
+    assert!(text.contains("rm a.zip"), "{text}");
+
+    assert!(dst.store_get("1.14.0/a.zip").is_none(), "nothing moved");
+    assert!(src.store_get("1.14.0/a.zip").is_some(), "nothing deleted");
+}
+
+/// A mirror that fails deletes nothing: the source stays whole, the destination stays empty.
+#[test]
+fn mv_failed_mirror_keeps_the_source() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    expect_exit(&out, 3, "the pour fails on destination auth");
+
+    assert!(
+        src.store_get("1.14.0/a.zip").is_some(),
+        "the source is untouched"
+    );
+    assert!(dst.store_get("1.14.0/a.zip").is_none(), "nothing poured");
+}
+
+/// A refused delete after a converged pour is exit 1 and a duplicate, never a loss.
+#[test]
+fn mv_refused_delete_leaves_a_duplicate() {
+    let member = server(Scenario::Atomic);
+    seed_mirror_source(&member);
+    let src = MockNexus::start_group(&[&member, &server(Scenario::Atomic)]).unwrap();
+    let dst = server(Scenario::Atomic);
+
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    expect_exit(&out, 1, "the read-only source refuses the delete phase");
+
+    // The pour converged before the delete was refused: both sides hold the bytes.
+    assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+    assert_eq!(member.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+}
+
+// ---- service repos ---------------------------------------------------------
+
+/// `service repos` prints one `name format kind url` line per repository.
+#[test]
+fn service_repos_prints_human_lines() {
+    let srv = server(Scenario::Atomic);
+    let out = nxr(&["service", "repos", &srv.base_url()]);
+    expect_exit(&out, 0, "the document parses");
+    let text = stdout(&out);
+    assert!(text.contains("raw-main raw hosted http://"), "{text}");
+    assert!(text.contains("raw-all raw group http://"), "{text}");
+}
+
+/// `--json` is one object with the repository array; a repository URL works as the input.
+#[test]
+fn service_repos_json_shape_from_a_repository_url() {
+    let srv = server(Scenario::Atomic);
+    let inside = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["service", "repos", &inside, "--json"]);
+    expect_exit(&out, 0, "a repository URL roots to the server");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    let repos = v["repos"].as_array().expect("repos array");
+    assert_eq!(repos.len(), 2);
+    assert_eq!(repos[0]["name"], "raw-main");
+    assert_eq!(repos[0]["format"], "raw");
+    assert_eq!(repos[0]["type"], "hosted");
+    assert!(repos[0]["url"].as_str().unwrap().starts_with("http://"));
+}
+
+/// A server without the service API exits 3 with the server-root hint.
+#[test]
+fn service_repos_missing_prints_the_root_hint() {
+    let srv = server(Scenario::NoService);
+    let out = nxr(&["service", "repos", &srv.base_url()]);
+    expect_exit(
+        &out,
+        3,
+        "an absent service API is a transport-class refusal",
+    );
+    assert!(stderr(&out).contains("server root"), "{}", stderr(&out));
+}
+
+// ---- prefix ----------------------------------------------------------------
+
+/// `down --prefix` plans exactly the subtree; a bare prefix is misuse.
+#[test]
+fn down_prefix_flag_filters_the_plan() {
+    let srv = server(Scenario::Atomic);
+    seed_subtrees_cli(&srv);
+    let dst = tempfile::tempdir().unwrap();
+
+    let out = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--prefix",
+        "bom/",
+        "--dry-run",
+    ]);
+    expect_exit(&out, 0, "the filtered plan resolves");
+    let text = stdout(&out);
+    assert!(text.contains("download bom/a.zip"), "{text}");
+    assert!(!text.contains("lib/c.bin"), "{text}");
+
+    let bad = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--prefix",
+        "bom",
+    ]);
+    expect_exit(&bad, 2, "a prefix without the slash is misuse");
+    assert!(stderr(&bad).contains("whole segments"), "{}", stderr(&bad));
+}
+
+/// Two-prefix mirror pours exactly the union.
+#[test]
+fn mirror_prefix_flag_pours_the_union() {
+    let src = server(Scenario::Atomic);
+    seed_subtrees_cli(&src);
+    let dst = server(Scenario::Atomic);
+
+    let out = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "bom/a.zip",
+        "--name",
+        "lib/c.bin",
+        "--prefix",
+        "bom/",
+    ]);
+    expect_exit(&out, 0, "the filtered pour converges");
+    assert_eq!(dst.store_get("1.14.0/bom/a.zip").unwrap(), ALPHA);
+    assert!(
+        dst.store_get("1.14.0/lib/c.bin").is_none(),
+        "the lib subtree is filtered out"
+    );
+}
+
+fn seed_subtrees_cli(srv: &MockNexus) {
+    srv.insert("1.14.0/bom/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/bom/a.zip.sha256",
+        format!("{}  bom/a.zip\n", hex_digest(ALPHA)).as_bytes(),
+    );
+    srv.insert("1.14.0/lib/c.bin", ALPHA);
+    srv.insert(
+        "1.14.0/lib/c.bin.sha256",
+        format!("{}  lib/c.bin\n", hex_digest(ALPHA)).as_bytes(),
+    );
+    srv.insert(
+        "1.14.0/manifest.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["bom/a.zip","lib/c.bin"]}"#,
+    );
+}

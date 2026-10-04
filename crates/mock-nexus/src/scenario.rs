@@ -29,6 +29,7 @@ pub const SCENARIOS: &[&str] = &[
     "rate-limit",
     "redirect",
     "readonly",
+    "no-service",
 ];
 
 /// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
@@ -98,6 +99,10 @@ pub enum Scenario {
     /// Nothing is ever removed from the store.
     /// GET/HEAD/PUT behave like [`Scenario::Atomic`].
     ReadOnly,
+    /// The service REST endpoint (`/service/rest/v1/repositories`) answers `404` like a store miss:
+    /// an installation without the management API (an old Nexus, or a non-Sonatype server).
+    /// Storage behavior is [`Scenario::Atomic`]; only `service repos` notices.
+    NoService,
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
