@@ -1,0 +1,13 @@
+{
+  "name": "nexus-raw-example-panel",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.26.0",
+  "description": "A minimal web panel over the nexus-raw Node bindings",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "nexus-raw": "link:../../crates/nexus-raw-napi"
+  }
+}

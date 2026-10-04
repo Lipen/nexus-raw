@@ -1,0 +1,19 @@
+[package]
+name = "nexus-raw-example-tui"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone on purpose: not a member of the repository workspace.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+crossterm = "0.28"
+nexus-raw-core = { path = "../../crates/nexus-raw-core" }
+ratatui = "0.28"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+
+[[bin]]
+name = "nxr-tui"
+path = "src/main.rs"

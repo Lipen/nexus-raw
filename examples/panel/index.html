@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nexus-raw panel</title>
+<style>
+  :root {
+    --bg: #10151b;
+    --panel: #171e26;
+    --line: #26313c;
+    --text: #d9e2ea;
+    --dim: #8496a5;
+    --accent: #4da3ff;
+    --ok: #46c483;
+    --bad: #e0716f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  header span { color: var(--dim); font-size: 12px; }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 12px 20px;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .pane {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 220px;
+  }
+  .pane h2 { font-size: 13px; margin: 0 0 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+  form { display: flex; gap: 8px; margin-bottom: 10px; }
+  input[type="url"], input[type="text"] {
+    flex: 1;
+    background: #0d1218;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font: inherit;
+  }
+  input:focus { outline: 1px solid var(--accent); }
+  button {
+    background: #1d3450;
+    color: var(--text);
+    border: 1px solid #2d4a6e;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { background: #24425f; }
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li {
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  ul.list li:hover { background: #1f2933; }
+  ul.list li.selected { background: #20324a; }
+  ul.list li:has(input) { cursor: default; }
+  .name { color: var(--text); }
+  .kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .kind.group { color: #d8a657; }
+  .kind.hosted { color: var(--ok); }
+  .url { color: var(--dim); font-size: 12px; margin-left: auto; }
+  .hint { color: var(--dim); }
+  section.wide {
+    margin: 0 20px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  section.wide h2 { font-size: 13px; margin: 0 0 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+  #down-note { color: var(--dim); }
+  #log {
+    margin: 0;
+    background: #0d1218;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+    font: 12px/1.6 ui-monospace, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  #log .ok { color: var(--ok); }
+  #log .bad { color: var(--bad); }
+  #log .dim { color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>nexus-raw panel</h1>
+  <span>a web surface over the nxr Node bindings</span>
+</header>
+
+<main>
+  <section class="pane" id="pane-repos">
+    <h2>Server and repositories</h2>
+    <form id="server-form">
+      <input id="server-url" type="url" value="http://127.0.0.1:8099" required>
+      <button type="submit">List repositories</button>
+    </form>
+    <ul class="list" id="repo-list"></ul>
+  </section>
+
+  <section class="pane" id="pane-versions">
+    <h2>Versions</h2>
+    <p class="hint" id="versions-hint">Pick a repository on the left.</p>
+    <ul class="list" id="version-list"></ul>
+  </section>
+
+  <section class="pane" id="pane-assets">
+    <h2>Assets</h2>
+    <p class="hint" id="assets-hint">Pick a version.</p>
+    <ul class="list" id="asset-list"></ul>
+  </section>
+</main>
+
+<section class="wide" id="download">
+  <h2>Download</h2>
+  <form id="down-form">
+    <input id="down-dir" type="text" value="panel-downloads" required>
+    <button type="submit">Download selected</button>
+    <span id="down-note"></span>
+  </form>
+</section>
+
+<section class="wide" id="progress">
+  <h2>Progress</h2>
+  <pre id="log"></pre>
+</section>
+
+<script>
+'use strict'
+
+const state = { serverUrl: null, repoUrl: null, dirUrl: null }
+
+const $ = (id) => document.getElementById(id)
+
+const esc = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+
+function logLine(text, cls) {
+  const line = document.createElement('div')
+  if (cls) line.className = cls
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`
+  $('log').append(line)
+  $('log').scrollTop = $('log').scrollHeight
+}
+
+async function api(path, init) {
+  const res = await fetch(path, init)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const hint = body.hint ? ` (${body.hint})` : ''
+    throw new Error(`${body.error ?? res.statusText}${hint}`)
+  }
+  return body
+}
+
+// ---- panes ---------------------------------------------------------------
+
+$('server-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  state.serverUrl = $('server-url').value
+  const repos = await api(`/api/repos?url=${encodeURIComponent(state.serverUrl)}`)
+  $('repo-list').innerHTML = ''
+  for (const repo of repos) {
+    const li = document.createElement('li')
+    li.innerHTML = `<span class="name">${esc(repo.name)}</span><span class="kind ${esc(repo.kind)}">${esc(repo.kind)}</span><span class="url">${esc(repo.url)}</span>`
+    li.addEventListener('click', () => pickRepo(repo, li))
+    $('repo-list').append(li)
+  }
+})
+
+async function pickRepo(repo, li) {
+  state.repoUrl = repo.url
+  state.dirUrl = null
+  for (const el of document.querySelectorAll('#repo-list li')) el.classList.remove('selected')
+  li.classList.add('selected')
+  $('assets-hint').textContent = 'Pick a version.'
+  $('asset-list').innerHTML = ''
+  $('versions-hint').textContent = `Loading ${repo.name}...`
+  try {
+    const versions = await api(`/api/versions?url=${encodeURIComponent(repo.url)}`)
+    $('versions-hint').textContent = versions.length === 0 ? 'No versions reported.' : `${versions.length} version(s):`
+    $('version-list').innerHTML = ''
+    for (const version of versions) {
+      const vli = document.createElement('li')
+      vli.innerHTML = `<span class="name">${esc(version)}</span>`
+      vli.addEventListener('click', () => pickVersion(version, vli))
+      $('version-list').append(vli)
+    }
+  } catch (err) {
+    $('versions-hint').textContent = err.message
+  }
+}
+
+async function pickVersion(version, li) {
+  state.dirUrl = `${state.repoUrl}${version}/`
+  for (const el of document.querySelectorAll('#version-list li')) el.classList.remove('selected')
+  li.classList.add('selected')
+  $('assets-hint').textContent = `Loading ${state.dirUrl}...`
+  try {
+    const assets = await api(`/api/assets?url=${encodeURIComponent(state.dirUrl)}`)
+    $('assets-hint').textContent = assets.length === 0 ? 'No assets reported.' : `${assets.length} asset(s):`
+    $('asset-list').innerHTML = ''
+    for (const asset of assets) {
+      const ali = document.createElement('li')
+      ali.innerHTML = `<label style="display:flex;gap:8px;align-items:baseline;width:100%"><input type="checkbox" value="${esc(asset)}" checked><span class="name">${esc(asset)}</span></label>`
+      $('asset-list').append(ali)
+    }
+  } catch (err) {
+    $('assets-hint').textContent = err.message
+  }
+}
+
+// ---- download ------------------------------------------------------------
+
+$('down-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  if (!state.dirUrl) {
+    $('down-note').textContent = 'Pick a version first.'
+    return
+  }
+  const names = [...document.querySelectorAll('#asset-list input:checked')].map((b) => b.value)
+  const body = { url: state.dirUrl, dir: $('down-dir').value }
+  if (names.length > 0) body.names = names
+  $('down-note').textContent = names.length > 0 ? `${names.length} name(s) requested.` : 'No selection: the manifest.json at the version URL enumerates the download.'
+  try {
+    const { id } = await api('/api/down', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    follow(id)
+  } catch (err) {
+    logLine(`start failed: ${err.message}`, 'bad')
+  }
+})
+
+function follow(id) {
+  logLine(`job ${id}: stream open`, 'dim')
+  const es = new EventSource(`/api/progress/${encodeURIComponent(id)}`)
+  es.onmessage = (m) => {
+    const frame = JSON.parse(m.data)
+    if (frame.type === 'start') logLine(`down ${frame.url} -> ${frame.dir}`, 'dim')
+    if (frame.type === 'event') logEvent(frame.event)
+    if (frame.type === 'end') {
+      if (frame.ok) {
+        logLine(`summary uploaded=${frame.summary.uploaded} downloaded=${frame.summary.downloaded} skipped=${frame.summary.skipped} failed=${frame.summary.failed.length}`, 'ok')
+      } else {
+        logLine(`failed: ${frame.error}`, 'bad')
+      }
+      es.close()
+    }
+  }
+  es.onerror = () => {
+    logLine('stream closed', 'dim')
+    es.close()
+  }
+}
+
+function logEvent(ev) {
+  if (ev.event === 'artifact') {
+    const bytes = ev.total ? ` ${ev.done}/${ev.total}` : ''
+    logLine(`artifact ${ev.state} ${ev.name}${bytes}`)
+    return
+  }
+  if (ev.event === 'plan') {
+    logLine(`plan download=${(ev.download ?? []).length} skip=${(ev.skip ?? []).length}`)
+    return
+  }
+  if (ev.event === 'retrying') {
+    logLine(`retrying ${ev.name} attempt=${ev.attempt} ${ev.reason ?? ''}`, 'bad')
+    return
+  }
+  logLine(JSON.stringify(ev))
+}
+</script>
+</body>
+</html>
