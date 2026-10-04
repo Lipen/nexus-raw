@@ -6,6 +6,8 @@ use crate::Cli;
 
 pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
     let mut report: Vec<(&'static str, bool, String)> = Vec::new();
+    // Warns pass the check (no exit-code impact) but deserve their own marker in both renders.
+    let mut warns: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
 
     // Credentials: resolved presence only, never values.
     let explicit = cli.user.as_deref();
@@ -19,15 +21,17 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                 "NXR_USERNAME + NXR_PASSWORD"
             };
             let has = header.is_some();
-            report.push((
-                "credentials",
-                has,
-                if has {
-                    format!("resolved from {source}")
-                } else {
-                    "none found: anonymous requests; pass -u or export NXR_AUTH".to_owned()
-                },
-            ));
+            if has {
+                report.push(("credentials", true, format!("resolved from {source}")));
+            } else {
+                // Anonymous access is a legitimate configuration: the gap is a warning, not a failure.
+                warns.insert("credentials");
+                report.push((
+                    "credentials",
+                    true,
+                    "warning: none found; anonymous requests go out unauthenticated (pass -u or export NXR_AUTH)".to_owned(),
+                ));
+            }
             header
         }
         Err(e) => {
@@ -50,7 +54,11 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
 
     report.push((
         "settings",
-        cli.workers > 0 && cli.workers <= 64,
+        cli.workers > 0
+            && cli.workers <= 64
+            && cli.retry >= 1
+            && cli.connect_timeout_secs >= 1
+            && cli.stall_secs >= 1,
         format!(
             "workers {}, retry {}, stall {}s, connect {}s",
             cli.workers, cli.retry, cli.stall_secs, cli.connect_timeout_secs
@@ -72,12 +80,16 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                 match nexus_raw_core::NexusClient::new(&cfg, dead_progress()) {
                     Ok(client) => match client.head_info(url).await {
                         Ok(info) => {
-                            let ok = info.status < 500;
-                            report.push((
-                                "probe",
-                                ok,
-                                format!("HEAD {url} → HTTP {}", info.status),
-                            ));
+                            // A 401 or 403 means the server rejected the call: the probe is a
+                            // credentials failure, not a pass, whatever the status table says.
+                            let rejected = info.status == 401 || info.status == 403;
+                            let ok = !rejected && info.status < 500;
+                            let detail = if rejected {
+                                format!("HEAD {url} → HTTP {}: credentials rejected", info.status)
+                            } else {
+                                format!("HEAD {url} → HTTP {}", info.status)
+                            };
+                            report.push(("probe", ok, detail));
                         }
                         Err(e) => report.push(("probe", false, e.to_string())),
                     },
@@ -98,15 +110,22 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                     transport_failures += 1;
                 }
             }
-            println!(
-                "{}",
-                serde_json::json!({"check": name, "ok": ok, "detail": detail})
-            );
+            let mut line = serde_json::json!({"check": name, "ok": ok, "detail": detail});
+            if warns.contains(name) {
+                line["warn"] = serde_json::Value::Bool(true);
+            }
+            println!("{line}");
         }
     } else {
         println!("doctor:");
         for (name, ok, detail) in &report {
-            let mark = if *ok { "  ok  " } else { " FAIL " };
+            let mark = if !ok {
+                " FAIL "
+            } else if warns.contains(name) {
+                " warn "
+            } else {
+                "  ok  "
+            };
             if !ok {
                 failures += 1;
                 if matches!(*name, "probe") {
@@ -115,8 +134,10 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
             }
             println!("  [{mark}] {name}: {detail}");
         }
-        if failures == 0 {
+        if failures == 0 && warns.is_empty() {
             println!("  all checks passed");
+        } else if failures == 0 {
+            println!("  all checks passed with {} warning(s)", warns.len());
         }
     }
     if failures == 0 {

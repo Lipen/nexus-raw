@@ -234,6 +234,19 @@ fn main() -> std::process::ExitCode {
     match runtime.block_on(cmd::dispatch(&cli)) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
+            if cli.json {
+                // The NDJSON channel must see the failure too: scripts parse this
+                // line, they do not scrape stderr.
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "event": "error",
+                        "code": e.exit_code(),
+                        "error": e.to_string(),
+                        "hint": e.hint(),
+                    })
+                );
+            }
             eprintln!("error: {e}");
             if let Some(hint) = e.hint() {
                 eprintln!("hint: {hint}");

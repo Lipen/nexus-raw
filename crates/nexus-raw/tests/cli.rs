@@ -827,11 +827,19 @@ fn failing_up_still_flushes_ndjson_events() {
             events.iter().any(|e| e["event"] == "plan"),
             "the plan event must survive the failure: {events:?}"
         );
-        // The Summary event goes out just before the error surfaces.
-        let summary = events.last().expect("at least the summary line");
+        // The Summary event goes out just before the failure, and the error object
+        // closes the stream: the machine channel sees the failure too.
+        let summary = &events[events.len() - 2];
         assert_eq!(
             summary["event"], "summary",
-            "summary comes last: {events:?}"
+            "summary precedes the error object: {events:?}"
+        );
+        let last = events.last().expect("the error object closes the stream");
+        assert_eq!(last["event"], "error", "got: {last}");
+        assert_eq!(last["code"], 3, "got: {last}");
+        assert!(
+            last["hint"].is_string(),
+            "the error object carries its hint: {last}"
         );
         let mut failed: Vec<&str> = summary["failed"]
             .as_array()
@@ -847,7 +855,8 @@ fn failing_up_still_flushes_ndjson_events() {
         );
     }
 
-    // The auth variant: the failure precedes any event, so stdout stays empty and the error lands on stderr with its hint.
+    // The auth variant: the failure precedes any transfer event, so the only line
+    // on stdout is the closing error object, and stderr repeats it with the hint.
     let auth = server(Scenario::Auth401 {
         user: "nexus".into(),
         pass: "secret".into(),
@@ -866,20 +875,28 @@ fn failing_up_still_flushes_ndjson_events() {
         "a hint accompanies the failure: {}",
         stderr(&guarded)
     );
+    let lines = ndjson(&guarded);
     assert_eq!(
-        ndjson(&guarded),
-        Vec::<serde_json::Value>::new(),
-        "no events precede a diff-phase failure"
+        lines.len(),
+        1,
+        "the error object is the only line: {lines:?}"
+    );
+    assert_eq!(lines[0]["event"], "error");
+    assert_eq!(lines[0]["code"], 3);
+    assert!(
+        lines[0]["hint"].as_str().unwrap().contains("NXR_AUTH"),
+        "the auth hint rides the error object: {lines:?}"
     );
 }
 
-/// doctor: without credentials the credentials check fails (exit 2).
-/// With -u and no URL everything passes (exit 0).
+/// doctor: missing credentials are a warning (exit 0), explicit credentials pass clean (exit 0).
+/// A broken setting (retry 0) is a failure (exit 2).
 #[test]
 fn doctor_exit_codes() {
     let bare = nxr(&["doctor"]);
-    expect_exit(&bare, 2, "doctor without credentials flags the gap");
-    assert!(stderr(&bare).contains("hint:"));
+    expect_exit(&bare, 0, "missing credentials warn without failing");
+    assert!(stdout(&bare).contains("[ warn ]"));
+    assert!(stdout(&bare).contains("all checks passed"));
 
     let ok = nxr(&["-u", "someone:hunter2", "doctor"]);
     expect_exit(&ok, 0, "doctor with explicit credentials passes");
@@ -888,17 +905,23 @@ fn doctor_exit_codes() {
         "got: {}",
         stdout(&ok)
     );
+    assert!(!stdout(&ok).contains("[ warn ]"));
     assert!(
         !stdout(&ok).contains("hunter2"),
         "secrets never reach output"
     );
+
+    let broken = nxr(&["--retry", "0", "doctor"]);
+    expect_exit(&broken, 2, "a setting the commands refuse fails the check");
+    assert!(stderr(&broken).contains("hint:"));
 }
 
 /// doctor --json: one NDJSON line per check, names and booleans only — no secret ever appears in the detail field.
+/// Missing credentials carry `ok: true` plus the additive `warn` field.
 #[test]
 fn doctor_json_lines() {
     let bare = nxr(&["--json", "doctor"]);
-    expect_exit(&bare, 2, "doctor without credentials flags the gap");
+    expect_exit(&bare, 0, "missing credentials warn without failing");
     let lines = ndjson(&bare);
     assert!(
         !lines.is_empty(),
@@ -915,14 +938,64 @@ fn doctor_json_lines() {
         .iter()
         .find(|l| l["check"] == "credentials")
         .expect("the credentials check is reported");
-    assert_eq!(creds["ok"], false, "anonymous credentials fail the check");
+    assert_eq!(
+        creds["ok"], true,
+        "anonymous access is a warning, not a failure"
+    );
+    assert_eq!(creds["warn"], true, "the warning is visible in json");
 
     let ok = nxr(&["--json", "-u", "someone:hunter2", "doctor"]);
     expect_exit(&ok, 0, "doctor with explicit credentials passes");
+    let ok_lines = ndjson(&ok);
+    let creds = ok_lines
+        .iter()
+        .find(|l| l["check"] == "credentials")
+        .expect("the credentials check is reported");
+    assert_eq!(
+        creds["warn"],
+        serde_json::Value::Null,
+        "no warn field without a warning"
+    );
     assert!(
         !stdout(&ok).contains("hunter2"),
         "secrets never reach json output"
     );
+}
+
+/// doctor against an auth server: the probe turns 401 into a credentials failure (exit 3),
+/// and correct credentials turn the same probe green.
+#[test]
+fn doctor_probe_rejects_rejected_credentials() {
+    let srv = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    let url = root_url(&srv);
+
+    let bad = nxr(&["--json", "doctor", &url]);
+    expect_exit(&bad, 3, "a rejected probe is an auth verdict");
+    let lines = ndjson(&bad);
+    let probe = lines
+        .iter()
+        .find(|l| l["check"] == "probe")
+        .expect("the probe is reported");
+    assert_eq!(probe["ok"], false);
+    assert!(
+        probe["detail"]
+            .as_str()
+            .unwrap()
+            .contains("credentials rejected"),
+        "got: {probe}"
+    );
+
+    let good = nxr(&["--json", "-u", "nexus:secret", "doctor", &url]);
+    expect_exit(&good, 0, "valid credentials pass the probe");
+    let lines = ndjson(&good);
+    let probe = lines
+        .iter()
+        .find(|l| l["check"] == "probe")
+        .expect("the probe is reported");
+    assert_eq!(probe["ok"], true, "got: {probe}");
 }
 
 // ---- rm and point ---------------------------------------------------------
