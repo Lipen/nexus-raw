@@ -40,7 +40,20 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             name,
             ls,
             fresh,
-        } => transfer::down(cli, src, dst, manifest.as_deref(), name, *ls, *fresh).await,
+            dry_run,
+        } => {
+            transfer::down(
+                cli,
+                src,
+                dst,
+                manifest.as_deref(),
+                name,
+                *ls,
+                *fresh,
+                *dry_run,
+            )
+            .await
+        }
         Cmd::Rm {
             src,
             manifest,
@@ -63,7 +76,8 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             manifest,
             name,
             ls,
-        } => transfer::mirror(cli, src, dst, manifest.as_deref(), name, *ls).await,
+            dry_run,
+        } => transfer::mirror(cli, src, dst, manifest.as_deref(), name, *ls, *dry_run).await,
         Cmd::Ls { url, assets } => layout::ls(cli, url, *assets).await,
         Cmd::Channel { op } => match op {
             ChannelOp::Get { url } => layout::channel_get(cli, url).await,

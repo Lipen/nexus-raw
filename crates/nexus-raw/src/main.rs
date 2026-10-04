@@ -125,6 +125,9 @@ pub(crate) enum Cmd {
         /// Ignore existing part files: every name downloads from zero.
         #[arg(long)]
         fresh: bool,
+        /// Print the plan without transferring anything.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Delete the enumerated names from a remote directory (§5.4).
     Rm {
@@ -170,6 +173,9 @@ pub(crate) enum Cmd {
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
+        /// Print the plan without transferring anything.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// List versions or the objects of a version directory (experimental).
     Ls {

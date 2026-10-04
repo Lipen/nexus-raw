@@ -14,7 +14,12 @@ use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::state::{LocalStatus, RemoteStatus};
 use crate::primitive::{self, GetOutcome, HeadInfo, ShaSource};
-use crate::sync::{self, down, mirror, rm::RmAction, up, Action, Mode};
+use crate::sync::{
+    self, down,
+    mirror::{self, MirrorAction},
+    rm::RmAction,
+    up, Action, Mode,
+};
 use crate::transport::client::NexusClient;
 
 /// How `down` learns which names to fetch (spec §5.2.1).
@@ -162,7 +167,6 @@ impl Nxr {
         names: Option<Vec<ArtifactName>>,
         gen_markers: bool,
         claim: Option<ArtifactName>,
-        plan: Option<Vec<Action>>,
     ) -> Result<Summary, Error> {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
@@ -203,21 +207,17 @@ impl Nxr {
                 )));
             }
         }
-        let actions = if let Some(p) = plan {
-            p
-        } else {
-            let remotes = self
-                .remote_states_for(locals.iter().map(|(n, _)| n))
-                .await?;
-            let d = dir.to_owned();
-            let markers = gen_markers;
-            tokio::task::spawn_blocking(move || {
-                sync::classify(&d, Mode::Up, markers, locals, remotes)
-            })
-            .await
-            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
-            .map_err(Error::from)?
-        };
+        let remotes = self
+            .remote_states_for(locals.iter().map(|(n, _)| n))
+            .await?;
+        let d = dir.to_owned();
+        let markers = gen_markers;
+        let actions = tokio::task::spawn_blocking(move || {
+            sync::classify(&d, Mode::Up, markers, locals, remotes)
+        })
+        .await
+        .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+        .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Up);
         up::execute(
             self.client.clone(),
@@ -245,28 +245,23 @@ impl Nxr {
         dir: &Path,
         enum_src: Enumeration,
         fresh: bool,
-        plan: Option<Vec<Action>>,
     ) -> Result<Summary, Error> {
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| Error::io(dir, e))?;
         down::cleanup_orphans(dir)?;
         let names = self.resolve_names(enum_src).await?;
-        let actions = if let Some(p) = plan {
-            p
-        } else {
-            let locals = sync::local_statuses(dir, names).await;
-            let remotes = self
-                .remote_states_for(locals.iter().map(|(n, _)| n))
-                .await?;
-            let d = dir.to_owned();
-            tokio::task::spawn_blocking(move || {
-                sync::classify(&d, Mode::Down, true, locals, remotes)
-            })
-            .await
-            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
-            .map_err(Error::from)?
-        };
+        let locals = sync::local_statuses(dir, names).await;
+        let remotes = self
+            .remote_states_for(locals.iter().map(|(n, _)| n))
+            .await?;
+        let d = dir.to_owned();
+        let actions = tokio::task::spawn_blocking(move || {
+            sync::classify(&d, Mode::Down, true, locals, remotes)
+        })
+        .await
+        .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+        .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Down);
         down::execute(
             self.client.clone(),
@@ -318,6 +313,12 @@ impl Nxr {
 
     /// Resolve the enumeration source into names, refusing an empty result like `down`.
     /// A repeated explicit name collapses to its first occurrence: one artifact, one worker.
+    pub async fn enumerate(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
+        self.resolve_names(enum_src).await
+    }
+
+    /// Resolve the enumeration source into names, refusing an empty result like `down`.
+    /// A repeated explicit name collapses to its first occurrence: one artifact, one worker.
     async fn resolve_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
         let names = match enum_src {
             Enumeration::Manifest(m) => m.names,
@@ -346,6 +347,28 @@ impl Nxr {
         layout::pointer_clear(&self.client, url).await
     }
 
+    /// The mirror plan: probes both sides and classifies, moves nothing.
+    /// Emits the plan event exactly like [`Nxr::mirror`](Self::mirror) does.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Enumerate`] when the enumeration is empty and the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff.
+    pub async fn mirror_plan(
+        &self,
+        dst: &Nxr,
+        enum_src: Enumeration,
+    ) -> Result<Vec<MirrorAction>, Error> {
+        let names = self.resolve_names(enum_src).await?;
+        let srcs = self.remote_states_for(&names).await?;
+        let dsts = dst.remote_states_for(&names).await?;
+        let actions = tokio::task::spawn_blocking(move || mirror::classify(names, srcs, dsts))
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+            .map_err(Error::from)?;
+        self.events.plan_mirror(&actions);
+        Ok(actions)
+    }
+
     /// Pour enumerated names from this repository into `dst` (mirror).
     ///
     /// The enumeration lives at the source; the destination diff rules are up's:
@@ -361,14 +384,7 @@ impl Nxr {
     ///
     /// Returns [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff, [`Error::Mismatch`] on a staged-body divergence, [`Error::Misuse`] if a task panicked, and [`Error::Io`] when the staging directory cannot be managed.
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
-        let names = self.resolve_names(enum_src).await?;
-        let srcs = self.remote_states_for(&names).await?;
-        let dsts = dst.remote_states_for(&names).await?;
-        let actions = tokio::task::spawn_blocking(move || mirror::classify(names, srcs, dsts))
-            .await
-            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
-            .map_err(Error::from)?;
-        self.events.plan_mirror(&actions);
+        let actions = self.mirror_plan(dst, enum_src).await?;
         // Claim-first: the version document, when the enumeration leads with it.
         let claim = mirror::claim_first(&actions);
         let staging = mirror::staging_dir(&self.base, &dst.base);
@@ -387,6 +403,26 @@ impl Nxr {
         tokio::fs::create_dir_all(&staging)
             .await
             .map_err(|e| Error::io(&staging, e))?;
+        // Two concurrent mirrors of one pair would interleave the same part files:
+        // an advisory lock refuses the second run instead of corrupting the first.
+        // The guard lives to the end of the run, the lock dies with it.
+        #[cfg(unix)]
+        let _staging_guard = {
+            use std::os::unix::io::AsRawFd;
+            let lock_path = staging.with_extension("lock");
+            let lock = std::fs::File::create(&lock_path).map_err(|e| Error::io(&lock_path, e))?;
+            let rc = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+            if rc != 0 {
+                return Err(Error::misuse(format!(
+                    "another mirror is already running for this pair (lock: {})",
+                    lock_path.display()
+                )));
+            }
+            // `_`-prefixed on purpose: the warning is silenced, the lock is not dropped.
+            Some(lock)
+        };
+        #[cfg(not(unix))]
+        let staging_guard: Option<std::fs::File> = None;
         let result = mirror::execute(
             self.client.clone(),
             dst.client.clone(),

@@ -58,10 +58,12 @@ async fn run_up(
     }
     // The Summary event is the single source for totals: the renderer prints it in both modes.
     // Printing a second copy here raced the renderer.
-    ctx.nxr.up(src, names, !no_sha, claim, None).await?;
+    ctx.nxr.up(src, names, !no_sha, claim).await?;
     Ok(())
 }
 
+// The signature is the CLI surface: every argument is a user flag of `nxr down`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn down(
     cli: &Cli,
     src: &str,
@@ -70,9 +72,11 @@ pub(crate) async fn down(
     names: &[String],
     ls: bool,
     fresh: bool,
+    dry_run: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let result = run_down(&ctx, dst, manifest, names, ls, fresh).await;
+    let enum_src = enumeration_source(&ctx, manifest, names, ls).await?;
+    let result = run_down(&ctx, dst, enum_src, fresh, dry_run).await;
     finish(ctx).await;
     result
 }
@@ -80,13 +84,22 @@ pub(crate) async fn down(
 async fn run_down(
     ctx: &Ctx,
     dst: &Path,
-    manifest: Option<&str>,
-    names: &[String],
-    ls: bool,
+    enum_src: Enumeration,
     fresh: bool,
+    dry_run: bool,
 ) -> Result<(), Error> {
-    let enum_src = enumeration_source(ctx, manifest, names, ls).await?;
-    ctx.nxr.down(dst, enum_src, fresh, None).await?;
+    if dry_run {
+        let names = ctx.nxr.enumerate(enum_src).await?;
+        let actions = ctx
+            .nxr
+            .diff(dst, names, nexus_raw_core::Mode::Down, false)
+            .await?;
+        for a in &actions {
+            crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
+        }
+        return Ok(());
+    }
+    ctx.nxr.down(dst, enum_src, fresh).await?;
     Ok(())
 }
 
@@ -174,12 +187,33 @@ pub(crate) async fn mirror(
     manifest: Option<&str>,
     names: &[String],
     ls: bool,
+    dry_run: bool,
 ) -> Result<(), Error> {
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
     // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
     let src_nxr = make_nxr(cli, src, session.sender())?;
     let dst_nxr = make_nxr(cli, dst, session.sender())?;
-    let result = run_mirror(&src_nxr, &dst_nxr, manifest, names, ls).await;
+    // Enumeration only from the source: the same three sources as down.
+    let enum_src = if ls {
+        Enumeration::Search
+    } else if let Some(spec) = manifest {
+        Enumeration::Manifest(load_manifest(&src_nxr, spec).await?)
+    } else if !names.is_empty() {
+        Enumeration::Names(parse_names(names)?)
+    } else {
+        // The convention: a manifest.json at the source directory URL.
+        match src_nxr.manifest_at_base().await? {
+            Some(m) => Enumeration::Manifest(m),
+            None => {
+                return Err(Error::Enumerate {
+                    url: src_nxr.base().to_owned(),
+                    reason: "no manifest.json at the source and no --manifest/--name/--ls given"
+                        .into(),
+                })
+            }
+        }
+    };
+    let result = run_mirror(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
     // Both facades must die before the renderer drains: each holds a sender clone.
     drop(src_nxr);
     drop(dst_nxr);
@@ -190,30 +224,31 @@ pub(crate) async fn mirror(
 async fn run_mirror(
     src: &Nxr,
     dst: &Nxr,
-    manifest: Option<&str>,
-    names: &[String],
-    ls: bool,
+    enum_src: Enumeration,
+    dry_run: bool,
+    json: bool,
 ) -> Result<(), Error> {
-    // Enumeration only from the source: the same three sources as down.
-    let enum_src = if ls {
-        Enumeration::Search
-    } else if let Some(spec) = manifest {
-        Enumeration::Manifest(load_manifest(src, spec).await?)
-    } else if !names.is_empty() {
-        Enumeration::Names(parse_names(names)?)
-    } else {
-        // The convention: a manifest.json at the source directory URL.
-        match src.manifest_at_base().await? {
-            Some(m) => Enumeration::Manifest(m),
-            None => {
-                return Err(Error::Enumerate {
-                    url: src.base().to_owned(),
-                    reason: "no manifest.json at the source and no --manifest/--name/--ls given"
-                        .into(),
-                })
-            }
+    if dry_run {
+        for a in src.mirror_plan(dst, enum_src).await? {
+            let (line, json_shape) = mirror_plan_line(&a);
+            crate::cmd::print_line(json, &line, &json_shape);
         }
-    };
+        return Ok(());
+    }
     src.mirror(dst, enum_src).await?;
     Ok(())
+}
+
+/// The plan line of a mirror action, human and JSON shapes.
+fn mirror_plan_line(a: &nexus_raw_core::MirrorAction) -> (String, serde_json::Value) {
+    match a {
+        nexus_raw_core::MirrorAction::Skip { name, .. } => (
+            format!("skip {name}"),
+            serde_json::json!({"plan": "skip", "name": name.as_str()}),
+        ),
+        nexus_raw_core::MirrorAction::Copy { name, size, .. } => (
+            format!("copy {name}"),
+            serde_json::json!({"plan": "copy", "name": name.as_str(), "size": size}),
+        ),
+    }
 }
