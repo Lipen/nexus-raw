@@ -7,9 +7,8 @@
 //! A promise resolves to the command's result and rejects with an `Error` whose `exitCode` and `hint` mirror `Error::exit_code` and `Error::hint` of the core.
 //! The JS entry (`index.js`) promotes them from the rejection message the raw addon produces.
 //!
-//! Platform status: `linux-x86_64-gnu` is the wired prebuilt target.
-//! macOS and Windows triples are known-good for the core but wait for release runners.
-//! No prebuilt packages exist for them yet.
+//! Platform status: `linux-x86_64-gnu`, `darwin-x64` and `darwin-arm64` ship as prebuilt packages.
+//! The win32 addon waits on an npm ticket; there the loader falls back to a local build.
 
 mod mapping;
 
