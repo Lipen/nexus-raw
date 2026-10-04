@@ -13,7 +13,7 @@ use tokio::io::AsyncWriteExt;
 use crate::error::Error;
 use crate::events::Dir;
 use crate::model::digest::{self, Digest};
-use crate::model::name::ArtifactName;
+use crate::model::name::{percent_decode, ArtifactName};
 use crate::model::sibling;
 pub use crate::transport::client::HeadInfo;
 use crate::transport::client::NexusClient;
@@ -125,11 +125,12 @@ pub async fn put(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    client.upload_file((&name, Dir::Up), url, src, size).await?;
+    // The digest rides the upload: the bytes are hashed as they hit the wire,
+    // no second pass over the file and no synchronous read on the runtime.
+    let d = client.upload_file((&name, Dir::Up), url, src, size).await?;
     if !sha {
         return Ok((size, None));
     }
-    let d = digest::sha256_file(src).map_err(|e| Error::io(src, e))?;
     // The sibling URL is the object URL + ".sha256".
     // The marker names the object by its final path segment.
     let marker_name = last_segment(url);
@@ -197,32 +198,6 @@ fn last_segment(url: &str) -> String {
         .and_then(|u| u.path().rsplit('/').next().map(str::to_owned))
         .unwrap_or_default();
     percent_decode(&raw)
-}
-
-fn percent_decode(seg: &str) -> String {
-    let bytes = seg.as_bytes();
-    let hex = |b: u8| -> Option<u8> {
-        match b {
-            b'0'..=b'9' => Some(b - b'0'),
-            b'a'..=b'f' => Some(b - b'a' + 10),
-            b'A'..=b'F' => Some(b - b'A' + 10),
-            _ => None,
-        }
-    };
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
-                out.push(h * 16 + l);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(test)]

@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nxr = nxr_for(&base, tx)?;
 
     // Up: markers are written by default, so the remote copy is complete.
-    let summary = nxr.up(dir.path(), None, true, None, None).await?;
+    let summary = nxr.up(dir.path(), None, true, None).await?;
     println!("published: {summary:?}");
 
     // Down into a second directory; enumeration comes from explicit names.
@@ -43,7 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             out.path(),
             Enumeration::Names(vec![ArtifactName::parse("artifact.bin")?]),
             false,
-            None,
         )
         .await?;
     println!("fetched: {summary:?}");

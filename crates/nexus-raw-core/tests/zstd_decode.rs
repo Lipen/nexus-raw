@@ -200,7 +200,7 @@ async fn resume_request_pins_identity_encoding() {
 
     let (ev_tx, _ev_rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(base.clone()), ev_tx).unwrap();
-    nxr.down(dir.path(), Enumeration::Names(vec![name]), false, None)
+    nxr.down(dir.path(), Enumeration::Names(vec![name]), false)
         .await
         .unwrap();
 

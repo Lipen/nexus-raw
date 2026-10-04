@@ -20,9 +20,13 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
     while let Some(d) = stack.pop() {
         let entries = std::fs::read_dir(&d).map_err(|e| Error::io(&d, e))?;
         let mut items: Vec<_> = entries
-            .filter_map(std::result::Result::ok)
-            .map(|e| (e.file_name(), e.path()))
-            .collect();
+            .map(|e| {
+                // A failed entry is a real read error, never a silent skip: an
+                // upload over a half-readable tree must fail, not under-report.
+                let e = e.map_err(|e| Error::io(&d, e))?;
+                Ok::<_, Error>((e.file_name(), e.path()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         items.sort();
         for (fname, path) in items {
             let fname = fname.to_string_lossy().into_owned();

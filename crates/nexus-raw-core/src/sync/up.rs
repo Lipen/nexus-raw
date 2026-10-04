@@ -211,8 +211,9 @@ pub(crate) async fn generate_markers(
     })
     .await
     .map_err(|e| Error::misuse(format!("task panicked: {e}")))??;
+    let made: std::collections::HashMap<_, _> = made.into_iter().collect();
     for (name, st) in locals.iter_mut() {
-        if let Some((_, d)) = made.iter().find(|(n, _)| n == name) {
+        if let Some(d) = made.get(name) {
             *st = LocalStatus::Complete(d.clone());
         }
     }
