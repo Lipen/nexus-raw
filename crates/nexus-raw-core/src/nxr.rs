@@ -372,6 +372,18 @@ impl Nxr {
         // Claim-first: the version document, when the enumeration leads with it.
         let claim = mirror::claim_first(&actions);
         let staging = mirror::staging_dir(&self.base, &dst.base);
+        // The parts may hold private bytes in a shared temp location: create the
+        // directory private instead of publishing them to every local user.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .recursive(true)
+                .create(&staging)
+                .map_err(|e| Error::io(&staging, e))?;
+        }
+        #[cfg(not(unix))]
         tokio::fs::create_dir_all(&staging)
             .await
             .map_err(|e| Error::io(&staging, e))?;
