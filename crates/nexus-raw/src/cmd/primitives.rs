@@ -60,13 +60,20 @@ pub(crate) async fn head(cli: &Cli, url: &str) -> Result<(), Error> {
 
 async fn run_head(ctx: &Ctx, url: &str) -> Result<(), Error> {
     let info = ctx.nxr.head(url).await?;
+    // The content type is a server-supplied string: escape it for the terminal,
+    // the same invariant the error paths keep against ANSI/OSC injection.
+    let content_type = info
+        .content_type
+        .as_deref()
+        .map(|ct| ct.escape_debug().to_string())
+        .unwrap_or_else(|| "-".into());
     print_line(
         ctx.json,
         &format!(
             "head: {} {} {}",
             info.status,
             info.size.map_or("-".into(), |s| s.to_string()),
-            info.content_type.clone().unwrap_or_else(|| "-".into()),
+            content_type
         ),
         &serde_json::json!({
             "url": url,
