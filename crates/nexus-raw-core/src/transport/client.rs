@@ -117,6 +117,9 @@ impl NexusClient {
         cfg.validate()?;
         let mut builder = reqwest::Client::builder()
             .connect_timeout(cfg.connect_timeout)
+            // Control requests (probe, marker PUT, delete, small get/put) have no body
+            // loop to watch: this read timeout is their only stall guard.
+            .read_timeout(cfg.stall_timeout)
             .redirect(reqwest::redirect::Policy::none());
         if cfg.tls_insecure {
             builder = builder.danger_accept_invalid_certs(true);
