@@ -172,8 +172,12 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
 /// # Errors
 ///
 /// Returns [`Error::Mismatch`] on a source/destination digest divergence, [`Error::Misuse`] if a task panicked, and the first transport/auth/HTTP failure of the run.
+// Two clients, two endpoints, staging, the plan, the claim and the worker budget are
+// genuinely distinct pieces: a parameter struct would only rename this list.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn execute(
     client: Arc<NexusClient>,
+    dst_client: Arc<NexusClient>,
     staging: PathBuf,
     src_url: String,
     dst_url: String,
@@ -200,7 +204,7 @@ pub(crate) async fn execute(
     if let Some(action) = claim_action {
         // Inline, not spawned: the claim must finish before anything else starts.
         // A failed claim aborts the run so the destination never gains bytes behind a version document that did not arrive.
-        match copy_one(&client, &staging, &src_url, &dst_url, &action).await {
+        match copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &action).await {
             Ok(Some(_)) => summary.uploaded += 1,
             Ok(None) => summary.skipped += 1,
             Err((name, Failure::Failed(e))) => {
@@ -235,12 +239,13 @@ pub(crate) async fn execute(
                     .await
                     .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
                 let client = client.clone();
+                let dst_client = dst_client.clone();
                 let staging = staging.clone();
                 let src_url = src_url.clone();
                 let dst_url = dst_url.clone();
                 set.spawn(async move {
                     let _permit = permit;
-                    copy_one(&client, &staging, &src_url, &dst_url, &copy).await
+                    copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &copy).await
                 });
             }
         }
@@ -284,6 +289,7 @@ const REFUSAL_DETAIL: &str = "mirrored content diverges from its sha-sibling";
 /// `Ok(None)` means the destination already held exactly the staged digest: nothing was written there.
 async fn copy_one(
     client: &NexusClient,
+    dst_client: &NexusClient,
     staging: &Path,
     src_url: &str,
     dst_url: &str,
@@ -351,10 +357,19 @@ async fn copy_one(
     let size = std::fs::metadata(&staged)
         .map(|m| m.len())
         .map_err(|e| (name.clone(), Failure::Failed(Error::io(&staged, e))))?;
-    up::upload_one(client, staging, dst_url, name, size, Some(digest), false)
-        .await
-        .map_err(|e| (name.clone(), Failure::Failed(e)))?;
-    client
+    // The write side is the destination client: the source credentials never reach the destination host.
+    up::upload_one(
+        dst_client,
+        staging,
+        dst_url,
+        name,
+        size,
+        Some(digest),
+        false,
+    )
+    .await
+    .map_err(|e| (name.clone(), Failure::Failed(e)))?;
+    dst_client
         .progress()
         .done(name.as_str(), Dir::Up, false, size, Some(size))
         .await;

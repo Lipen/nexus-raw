@@ -1060,6 +1060,48 @@ async fn mirror_missing_name_is_data_error() {
     assert_eq!(err.exit_code(), 1);
 }
 
+#[tokio::test]
+async fn mirror_uses_the_destination_client_for_its_writes() {
+    // The source credentials must never reach the destination host, and the writes
+    // must carry the destination credentials: the writes follow the destination.
+    // The source runs open, the destination demands Basic auth, and only the
+    // destination facade holds the credentials.
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Auth401 {
+        user: USER.to_owned(),
+        pass: PASS.to_owned(),
+    })
+    .unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(
+        config(
+            &dst_mock,
+            Some(format!(
+                "Basic {}",
+                nexus_raw_core::creds::basic(USER, PASS)
+            )),
+        ),
+        tx,
+    )
+    .unwrap();
+
+    let manifest = src.manifest_at_base().await.unwrap().unwrap();
+    let summary = src
+        .mirror(&dst, Enumeration::Manifest(manifest))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, FIXTURE.len());
+
+    // The bytes landed behind the destination's own credentials.
+    for name in FIXTURE {
+        assert!(
+            dst_mock.store_get(&format!("{VERSION}/{name}")).is_some(),
+            "{name} reached the authenticated destination"
+        );
+    }
+}
+
 // ---------------------------------------------------------------- auth, stall
 
 #[tokio::test]

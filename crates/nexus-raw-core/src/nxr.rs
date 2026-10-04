@@ -372,6 +372,7 @@ impl Nxr {
             .map_err(|e| Error::io(&staging, e))?;
         let result = mirror::execute(
             self.client.clone(),
+            dst.client.clone(),
             staging.clone(),
             self.base.clone(),
             dst.base.clone(),
