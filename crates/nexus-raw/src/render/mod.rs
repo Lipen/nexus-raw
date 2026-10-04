@@ -2,6 +2,8 @@
 
 mod json;
 
+use std::io::IsTerminal;
+
 use nexus_raw_core::{Dir, Event};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -50,11 +52,21 @@ impl Session {
 }
 
 async fn run(mut rx: UnboundedReceiver<Event>, mode: Mode) {
+    let mut progress: Option<u16> = None;
     while let Some(ev) = rx.recv().await {
         match mode {
-            Mode::Human { quiet, verbose } => human(&ev, quiet, verbose),
+            Mode::Human { quiet, verbose } => human(&ev, quiet, verbose, &mut progress),
             Mode::Json => json::line(&ev),
         }
+    }
+    clear_progress(&progress);
+}
+
+/// Erase an in-place progress line, if one is drawn.
+fn clear_progress(progress: &Option<u16>) {
+    if let Some(w) = progress {
+        let blank = " ".repeat(*w as usize);
+        eprint!("\r{blank}\r");
     }
 }
 
@@ -62,8 +74,12 @@ async fn run(mut rx: UnboundedReceiver<Event>, mode: Mode) {
 ///
 /// `-q` keeps only the final summary.
 /// `-v` adds transfer starts and plan names.
-/// Coalesced byte-progress events are not printed in human mode.
-fn human(ev: &Event, quiet: bool, verbose: bool) {
+/// Byte-progress draws one in-place stderr line when stderr is a terminal.
+fn human(ev: &Event, quiet: bool, verbose: bool, progress: &mut Option<u16>) {
+    // Any non-progress line starts clean, so the in-place drawing never smears.
+    if !matches!(ev, Event::ArtifactBytes { .. }) {
+        clear_progress(progress);
+    }
     match ev {
         Event::Plan {
             upload,
@@ -99,7 +115,31 @@ fn human(ev: &Event, quiet: bool, verbose: bool) {
                 );
             }
         }
-        Event::ArtifactBytes { .. } => {}
+        Event::ArtifactBytes {
+            name,
+            dir,
+            done,
+            total,
+        } => {
+            // The in-place progress line lives on stderr and only on a terminal:
+            // stdout stays the event stream, pipes stay clean.
+            if quiet || !std::io::stderr().is_terminal() {
+                return;
+            }
+            let arrow = match dir {
+                Dir::Up => "↑",
+                Dir::Down => "↓",
+            };
+            let line = match total {
+                Some(t) if *t > 0 => {
+                    format!("{arrow} {name} {done}/{t} ({}%)", done * 100 / t)
+                }
+                _ => format!("{arrow} {name} {done} bytes"),
+            };
+            let pad = (*progress).map_or(0, |w| (w as usize).saturating_sub(line.len()));
+            eprint!("\r{line}{}", " ".repeat(pad));
+            *progress = Some(line.len() as u16);
+        }
         Event::ArtifactDone {
             name, dir, skipped, ..
         } => {
