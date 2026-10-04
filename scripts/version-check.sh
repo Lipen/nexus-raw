@@ -21,6 +21,27 @@ for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on
   fi
 done
 
+# The examples are standalone consumers pinned to the minor: a pin that
+# lags the workspace teaches a version nobody released. The rust example
+# carries the loose major.minor form, the node example the caret form.
+minor="${ws%.*}"
+rust_pin="$(sed -n 's/^nexus-raw-core = "\(.*\)"/\1/p' examples/rust/Cargo.toml)"
+node_pin="$(sed -n 's/.*"nexus-raw": "\(.*\)".*/\1/p' examples/node/package.json)"
+if [ -z "$rust_pin" ]; then
+  echo "version-check: no nexus-raw-core pin in examples/rust/Cargo.toml" >&2
+  failed=1
+elif [ "$rust_pin" != "$minor" ]; then
+  echo "version-check: examples/rust pins $rust_pin, the workspace is $minor" >&2
+  failed=1
+fi
+if [ -z "$node_pin" ]; then
+  echo "version-check: no nexus-raw pin in examples/node/package.json" >&2
+  failed=1
+elif [ "$node_pin" != "^$minor.0" ]; then
+  echo "version-check: examples/node pins $node_pin, the workspace is $minor" >&2
+  failed=1
+fi
+
 # Pages may name the command, never the current number: a pinned version is a
 # lie on the next release. The recorded session under docs/assets is exempt —
 # it names the binary that made the recording, and `just demo-cast` refreshes it.
