@@ -5,7 +5,7 @@ No Nexus installation is needed: the repository ships `mock-nexus`, a mock Nexus
 
 ## Prerequisites
 
-- Rust 1.85+ through `rustup`, the only hard requirement.
+- Rust 1.88+ through `rustup`, the only hard requirement.
 - `just` is optional and only wraps the recipes below.
 
 ## Install

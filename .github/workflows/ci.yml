@@ -38,15 +38,15 @@ jobs:
   # The manifest pins the minimum supported Rust version; this proves the
   # pinned toolchain still builds the workspace, cheaply and early.
   msrv:
-    name: MSRV (1.85)
+    name: MSRV (1.88)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Set up Rust 1.85
-        uses: dtolnay/rust-toolchain@a9ac24949e6152c2fbb076542fe97615b2b7db9f # 1.85
+      - name: Set up Rust 1.88
+        uses: dtolnay/rust-toolchain@94ec8bc822f50f94d0e68501cff2eb388c550726 # 1.88
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2

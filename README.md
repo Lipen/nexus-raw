@@ -51,7 +51,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-The cargo paths build from source, so they need Rust 1.85 or newer.
+The cargo paths build from source, so they need Rust 1.88 or newer.
 Check the install with `nxr --version`.
 
 ## Quick start

@@ -51,7 +51,7 @@ cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
 cargo install --path crates/nexus-raw --locked
 ```
 
-Варианты через cargo собирают из исходников, поэтому нужен Rust 1.85 или новее.
+Варианты через cargo собирают из исходников, поэтому нужен Rust 1.88 или новее.
 Проверить установку: `nxr --version`.
 
 ## Быстрый старт
