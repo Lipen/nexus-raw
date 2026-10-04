@@ -2,14 +2,15 @@
 
 `nxr` moves files to and from a Nexus raw repository.
 Single-object commands: `get`, `put`, `head`, `sha`.
-Directory transfers with sha-sibling verification: `up`, `down`.
+Directory transfers with sha-sibling verification: `up`, `down`, `mirror`.
 Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 
 Every invocation is self-sufficient: the URL is a command-line argument and credentials come from `-u` or the environment.
 There is no config file, no profile and no state directory.
 
-The transcripts on this page are real output of `nxr`; the mock scenarios ran against `crates/mock-nexus`, the `ls` capture against a live Nexus Repository, and hosts are shown as `nexus.example.com` either way.
+The transcripts on this page are real output of `nxr`.
+The mock scenarios ran against `crates/mock-nexus`, the `ls` capture against a live Nexus Repository, and hosts are shown as `nexus.example.com` either way.
 `just demo` runs a full session against the same mock.
 Exit codes are quoted as observed.
 
@@ -49,6 +50,9 @@ $ echo $?
 
 The base URL is normalized: `https://host/raw` and `https://host/raw/` address the same directory.
 Only `http`/`https` with a host are accepted, and credentials in the URL's userinfo are rejected.
+
+Proxy environment variables work as in curl: `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` are read from the environment and honored on every request.
+Proxy values never appear in logs or output.
 
 ## Global flags
 
@@ -109,15 +113,16 @@ $ echo $?
 | `2` | misuse: a non-http URL |
 | `3` | 404, auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
-`--json` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
+`--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
 
 ```json
 {"done":0,"event":"artifact","name":"app.zip","state":"downloading","total":45}
 {"done":45,"event":"artifact","name":"app.zip","state":"downloading","total":45}
-{"bytes":45,"ok":true,"out":"app.zip","resumed_from":12,"sha256":"a8a24209…","url":"…"}
+{"bytes":45,"ok":true,"out":"app.zip","resumed_from":0,"sha256":"a8a24209…","url":"…"}
 ```
 
-Without `-o` the stdout body is raw bytes: do not combine stdout mode with `--json`.
+Without `-o` the stdout body is raw bytes and nothing else: stdout mode emits no progress events.
+`--json` without `-o` is refused as misuse (exit 2), and the hint names the two ways out: pass `-o FILE` or drop `--json`.
 
 ## nxr put
 
@@ -295,7 +300,8 @@ With `--json`, `--dry-run` prints one object per plan line:
 {"action":"upload","name":"manifest.json","size":2}
 ```
 
-`--claim-first <NAME>` uploads the named file first and alone. A failed claim aborts the run with nothing else sent.
+`--claim-first <NAME>` uploads the named file first and alone.
+A failed claim aborts the run with nothing else sent.
 A claim name outside the scanned directory is misuse:
 
 ```console
@@ -377,10 +383,49 @@ $ echo $?
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure |
 
-Part files are named `.nxr-part-<16 hex>` and are stable per artifact name, so a rerun finds its resume fuel without a state file.
+Part files are named `.nxr-part-<32 hex>` and are stable per artifact name, so a rerun finds its resume fuel without a state file.
 `--fresh` ignores the parts and downloads every name from zero.
 A resumed part that belongs to an older remote version fails the digest check and is discarded once: the name restarts from zero under the same digest check.
 A fresh download that still diverges refuses the run (exit 1), so nothing divergent is ever written.
+
+## nxr mirror
+
+```
+nxr mirror <SRC_URL> <DST_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls]
+```
+
+Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
+The enumeration lives at the source, with the same sources as `down`: a `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+Without any source the run refuses with `cannot enumerate` (exit 1).
+
+| Flag | Meaning |
+|:-----|:--------|
+| `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
+| `--name <NAME>` | one explicit name, repeat as needed |
+| `--ls` | best-effort enumeration through the server search API |
+
+Every name travels through a staging directory: a Range-aware GET from the source, a digest check against the source marker, then a PUT of the bytes and of the `<name>.sha256` marker on the destination.
+The destination diff follows `up`'s rules: an identical complete copy is skipped, a diverging complete copy refuses the run, an unfinished copy is completed.
+When the enumeration leads with `version.json`, the conventional version document, that name is claimed: it transfers alone before any other name starts, and a failed claim aborts the run with nothing else sent.
+
+`--json` prints the transfer event stream, a `downloading` and an `uploading` sequence for every moved name:
+
+```json
+{"download":[],"event":"plan","skip":[],"upload":["a.zip"]}
+{"done":0,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"downloading","total":35}
+{"done":0,"event":"artifact","name":"a.zip","state":"uploading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"uploading","total":35}
+{"done":35,"event":"artifact","name":"a.zip","state":"done","total":35}
+{"downloaded":0,"event":"summary","failed":[],"removed":0,"skipped":0,"uploaded":1}
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | plan executed, the destination holds every enumerated name |
+| `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`); local I/O around the staging directory |
+| `2` | misuse: an unsafe `--name` |
+| `3` | transport or auth failure, on either side |
 
 ## nxr rm
 
@@ -453,7 +498,8 @@ $ echo $?
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure: the `failed:` list names where the run stopped |
 
-`--json` prints one event per name and the summary last; a rerun emits `missing` events and still exits 0:
+`--json` prints one event per name and the summary last.
+A rerun emits `missing` events and still exits 0:
 
 ```json
 {"event":"removing","name":"a.zip"}
@@ -542,7 +588,8 @@ $ echo $?
 ```
 
 Measured caveat from the same live server: for a group URL the search request filters by `group`, and on that Nexus release the parameter matched Maven coordinates rather than raw path prefixes, so a group-scoped `ls` returned an empty list with exit 0.
-Treat `ls` as a convenience only; `down` takes its names from manifests instead of from listings, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
+Treat `ls` as a convenience only.
+`down` takes its names from manifests instead of from listings, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
 
 | Exit | When |
 |:----:|:-----|
@@ -671,20 +718,15 @@ nxr doctor [URL]
 
 Diagnose the setup before a pipeline runs.
 Local checks always execute: credentials (resolved source, never values), TLS mode, worker and timeout settings.
-With a URL: one `HEAD` probe for reachability. Any status below 500 passes, a 5xx or a connection failure fails the probe as transport.
+Settings are validated, not just echoed: workers outside `1..=64`, `--retry 0` or a zero timeout fail the check.
 
-```console
-$ env -u NXR_USERNAME -u NXR_PASSWORD -u NXR_AUTH nxr doctor
-doctor:
-  [ FAIL ] credentials: none found: anonymous requests; pass -u or export NXR_AUTH
-  [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
-error: misuse: 1 check(s) failed
-hint: check the command line arguments
-$ echo $?
-2
-```
+With a URL: one `HEAD` probe for reachability.
+Any status below 500 passes, except 401 and 403: the server rejected the credentials, and the probe fails with the detail `credentials rejected`.
+A 5xx or a connection failure fails the probe as transport.
 
+Missing credentials are a warning, not a failure: the run reports `none found` and still exits 0, because anonymous requests are a legitimate setup against a read-open repository.
+
+A passing run, probe included, is shown in [credentials and URLs](#credentials-and-urls).
 A probe that cannot connect is a transport failure:
 
 ```console
@@ -700,8 +742,8 @@ $ echo $?
 3
 ```
 
-`doctor` always renders the human report, `--json` or not.
-With `--json` the report lines are one object per check:
+The report prints one line per check.
+`--json` replaces the human report with one object per check on stdout:
 
 ```json
 {"check":"credentials","detail":"resolved from NXR_AUTH","ok":true}
@@ -709,13 +751,14 @@ With `--json` the report lines are one object per check:
 
 | Exit | When |
 |:----:|:-----|
-| `0` | all checks passed |
-| `2` | a local gap, for example no credentials anywhere |
-| `3` | the probe could not reach the server |
+| `0` | all checks passed, warnings included |
+| `2` | a local check failed: TLS verification off, settings out of range |
+| `3` | the probe failed: unreachable, a 5xx, or the server rejected the credentials (401/403) |
 
 ## Output
 
-Human output goes to stdout. `error:` and `hint:` lines go to stderr.
+Human output goes to stdout.
+`error:` and `hint:` lines go to stderr.
 The line vocabulary:
 
 - `plan: N to upload, N to download, N up to date`, once per transfer.
@@ -747,9 +790,14 @@ Artifact lines arrive in worker completion order, not plan order.
 
 `--json` switches stdout to NDJSON:
 
-- `up`, `down`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
+- `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
 - `head`, `sha`, `channel`, `point` and `doctor` print their objects described in their sections above.
-- the body of `get` without `-o` is raw bytes on stdout, so do not mix it with `--json`.
+- the body of `get` without `-o` is the only thing on stdout: no events are printed in stdout mode, and `--json` without `-o` is refused as misuse (exit 2).
+- a failed run ends stdout with one `error` object before the non-zero exit, carrying the exit `code` and the `hint` that stderr carries:
+
+```json
+{"event":"error","code":3,"hint":"check the network; transfers are resumable, rerunning is safe"}
+```
 
 A captured transfer stream:
 
@@ -777,11 +825,12 @@ Four codes cover every failure, and the mapping from error to code has one home,
 |:----:|:------|:----------------------|
 | `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
 | `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures |
-| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear` |
+| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o` |
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, 404 and other unexpected statuses |
 
 `verify` is offline and cannot produce `3`.
-`head` reports statuses as results and exits `0` on any answer; only a dead connection gives `3`.
+`head` reports statuses as results and exits `0` on any answer.
+Only a dead connection gives `3`.
 Every error also prints a `hint:` line on stderr: the full [taxonomy with hints](errors.md) and the [incident playbook](../how-to/troubleshoot.md) cover what to do next.
 
 Where to go from here:

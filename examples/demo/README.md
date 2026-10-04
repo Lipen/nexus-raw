@@ -35,7 +35,8 @@ just nxr -- up --help
 ```
 
 Without `--port` the server takes an ephemeral port and the keep banner prints the URL to use.
-`NXR_DEMO_SCOPE=core` stops after verify — the four beats the landing animation shows; `NXR_DEMO_KEEP=1` (or `--port` with it) keeps the last mock alive.
+`NXR_DEMO_SCOPE=core` stops after verify, the four beats the landing animation shows.
+`NXR_DEMO_KEEP=1` (or `--port` with it) keeps the last mock alive.
 
 ## Recording the landing animation
 
@@ -43,19 +44,22 @@ Without `--port` the server takes an ephemeral port and the keep banner prints t
 just demo-cast
 ```
 
-One run, three files: the recipe records the session in its `core` scope, then stages and draws it.
+One run, two files: the recipe records the session in its `core` scope, then stages and draws it.
 
 | File | What it is |
 | :-- | :-- |
 | `docs/assets/cast/session.json` | the recording: every line with the time it arrived, then `title`, `at` and `kinds` |
 | `docs/assets/img/session.svg` | the same session as an animated SVG, embedded by both readmes |
 
-The commands run at their default verbosity: `-v` prints every name three times — as a plan entry, as a transfer start and on completion — and a transcript wants one line per file.
+The commands run at their default verbosity.
+`-v` prints every name three times (as a plan entry, as a transfer start and on completion), and a transcript wants one line per file.
 
 `stage.py` writes the two display fields from the recording.
 `at` is when each line appears: the recorded times are the tool's own speed, and a reader needs a pace, so a long line is held longer, a blank line is a beat and a command is held before its output starts.
 `kinds` is what each line is (command, note, digest result, error), which is the color both renderers paint it with.
-The landing player and the SVG replay that same timeline, so the animation and the readme show one session at one pace. `svg.py` only lays it out.
-The recorded times are what the machine measured, so recording again moves them. `at` and `kinds` come from the line contents, so the animation, its length and the SVG do not.
+The landing player and the SVG replay that same timeline, so the animation and the readme show one session at one pace.
+`svg.py` only lays it out.
+The recorded times are what the machine measured, so recording again moves them.
+`at` and `kinds` come from the line contents, so the animation, its length and the SVG do not.
 
-Regenerate all three after any change to the commands, the output format or the payloads.
+Regenerate both files after any change to the commands, the output format or the payloads.

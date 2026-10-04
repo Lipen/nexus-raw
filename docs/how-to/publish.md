@@ -123,6 +123,26 @@ head: 200 80 -
     Bytes uploaded with `--no-sha` have no marker on the server.
     A later `up` of a marker-bearing directory classifies them as `Markerless` and re-sends them complete with markers, but until then nothing can detect corruption or divergence for those names.
 
+## Claim first: `--claim-first`
+
+`--claim-first <NAME>` uploads one name first and alone, before any other name starts:
+
+```bash
+nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --claim-first manifest.json
+```
+
+The natural claim is `manifest.json`: the enumeration document becomes visible at the version URL before any byte it names, so a watcher sees the publish declare itself instead of a random artifact arriving first.
+A failed claim aborts the run with nothing else sent.
+A claim name outside the scanned directory is misuse (exit 2):
+
+```console
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/claim/ --claim-first nope.txt
+error: misuse: claim-first: nope.txt is not among the scanned names of dist/1.4.0/
+hint: check the command line arguments
+$ echo $?
+2
+```
+
 ## When `up` refuses
 
 Two situations stop the run before a single byte moves, because continuing would overwrite something.
@@ -145,7 +165,8 @@ hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a d
 
 Both refuse with exit 1.
 Fix the cause (rebuild, or republish under a new version directory) and run again.
-A transfer never deletes and never overwrites a diverging object; deletion is the explicit `nxr rm`.
+A transfer never deletes and never overwrites a diverging object.
+Deletion is the explicit `nxr rm`.
 
 ## Restrict the transfer with a manifest
 
@@ -218,7 +239,8 @@ Version directories are never reused, which is what keeps re-runs, resume and fo
 
 !!! note "Retiring a version"
 
-    Transfers never delete; `nxr rm` is the deliberate exception ([the CLI reference](../reference/cli.md#nxr-rm)).
+    Transfers never delete.
+    `nxr rm` is the deliberate exception ([the CLI reference](../reference/cli.md#nxr-rm)).
     Retire a version explicitly: `rm` the enumerated names, then move the channel forward or `nxr point --clear` it.
 
 ## Next steps

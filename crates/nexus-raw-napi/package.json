@@ -15,7 +15,7 @@
     "cli",
     "devops"
   ],
-  "description": "Node bindings for nexus-raw: the nxr surface as promises over Nexus raw storage",
+  "description": "Node bindings for nexus-raw: a subset of the nxr command surface as promises over Nexus raw storage",
   "main": "index.js",
   "types": "index.d.ts",
   "files": [

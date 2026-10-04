@@ -18,6 +18,21 @@
 
 ## Install
 
+Prebuilt binaries ride on [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), with checksums in [`SHA256SUMS`](https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS):
+
+| File | Platform |
+|:-----|:---------|
+| [`nxr-linux-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-linux-x64.tar.gz) | Linux x86_64, statically linked |
+| [`nxr-darwin-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-x64.tar.gz) | macOS Intel |
+| [`nxr-darwin-arm64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-arm64.tar.gz) | macOS Apple silicon |
+| [`nxr-windows-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-windows-x64.tar.gz) | Windows x86_64 |
+
+`cargo binstall` fetches the same archives:
+
+```bash
+cargo binstall nexus-raw
+```
+
 From crates.io:
 
 ```bash
@@ -36,7 +51,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-Every way builds from source, so Rust 1.85 or newer is required.
+The cargo paths build from source, so they need Rust 1.85 or newer.
 Check the install with `nxr --version`.
 
 ## Quick start
@@ -67,15 +82,17 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
-| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | enumerate → DELETE each marker, then its bytes; 404 is fine, read-only refuses |
-| `nxr point --clear <URL>` | DELETE a pointer file (channel ref); absent is fine |
+| `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | enumerate at the source, diff at the destination, copy bytes + markers |
+| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
+| `nxr point --clear <URL>` | DELETE a pointer file (channel ref, absent is fine) |
 | `nxr ls <URL> [--assets]` | version or object listing through the search API (experimental) |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token. `--if-forward` accepts only forward moves in dotted-numeric order |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token (`--if-forward` accepts only forward moves in dotted-numeric order) |
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 
-`down` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`. With none of them they refuse.
+`down`, `mirror` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+With none of them they refuse.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.
@@ -98,13 +115,15 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Docs
 
 Guides and reference: <https://lipen.github.io/nexus-raw/>.
-Sources live in [docs/](docs/). `just docs` serves the site locally.
+Sources live in [docs/](docs/).
+`just docs` serves the site locally.
 
 ## Contributing
 
 Build, test, commit, protocol changes and the release checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 Repository layout and the rules for changing things: [AGENTS.md](AGENTS.md).
-`just check` runs the full gate. `just demo` runs the recorded session against the local mock server.
+`just check` runs the full gate.
+`just demo` runs the recorded session against the local mock server.
 
 ## License
 

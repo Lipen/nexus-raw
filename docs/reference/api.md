@@ -77,7 +77,8 @@ let nxr = Nxr::new(
 
 `Config::base` is the directory URL this invocation works on, normalized to a trailing `/`.
 `auth` is the ready `Authorization` header value.
-Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does; `creds::resolve` does this for you.
+Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does.
+`creds::resolve` does this for you.
 `Config::validate` enforces the ranges the CLI flags map onto: workers in `1..=64`, positive timeouts.
 
 A complete, self-contained round trip (publish a directory against a scratch server and fetch it back) is `cargo run -p nexus-raw-core --example publish`.
@@ -97,6 +98,7 @@ Every method mirrors a CLI command one-to-one.
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
 | `up(dir, names, gen_markers, claim, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
 | `down(dst, enum_src, fresh, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `mirror(dst, enum_src)` | `Summary` | `nxr mirror` | pour the enumerated names into a second facade's base: staged through the `down` machinery, written in `up`'s order |
 | `rm(enum_src)` | `Summary` | `nxr rm` | DELETE the enumerated names, marker before bytes: 404 is success, divergence is never checked |
 | `rm_plan(enum_src)` | `Vec<RmAction>` | `rm --dry-run` | `Remove`/`Missing` per name by remote existence, nothing deleted |
 | `point_clear(url)` | `ClearOutcome` | `nxr point --clear` | DELETE the pointer: `Cleared` or `Absent` |
@@ -239,7 +241,8 @@ A real stream, captured by `down --name app-1.4.0.zip --json` against the mock:
 {"downloaded":1,"event":"summary","failed":[],"skipped":0,"uploaded":0}
 ```
 
-Simple commands print their final object instead of a stream: `get` → `{"bytes":…,"ok":true,"out":…,"resumed_from":…,"sha256":…,"url":…}`, `put` → `{"bytes":…,"marker":…,"ok":true,"url":…}`, `head` → `{"content_type":…,"size":…,"status":…,"url":…}`, `channel set` → `{"from":…,"outcome":"written","token":…,"url":…}`.
+`head` and `channel set` print their final object instead of a stream: `head` → `{"content_type":…,"size":…,"status":…,"url":…}`, `channel set` → `{"from":…,"outcome":"written","token":…,"url":…}`.
+`get -o` and `put` print a transfer's event stream and end with their final object: `get` → `{"bytes":…,"ok":true,"out":…,"resumed_from":…,"sha256":…,"url":…}`, `put` → `{"bytes":…,"marker":…,"ok":true,"url":…}`.
 The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
@@ -251,8 +254,9 @@ Both are covered variant by variant in [errors and exit codes](errors.md).
 
 ## Node bindings
 
-The same surface ships to Node as promises: the `nexus-raw-napi` crate wraps the `Nxr` facade one-to-one, and the npm package name is `nexus-raw`.
-Every command is one self-sufficient call — the URL in argv, credentials in the `auth` option or the environment, no config file — and each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
+The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), `up`, `down`, `verify` and the channel operations.
+Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
+Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.
 
 ```js
@@ -264,7 +268,7 @@ const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw
 })
 ```
 
-The crate is built on napi-rs 3: async exports run on its built-in tokio runtime, the build scripts come from the `@napi-rs/cli`, and `x86_64-unknown-linux-gnu` is the wired prebuilt target.
+The crate is built on napi-rs 3: async exports run on its built-in tokio runtime, the build scripts come from the `@napi-rs/cli`, and the prebuilt addons are wired for `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin` and `aarch64-apple-darwin`.
 The typed declarations live in `crates/nexus-raw-napi/index.d.ts`, and `crates/nexus-raw-napi/smoke.mjs` is the runnable offline check of the built addon.
 
 ## Guarantees

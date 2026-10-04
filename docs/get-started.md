@@ -40,12 +40,15 @@ The `mock-nexus` binary serves one failure scenario at a time.
 `atomic` is the correct-server scenario: PUT/GET/HEAD, `Range: bytes=N-` resume, 404 on unknown paths.
 
 ```bash
-cargo run -p mock-nexus -- atomic --port 8080
+cargo install mock-nexus
+mock-nexus atomic --port 8080
 ```
 
 ```console
 listening http://127.0.0.1:8080
 ```
+
+From a repository checkout, `cargo run -p mock-nexus -- atomic --port 8080` runs the same server without the install step.
 
 Everything below talks to that process.
 In a real deployment the URL is your repository, for example `https://nexus.example.com/repository/raw-main/`, and credentials travel per call (see [the CLI reference](reference/cli.md#credentials-and-urls)).
@@ -108,7 +111,8 @@ A publishing job can be retried blindly: finished names are skipped, missing one
 
 ## Name the version
 
-A channel is a token file at any URL. `latest` is just the most common name.
+A channel is a token file at any URL.
+`latest` is just the most common name.
 `--if-forward` compares tokens in dotted-numeric version order, so an older token never replaces a newer one:
 
 ```console
@@ -159,7 +163,7 @@ Now interrupt a transfer mid-flight.
 Run a second mock in its `slow` scenario, which writes response bodies in small delayed chunks, and kill `down` three seconds in (`timeout` stands in for `Ctrl-C`):
 
 ```console
-$ cargo run -p mock-nexus -- slow --chunk-delay-ms 300 --chunk-size 2048 --port 8095 &
+$ mock-nexus slow --chunk-delay-ms 300 --chunk-size 2048 --port 8095 &
 listening http://127.0.0.1:8095
 $ nxr up dist/1.4.0/ http://127.0.0.1:8095/1.4.0/ >/dev/null
 $ timeout 3 nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/

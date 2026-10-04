@@ -1,7 +1,7 @@
 # nexus-raw-core
 
 The core of nexus-raw: curl for a Sonatype Nexus raw repository.
-Four public layers — transport + primitives, transfer, layout helpers and the `Nxr` facade — with the CLI as a thin shell that carries no protocol logic.
+Four public layers (transport + primitives, transfer, layout helpers, the `Nxr` facade), with the CLI as a thin shell that carries no protocol logic.
 
 ## Layers
 
@@ -38,16 +38,17 @@ async fn main() -> Result<(), nexus_raw_core::Error> {
     )?;
 
     // Verified upload of a directory: markers generated and written by default.
-    nxr.up("dist/1.4.0".as_ref(), None, true, None).await?;
+    nxr.up("dist/1.4.0".as_ref(), None, true, None, None).await?;
 
     // Verified download, enumerated by the version's manifest.
+    // Resume is the default: `fresh = false` continues the part files of an interrupted run.
     let manifest = nxr
         .manifest_from("https://nexus.example.com/repository/raw-main/1.4.0/manifest.json")
         .await?;
     nxr.down(
         "vendor/1.4.0".as_ref(),
         Enumeration::Manifest(manifest),
-        true,
+        false,
         None,
     )
     .await?;
@@ -58,14 +59,14 @@ async fn main() -> Result<(), nexus_raw_core::Error> {
 }
 ```
 
-`Config` is one invocation's settings — there is no config file.
+`Config` is one invocation's settings, there is no config file.
 `auth` is the ready `Authorization` header, resolved by the caller from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`.
 
 ## Guarantees
 
 - Completion is bytes plus a `<name>.sha256` sibling, digest matching, `sha256sum -c` format.
 - `up` writes markers by default and generates missing local siblings, `--no-sha` opts out.
-- `down` requires an enumeration source — a manifest, explicit names or the search API — and refuses to guess.
+- `down` requires an enumeration source (a manifest, explicit names or the search API) and refuses to guess.
 - The symmetric diff drives both directions, so a repeat command finishes an interrupted transfer.
 - Divergent complete artifacts are refused, never overwritten.
 - Credentials never appear in events, errors or logs.

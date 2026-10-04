@@ -1,7 +1,8 @@
 # Wire protocol
 
 What `nxr` says to the server: the store layout, the objects, the classification that drives transfers, the write order and the Range contract.
-This page documents implemented behavior. A divergence between this page and the code is a bug in one of them.
+This page documents implemented behavior.
+A divergence between this page and the code is a bug in one of them.
 
 ## The shape of a store
 
@@ -11,12 +12,13 @@ Everything `nxr` writes fits four object kinds:
 ```text
 <base>/<name>            artifact bytes
 <base>/<name>.sha256     sha-sibling: "<hex>  <name>\n" (sha256sum -c format)
-<base>/manifest.json     conventional name list — the enumeration source for down
+<base>/manifest.json     conventional name list, the enumeration source for down
 <base>/<channel>         a token file: "<token>\n", any name (latest, stable, …)
 ```
 
 Four methods exist: `GET`, `HEAD`, `PUT` and `DELETE`.
-DELETE is the one deliberate extension, restricted to the objects of the enumerated version ([Deletion](#deletion)); there is no rename, no server-side computation.
+DELETE is the one deliberate extension, restricted to the objects of the enumerated version ([Deletion](#deletion)).
+There is no rename, no server-side computation.
 A version is just a directory, and a channel is just a file.
 
 | Object kind | Path | Written by | Read by | Deleted by |
@@ -93,7 +95,8 @@ The sibling is the marker of its bytes and is never an artifact in its own right
 ```
 
 An ordinary file with a conventional role: the enumeration source for `down` and the optional name filter for `up`.
-It carries no digests. Each artifact's sibling does.
+It carries no digests.
+Each artifact's sibling does.
 
 | Rule | Behavior |
 |:-----|:---------|
@@ -104,7 +107,8 @@ It carries no digests. Each artifact's sibling does.
 | `schema_version` | tolerated, must be `1` when present |
 | `version` | tolerated and ignored |
 
-Manifest and channel reads are capped at 16 MiB. A larger object is refused as a misuse error instead of being slurped into memory.
+Manifest and channel reads are capped at 16 MiB.
+A larger object is refused as a misuse error instead of being slurped into memory.
 A `manifest.json` sitting in a published directory is just a file that `up` uploads like any artifact.
 The version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
 
@@ -181,19 +185,20 @@ Three rules bind the whole matrix:
 Upload:
 
 ```text
-1. generate missing local siblings      — hash the bytes, write canonical markers
-2. PUT <name>                           — bytes, in parallel workers
-3. PUT <name>.sha256                    — strictly after the bytes of the same name
+1. generate missing local siblings      (hash the bytes, write canonical markers)
+2. PUT <name>                           (bytes, in parallel workers)
+3. PUT <name>.sha256                    (strictly after the bytes of the same name)
 ```
 
 Marker-after-bytes is what makes `Markerless` mean "under-uploaded": a client never trusts a marker whose bytes are absent, and a crash between steps 2 and 3 is recoverable by design.
-A local sibling that does not match its bytes stops the run at step 1. The file is never touched and nothing is uploaded.
+A local sibling that does not match its bytes stops the run at step 1.
+The file is never touched and nothing is uploaded.
 
 Download mirrors the order locally:
 
 ```text
-1. GET <name> into the part file        — hashed on the fly, Range-resumable
-2. digest check against the sibling     — a diverging digest deletes the part
+1. GET <name> into the part file        (hashed on the fly, Range-resumable)
+2. digest check against the sibling     (a diverging digest deletes the part)
 3. rename part → <name>
 4. write <name>.sha256 from the received bytes
 ```
@@ -211,7 +216,7 @@ A claim name outside the scanned directory is misuse (exit 2).
 | Surface | Part file | On failure | On success |
 |:--------|:----------|:-----------|:-----------|
 | `get -o FILE` | `<FILE>.part` | removed on a clean failure; only a killed run leaves one | renamed to `FILE` |
-| `down` | `.nxr-part-<16 hex>` per name | kept, because it is the resume fuel | renamed to the name |
+| `down` | `.nxr-part-<32 hex>` per name | kept, because it is the resume fuel | renamed to the name |
 | `put` / `up` | none | PUTs replay whole | none |
 
 The `down` part name is a stable hash of the artifact name, so a repeated run finds its fuel without a state file.
@@ -342,8 +347,9 @@ The enumeration is the source's (the same table as above), and the destination d
 | `Absent` | `Absent` | **missing** |
 | `Absent` | anything present | **mismatch: mirroring never deletes** |
 
-Reads are GETs: every copied name is staged through the `down` machinery — a Range-aware GET into a part file, hashed on the fly, verified against the source marker when one exists — and then pushed through the `up` machinery, so the write order is exactly up's and a refusal never reaches the destination.
-The staging parts live in a per-(source, destination) directory under the system temp dir; a rerun resumes them through `206`, and a clean run removes the directory.
+Reads are GETs: every copied name is staged through the `down` machinery (a Range-aware GET into a part file, hashed on the fly, verified against the source marker when one exists) and then pushed through the `up` machinery, so the write order is exactly up's and a refusal never reaches the destination.
+The staging parts live in a per-(source, destination) directory under the system temp dir.
+A rerun resumes them through `206`, and a clean run removes the directory.
 When the enumeration leads with the conventional version document `version.json`, it is claimed: it transfers first and alone, and a failed claim aborts the run with nothing else sent.
 
 ## Transport

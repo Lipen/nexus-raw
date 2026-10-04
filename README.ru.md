@@ -6,7 +6,7 @@
 
 # nexus-raw
 
-`nxr` — это curl для raw-репозитория Sonatype Nexus.
+`nxr` работает как curl для raw-репозитория Sonatype Nexus.
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
@@ -17,6 +17,21 @@
 </div>
 
 ## Установка
+
+Готовые бинарники лежат в [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), контрольные суммы в [`SHA256SUMS`](https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS):
+
+| Файл | Платформа |
+|:-----|:----------|
+| [`nxr-linux-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-linux-x64.tar.gz) | Linux x86_64, статическая сборка |
+| [`nxr-darwin-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-x64.tar.gz) | macOS Intel |
+| [`nxr-darwin-arm64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-arm64.tar.gz) | macOS Apple silicon |
+| [`nxr-windows-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-windows-x64.tar.gz) | Windows x86_64 |
+
+Те же архивы умеет забирать `cargo binstall`:
+
+```bash
+cargo binstall nexus-raw
+```
 
 Из crates.io:
 
@@ -36,7 +51,7 @@ cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
 cargo install --path crates/nexus-raw --locked
 ```
 
-Любой способ собирает из исходников, поэтому нужен Rust 1.85 или новее.
+Варианты через cargo собирают из исходников, поэтому нужен Rust 1.85 или новее.
 Проверить установку: `nxr --version`.
 
 ## Быстрый старт
@@ -67,15 +82,17 @@ nxr verify vendor/prebuilt
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
-| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов; 404 — норма, read-only отказывает |
-| `nxr point --clear <URL>` | DELETE файла-указателя (channel ref); отсутствие — норма |
+| `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
+| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
+| `nxr point --clear <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
 | `nxr ls <URL> [--assets]` | листинг версий или объектов через search API (экспериментально) |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена. `--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке |
+| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена (`--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке) |
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 
-`down` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`. Без любого из них — отказ.
+`down`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
+Без любого из них команда отказывает.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.
@@ -98,13 +115,15 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Документация
 
 Гайды и справочник: <https://lipen.github.io/nexus-raw/>.
-Исходники в [docs/](docs/). Локально сайт поднимается `just docs`.
+Исходники в [docs/](docs/).
+Локально сайт поднимается `just docs`.
 
 ## Участие
 
 Сборка, тесты, коммиты, изменения протокола и чеклист релиза: [CONTRIBUTING.md](CONTRIBUTING.md).
 Устройство репозитория и правила изменений: [AGENTS.md](AGENTS.md).
-`just check` — полный гейт. `just demo` — записанная сессия против локального мок-сервера.
+`just check` запускает полный гейт.
+`just demo` проигрывает записанную сессию против локального мок-сервера.
 
 ## Лицензия
 

@@ -203,7 +203,7 @@ $ echo $?
 The per-command tables live in [the CLI page](cli.md#exit-codes).
 In short: `0` continue the pipeline, `1` stop and show stderr to a human, `2` fix the invocation and rerun, `3` retry later, because resume makes reruns cheap.
 
-`doctor` reuses the same classes: a local gap such as missing credentials exits `2`, a failed reachability probe exits `3`.
+`doctor` reuses the same classes: a failed local check such as TLS verification off or settings out of range exits `2`, a failed reachability probe exits `3` (a 401 or 403 probe fails as `credentials rejected`, still exit `3`).
 
 ## The refusal rule
 

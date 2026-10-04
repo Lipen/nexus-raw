@@ -11,13 +11,15 @@ cargo install nexus-raw
 
 From a checkout instead, if you want the revision your code is building against: `cargo install --path crates/nexus-raw`.
 
-Credentials resolve from `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`, in that order — the sources, the precedence and the argv caveat are in the [CLI reference](../reference/cli.md#credentials-and-urls).
+Credentials resolve from `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`, in that order.
+The sources, the precedence and the argv caveat are in the [CLI reference](../reference/cli.md#credentials-and-urls).
 
 The command surface, one line each, all details in the [CLI reference](../reference/cli.md):
 
 | Commands | Do |
 |:---------|:---|
 | `up`, `down` | verified directory transfers over the symmetric diff, resume included |
+| `mirror` | pour a version from one repository into another: read the source, write the destination through the `up` rules |
 | `get`, `put`, `head`, `sha` | curl-grade primitives, digest computed on the fly |
 | `channel get`, `channel set` | name versions through token files, with the forward-only guard |
 | `ls` | version and object listings through the search API (experimental) |
@@ -34,17 +36,19 @@ The event shapes are fixed, and the [CI page](ci.md#ndjson-events) shows a `jq` 
 ## As a Rust library
 
 `nexus-raw-core` is the same protocol without a UI.
-It is on crates.io; take it as a version dependency:
+It is on crates.io.
+Take it as a version dependency:
 
 ```toml
 [dependencies]
 nexus-raw-core = "0.3"
 ```
 
-A git pin or a vendored copy still works for special cases; vendoring has its own section below.
+A git pin or a vendored copy still works for special cases.
+Vendoring has its own section below.
 
 The [`Nxr`](../reference/api.md#the-facade) facade is the single entry point: build it from a `Config` and an event channel, then call methods that mirror the CLI commands one-to-one.
-Progress arrives as [`Event`](../reference/api.md#events) objects over a `tokio::sync::mpsc::UnboundedReceiver` — drain it while the operation runs, or drain the buffered queue afterwards.
+Progress arrives as [`Event`](../reference/api.md#events) objects over a `tokio::sync::mpsc::UnboundedReceiver`: drain it while the operation runs, or drain the buffered queue afterwards.
 
 ```rust
 use std::time::Duration;
@@ -89,7 +93,7 @@ The guided tour of the API, layers included: [the Rust API](../reference/api.md)
 
 ## As Node bindings
 
-The `nexus-raw-napi` crate ships the same surface to Node as promises: the npm package name is `nexus-raw`, built on napi-rs 3.
+The `nexus-raw-napi` crate ships a subset of the surface to Node as promises: the npm package name is `nexus-raw`, built on napi-rs 3.
 Install from the registry:
 
 ```bash
@@ -97,6 +101,8 @@ npm install nexus-raw
 ```
 
 Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
+There is no `win32-x64-msvc` prebuild: npm's spam filter rejects that platform package, so on Windows the addon builds from a repository checkout (below).
+The CLI does ship a Windows binary: `nxr-windows-x64.tar.gz` in the [GitHub release](https://github.com/Lipen/nexus-raw/releases/latest).
 A runnable consumer lives in [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node): it installs the package from the registry and drives the whole publish-and-consume loop against the mock server:
 
 ```bash
@@ -109,7 +115,8 @@ To consume a locally built addon instead of the registry build, build the addon,
 `npm run build:debug` runs the napi CLI over a cargo build of the crate and leaves the platform addon (`*.node`), the generated loader (`binding.cjs`) and the generated declarations (`binding.d.ts`) next to the crate.
 
 Every command is one self-sufficient call, and an optional `onEvent` callback receives the core's NDJSON events as parsed JSON objects.
-The ordering contract matters for tests: the promise settles only after every event has been handed to the callback, including on failure — the events that led to the error arrive first, then the promise rejects with an `Error` carrying `exitCode` and `hint`.
+The ordering contract matters for tests: the promise settles only after every event has been handed to the callback, including on failure.
+The events that led to the error arrive first, then the promise rejects with an `Error` carrying `exitCode` and `hint`.
 Events still cross a thread boundary, so the last callback invocation may run an instant after the promise resolved.
 Tests that assert on collected events drain the JS queue first, as `crates/nexus-raw-napi/smoke.mjs` does.
 
@@ -131,7 +138,7 @@ When a copy must live in your tree, vendor the whole workspace (or at least `cra
 Two artifacts of this repository are the contract a vendored copy inherits:
 
 - the crate docs of `nexus-raw-core` (`crates/nexus-raw-core/src/lib.rs`) are the behavioral summary of the protocol;
-- the [conformance suites](../../explanation/conformance.md) are its contract tests, and the scenario list in `crates/mock-nexus` is the single table they run against.
+- the [conformance suites](../explanation/conformance.md) are its contract tests, and the scenario list in `crates/mock-nexus` is the single table they run against.
 
 A vendored copy is expected to keep those suites green: `cargo test --workspace` runs them, and a scenario added upstream lands in the same change as its test.
 
@@ -140,4 +147,4 @@ A vendored copy is expected to keep those suites green: `cargo test --workspace`
 - The two flows the tools exist for: [publish a version](publish.md) and [consume artifacts](consume.md).
 - Flags, transcripts and output shapes: [the CLI reference](../reference/cli.md).
 - Embedding deeper in Rust: [the API](../reference/api.md).
-- What every level above is pinned against: [conformance](../../explanation/conformance.md).
+- What every level above is pinned against: [conformance](../explanation/conformance.md).

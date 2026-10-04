@@ -107,7 +107,8 @@ $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json
 {"attempt":3,"event":"retrying","name":"manifest.json","reason":"transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: HTTP 503"}
 ```
 
-Simple commands are different: `head`, `put`, `sha`, `get -o` and `channel get` print one JSON object, not a stream (see [the CLI reference](../reference/cli.md#output)).
+`head`, `sha` and `channel get` are different: they print one JSON object, not a stream.
+`put` and `get -o` print a transfer's event stream and end with their final object (see [the CLI reference](../reference/cli.md#output)).
 
 ## A release job, end to end
 
@@ -157,22 +158,13 @@ doctor:
   all checks passed
 ```
 
-Without credentials, against a server that rejects anonymous requests, it fails fast and cheap:
+Without credentials the gate still passes against a server that serves anonymous reads: `doctor` reports the missing credentials as a warning and exits 0.
+The warning is a nudge, not a failure: a pipeline that intentionally talks to a read-open repository stays green.
 
-```console
-$ nxr doctor https://nexus.example.com/repository/raw-main/1.4.0/manifest.json
-doctor:
-  [ FAIL ] credentials: none found: anonymous requests; pass -u or export NXR_AUTH
-  [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
-  [  ok  ] probe: HEAD https://nexus.example.com/repository/raw-main/1.4.0/manifest.json → HTTP 401
-error: misuse: 1 check(s) failed
-hint: check the command line arguments
-```
+Credentials that the server rejects are a different story: the probe answers 401 or 403, `doctor` fails it with the detail `credentials rejected`, and the run exits 3.
+That is the cheap preflight for a typo'd password.
 
-The probe only checks that the URL answers.
-
-The exit code says which side to fix: `2` is the job definition, `3` is the server or the network (an unreachable server probes as `transport` and exits 3).
+The exit code says which side to fix: `2` is the job definition, `3` is the server, the network or the credentials (an unreachable server probes as `transport` and exits 3).
 Run it at the top of a pipeline.
 
 ## Next steps
