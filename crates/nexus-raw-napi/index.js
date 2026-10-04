@@ -1,14 +1,13 @@
 'use strict'
 
-// nexus-raw Node bindings: the `nxr` surface as promises over Nexus raw storage.
+// nexus-raw Node bindings: a subset of the `nxr` surface as promises over Nexus raw storage.
 // The generated loader (`binding.cjs`) picks the native addon: a local crate
 // build first, then the per-platform prebuilt package.
 //
 // Prebuilt targets:
-// - linux-x64-gnu is wired in package.json ("napi"."targets").
-// - Pending runners, wired in when a release runner exists (no prebuilt
-//   packages until then, the loader asks for a local build instead):
-//   darwin-x64, darwin-arm64, win32-x64-msvc.
+// - linux-x64-gnu, darwin-x64 and darwin-arm64 ship as prebuilt packages.
+// - win32-x64-msvc waits on the npm spam-filter ticket: the loader falls back
+//   to a local crate build there.
 
 const raw = require('./binding.cjs')
 
@@ -66,14 +65,15 @@ function withEnrichedRejection(fn) {
   }
 }
 
-module.exports = {
-  get: withEnrichedRejection(raw.get),
-  put: withEnrichedRejection(raw.put),
-  head: withEnrichedRejection(raw.head),
-  sha: withEnrichedRejection(raw.sha),
-  up: withEnrichedRejection(raw.up),
-  down: withEnrichedRejection(raw.down),
-  verify: withEnrichedRejection(raw.verify),
-  channelGet: withEnrichedRejection(raw.channelGet),
-  channelSet: withEnrichedRejection(raw.channelSet),
-}
+// Dot assignments, not an object literal: cjs-module-lexer only detects this
+// shape, and named ESM imports (`import { up } from 'nexus-raw'`) resolve
+// through it. Keep every export as its own `exports.<name> = ...` line.
+exports.get = withEnrichedRejection(raw.get)
+exports.put = withEnrichedRejection(raw.put)
+exports.head = withEnrichedRejection(raw.head)
+exports.sha = withEnrichedRejection(raw.sha)
+exports.up = withEnrichedRejection(raw.up)
+exports.down = withEnrichedRejection(raw.down)
+exports.verify = withEnrichedRejection(raw.verify)
+exports.channelGet = withEnrichedRejection(raw.channelGet)
+exports.channelSet = withEnrichedRejection(raw.channelSet)
