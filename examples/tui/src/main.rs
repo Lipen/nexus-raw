@@ -1,12 +1,15 @@
 //! `nxr-tui`: a terminal browser over a Nexus raw repository, built on the `nexus-raw-core` facade.
 //!
-//! Screens: repositories, versions, objects, with a download action and a live progress line.
+//! Screens: the repositories of every configured server, then the tree of the
+//! selected repository at full depth, with a subtree download action and a live
+//! progress line.
 //!
 //! ```text
 //! nxr-tui http://127.0.0.1:8099/
 //! ```
 //!
-//! `--smoke` runs the same browse-and-download flow without the TUI.
+//! The bootstrap validates every base before the terminal switches to the
+//! alternate screen; `--smoke` runs the same flow headless.
 
 mod app;
 mod args;
@@ -27,7 +30,7 @@ fn main() -> ExitCode {
         Ok(Some(args)) => Arc::new(args),
         Ok(None) => return ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("nxr-tui: {e}");
+            eprintln!("error: {e}");
             return ExitCode::from(2);
         }
     };
@@ -43,11 +46,12 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            let code = e
-                .chain()
-                .find_map(|cause| cause.downcast_ref::<Error>())
-                .map_or(1, Error::exit_code);
-            eprintln!("nxr-tui: {e:#}");
+            let core = e.chain().find_map(|cause| cause.downcast_ref::<Error>());
+            let code = core.map_or(1, Error::exit_code);
+            eprintln!("error: {e:#}");
+            if let Some(hint) = core.and_then(Error::hint) {
+                eprintln!("hint: {hint}");
+            }
             ExitCode::from(code)
         }
     }

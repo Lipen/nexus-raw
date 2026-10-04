@@ -1,4 +1,4 @@
-//! The terminal loop: raw mode, the input thread and the message pump.
+//! The terminal loop: the fail-fast bootstrap, raw mode, the input thread and the message pump.
 
 use std::io::stdout;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,26 +8,37 @@ use std::time::Duration;
 use anyhow::Context;
 use crossterm::event::{self, Event as TermEvent};
 use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 
 use crate::app::{App, Msg};
 use crate::args::Args;
+use crate::net;
 use crate::ui;
 
 /// Runs the TUI until the user quits.
 ///
+/// The bootstrap validates everything before the terminal changes mode:
+/// every base URL must resolve, `service_repos()` must answer and the
+/// repository list is the already-populated first screen.
+/// Any failure returns before raw mode, so the caller prints `error:` + `hint:`
+/// and exits with the core exit code while the terminal stays untouched.
+///
 /// # Errors
 ///
-/// Returns an error when the terminal cannot be set up or drawing fails.
+/// Returns the bootstrap error and errors from terminal setup or drawing.
 pub async fn run(args: Arc<Args>) -> anyhow::Result<()> {
+    let auth = net::auth_header(&args.user).context("resolve credentials")?;
+    let repos = net::bootstrap(&args.bases, auth.clone()).await?;
+
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-    // The input thread is sync code: a bounded channel gives it `blocking_send`.
-    let (input_tx, mut input_rx) = mpsc::channel::<TermEvent>(256);
-    enable_raw_mode().context("enable raw mode")?;
-    execute!(stdout(), EnterAlternateScreen).context("enter alternate screen")?;
+    let mut app = App::new(args, repos, auth, tx);
+    app.boot();
+
     // A panic mid-frame must not leave the terminal in raw mode.
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -36,6 +47,8 @@ pub async fn run(args: Arc<Args>) -> anyhow::Result<()> {
         previous_hook(info);
     }));
 
+    // The input thread is sync code: a bounded channel gives it `blocking_send`.
+    let (input_tx, mut input_rx) = mpsc::channel::<TermEvent>(256);
     let stop = Arc::new(AtomicBool::new(false));
     let input_stop = Arc::clone(&stop);
     let input = std::thread::spawn(move || {
@@ -57,9 +70,10 @@ pub async fn run(args: Arc<Args>) -> anyhow::Result<()> {
         }
     });
 
-    let mut app = App::new(args, tx.clone()).context("resolve credentials")?;
-    app.boot();
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout())).context("terminal backend")?;
+    enable_raw_mode().context("enable raw mode")?;
+    execute!(stdout(), EnterAlternateScreen).context("enter alternate screen")?;
+    let mut terminal =
+        Terminal::new(CrosstermBackend::new(stdout())).context("terminal backend")?;
     let result = pump(&mut terminal, &mut app, &mut rx, &mut input_rx).await;
 
     let _ = disable_raw_mode();

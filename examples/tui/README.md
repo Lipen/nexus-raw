@@ -1,7 +1,7 @@
 # nxr-tui
 
 A terminal browser over a Nexus raw repository, built on the `nexus-raw-core` facade.
-It drills down from repositories to versions to objects and downloads a version subtree with live progress.
+A raw repository is an arbitrary file tree, and the TUI treats it as one: repositories first, then the tree of the selected repository at full depth.
 
 ## Run
 
@@ -18,7 +18,7 @@ A quick way to get a server is the repository mock.
 Build it once from the repository root, then start it:
 
 ```text
-cargo build -p mock-nexus -p nxr
+cargo build -p mock-nexus -p nexus-raw
 target/debug/mock-nexus atomic --port 8099
 ```
 
@@ -27,63 +27,95 @@ Seed it with the `nxr` CLI, for example:
 
 ```text
 echo hello > /tmp/notes.txt
-target/debug/nxr put http://127.0.0.1:8099/repository/raw-main/1.14.0/notes.txt -f /tmp/notes.txt --sha
+target/debug/nxr put http://127.0.0.1:8099/repository/raw-main/app/notes.txt -f /tmp/notes.txt --sha
 ```
 
-The versions and objects screens use the Nexus search API (`/service/rest/v1/search/assets`).
+The listings go through the Nexus search API (`/service/rest/v1/search/assets`).
 A real Nexus provides it.
-The mock does not out of the box, so also PUT a static search page listing the object paths:
+The mock does not out of the box, so also PUT a static search page listing the repo-relative object paths:
 
 ```text
-printf '{"items":[{"path":"1.14.0/notes.txt"},{"path":"1.14.0/notes.txt.sha256"}]}' > /tmp/search.json
+printf '{"continuationToken":null,"items":[{"path":"app/notes.txt"}]}' > /tmp/search.json
 target/debug/nxr put http://127.0.0.1:8099/service/rest/v1/search/assets -f /tmp/search.json
 ```
 
-## Screens and keys
+## The fail-fast contract
+
+The bootstrap validates everything before the terminal switches to the alternate screen.
+Every base URL must resolve, `service_repos()` must answer on every server, and the repository list is the first screen, already populated.
+Any failure prints `error:` and the matching `hint:` to stderr and exits with `Error::exit_code()`: 0 ok, 1 data, 2 misuse, 3 transport.
+The TUI never opens on unknown ground, so there is no error screen and no dead alternate screen.
+The same bootstrap runs in `--smoke` mode, which is how CI exercises it.
+
+## Screens
 
 Screen 1 lists the repositories of every configured server, with format and kind, from `service_repos()`.
-Screen 2 lists the versions of the selected raw repository through `ls_versions()`.
-Screen 3 lists the objects of the selected version through `ls_assets()`.
+Screen 2 is the tree of the selected repository, listed through `ls_entries()` at whatever depth you descend to.
+Entries render straight from the listing: `name/` for folders and `name` for files.
+Folders sort first, files after, and the derived `.sha256` siblings stay hidden.
+The header carries the breadcrumb: the repository name plus every folder below it, for example `raw-main / app / core`.
 
-Keys:
+## Repository filter
+
+Only `format == "raw"` repositories are enterable.
+Repositories of other formats stay visible, dimmed, with the format shown as a badge such as `[maven2]`, and enter only prints a status hint.
+`--all-formats` lifts the filter and lets every format be opened.
+
+## Keys
 
 - `up`/`down` or `k`/`j` move the selection.
-- `enter` drills down, or on the object screen downloads the whole version subtree.
-- `esc` goes back one screen.
+- `enter` opens a folder and descends, or on a file entry downloads that file.
+- `d` downloads the selected entry: a folder downloads its whole subtree, a file downloads itself.
+- `esc` or `backspace` climbs one level, from the repo root back to the repositories.
 - `q` or `ctrl-c` quits.
 
-The download lands in `./nxr-tui-downloads/<repo>/<version>/` and runs through `down` with an explicit name list taken from the object listing.
+The tree has no depth limit.
+Every descent lists the child directory through `ls_entries()`, and the breadcrumb tracks the path from the repo root.
+
+## Download semantics
+
+The download always runs as one `down` call with `Enumeration::Names`.
+For a file entry the plan is that one name.
+For a folder entry the TUI walks the subtree with `ls_entries()` recursively and maps every file to a name relative to the repo root, then downloads the whole set in one transfer.
+The plan count is shown before the transfer starts, in the status line and in the download panel.
+Files land under `./nxr-tui-downloads/<repo>/`, mirroring their repo-relative paths.
 A panel shows the plan, the files in flight with byte progress, and the final summary.
-The status bar shows hints and, on failure, the error message plus its `Error::hint()` text.
-Errors never close the TUI: a refused listing or download only paints the status bar.
+Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.
 
 ## Headless smoke mode
 
-`--smoke` runs the same browse-and-download flow without the terminal and prints what it sees:
+`--smoke` runs the browse-and-download flow without the terminal and prints what it sees:
 
 ```text
 nxr-tui --smoke http://127.0.0.1:8099/
 ```
 
-It picks the first hosted raw repository, lists versions and objects, downloads the first version into `./nxr-tui-smoke/` and prints the summary.
+It lists the repositories of every server, walks the tree of the first hosted raw repository two levels deep, downloads the subtree of the first root folder, and prints the summary.
 The exit code follows `Error::exit_code()`: 0 ok, 1 data, 2 misuse, 3 transport.
+
+## Tests
+
+```text
+cargo test
+```
+
+The suite covers argument parsing, the raw filter, descend and ascend navigation, stale-listing guards, the fail-fast bootstrap against a live mock and against dead and malformed URLs, the recursive subtree walk, and end-to-end binary runs: a dead URL must exit non-zero with `error:` and `hint:` before the alternate screen ever opens, and `--smoke` must walk a seeded three-level tree and land the files on disk.
 
 ## What works
 
-- Multi-server repository listing with format and kind.
-- Version and object listings through the search API, with stale-result guards when you back out mid-load.
-- Full version subtree download with the sha-sibling markers, byte progress, retry notes and a completion summary.
+- Multi-server repository listing with format and kind, loaded before the TUI opens.
+- Full-depth tree navigation with breadcrumbs and backspace.
+- Whole-subtree and single-file downloads through one `down` call, with byte progress, retry notes and a completion summary.
 - Auth via `-u` or the environment, applied to every request.
 - Headless smoke mode for CI.
 
 ## Limitations
 
-- The download target directory is fixed to `./nxr-tui-downloads/` and the whole version is always fetched.
-- There is no single-file pick and no `--fresh` flag.
-- Any raw repository can be selected, but only a hosted one holds objects.
-- A group repository refuses the listings on a real server, which the status bar shows as an error with its hint.
-- The search page cap of the core (100 pages) bounds the listing size.
-- A repository with more objects than that needs the manifest enumeration path instead.
+- The download target directory is fixed to `./nxr-tui-downloads/`.
+- There is no `--fresh` flag; reruns skip files already complete.
+- A group repository passes the raw filter, but the search API it needs may refuse on the server, which the status bar shows as an error with its hint.
+- The search page cap of the core (100 pages) bounds every listing.
+- A repository with more files than that needs the manifest enumeration path instead.
 - No mouse support.
 - Navigation is keyboard only.
 - TLS verification is always on.

@@ -865,6 +865,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mock-nexus"
+version = "0.4.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "nexus-raw-core"
 version = "0.4.0"
 dependencies = [
@@ -886,6 +893,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "crossterm",
+ "mock-nexus",
  "nexus-raw-core",
  "ratatui",
  "tokio",

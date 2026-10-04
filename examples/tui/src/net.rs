@@ -1,14 +1,15 @@
 //! Async operations over the [`Nxr`] facade.
-//! Every call owns a short-lived instance and reports back through the app channel.
+//! The bootstrap runs before the TUI opens, the rest reports back through the app channel.
 
+use std::future::Future;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use nexus_raw_core::creds;
-use nexus_raw_core::{ArtifactName, Config, Enumeration, Event, Nxr};
+use nexus_raw_core::{ArtifactName, Config, EntryKind, Enumeration, Error, Event, Nxr};
 use tokio::sync::mpsc;
 
-use crate::app::{DlEv, Msg};
+use crate::app::{DlEv, Msg, RepoRow};
 
 /// Resolves the `Authorization` header value from `-u user:pass` and the environment.
 /// The fallback order matches the `nxr` CLI: `-u`, then `NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`.
@@ -51,74 +52,128 @@ pub fn dir_url(url: &str) -> String {
     }
 }
 
-/// Lists the repositories of one server root.
-pub fn load_repos(
+/// The fail-fast bootstrap: every base must resolve and answer `service_repos()`.
+/// The result is the first screen, already populated, so the TUI only opens on known ground.
+///
+/// # Errors
+///
+/// Returns the core error of the first refusing base: the caller prints `error:` + `hint:`
+/// and exits with `Error::exit_code()` before the terminal ever changes mode.
+pub async fn bootstrap(bases: &[String], auth: Option<String>) -> Result<Vec<RepoRow>, Error> {
+    let mut rows = Vec::new();
+    for (server, base) in bases.iter().enumerate() {
+        let repos = {
+            let (events, _drain) = mpsc::unbounded_channel::<Event>();
+            Nxr::new(config(dir_url(base), auth.clone()), events)?
+                .service_repos()
+                .await?
+        };
+        rows.extend(repos.into_iter().map(|repo| RepoRow { server, repo }));
+    }
+    Ok(rows)
+}
+
+/// Lists the immediate children of one directory URL through `ls_entries`.
+pub fn load_entries(
     tx: mpsc::UnboundedSender<Msg>,
-    base: String,
-    server: usize,
+    dir_url: String,
+    gen: u64,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
         let res = async {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(base.clone(), auth.clone()), events)?
-                .service_repos()
+            Nxr::new(config(dir_url.clone(), auth.clone()), events)?
+                .ls_entries()
                 .await
         }
         .await;
-        let _ = tx.send(Msg::Repos { server, res });
+        let _ = tx.send(Msg::Entries { gen, res });
     });
 }
 
-/// Lists the versions of one repository through the search API.
-pub fn load_versions(
+/// Collects the names behind a download request and reports them to the app.
+/// A folder entry walks the whole subtree, a file entry is a single-name plan.
+pub fn walk_for_download(
     tx: mpsc::UnboundedSender<Msg>,
     repo_url: String,
+    rel: String,
+    kind: EntryKind,
     gen: u64,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
         let res = async {
-            let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(repo_url.clone(), auth.clone()), events)?
-                .ls_versions()
-                .await
+            match kind {
+                EntryKind::Dir => collect_dir(&repo_url, &format!("{rel}/"), auth).await,
+                EntryKind::File => Ok(vec![ArtifactName::parse(&rel)?]),
+            }
         }
         .await;
-        let _ = tx.send(Msg::Versions { gen, res });
+        let _ = tx.send(Msg::Walk { gen, res });
     });
 }
 
-/// Lists the objects of one version directory through the search API.
-pub fn load_assets(
-    tx: mpsc::UnboundedSender<Msg>,
-    version_url: String,
-    gen: u64,
+/// Every file under one directory of the repository, names relative to the repo root.
+/// The `.sha256` siblings stay out: `ls_entries` never reports them.
+///
+/// # Errors
+///
+/// Returns the first listing error of the walk and [`Error::UnsafeName`] when a name fails the grammar.
+pub async fn collect_dir(
+    repo_url: &str,
+    dir_rel: &str,
     auth: Option<String>,
-) {
-    tokio::spawn(async move {
-        let res = async {
-            let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(version_url.clone(), auth.clone()), events)?
-                .ls_assets()
-                .await
-        }
-        .await;
-        let _ = tx.send(Msg::Assets { gen, res });
-    });
+) -> Result<Vec<ArtifactName>, Error> {
+    let mut names = Vec::new();
+    walk_dir(repo_url, dir_rel, &mut names, auth).await?;
+    Ok(names)
 }
 
-/// Downloads the version subtree into `dst`, streaming progress into the app channel.
-/// The names come from the object listing, so the download matches what the screen shows.
+/// Recursive half of [`collect_dir`]: lists one directory, recurses into folders.
+fn walk_dir<'a>(
+    repo_url: &'a str,
+    dir_rel: &'a str,
+    out: &'a mut Vec<ArtifactName>,
+    auth: Option<String>,
+) -> std::pin::Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+    Box::pin(async move {
+        let url = dir_url(&format!("{repo_url}{dir_rel}"));
+        let entries = {
+            let (events, _drain) = mpsc::unbounded_channel::<Event>();
+            Nxr::new(config(url, auth.clone()), events)?
+                .ls_entries()
+                .await?
+        };
+        for entry in entries {
+            match entry.kind {
+                EntryKind::Dir => {
+                    let rel = format!("{dir_rel}{}/", entry.name);
+                    walk_dir(repo_url, &rel, out, auth.clone()).await?;
+                }
+                EntryKind::File => {
+                    out.push(ArtifactName::parse(&format!("{dir_rel}{}", entry.name))?);
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Downloads the collected names from the repository root into `dst`,
+/// streaming progress into the app channel.
 pub fn start_download(
     tx: mpsc::UnboundedSender<Msg>,
-    version_url: String,
+    repo_url: String,
     names: Vec<ArtifactName>,
     dst: PathBuf,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
-        let _ = tx.send(Msg::Dl(DlEv::Start { dst: dst.clone() }));
+        let _ = tx.send(Msg::Dl(DlEv::Start {
+            dst: dst.clone(),
+            files: names.len(),
+        }));
         let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
         let forward_tx = tx.clone();
         let forwarder = tokio::spawn(async move {
@@ -127,7 +182,7 @@ pub fn start_download(
             }
         });
         let res = async {
-            let nxr = Nxr::new(config(version_url.clone(), auth.clone()), events)?;
+            let nxr = Nxr::new(config(repo_url.clone(), auth.clone()), events)?;
             nxr.down(&dst, Enumeration::Names(names), false).await
         }
         .await;
@@ -149,9 +204,19 @@ fn fold_event(event: Event) -> Msg {
             done: 0,
             total,
         },
-        Event::ArtifactBytes { name, done, total, .. } => DlEv::Bytes { name, done, total },
+        Event::ArtifactBytes {
+            name, done, total, ..
+        } => DlEv::Bytes { name, done, total },
         Event::ArtifactDone { name, skipped, .. } => DlEv::FileDone { name, skipped },
-        Event::Retrying { name, attempt, reason } => DlEv::Retry { name, attempt, reason },
+        Event::Retrying {
+            name,
+            attempt,
+            reason,
+        } => DlEv::Retry {
+            name,
+            attempt,
+            reason,
+        },
         // The summary arrives as the call result; deletion events never fire on `down`.
         Event::Summary(_)
         | Event::Removing { .. }
@@ -159,4 +224,108 @@ fn fold_event(event: Event) -> Msg {
         | Event::Missing { .. } => return Msg::Redraw,
     };
     Msg::Dl(dl)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mock_nexus::{MockNexus, Scenario};
+
+    /// The search page the mock serves for every listing query: the whole repo in one page.
+    fn seed_three_levels(mock: &MockNexus) {
+        for path in [
+            "app/core/lib.rs",
+            "app/core/util/helpers.py",
+            "app/readme.txt",
+            "docs/guide/intro.md",
+            "README.txt",
+        ] {
+            mock.insert(path, format!("content of {path}\n").as_bytes());
+        }
+        mock.insert(
+            "service/rest/v1/search/assets",
+            br#"{"continuationToken":null,"items":[
+                {"path":"app/core/lib.rs"},
+                {"path":"app/core/util/helpers.py"},
+                {"path":"app/readme.txt"},
+                {"path":"docs/guide/intro.md"},
+                {"path":"README.txt"}]}"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_lists_the_repos_of_every_base() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let rows = bootstrap(&[mock.base_url()], None).await.unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.repo.name.as_str()).collect();
+        assert_eq!(names, vec!["raw-main", "raw-all"]);
+        assert!(rows.iter().all(|r| r.repo.format == "raw"));
+        assert_eq!(rows[0].server, 0);
+    }
+
+    #[tokio::test]
+    async fn bootstrap_refuses_an_unreachable_base() {
+        // Port 1 on loopback: connection refused, nothing listens there.
+        let err = bootstrap(&["http://127.0.0.1:1/".to_owned()], None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.exit_code(), 3);
+        assert!(err.hint().is_some());
+    }
+
+    #[tokio::test]
+    async fn bootstrap_refuses_a_malformed_base() {
+        let err = bootstrap(&["not a url".to_owned()], None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.exit_code(), 2);
+    }
+
+    #[tokio::test]
+    async fn collect_dir_walks_the_whole_subtree() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        seed_three_levels(&mock);
+        let repo_url = format!("{}repository/raw-main/", mock.base_url());
+        let names = collect_dir(&repo_url, "", None).await.unwrap();
+        let mut got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+        got.sort_unstable();
+        assert_eq!(
+            got,
+            vec![
+                "README.txt",
+                "app/core/lib.rs",
+                "app/core/util/helpers.py",
+                "app/readme.txt",
+                "docs/guide/intro.md",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn collect_dir_scopes_to_the_named_folder() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        seed_three_levels(&mock);
+        let repo_url = format!("{}repository/raw-main/", mock.base_url());
+        let names = collect_dir(&repo_url, "app/core/", None).await.unwrap();
+        let mut got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+        got.sort_unstable();
+        assert_eq!(got, vec!["app/core/lib.rs", "app/core/util/helpers.py"]);
+    }
+
+    #[tokio::test]
+    async fn collect_dir_on_an_empty_folder_yields_nothing() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        mock.insert(
+            "service/rest/v1/search/assets",
+            br#"{"continuationToken":null,"items":[{"path":"docs/guide/intro.md"}]}"#,
+        );
+        let repo_url = format!("{}repository/raw-main/", mock.base_url());
+        let names = collect_dir(&repo_url, "docs/", None).await.unwrap();
+        let got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+        assert_eq!(got, vec!["docs/guide/intro.md"]);
+        let none = collect_dir(&repo_url, "docs/guide/empty/", None)
+            .await
+            .unwrap();
+        assert!(none.is_empty());
+    }
 }

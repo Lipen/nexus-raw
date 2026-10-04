@@ -12,13 +12,15 @@ arguments:
 
 options:
   -u, --user USER:PASS  credentials, curl style; env fallback: NXR_AUTH or NXR_USERNAME + NXR_PASSWORD
-      --smoke           headless mode: run the same browse-and-download flow and print the summary
+      --all-formats     let repositories of every format be opened, not only raw
+      --smoke           headless mode: list the tree, download a subtree, print the summary
   -h, --help            print this help
 
 keys:
   up/down or k/j        move the selection
-  enter                 drill down, or download the selected version subtree
-  esc                   go back one screen
+  enter                 open a folder, or download the selected file
+  d                     download the selected entry: a folder subtree or a single file
+  esc or backspace      go up one level
   q or ctrl-c           quit
 "#;
 
@@ -29,7 +31,9 @@ pub struct Args {
     pub bases: Vec<String>,
     /// Credentials as `user:pass`, curl style.
     pub user: Option<String>,
-    /// Headless smoke mode: the same browse-and-download flow without the TUI.
+    /// Let repositories of every format be opened, not only raw.
+    pub all_formats: bool,
+    /// Headless smoke mode: the browse-and-download flow without the TUI.
     pub smoke: bool,
 }
 
@@ -47,6 +51,7 @@ impl Args {
         let mut items = it.into_iter();
         let mut bases = Vec::new();
         let mut user = None;
+        let mut all_formats = false;
         let mut smoke = false;
         while let Some(arg) = items.next() {
             match arg.as_str() {
@@ -60,6 +65,7 @@ impl Args {
                     };
                     user = Some(value);
                 }
+                "--all-formats" => all_formats = true,
                 "--smoke" => smoke = true,
                 _ if arg.starts_with('-') && arg != "-" => bail!("unknown flag: {arg}"),
                 _ => bases.push(arg),
@@ -68,6 +74,53 @@ impl Args {
         if bases.is_empty() {
             bail!("at least one server base URL is required");
         }
-        Ok(Some(Self { bases, user, smoke }))
+        Ok(Some(Self {
+            bases,
+            user,
+            all_formats,
+            smoke,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> anyhow::Result<Args> {
+        Args::parse(args.iter().map(ToString::to_string)).map(Option::unwrap)
+    }
+
+    #[test]
+    fn parses_bases_user_and_flags() -> anyhow::Result<()> {
+        let args = parse(&[
+            "http://a/",
+            "http://b/",
+            "-u",
+            "u:p",
+            "--all-formats",
+            "--smoke",
+        ])?;
+        assert_eq!(args.bases, vec!["http://a/", "http://b/"]);
+        assert_eq!(args.user.as_deref(), Some("u:p"));
+        assert!(args.all_formats);
+        assert!(args.smoke);
+        Ok(())
+    }
+
+    #[test]
+    fn defaults_are_off() -> anyhow::Result<()> {
+        let args = parse(&["http://a/"])?;
+        assert!(!args.all_formats);
+        assert!(!args.smoke);
+        assert!(args.user.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn refuses_unknown_flags_and_empty_bases() {
+        assert!(parse(&["--nope"]).is_err());
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["-u"]).is_err());
     }
 }
