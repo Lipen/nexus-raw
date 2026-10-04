@@ -1623,3 +1623,80 @@ fn mirror_dry_run_prints_plan_without_writing() {
         "a dry run writes nothing to the destination"
     );
 }
+
+// ---- mirror per-side credentials -------------------------------------------
+
+fn seed_mirror_source(srv: &MockNexus) {
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}  a.zip\n", hex_digest(ALPHA)).as_bytes(),
+    );
+    srv.insert(
+        "1.14.0/manifest.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#,
+    );
+}
+
+/// `--dst-user` authenticates only the destination: the source stays whatever it is.
+#[test]
+fn mirror_dst_user_authenticates_the_destination() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+
+    let ok = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--dst-user",
+        "nexus:secret",
+    ]);
+    expect_exit(&ok, 0, "destination credentials land the copy");
+    assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+
+    // Without the flag the destination rejects the writes: nothing lands, nothing lost.
+    let dst2 = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    let bad = nxr(&["mirror", &dir_url(&src), &dir_url(&dst2)]);
+    expect_exit(&bad, 3, "no destination credentials is an auth failure");
+    assert!(dst2.store_get("1.14.0/a.zip").is_none());
+}
+
+/// `--src-user` authenticates only the source: a wrong source secret never reads.
+#[test]
+fn mirror_src_user_authenticates_the_source() {
+    let src = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Atomic);
+
+    let ok = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--src-user",
+        "nexus:secret",
+    ]);
+    expect_exit(&ok, 0, "source credentials read the source");
+    assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+
+    // A wrong source secret fails the reads: a fresh destination receives nothing.
+    let dst2 = server(Scenario::Atomic);
+    let bad = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst2),
+        "--src-user",
+        "nexus:wrong",
+    ]);
+    expect_exit(&bad, 3, "a wrong source secret fails the reads");
+    assert!(dst2.store_get("1.14.0/a.zip").is_none());
+}
