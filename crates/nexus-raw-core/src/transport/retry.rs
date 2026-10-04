@@ -47,11 +47,33 @@ impl RetryPolicy {
     }
 }
 
-/// One attempt's failure: whether to retry.
+/// One attempt's failure: whether to retry, and an optional server-mandated pause.
 #[derive(Debug)]
 pub struct AttemptFailure {
     pub retryable: bool,
+    /// A `Retry-After` pause from a 429: replaces the backoff for this retry.
+    pub retry_after: Option<std::time::Duration>,
     pub error: crate::error::Error,
+}
+
+impl AttemptFailure {
+    /// A failure that is never retried.
+    pub fn stop(error: crate::error::Error) -> Self {
+        Self {
+            retryable: false,
+            retry_after: None,
+            error,
+        }
+    }
+
+    /// A failure worth another attempt, on the regular backoff.
+    pub fn again(error: crate::error::Error) -> Self {
+        Self {
+            retryable: true,
+            retry_after: None,
+            error,
+        }
+    }
 }
 
 /// Connect errors, timeouts, body breaks are retried.

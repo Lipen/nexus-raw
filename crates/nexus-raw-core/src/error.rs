@@ -128,11 +128,6 @@ pub enum Verdict {
     Mismatch { name: String, detail: String },
     #[error("missing: {}: exist nowhere", fmt_names(names))]
     Missing { names: Vec<String> },
-    #[error(
-        "incomplete: {}: local copies are not Complete before verification",
-        fmt_names(names)
-    )]
-    LocalIncomplete { names: Vec<String> },
 }
 
 fn fmt_names(names: &[String]) -> String {
@@ -144,7 +139,6 @@ impl From<Verdict> for Error {
         match v {
             Verdict::Mismatch { name, detail } => Error::Mismatch { name, detail },
             Verdict::Missing { names } => Error::Missing { names },
-            Verdict::LocalIncomplete { names } => Error::Incomplete { names },
         }
     }
 }
@@ -209,6 +203,10 @@ mod tests {
             Error::Http {
                 status: 503,
                 url: "http://x/".into(),
+            },
+            Error::Io {
+                path: "a.zip".into(),
+                detail: "disk".into(),
             },
             Error::Misuse("bad flag".into()),
         ];

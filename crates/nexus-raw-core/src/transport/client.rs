@@ -182,14 +182,18 @@ impl NexusClient {
                 Ok(v) => return Ok(v),
                 Err(fail) if fail.retryable && n < self.retry.attempts => {
                     let reason = fail.error.to_string();
-                    log::warn!("retry {n}/{} for {url}: {reason}", self.retry.attempts);
+                    let pause = fail.retry_after.unwrap_or_else(|| self.retry.delay(n));
+                    log::warn!(
+                        "retry {n}/{} for {url}: {reason} (pause {pause:?})",
+                        self.retry.attempts
+                    );
                     let _ = self.events.sender().send(Event::Retrying {
                         name: subject
                             .map_or_else(|| Self::object_label(url), |(name, _)| name.to_owned()),
                         attempt: n + 1,
                         reason,
                     });
-                    tokio::time::sleep(self.retry.delay(n)).await;
+                    tokio::time::sleep(pause).await;
                 }
                 Err(fail) => return Err(fail.error),
             }
@@ -199,12 +203,17 @@ impl NexusClient {
     fn wrap_send_err(&self, url: &str, e: reqwest::Error) -> AttemptFailure {
         AttemptFailure {
             retryable: is_retryable(&e),
+            retry_after: None,
             error: Error::transport(url, e),
         }
     }
 
-    fn status_failure(&self, url: &str, status: reqwest::StatusCode) -> AttemptFailure {
-        let retryable = (500..600).contains(&status.as_u16());
+    /// A non-success status: 5xx and 429 are retryable, a 429 carries its
+    /// `Retry-After` pause, and a 401/403 is the auth verdict.
+    fn status_failure(&self, url: &str, resp: &reqwest::Response) -> AttemptFailure {
+        let status = resp.status();
+        let rate_limited = status.as_u16() == 429;
+        let retryable = (500..600).contains(&status.as_u16()) || rate_limited;
         let error = match status.as_u16() {
             401 | 403 => Error::Auth {
                 url: url.to_owned(),
@@ -218,7 +227,23 @@ impl NexusClient {
                 url: url.to_owned(),
             },
         };
-        AttemptFailure { retryable, error }
+        AttemptFailure {
+            retryable,
+            retry_after: rate_limited.then(|| Self::retry_after(resp)).flatten(),
+            error,
+        }
+    }
+
+    /// The `Retry-After` pause of a 429: the seconds form only, clamped to 1..=60.
+    /// The HTTP-date form and unparseable values fall back to the regular backoff.
+    fn retry_after(resp: &reqwest::Response) -> Option<std::time::Duration> {
+        let raw = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)?
+            .to_str()
+            .ok()?;
+        let secs: u64 = raw.trim().parse().ok()?;
+        Some(std::time::Duration::from_secs(secs.clamp(1, 60)))
     }
 
     /// The object a URL addresses, for callers that transfer by URL rather than by [`ArtifactName`]: markers, channel tokens, manifests, search pages.
@@ -283,31 +308,25 @@ impl NexusClient {
                 match status {
                     s if s.is_success() => {
                         if resp.content_length().is_some_and(|n| n > SMALL_CAP) {
-                            return Err(AttemptFailure {
-                                retryable: false,
-                                error: Error::misuse(format!(
-                                    "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
-                                )),
-                            });
+                            return Err(AttemptFailure::stop(Error::misuse(format!(
+                                "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
+                            ))));
                         }
                         let mut body = resp.bytes_stream();
                         let mut buf = Vec::new();
                         while let Some(chunk) = body.next().await {
                             let chunk = chunk.map_err(|e| this.wrap_send_err(url, e))?;
                             if buf.len() as u64 + chunk.len() as u64 > SMALL_CAP {
-                                return Err(AttemptFailure {
-                                    retryable: false,
-                                    error: Error::misuse(format!(
-                                        "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
-                                    )),
-                                });
+                                return Err(AttemptFailure::stop(Error::misuse(format!(
+                                    "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
+                                ))));
                             }
                             buf.extend_from_slice(&chunk);
                         }
                         Ok(Some(buf))
                     }
-                    s if s.as_u16() == 404 => Ok(None),
-                    s => Err(this.status_failure(url, s)),
+                    _s if _s.as_u16() == 404 => Ok(None),
+                    _ => Err(this.status_failure(url, &resp)),
                 }
             })
         })
@@ -328,7 +347,7 @@ impl NexusClient {
                 let status = resp.status();
                 match status {
                     s if s.is_success() => Ok(()),
-                    s => Err(this.status_failure(url, s)),
+                    _ => Err(this.status_failure(url, &resp)),
                 }
             })
         })
@@ -352,14 +371,11 @@ impl NexusClient {
                 match status.as_u16() {
                     s if (200..300).contains(&s) => Ok(DeleteOutcome::Deleted),
                     404 => Ok(DeleteOutcome::Missing),
-                    s @ (403 | 405) => Err(AttemptFailure {
-                        retryable: false,
-                        error: Error::ReadOnly {
-                            url: url.to_owned(),
-                            status: s,
-                        },
-                    }),
-                    s => Err(this.status_failure(url, reqwest::StatusCode::from_u16(s).unwrap())),
+                    s @ (403 | 405) => Err(AttemptFailure::stop(Error::ReadOnly {
+                        url: url.to_owned(),
+                        status: s,
+                    })),
+                    _ => Err(this.status_failure(url, &resp)),
                 }
             })
         })
@@ -410,21 +426,8 @@ impl NexusClient {
                         match status {
                             s if (200..300).contains(&s) => Ok(Some(info)),
                             404 => Ok(None),
-                            s @ (401 | 403) => {
-                                Err(this
-                                    .status_failure(url, reqwest::StatusCode::from_u16(s).unwrap()))
-                            }
-                            s if (500..600).contains(&s) => Err(AttemptFailure {
-                                retryable: true,
-                                error: Error::transport(url, format!("HTTP {s}")),
-                            }),
-                            s => Err(AttemptFailure {
-                                retryable: false,
-                                error: Error::Http {
-                                    status: s,
-                                    url: url.to_owned(),
-                                },
-                            }),
+                            // Everything else routes through the shared verdict: auth, rate limits, 5xx.
+                            _ => Err(this.status_failure(url, &resp)),
                         }
                     })
                 },
@@ -471,7 +474,7 @@ impl NexusClient {
                 let status = resp.status();
                 match status {
                     s if s.is_success() => Ok(resp),
-                    s => Err(this.status_failure(url, s)),
+                    _ => Err(this.status_failure(url, &resp)),
                 }
             })
         })
@@ -521,20 +524,14 @@ impl NexusClient {
                                         prefix += n as u64;
                                     }
                                     Err(e) => {
-                                        return Err(AttemptFailure {
-                                            retryable: false,
-                                            error: Error::io(&part, e),
-                                        })
+                                        return Err(AttemptFailure::stop(Error::io(&part, e)));
                                     }
                                 }
                             }
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                         Err(e) => {
-                            return Err(AttemptFailure {
-                                retryable: false,
-                                error: Error::io(&part, e),
-                            })
+                            return Err(AttemptFailure::stop(Error::io(&part, e)));
                         }
                     }
                 }
@@ -556,7 +553,7 @@ impl NexusClient {
                     return Ok((prefix, digest));
                 }
                 if !(200..300).contains(&status) {
-                    return Err(this.status_failure(url, resp.status()));
+                    return Err(this.status_failure(url, &resp));
                 }
                 // 206 = the range was honored, append from `prefix`.
                 // 200 = full body, restart from zero.
@@ -568,14 +565,10 @@ impl NexusClient {
                 let total = resp.content_length().map(|n| n + prefix).or(total_hint);
                 progress.started(&subject_name, Dir::Down, total).await;
                 let mut body = resp.bytes_stream();
-                let mut file =
-                    write_options(append)
-                        .open(&part)
-                        .await
-                        .map_err(|e| AttemptFailure {
-                            retryable: false,
-                            error: Error::io(&part, e),
-                        })?;
+                let mut file = write_options(append)
+                    .open(&part)
+                    .await
+                    .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
                 let mut done: u64 = prefix;
                 loop {
                     let chunk = tokio::time::timeout(stall, body.next()).await;
@@ -584,25 +577,20 @@ impl NexusClient {
                         Ok(None) => break,
                         Err(_) => {
                             let e = format!("stalled: no bytes for {}s", stall.as_secs_f64());
-                            return Err(AttemptFailure {
-                                retryable: true,
-                                error: Error::transport(url, e),
-                            });
+                            return Err(AttemptFailure::again(Error::transport(url, e)));
                         }
                     };
                     let chunk = chunk.map_err(|e| this.wrap_send_err(url, e))?;
                     hasher.update(&chunk);
-                    file.write_all(&chunk).await.map_err(|e| AttemptFailure {
-                        retryable: false,
-                        error: Error::io(&part, e),
-                    })?;
+                    file.write_all(&chunk)
+                        .await
+                        .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
                     done += chunk.len() as u64;
                     progress.bytes(&subject_name, Dir::Down, done, total).await;
                 }
-                file.flush().await.map_err(|e| AttemptFailure {
-                    retryable: false,
-                    error: Error::io(&part, e),
-                })?;
+                file.flush()
+                    .await
+                    .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
                 let digest = Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
                 Ok((done, digest))
             })
@@ -622,7 +610,7 @@ impl NexusClient {
         url: &str,
         src: &Path,
         size: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<Digest, Error> {
         let stall = self.stall;
         let progress = self.events.clone();
         let subject_name = subject.0.to_owned();
@@ -672,11 +660,19 @@ impl NexusClient {
                 });
                 progress.started(&subject_name, Dir::Up, Some(size)).await;
                 let watcher = last.clone();
+                // The digest of what actually hit the wire: the consumer hashes the
+                // chunks it feeds the body, so put never re-reads the file for a marker.
+                let upload_hash = Arc::new(std::sync::Mutex::new(Sha256::new()));
+                let body_hasher = upload_hash.clone();
                 let body = reqwest::Body::wrap_stream(futures_util::stream::poll_fn(move |cx| {
                     use futures_util::task::Poll;
                     match rx.poll_recv(cx) {
                         Poll::Ready(Some(Ok(chunk))) => {
                             *watcher.lock().expect("progress lock") = std::time::Instant::now();
+                            body_hasher
+                                .lock()
+                                .expect("upload digest lock")
+                                .update(&chunk);
                             Poll::Ready(Some(
                                 Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(chunk),
                             ))
@@ -706,13 +702,13 @@ impl NexusClient {
                         () = tokio::time::sleep(stall.saturating_sub(since_progress)) => {
                             if last.lock().expect("progress lock").elapsed() >= stall {
                                 producer.abort();
-                                break Err(AttemptFailure {
-                                    retryable: true,
-                                    error: Error::transport(url, format!(
+                                break Err(AttemptFailure::again(Error::transport(
+                                    url,
+                                    format!(
                                         "stalled: no upload progress for {}s",
                                         stall.as_secs_f64()
-                                    )),
-                                });
+                                    ),
+                                )));
                             }
                             // Progress raced the timer: re-arm and keep waiting.
                         }
@@ -722,8 +718,13 @@ impl NexusClient {
                 let resp = resp?;
                 let status = resp.status();
                 match status {
-                    s if s.is_success() => Ok(()),
-                    s => Err(this.status_failure(url, s)),
+                    s if s.is_success() => {
+                        let hasher = upload_hash.lock().expect("upload digest lock").clone();
+                        Ok(Digest::from_hex_string(crate::model::digest::hex(
+                            &hasher.finalize(),
+                        )))
+                    }
+                    _ => Err(this.status_failure(url, &resp)),
                 }
             })
         })
