@@ -40,6 +40,10 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
             if fname.ends_with(".sha256") {
                 continue;
             }
+            if fname.ends_with(".part") {
+                // The unfinished download of `get -o` next to its target: never an artifact.
+                continue;
+            }
             let rel = path
                 .strip_prefix(dir)
                 .map_err(|_| Error::misuse(format!("scan root mismatch: {}", path.display())))?
@@ -64,6 +68,7 @@ mod tests {
         fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("a.zip"), b"x").unwrap();
         fs::write(root.join("a.zip.sha256"), b"x").unwrap();
+        fs::write(root.join("a.zip.part"), b"x").unwrap();
         fs::write(root.join("sub").join("b.json"), b"y").unwrap();
         fs::write(root.join(".hidden"), b"z").unwrap();
         let names = scan_dir(root).unwrap();
