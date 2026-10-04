@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
 use crate::sync::diff::Action;
 
@@ -176,20 +176,30 @@ impl Event {
 }
 
 /// Coalescing progress sender: at most one byte event per `MIN_INTERVAL` per (name, dir).
+/// The throttle key is the hash of (name, dir): the lookup runs on every chunk, so it
+/// must not allocate. A hash collision only merges two throttle slots, which is harmless.
 #[derive(Clone)]
 pub struct Progress {
     tx: mpsc::UnboundedSender<Event>,
-    last: Arc<Mutex<HashMap<(String, Dir), Instant>>>,
+    last: Arc<std::sync::Mutex<HashMap<u64, Instant>>>,
 }
 
 const MIN_INTERVAL: Duration = Duration::from_millis(200);
+
+/// The throttle slot of a (name, dir) pair: hash-based, allocation-free on the hot path.
+fn throttle_key(name: &str, dir: Dir) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (name, dir).hash(&mut h);
+    h.finish()
+}
 
 impl Progress {
     #[must_use]
     pub fn new(tx: mpsc::UnboundedSender<Event>) -> Self {
         Self {
             tx,
-            last: Arc::new(Mutex::new(HashMap::new())),
+            last: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -207,16 +217,20 @@ impl Progress {
     }
 
     pub async fn bytes(&self, name: &str, dir: Dir, done: u64, total: Option<u64>) {
-        let key = (name.to_owned(), dir);
-        let mut last = self.last.lock().await;
+        let key = throttle_key(name, dir);
         let now = Instant::now();
-        let due = match last.get(&key) {
-            Some(t) => now - *t >= MIN_INTERVAL,
-            None => true,
+        let due = {
+            let last = self.last.lock().expect("progress throttle lock");
+            match last.get(&key) {
+                Some(t) => now - *t >= MIN_INTERVAL,
+                None => true,
+            }
         };
         if due {
-            last.insert(key, now);
-            drop(last);
+            self.last
+                .lock()
+                .expect("progress throttle lock")
+                .insert(key, now);
             let _ = self.tx.send(Event::ArtifactBytes {
                 name: name.to_owned(),
                 dir,
