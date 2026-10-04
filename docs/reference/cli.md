@@ -322,11 +322,12 @@ $ echo $?
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh]
+nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--dry-run]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
 Every artifact is streamed into a part file, hashed on the fly, checked against the remote marker when one exists, then renamed into place and given a local sibling computed from the received bytes.
+`--dry-run` probes the server and prints the plan (`upload`/`download`/`skip` lines, exactly like `up --dry-run`) without writing into `DST_DIR`.
 
 | Flag | Meaning |
 |:-----|:--------|
@@ -391,12 +392,13 @@ A fresh download that still diverges refuses the run (exit 1), so nothing diverg
 ## nxr mirror
 
 ```
-nxr mirror <SRC_URL> <DST_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls]
+nxr mirror <SRC_URL> <DST_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--dry-run]
 ```
 
 Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
 The enumeration lives at the source, with the same sources as `down`: a `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 Without any source the run refuses with `cannot enumerate` (exit 1).
+`--dry-run` probes both sides and prints the plan (`copy <name>` for names that would transfer, `skip <name>` for converged ones) without writing to the destination.
 
 | Flag | Meaning |
 |:-----|:--------|

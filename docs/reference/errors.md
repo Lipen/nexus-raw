@@ -22,7 +22,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
 | `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
-| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route |
+| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health`; a 429 gets its own hint: honor `Retry-After` or lower `--workers` | a proxy answered 429, or the path hit a non-artifact route |
 | `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken transport.

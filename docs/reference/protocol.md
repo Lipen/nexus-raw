@@ -358,7 +358,8 @@ When the enumeration leads with the conventional version document `version.json`
 |:-------|:---------|
 | auth | `Basic`, attached to every request when credentials resolve; `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
-| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry; 4xx never |
+| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry; other 4xx never, except 429 |
+| 429 | retryable: a `Retry-After` pause in seconds (clamped to 1..=60) replaces the backoff; exhausting attempts is exit 3 with a rate-limit hint |
 | backoff | 0.5 s × 2ⁿ per attempt, capped at 60 s, plus hash-based jitter ≤ 250 ms |
 | stall | no bytes for `--stall-secs` aborts the attempt as retryable (default 30 s) |
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |

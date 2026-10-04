@@ -38,20 +38,15 @@ async fn main() -> Result<(), nexus_raw_core::Error> {
     )?;
 
     // Verified upload of a directory: markers generated and written by default.
-    nxr.up("dist/1.4.0".as_ref(), None, true, None, None).await?;
+    nxr.up("dist/1.4.0".as_ref(), None, true, None).await?;
 
     // Verified download, enumerated by the version's manifest.
     // Resume is the default: `fresh = false` continues the part files of an interrupted run.
     let manifest = nxr
         .manifest_from("https://nexus.example.com/repository/raw-main/1.4.0/manifest.json")
         .await?;
-    nxr.down(
-        "vendor/1.4.0".as_ref(),
-        Enumeration::Manifest(manifest),
-        false,
-        None,
-    )
-    .await?;
+    nxr.down("vendor/1.4.0".as_ref(), Enumeration::Manifest(manifest), false)
+        .await?;
 
     let _ = rx;
     drop(nxr); // dropping the facade closes the event stream
