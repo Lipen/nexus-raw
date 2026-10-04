@@ -3,11 +3,16 @@
 //
 // Endpoints:
 // - GET  /                    the single static page
+// - GET  /api/servers         the server URLs configured at startup
 // - GET  /api/repos?url=      the repository list of a server
-// - GET  /api/versions?url=   the version tokens of a repository
-// - GET  /api/assets?url=     the asset names of a version directory
+// - GET  /api/entries?url=    the immediate children of a raw directory URL
 // - POST /api/down            starts a download job, answers `{id}`
 // - GET  /api/progress/<id>   the SSE stream of a job, one `data:` frame per step
+//
+// Startup is strict by default: every `--url` server is probed with
+// `serviceRepos` before the port binds, and an unreachable server or one
+// without raw repositories exits non-zero with a hint.
+// `--lazy` skips that probe for quick local experiments.
 //
 // A job replays its frames to late subscribers, so a browser that opens the
 // stream after the POST still sees the whole history.
@@ -55,11 +60,12 @@ function publish(job, frame) {
   }
 }
 
-async function runDownload(job, url, dir, opts) {
-  publish(job, { type: 'start', url, dir })
+async function runDownload(job, repoUrl, dir, names) {
+  publish(job, { type: 'start', url: repoUrl, dir, names: names.length })
   try {
-    const summary = await nxr.down(url, dir, {
-      ...opts,
+    const summary = await nxr.down(repoUrl, dir, {
+      names,
+      fresh: true,
       onEvent: (event) => publish(job, { type: 'event', event }),
     })
     publish(job, { type: 'end', ok: true, summary })
@@ -120,26 +126,81 @@ function queryUrl(url, name = 'url') {
   return value
 }
 
+// Split `.../repository/<name>/<subtree>/` into the repo root and the decoded
+// subtree path. The root keeps its trailing slash, so names append directly.
+function splitRepoUrl(dirUrl) {
+  const parsed = new URL(dirUrl)
+  const segs = parsed.pathname.split('/').filter((s) => s !== '')
+  const at = segs.indexOf('repository')
+  if (at === -1 || at + 1 >= segs.length) {
+    return null
+  }
+  const root = new URL(dirUrl)
+  root.pathname = `/${segs.slice(0, at + 2).join('/')}/`
+  const subtree = segs.slice(at + 2).map(decodeSegment).join('/')
+  return { repoUrl: root.toString(), subtree }
+}
+
+// A decoded path segment; a malformed escape falls back to the raw text.
+function decodeSegment(seg) {
+  try {
+    return decodeURIComponent(seg)
+  } catch {
+    return seg
+  }
+}
+
+// A light path check on the subtree the browser sends: relative segments only.
+function validSubtree(path) {
+  if (path === '') {
+    return true
+  }
+  return path.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..')
+}
+
+// Walk the subtree below `dirUrl` through `lsEntries`, collecting every file
+// name relative to the repo root: exactly the list the download call needs.
+async function walkFiles(dirUrl, prefix, out) {
+  for (const entry of await nxr.lsEntries(dirUrl)) {
+    const name = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+    if (entry.kind === 'dir') {
+      await walkFiles(`${dirUrl}${encodeURIComponent(entry.name)}/`, name, out)
+    } else {
+      out.push(name)
+    }
+  }
+  return out
+}
+
 async function startDownload(body) {
-  const { url, dir, names } = body ?? {}
+  const { url, path, dir } = body ?? {}
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw badRequest('url must be an http(s) directory URL')
+  }
+  if (typeof path !== 'string' || !validSubtree(path)) {
+    throw badRequest('path must be a relative subtree path inside the repository, possibly empty')
   }
   if (typeof dir !== 'string' || dir.length === 0) {
     throw badRequest('dir must be a local target directory path')
   }
-  if (names !== undefined && (!Array.isArray(names) || names.some((n) => typeof n !== 'string' || n.length === 0))) {
-    throw badRequest('names must be an array of non-empty strings when given')
+  const split = splitRepoUrl(url)
+  if (split === null) {
+    throw badRequest('url must point inside /repository/<name>/')
   }
-  const opts = { fresh: true }
-  // An empty names list means the addon's own fallback: the conventional
-  // manifest.json at the directory URL.
-  if (Array.isArray(names) && names.length > 0) {
-    opts.names = names
+  if (split.subtree !== path) {
+    throw badRequest(`path ${JSON.stringify(path)} does not match the URL subtree ${JSON.stringify(split.subtree)}`)
+  }
+  const dirUrl = `${split.repoUrl}${path === '' ? '' : `${path.split('/').map(encodeURIComponent).join('/')}/`}`
+  // Names are repository-relative: the walk starts at the subtree but labels
+  // every file with the subtree prefix, exactly what `down` expects against
+  // the repository URL.
+  const files = await walkFiles(dirUrl, path, [])
+  if (files.length === 0) {
+    throw badRequest(`no files under ${url}`)
   }
   const job = { id: randomUUID(), frames: [], listeners: new Set(), done: false }
   rememberJob(job)
-  runDownload(job, url, dir, opts)
+  runDownload(job, split.repoUrl, dir, files)
   return { id: job.id }
 }
 
@@ -182,16 +243,16 @@ async function route(req, res) {
     res.end(indexHtml)
     return
   }
+  if (req.method === 'GET' && url.pathname === '/api/servers') {
+    sendJson(res, 200, servers)
+    return
+  }
   if (req.method === 'GET' && url.pathname === '/api/repos') {
     sendJson(res, 200, await nxr.serviceRepos(queryUrl(url)))
     return
   }
-  if (req.method === 'GET' && url.pathname === '/api/versions') {
-    sendJson(res, 200, await nxr.lsVersions(queryUrl(url)))
-    return
-  }
-  if (req.method === 'GET' && url.pathname === '/api/assets') {
-    sendJson(res, 200, await nxr.lsAssets(queryUrl(url)))
+  if (req.method === 'GET' && url.pathname === '/api/entries') {
+    sendJson(res, 200, await nxr.lsEntries(queryUrl(url)))
     return
   }
   if (req.method === 'POST' && url.pathname === '/api/down') {
@@ -212,20 +273,84 @@ async function route(req, res) {
   sendJson(res, 404, { error: `no route for ${req.method} ${url.pathname}` })
 }
 
-// --port N or --port=N, default 8123.
-function argValue(name) {
-  const inline = process.argv.find((a) => a.startsWith(`--${name}=`))
-  if (inline !== undefined) {
-    return inline.slice(name.length + 3)
+// Parse the command line: `--url U` (repeatable) or positional server URLs,
+// `--port N` (default 8123), and the `--lazy` switch.
+function parseArgs(argv) {
+  const servers = []
+  let port = 8123
+  let lazy = false
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--lazy') {
+      lazy = true
+      continue
+    }
+    if (arg === '--url' || arg.startsWith('--url=')) {
+      const value = arg === '--url' ? argv[++i] : arg.slice('--url='.length)
+      if (value === undefined || value === '') {
+        fail(`--url needs a server URL`)
+      }
+      servers.push(value)
+      continue
+    }
+    if (arg === '--port' || arg.startsWith('--port=')) {
+      const value = arg === '--port' ? argv[++i] : arg.slice('--port='.length)
+      port = Number(value)
+      if (!Number.isInteger(port) || port < 0 || port > 65535) {
+        fail(`bad --port value: ${value}`)
+      }
+      continue
+    }
+    if (arg.startsWith('--')) {
+      fail(`unknown option ${arg}`)
+    }
+    servers.push(arg)
   }
-  const i = process.argv.indexOf(`--${name}`)
-  return i !== -1 && i + 1 < process.argv.length ? process.argv[i + 1] : undefined
+  for (const server of servers) {
+    if (!/^https?:\/\//.test(server)) {
+      fail(`server URL must be http(s): ${server}`)
+    }
+  }
+  return { servers, port, lazy }
 }
 
-const port = Number(argValue('port') ?? 8123)
-if (!Number.isInteger(port) || port < 0 || port > 65535) {
-  console.error(`panel: bad --port value: ${argValue('port')}`)
+function fail(message) {
+  console.error(`panel: ${message}`)
+  console.error('usage: node server.mjs [--url URL]... [--port N] [--lazy]')
   process.exit(2)
+}
+
+// Strict startup: every configured server must answer `serviceRepos` and own
+// at least one raw repository, or the panel refuses to start.
+async function validateServers(urls) {
+  for (const server of urls) {
+    let repos
+    try {
+      repos = await nxr.serviceRepos(server)
+    } catch (err) {
+      console.error(`panel: ${server}: ${err?.message ?? String(err)}`)
+      if (err?.hint) {
+        console.error(`hint: ${err.hint}`)
+      }
+      process.exit(err?.exitCode ?? 1)
+    }
+    const raw = repos.filter((r) => r.format === 'raw')
+    if (raw.length === 0) {
+      const formats = repos.map((r) => r.format).join(', ')
+      console.error(`panel: ${server}: no raw repositories on the server (formats: ${formats || 'none'})`)
+      console.error('hint: create a repository with the raw format, or point --url at a server that has one')
+      process.exit(1)
+    }
+    console.log(`panel: ${server}: raw repositories: ${raw.map((r) => r.name).join(', ')}`)
+  }
+}
+
+const { servers, port, lazy } = parseArgs(process.argv.slice(2))
+if (!lazy && servers.length === 0) {
+  fail('no server URL given: pass --url <server> at least once, or add --lazy to skip startup validation')
+}
+if (!lazy) {
+  await validateServers(servers)
 }
 
 const server = createServer((req, res) => {

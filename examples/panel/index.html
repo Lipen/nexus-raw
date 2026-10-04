@@ -33,7 +33,7 @@
   header span { color: var(--dim); font-size: 12px; }
   main {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 2fr 3fr;
     gap: 12px;
     padding: 12px 20px;
   }
@@ -71,20 +71,33 @@
   ul.list li {
     padding: 6px 8px;
     border-radius: 6px;
-    cursor: pointer;
     display: flex;
     gap: 8px;
     align-items: baseline;
   }
-  ul.list li:hover { background: #1f2933; }
+  ul.list li.clickable { cursor: pointer; }
+  ul.list li.clickable:hover { background: #1f2933; }
   ul.list li.selected { background: #20324a; }
-  ul.list li:has(input) { cursor: default; }
+  ul.list li.disabled { opacity: 0.45; }
   .name { color: var(--text); }
+  li.clickable .name:hover { color: var(--accent); }
+  .dir .name { font-weight: 600; }
   .kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
   .kind.group { color: #d8a657; }
   .kind.hosted { color: var(--ok); }
   .url { color: var(--dim); font-size: 12px; margin-left: auto; }
   .hint { color: var(--dim); }
+  nav.crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  nav.crumbs a { color: var(--accent); cursor: pointer; }
+  nav.crumbs a:hover { text-decoration: underline; }
+  nav.crumbs .sep { color: var(--dim); }
+  nav.crumbs .here { color: var(--text); font-weight: 600; }
   section.wide {
     margin: 0 20px 12px;
     background: var(--panel);
@@ -127,24 +140,20 @@
     <ul class="list" id="repo-list"></ul>
   </section>
 
-  <section class="pane" id="pane-versions">
-    <h2>Versions</h2>
-    <p class="hint" id="versions-hint">Pick a repository on the left.</p>
-    <ul class="list" id="version-list"></ul>
-  </section>
-
-  <section class="pane" id="pane-assets">
-    <h2>Assets</h2>
-    <p class="hint" id="assets-hint">Pick a version.</p>
-    <ul class="list" id="asset-list"></ul>
+  <section class="pane" id="pane-browser">
+    <h2>Browser</h2>
+    <nav class="crumbs" id="crumbs"></nav>
+    <p class="hint" id="browser-hint">Pick a raw repository on the left.</p>
+    <ul class="list" id="entry-list"></ul>
   </section>
 </main>
 
 <section class="wide" id="download">
   <h2>Download</h2>
+  <p class="hint" id="down-scope">Scope: nothing picked yet.</p>
   <form id="down-form">
     <input id="down-dir" type="text" value="panel-downloads" required>
-    <button type="submit">Download selected</button>
+    <button type="submit">Download this directory</button>
     <span id="down-note"></span>
   </form>
 </section>
@@ -157,7 +166,9 @@
 <script>
 'use strict'
 
-const state = { serverUrl: null, repoUrl: null, dirUrl: null }
+// The browser is a plain file tree over `lsEntries`: breadcrumbs above,
+// `name/` rows for folders, `name` rows for files, any depth.
+const state = { serverUrl: null, repoUrl: null, repoName: null, dirSegs: [] }
 
 const $ = (id) => document.getElementById(id)
 
@@ -181,60 +192,104 @@ async function api(path, init) {
   return body
 }
 
-// ---- panes ---------------------------------------------------------------
+// ---- repositories --------------------------------------------------------
 
 $('server-form').addEventListener('submit', async (e) => {
   e.preventDefault()
   state.serverUrl = $('server-url').value
-  const repos = await api(`/api/repos?url=${encodeURIComponent(state.serverUrl)}`)
-  $('repo-list').innerHTML = ''
-  for (const repo of repos) {
-    const li = document.createElement('li')
-    li.innerHTML = `<span class="name">${esc(repo.name)}</span><span class="kind ${esc(repo.kind)}">${esc(repo.kind)}</span><span class="url">${esc(repo.url)}</span>`
-    li.addEventListener('click', () => pickRepo(repo, li))
-    $('repo-list').append(li)
+  try {
+    const repos = await api(`/api/repos?url=${encodeURIComponent(state.serverUrl)}`)
+    $('repo-list').innerHTML = ''
+    for (const repo of repos) {
+      const li = document.createElement('li')
+      const raw = repo.format === 'raw'
+      li.className = raw ? 'clickable' : 'disabled'
+      li.title = raw ? '' : `format ${repo.format}: only raw repositories are navigable`
+      li.innerHTML = `<span class="name">${esc(repo.name)}</span><span class="kind ${esc(repo.kind)}">${esc(repo.kind)}</span><span class="kind">${esc(repo.format)}</span><span class="url">${esc(repo.url)}</span>`
+      if (raw) {
+        li.addEventListener('click', () => pickRepo(repo, li))
+      }
+      $('repo-list').append(li)
+    }
+  } catch (err) {
+    $('repo-list').innerHTML = ''
+    logLine(`repos failed: ${err.message}`, 'bad')
   }
 })
 
 async function pickRepo(repo, li) {
-  state.repoUrl = repo.url
-  state.dirUrl = null
+  state.repoUrl = repo.url.endsWith('/') ? repo.url : `${repo.url}/`
+  state.repoName = repo.name
+  state.dirSegs = []
   for (const el of document.querySelectorAll('#repo-list li')) el.classList.remove('selected')
   li.classList.add('selected')
-  $('assets-hint').textContent = 'Pick a version.'
-  $('asset-list').innerHTML = ''
-  $('versions-hint').textContent = `Loading ${repo.name}...`
-  try {
-    const versions = await api(`/api/versions?url=${encodeURIComponent(repo.url)}`)
-    $('versions-hint').textContent = versions.length === 0 ? 'No versions reported.' : `${versions.length} version(s):`
-    $('version-list').innerHTML = ''
-    for (const version of versions) {
-      const vli = document.createElement('li')
-      vli.innerHTML = `<span class="name">${esc(version)}</span>`
-      vli.addEventListener('click', () => pickVersion(version, vli))
-      $('version-list').append(vli)
-    }
-  } catch (err) {
-    $('versions-hint').textContent = err.message
-  }
+  renderCrumbs()
+  loadEntries()
 }
 
-async function pickVersion(version, li) {
-  state.dirUrl = `${state.repoUrl}${version}/`
-  for (const el of document.querySelectorAll('#version-list li')) el.classList.remove('selected')
-  li.classList.add('selected')
-  $('assets-hint').textContent = `Loading ${state.dirUrl}...`
+// ---- tree browser --------------------------------------------------------
+
+// The directory URL of the current tree position.
+function dirUrl() {
+  const rest = state.dirSegs.map(encodeURIComponent).join('/')
+  return `${state.repoUrl}${rest}${state.dirSegs.length === 0 ? '' : '/'}`
+}
+
+function renderCrumbs() {
+  const nav = $('crumbs')
+  nav.innerHTML = ''
+  const home = document.createElement('a')
+  home.textContent = state.repoName
+  home.addEventListener('click', () => ascend(-1))
+  nav.append(home)
+  state.dirSegs.forEach((seg, i) => {
+    nav.append(Object.assign(document.createElement('span'), { className: 'sep', textContent: '/' }))
+    if (i === state.dirSegs.length - 1) {
+      nav.append(Object.assign(document.createElement('span'), { className: 'here', textContent: seg }))
+      return
+    }
+    const link = document.createElement('a')
+    link.textContent = seg
+    link.addEventListener('click', () => ascend(i))
+    nav.append(link)
+  })
+  $('down-scope').textContent = `Scope: ${state.repoName}${state.dirSegs.length === 0 ? ' (whole repository)' : `/${state.dirSegs.join('/')}`}`
+}
+
+// Descend into a folder: extend the path and list the children.
+function descend(name) {
+  state.dirSegs.push(name)
+  renderCrumbs()
+  loadEntries()
+}
+
+// Climb to the breadcrumb level `i` (-1 is the repository root).
+function ascend(i) {
+  state.dirSegs = state.dirSegs.slice(0, i + 1)
+  renderCrumbs()
+  loadEntries()
+}
+
+async function loadEntries() {
+  const url = dirUrl()
+  $('browser-hint').textContent = `Loading ${url}...`
+  $('entry-list').innerHTML = ''
   try {
-    const assets = await api(`/api/assets?url=${encodeURIComponent(state.dirUrl)}`)
-    $('assets-hint').textContent = assets.length === 0 ? 'No assets reported.' : `${assets.length} asset(s):`
-    $('asset-list').innerHTML = ''
-    for (const asset of assets) {
-      const ali = document.createElement('li')
-      ali.innerHTML = `<label style="display:flex;gap:8px;align-items:baseline;width:100%"><input type="checkbox" value="${esc(asset)}" checked><span class="name">${esc(asset)}</span></label>`
-      $('asset-list').append(ali)
+    const entries = await api(`/api/entries?url=${encodeURIComponent(url)}`)
+    $('browser-hint').textContent = entries.length === 0 ? 'Empty directory.' : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}:`
+    for (const entry of entries) {
+      const li = document.createElement('li')
+      if (entry.kind === 'dir') {
+        li.className = 'clickable dir'
+        li.innerHTML = `<span class="name">${esc(entry.name)}/</span><span class="kind">dir</span>`
+        li.addEventListener('click', () => descend(entry.name))
+      } else {
+        li.innerHTML = `<span class="name">${esc(entry.name)}</span><span class="kind">file</span>`
+      }
+      $('entry-list').append(li)
     }
   } catch (err) {
-    $('assets-hint').textContent = err.message
+    $('browser-hint').textContent = err.message
   }
 }
 
@@ -242,14 +297,12 @@ async function pickVersion(version, li) {
 
 $('down-form').addEventListener('submit', async (e) => {
   e.preventDefault()
-  if (!state.dirUrl) {
-    $('down-note').textContent = 'Pick a version first.'
+  if (!state.repoUrl) {
+    $('down-note').textContent = 'Pick a repository first.'
     return
   }
-  const names = [...document.querySelectorAll('#asset-list input:checked')].map((b) => b.value)
-  const body = { url: state.dirUrl, dir: $('down-dir').value }
-  if (names.length > 0) body.names = names
-  $('down-note').textContent = names.length > 0 ? `${names.length} name(s) requested.` : 'No selection: the manifest.json at the version URL enumerates the download.'
+  const body = { url: dirUrl(), path: state.dirSegs.join('/'), dir: $('down-dir').value }
+  $('down-note').textContent = `Subtree ${body.path === '' ? '(repository root)' : body.path}: the server walks it and names every file explicitly.`
   try {
     const { id } = await api('/api/down', {
       method: 'POST',
@@ -267,7 +320,7 @@ function follow(id) {
   const es = new EventSource(`/api/progress/${encodeURIComponent(id)}`)
   es.onmessage = (m) => {
     const frame = JSON.parse(m.data)
-    if (frame.type === 'start') logLine(`down ${frame.url} -> ${frame.dir}`, 'dim')
+    if (frame.type === 'start') logLine(`down ${frame.url} -> ${frame.dir} (${frame.names} file(s))`, 'dim')
     if (frame.type === 'event') logEvent(frame.event)
     if (frame.type === 'end') {
       if (frame.ok) {
@@ -300,6 +353,22 @@ function logEvent(ev) {
   }
   logLine(JSON.stringify(ev))
 }
+
+// ---- startup -------------------------------------------------------------
+
+// Prefill the server the panel was started with, if any.
+// A classic script cannot use top-level await, so this runs detached.
+;(async () => {
+  try {
+    const configured = await api('/api/servers')
+    if (configured.length > 0) {
+      $('server-url').value = configured[0]
+      $('server-form').requestSubmit()
+    }
+  } catch {
+    // No configured servers (lazy mode): the form keeps its default.
+  }
+})()
 </script>
 </body>
 </html>
