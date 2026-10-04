@@ -24,10 +24,15 @@ done
 # The examples are standalone consumers pinned to the minor: a pin that
 # lags the workspace teaches a version nobody released. The rust example
 # carries the loose major.minor form, the node example the caret form.
+# Between releases the rust example may ride the workspace as a path
+# dependency instead (breaking core changes land on master first).
 minor="${ws%.*}"
 rust_pin="$(sed -n 's/^nexus-raw-core = "\(.*\)"/\1/p' examples/rust/Cargo.toml)"
+rust_path="$(sed -n 's/^nexus-raw-core = { path = .*}/path/p' examples/rust/Cargo.toml)"
 node_pin="$(sed -n 's/.*"nexus-raw": "\(.*\)".*/\1/p' examples/node/package.json)"
-if [ -z "$rust_pin" ]; then
+if [ -n "$rust_path" ]; then
+  : # the workspace build: nothing to agree with
+elif [ -z "$rust_pin" ]; then
   echo "version-check: no nexus-raw-core pin in examples/rust/Cargo.toml" >&2
   failed=1
 elif [ "$rust_pin" != "$minor" ]; then

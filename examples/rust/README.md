@@ -1,7 +1,9 @@
 # Rust example: an external consumer of `nexus-raw-core`
 
-A standalone crate that pulls the library the way an outside user would:
-from crates.io, pinned to the compatible minor (`"0.3"`).
+A standalone crate that pulls the library the way an outside user would.
+Between releases it rides the workspace as a path dependency: breaking core
+changes land on master ahead of the next publish.
+Flip to a registry version (`nexus-raw-core = "0.4"`) once it is out.
 It is deliberately outside the nexus-raw workspace.
 
 Run it:

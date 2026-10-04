@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nxr = Nxr::new(cfg, tx)?;
 
     let claim = ArtifactName::parse("manifest.json")?;
-    let up = nxr.up(&dist, None, true, Some(claim), None).await?;
+    let up = nxr.up(&dist, None, true, Some(claim)).await?;
     println!(
         "up: uploaded {}, skipped {}",
         up.uploaded, up.skipped
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = std::fs::remove_dir_all(&vendor);
     let manifest = std::fs::read(dist.join("manifest.json"))?;
     let enum_src = nexus_raw_core::Manifest::from_slice(&manifest)?;
-    let down = nxr.down(&vendor, nexus_raw_core::Enumeration::Manifest(enum_src), false, None).await?;
+    let down = nxr.down(&vendor, nexus_raw_core::Enumeration::Manifest(enum_src), false).await?;
     println!(
         "down: downloaded {}, skipped {}",
         down.downloaded, down.skipped
