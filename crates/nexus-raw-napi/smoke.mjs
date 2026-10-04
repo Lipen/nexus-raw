@@ -27,7 +27,7 @@ try {
   const events = []
   const summary = await nxr.verify(dir, { onEvent: (event) => events.push(event) })
   await flush()
-  assert.deepEqual(summary, { uploaded: 0, downloaded: 0, skipped: 1, failed: [] })
+  assert.deepEqual(summary, { uploaded: 0, downloaded: 0, skipped: 1, removed: 0, failed: [] })
   assert.equal(events.length, 1)
   assert.equal(events[0].event, 'summary')
   assert.deepEqual(events[0].failed, [])
