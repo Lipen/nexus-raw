@@ -189,6 +189,10 @@ pub(crate) async fn download_one(
     }
     let final_bytes = bytes_path(dir, name);
     if let Some(parent) = final_bytes.parent() {
+        if let Err(e) = ensure_symlink_free(parent, dir) {
+            let _ = tokio::fs::remove_file(&part).await;
+            return Err((name.clone(), Failure::Failed(e)));
+        }
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
             let _ = tokio::fs::remove_file(&part).await;
             return Err((name.clone(), Failure::Failed(Error::io(parent, e))));
@@ -262,6 +266,32 @@ fn alive(pid: u32) -> bool {
 fn alive(_pid: u32) -> bool {
     // Without /proc assume the process is alive: conservatively keep foreign temps.
     true
+}
+
+/// Every existing directory between the destination root and `parent` must be a real
+/// directory: `create_dir_all` and `rename` follow intermediate symlinks, so a planted
+/// `bom -> ~/.config` would land the artifact outside the destination.
+/// The root itself is the caller's choice and stays allowed.
+fn ensure_symlink_free(parent: &Path, root: &Path) -> Result<(), Error> {
+    let mut cur = parent.to_owned();
+    while cur.starts_with(root) && cur != root {
+        match std::fs::symlink_metadata(&cur) {
+            Ok(meta) if meta.is_symlink() => {
+                return Err(Error::io(
+                    &cur,
+                    std::io::Error::other("refusing to write through a symlinked directory"),
+                ));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(Error::io(&cur, e)),
+        }
+        cur = match cur.parent() {
+            Some(p) => p.to_owned(),
+            None => break,
+        };
+    }
+    Ok(())
 }
 
 #[cfg(test)]
