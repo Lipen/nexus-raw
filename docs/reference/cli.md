@@ -849,7 +849,15 @@ The line vocabulary:
 - `failed: name, name` after the summary, when names did not land.
 
 `-q` trims to the final summary line.
-`-v` adds plan names and transfer starts (`→ name (total)`):
+`-v` adds plan names and transfer starts, each with the size in human units (`↓ app.zip 24 B`, `↑ log.txt 1.2 KiB`).
+
+Colors are terminal-only.
+When stdout is a terminal, the human lines paint: counts bold, settled names green (skips and removals yellow), the summary green or red, `failed:` red.
+A pipe or a file gets the same lines byte-clean: no escapes, ever.
+`NO_COLOR` (any non-empty value) and `TERM=dumb` force plain lines even on a terminal.
+
+A live progress line draws on stderr while stderr is a terminal: one line, redrawn in place, carrying the settled-file counter and the freshest artifact (`↓ 2/5 files · app.zip 1.1 MiB/4.2 MiB (26%)`).
+Pipes never see it, and it is erased before the next human line prints.
 
 ```console
 $ nxr -v up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/

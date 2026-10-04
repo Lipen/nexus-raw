@@ -44,6 +44,19 @@ fn nxr(args: &[&str]) -> Output {
         .expect("nxr binary runs")
 }
 
+/// The same hermetic run with extra environment variables set on top.
+fn nxr_env(args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut cmd = Command::new(NXR);
+    cmd.args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD");
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("nxr binary runs")
+}
+
 fn code(out: &Output) -> i32 {
     out.status.code().unwrap_or(-1)
 }
@@ -1892,5 +1905,69 @@ fn seed_subtrees_cli(srv: &MockNexus) {
     srv.insert(
         "1.14.0/manifest.json",
         br#"{"schema_version":1,"version":"1.14.0","artifacts":["bom/a.zip","lib/c.bin"]}"#,
+    );
+}
+
+// ---- human render: verbose format and byte-clean pipes ----------------------
+
+/// The verbose start line names the size in human units, and a piped run stays
+/// byte-clean: no ANSI escapes, no carriage-return progress, on either stream.
+#[test]
+fn verbose_human_output_is_formatted_and_pipe_clean() {
+    let srv = server(Scenario::Atomic);
+    seed_mirror_source(&srv);
+    let dst = tempfile::tempdir().unwrap();
+
+    let out = nxr(&[
+        "-v",
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&out, 0, "the verbose download lands");
+
+    let stdout = stdout(&out);
+    assert!(
+        stdout.contains(&format!("↓ a.zip {} B", ALPHA.len())),
+        "the start line carries a human size: {stdout}"
+    );
+    assert!(stdout.contains("↓ a.zip ok"), "{stdout}");
+    assert!(
+        !stdout.contains('\x1b'),
+        "piped stdout carries no ANSI: {stdout}"
+    );
+    assert!(
+        !stderr(&out).contains('\x1b'),
+        "piped stderr carries no ANSI"
+    );
+    assert!(
+        !stderr(&out).contains('\r'),
+        "piped stderr carries no progress line"
+    );
+}
+
+/// `NO_COLOR` (any non-empty value) forces plain lines even when a terminal asks for paint.
+#[test]
+fn no_color_forces_plain_output() {
+    let srv = server(Scenario::Atomic);
+    seed_mirror_source(&srv);
+    let dst = tempfile::tempdir().unwrap();
+
+    let out = nxr_env(
+        &[
+            "down",
+            &dir_url(&srv),
+            dst.path().to_str().unwrap(),
+            "--name",
+            "a.zip",
+        ],
+        &[("NO_COLOR", "1"), ("FORCE_COLOR", "1")],
+    );
+    expect_exit(&out, 0, "the colored run lands");
+    assert!(
+        !stdout(&out).contains('\x1b'),
+        "NO_COLOR wins over FORCE_COLOR"
     );
 }
