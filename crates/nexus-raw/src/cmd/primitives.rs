@@ -8,6 +8,12 @@ use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
 
 pub(crate) async fn get(cli: &Cli, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
+    if out.is_none() && cli.json {
+        return Err(Error::Misuse(
+            "--json with stdout body would corrupt the artifact: pass -o FILE, or drop --json"
+                .to_owned(),
+        ));
+    }
     let ctx = make_ctx(cli, url)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
     let result = run_get(&ctx, url, out, cont).await;
