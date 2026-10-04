@@ -76,9 +76,7 @@ pub async fn get(
         })
     } else {
         let resp = client.get_stream(url).await?;
-        let total = resp.content_length();
-        // The contract: Started precedes the body it announces, even in stdout mode where nothing else is written.
-        client.progress().started("", Dir::Down, total).await;
+        // No progress events in stdout mode: anything the renderer prints would corrupt the body.
         let mut body = resp.bytes_stream();
         let mut stdout = tokio::io::stdout();
         let mut size: u64 = 0;
