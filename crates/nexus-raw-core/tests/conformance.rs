@@ -1941,3 +1941,30 @@ async fn channel_set_repairs_a_garbage_file() {
         Some("1.2.3")
     );
 }
+
+#[tokio::test]
+async fn put_sha_refuses_a_url_whose_marker_cannot_parse() {
+    // A marker built from an unparseable segment would land a permanently Broken
+    // object behind exit 0: the URL is refused before anything is written.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let file = local.path().join("f.txt");
+    std::fs::write(&file, CONTENT).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let trailing = format!("{}dir/", mock.base_url());
+    let err = nxr.put(&trailing, &file, true).await.unwrap_err();
+    assert_eq!(err.exit_code(), 2, "got {err:?}");
+    assert!(
+        mock.store_get("dir/.sha256").is_none(),
+        "no marker may land for an unparseable name"
+    );
+
+    // A plain URL still writes bytes and a marker as before.
+    let plain = format!("{}f.txt", mock.base_url());
+    let (size, digest) = nxr.put(&plain, &file, true).await.unwrap();
+    assert_eq!(size, CONTENT.len() as u64);
+    assert!(digest.is_some());
+    assert!(mock.store_get("f.txt.sha256").is_some());
+}

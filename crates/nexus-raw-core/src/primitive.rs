@@ -13,6 +13,7 @@ use tokio::io::AsyncWriteExt;
 use crate::error::Error;
 use crate::events::Dir;
 use crate::model::digest::{self, Digest};
+use crate::model::name::ArtifactName;
 use crate::model::sibling;
 pub use crate::transport::client::HeadInfo;
 use crate::transport::client::NexusClient;
@@ -133,7 +134,15 @@ pub async fn put(
     let d = digest::sha256_file(src).map_err(|e| Error::io(src, e))?;
     // The sibling URL is the object URL + ".sha256".
     // The marker names the object by its final path segment.
-    let marker = sibling::format_line(&last_segment(url), &d);
+    let marker_name = last_segment(url);
+    // An unparseable segment would land a permanently Broken marker behind exit 0.
+    if let Err(e) = ArtifactName::parse(&marker_name) {
+        return Err(Error::UnsafeName {
+            name: marker_name,
+            reason: format!("the final URL segment cannot carry a sha marker: {e}"),
+        });
+    }
+    let marker = sibling::format_line(&marker_name, &d);
     let sib_url = format!("{url}.sha256");
     client.put_small(&sib_url, marker.into_bytes()).await?;
     Ok((size, Some(d)))
