@@ -65,9 +65,48 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
         ),
     ));
 
+    // Proxy awareness: the names only, never the values (they can carry credentials).
+    let proxies: Vec<&str> = [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ]
+    .iter()
+    .copied()
+    .filter(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty()))
+    .collect();
+    report.push((
+        "proxy",
+        true,
+        if proxies.is_empty() {
+            "no proxy in the environment".to_owned()
+        } else {
+            format!("environment proxy: {}", proxies.join(", "))
+        },
+    ));
+
+    let mut plaintext_host: Option<String> = None;
     if let Some(url) = url {
         match normalize_base(url) {
             Ok(base) => {
+                // Credentials over plaintext http to anything but localhost is a
+                // configuration worth naming, whatever the probe answers.
+                if auth.is_some() && base.starts_with("http://") {
+                    let host = base
+                        .trim_start_matches("http://")
+                        .split(['/', ':'])
+                        .next()
+                        .unwrap_or("")
+                        .to_owned();
+                    if host != "localhost" && host != "127.0.0.1" && host != "[::1]" {
+                        plaintext_host = Some(host);
+                    }
+                }
                 let cfg = nexus_raw_core::Config {
                     base,
                     tls_insecure: cli.tls_insecure,
@@ -98,6 +137,14 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
             }
             Err(e) => report.push(("url", false, e.to_string())),
         }
+    }
+    if let Some(host) = plaintext_host {
+        warns.insert("plaintext");
+        report.push((
+            "plaintext",
+            true,
+            format!("warning: Basic credentials travel over plaintext http to {host}"),
+        ));
     }
 
     let mut failures = 0usize;
