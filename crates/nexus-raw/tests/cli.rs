@@ -672,6 +672,292 @@ fn dead_base_exit_3() {
     expect_exit(&get, 3, "connection refused is transport");
 }
 
+/// Auth403: an unauthenticated request is refused with 403 and maps onto the auth error, exit 3, like a 401.
+#[test]
+fn auth403_exit_3() {
+    let srv = server(Scenario::Auth403 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    srv.insert("file.bin", BETA);
+    let url = format!("{}file.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("file.bin");
+    let anon = nxr(&["get", "--retry", "1", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&anon, 3, "403 without credentials is an auth error");
+    assert!(stderr(&anon).contains("hint:"));
+    assert!(!target.exists());
+
+    let authed = nxr(&[
+        "-u",
+        "nexus:secret",
+        "get",
+        "--retry",
+        "1",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&authed, 0, "403 scenario with the right credentials");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// Redirect: the 301 is never followed and surfaces as the plain HTTP error, exit 3.
+#[test]
+fn redirect_exit_3() {
+    let srv = server(Scenario::Redirect {
+        location_path: "/repository/raw/moved".into(),
+    });
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        "--retry",
+        "1",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 3, "a 301 is an http error, not a redirect");
+    assert!(stderr(&down).contains("301"));
+    assert!(!dst.path().join("a.zip").exists());
+}
+
+// ---- scenario coverage ----------------------------------------------------
+
+/// rate-limit: the run spends retries on the 429s, the NDJSON stream names them, and the upload still lands with exit 0.
+#[test]
+fn rate_limit_up_retries_and_succeeds() {
+    let srv = server(Scenario::RateLimit {
+        first_429s: 1,
+        retry_after_secs: 1,
+    });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    let up = nxr(&["--json", "up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "up through the rate limiter");
+    let events = ndjson(&up);
+    assert!(
+        events
+            .iter()
+            .any(|e| e["event"] == "retrying" && e["name"] == "a.zip"),
+        "the throttled request must surface as a retrying event: {events:?}"
+    );
+    let summary = events.last().expect("summary last");
+    assert_eq!(summary["event"], "summary");
+    assert_eq!(summary["uploaded"], 1);
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
+}
+
+/// drop-connection: the reset first request is retried on the wire and the upload lands.
+#[test]
+fn drop_connection_up_recovers() {
+    let srv = server(Scenario::DropConnection);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+    // The probe was reset before anything was answered.
+    assert!(
+        srv.requests().iter().any(|r| r.outcome == Outcome::Reset),
+        "the mock must have reset the first request: {:?}",
+        srv.requests()
+    );
+    // The retry landed the whole artifact.
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
+}
+
+/// partial-put: the cut first PUT is retried and the bytes land whole, marker after bytes.
+#[test]
+fn partial_put_up_recovers() {
+    let srv = server(Scenario::PartialPut {
+        first_attempt_bytes: 4,
+    });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+    let puts = put_requests(&srv);
+    let bytes_puts = puts.iter().filter(|r| r.path == "1.14.0/a.zip").count();
+    assert!(bytes_puts >= 2, "the cut attempt must be retried: {puts:?}");
+    // The retry stored the bytes whole and the marker followed.
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
+}
+
+/// sizeless: a 200 without Content-Length is Broken, never Absent, so the complete remote object refuses the upload with exit 1.
+#[test]
+fn sizeless_up_refuses_instead_of_overwriting() {
+    let srv = server(Scenario::Sizeless);
+    srv.insert("1.14.0/a.zip", BETA);
+    srv.insert("1.14.0/a.zip.sha256", marker_line("a.zip", BETA).as_bytes());
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    let up = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 1, "an unverifiable remote is a data refusal");
+    // The remote bytes are untouched: the refusal is not an overwrite.
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(BETA));
+}
+
+/// slow: the drip never starves a healthy run, the download is byte-perfect.
+#[test]
+fn slow_down_succeeds() {
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 1,
+        chunk_size: 3,
+    });
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "down through the drip");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+}
+
+/// markerless: the remote holds bare bytes, down computes the marker from the received bytes.
+#[test]
+fn markerless_down_writes_computed_marker() {
+    let srv = server(Scenario::Markerless);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "down from a markerless remote");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert_eq!(
+        read_file(dst.path(), "a.zip.sha256"),
+        marker_line("a.zip", ALPHA).into_bytes()
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip.sha256"), None);
+}
+
+/// cut-body: the first GET breaks mid-body, the client retries through the part and the file lands byte-perfect.
+#[test]
+fn cut_body_down_completes_through_the_part() {
+    let srv = server(Scenario::CutBody {
+        after_bytes: 4,
+        fake_length: false,
+    });
+    srv.insert("1.14.0/a.zip", ALPHA);
+    // A complete remote (bytes plus sibling) is what makes the resume legal: without a sibling the download restarts from zero by design.
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        marker_line("a.zip", ALPHA).as_bytes(),
+    );
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "down through a mid-body cut");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert!(
+        srv.requests()
+            .iter()
+            .any(|r| r.outcome == Outcome::Status(206)),
+        "the retry must resume with Range: {:?}",
+        srv.requests()
+    );
+}
+
+/// flaky: one invocation absorbs the first 503s per path and lands the upload.
+#[test]
+fn flaky_up_recovers_in_one_invocation() {
+    let srv = server(Scenario::Flaky { first_failures: 1 });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "up through flaky",
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
+}
+
+/// doc-drift: the drifted version document is an ordinary name, down fetches the ghost bytes as they come.
+#[test]
+fn doc_drift_down_takes_the_drifted_document() {
+    let srv = server(Scenario::DocDrift);
+    srv.insert(
+        "1.14.0/version.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["real.zip"]}"#,
+    );
+    srv.enable_drift();
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "version.json",
+    ]);
+    expect_exit(&down, 0, "down of a drifted document");
+    assert_eq!(
+        read_file(dst.path(), "version.json"),
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["ghost.zip"]}"#.to_vec()
+    );
+}
+
+/// foreign-marker: the stored digest names a foreign object, the digest check refuses with exit 1 and drops the part.
+#[test]
+fn foreign_marker_down_refuses() {
+    let srv = server(Scenario::ForeignMarker);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}  a.zip\n", "0".repeat(64)).as_bytes(),
+    );
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 1, "a foreign digest is a data refusal");
+    assert!(
+        !dst.path().join("a.zip").exists(),
+        "the refused download must not land"
+    );
+    assert!(
+        !dst.path().join("a.zip.part").exists(),
+        "the part is dropped on a mismatch"
+    );
+}
+
 // ---- NDJSON ---------------------------------------------------------------
 
 /// --json on up and down: stdout is pure NDJSON with plan, artifact and a final summary carrying the counters.
@@ -778,9 +1064,45 @@ fn golden_ndjson_mirror_holds() {
     );
 }
 
+/// The retry surface is part of the same contract: a rate-limited up pins the `retrying` event, name, attempt and reason included.
+/// The reason carries the request URL, so the test masks the ephemeral port with `PORT` before comparing; the fixture is otherwise byte-exact.
+#[test]
+fn golden_ndjson_retrying_holds() {
+    let srv = server(Scenario::RateLimit {
+        first_429s: 1,
+        retry_after_secs: 1,
+    });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    let up = nxr(&["--json", "up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "golden retrying");
+    let port = srv.addr().port().to_string();
+    let normalized = stdout(&up).replace(&port, "PORT");
+    assert_eq!(
+        normalized,
+        include_str!("golden/retrying.ndjson"),
+        "the retrying ndjson changed: update tests/golden/retrying.ndjson deliberately"
+    );
+}
+
 /// doctor --json is the same contract for the check-report shape.
 #[test]
 fn golden_ndjson_doctor_holds() {
+    // The proxy row names the environment: the fixture pins the no-proxy shape.
+    for v in [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ] {
+        std::env::remove_var(v);
+    }
     let out = nxr(&["--json", "-u", "someone:hunter2", "doctor"]);
     expect_exit(&out, 0, "golden doctor");
     assert_eq!(
@@ -792,7 +1114,7 @@ fn golden_ndjson_doctor_holds() {
 
 // ---- doctor ---------------------------------------------------------------
 
-/// A failing `up --json` still drains the event channel: stdout stays complete NDJSON — plan, artifact lines — and the last line is the Summary event naming both failures.
+/// A failing `up --json` still drains the event channel: stdout stays complete NDJSON (plan, artifact lines) and the last line is the Summary event naming both failures.
 ///
 /// The drain is a race, so one green run proves nothing: the invocation repeats five times.
 ///
@@ -916,7 +1238,7 @@ fn doctor_exit_codes() {
     assert!(stderr(&broken).contains("hint:"));
 }
 
-/// doctor --json: one NDJSON line per check, names and booleans only — no secret ever appears in the detail field.
+/// doctor --json: one NDJSON line per check, names and booleans only, no secret ever appears in the detail field.
 /// Missing credentials carry `ok: true` plus the additive `warn` field.
 #[test]
 fn doctor_json_lines() {
@@ -1245,4 +1567,59 @@ fn point_clear_roundtrip_and_readonly() {
         stderr(&refused)
     );
     assert!(ro.store_get("stable").is_some(), "the pointer must survive");
+}
+
+// ---- dry-run plans ---------------------------------------------------------
+
+/// `down --dry-run` prints the plan and writes nothing into the target directory.
+#[test]
+fn down_dry_run_prints_plan_without_writing() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}  a.zip\n", hex_digest(ALPHA)).as_bytes(),
+    );
+    let dst = TempDir::new().unwrap();
+    let plan = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+        "--dry-run",
+    ]);
+    expect_exit(&plan, 0, "down --dry-run");
+    assert!(
+        stdout(&plan).contains("download a.zip"),
+        "got: {}",
+        stdout(&plan)
+    );
+    assert!(
+        !dst.path().join("a.zip").exists(),
+        "a dry run writes nothing"
+    );
+}
+
+/// `mirror --dry-run` probes both sides and prints the plan, the destination stays empty.
+#[test]
+fn mirror_dry_run_prints_plan_without_writing() {
+    let src = server(Scenario::Atomic);
+    src.insert("1.14.0/a.zip", ALPHA);
+    src.insert(
+        "1.14.0/manifest.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#,
+    );
+    let dst = server(Scenario::Atomic);
+    let plan = nxr(&["mirror", &dir_url(&src), &dir_url(&dst), "--dry-run"]);
+    expect_exit(&plan, 0, "mirror --dry-run");
+    assert!(
+        stdout(&plan).contains("copy a.zip"),
+        "got: {}",
+        stdout(&plan)
+    );
+    assert!(
+        dst.store_get("1.14.0/a.zip").is_none(),
+        "a dry run writes nothing to the destination"
+    );
 }
