@@ -1,5 +1,5 @@
 // Hand-maintained declarations for the nexus-raw Node bindings.
-// They must stay in sync with `crates/nexus-raw-napi/src/lib.rs`;
+// They must stay in sync with the item definitions under `crates/nexus-raw-napi/src/`;
 // `binding.d.ts` next to this file is the mechanically generated surface.
 //
 // Every command is one self-sufficient call, like the `nxr` CLI: the base URL
