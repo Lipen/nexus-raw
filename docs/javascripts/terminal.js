@@ -86,6 +86,21 @@
     body.append(cursor);
 
     frame.replaceChildren(bar, body);
+
+    /* The window is as tall as the finished recording from its first frame: the
+     * swap from the picture moves nothing, and nothing below the terminal jumps
+     * while the session plays. Measured, not computed: wrapped lines and the
+     * exact em arithmetic live in CSS. In em, so a resize keeps the frame's
+     * proportion, like the picture does. */
+    for (const node of nodes) node.hidden = false;
+    cursor.hidden = true;
+    body.style.visibility = "hidden";
+    const full = body.scrollHeight;
+    body.style.visibility = "";
+    for (const node of nodes) node.hidden = true;
+    const fontPx = Number.parseFloat(getComputedStyle(body).fontSize) || 1;
+    body.style.height = `${(full / fontPx).toFixed(3)}em`;
+
     frame.dataset.ready = "true";
 
     if (reducedMotion.matches) {
