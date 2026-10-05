@@ -50,6 +50,7 @@ nav:
       - When it breaks: how-to/troubleshoot.md
   - Reference:
       - reference/cli.md
+      - reference/tui.md
       - Wire protocol: reference/protocol.md
       - Errors and exit codes: reference/errors.md
       - Rust API: reference/api.md

@@ -100,6 +100,17 @@ Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.
 `--json` emits one JSON object per line on stdout.
 
+## Terminal browser
+
+`nxr-tui` browses a raw repository in the terminal: one tab per server, the repository tree at any depth, subtree downloads, a live filter and server presets.
+
+```bash
+cargo install nxr-tui
+nxr-tui https://nexus.example.com/     # or with no arguments: the config presets
+```
+
+Keys, the config file and the headless smoke mode: [the TUI reference](docs/reference/tui.md).
+
 ## Credentials
 
 Sources, in checked order: `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.

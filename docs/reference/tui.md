@@ -1,0 +1,153 @@
+# TUI reference
+
+`nxr-tui` is a terminal browser over Nexus raw repositories.
+It lists the repositories of a server, opens any raw repository as a tree at full depth, downloads entries and subtrees, and keeps one tab per server.
+The same core drives it as the `nxr` CLI: the listings go through the search API, the downloads through the verified `down` pipeline.
+
+Every invocation is self-sufficient in the `nxr` sense: credentials come from `-u` or the environment, never from the config file.
+What the config file adds is presets: named servers the TUI can open directly, and download defaults.
+
+The bootstrap validates everything before the terminal switches to the alternate screen.
+Every configured server must answer `service_repos`, and the repository lists are the first screen, already populated.
+A failure prints `error:` plus its `hint:` and exits with the core exit code: 0 ok, 1 data, 2 misuse, 3 transport.
+The TUI never opens on unknown ground.
+
+## Servers, tabs and presets
+
+Three ways to say which servers open:
+
+| Invocation | Opens |
+|:-----------|:------|
+| `nxr-tui http://host:8081/` | that server, the tab named after the host |
+| `nxr-tui --server main --server backup` | the named presets of the config, one tab each |
+| `nxr-tui` | every preset of the config file |
+
+Positional URLs and `--server` presets compose: both open, in that order.
+An unknown preset name is a usage error (exit 2) that names the known presets.
+
+Inside the TUI, `s` opens the servers overlay: every server the session knows, with the open ones marked.
+`enter` focuses the tab of the selected server or connects a new one in the background; `a` opens the add form.
+A successfully added server joins the config as a preset under a fresh unique name (`host`, `host-2`, ...), so the next `nxr-tui` without arguments opens it too.
+`tab`/`backtab` and `1`-`9` switch tabs; every tab keeps its own screen, cursor and filter.
+
+The overlay works against a refusing server the same way the CLI does: the error lands in the status bar with its hint, the form keeps the typed URL, nothing closes.
+
+## Keys
+
+| Key | Does |
+|:----|:-----|
+| `up`/`down`, `k`/`j` | move the selection |
+| `pgup`/`pgdown` | move by page |
+| `home`/`end`, `g`/`G` | first/last row |
+| `enter` | open a folder or repository, download a file |
+| `d` | download the selected entry: a folder downloads its subtree |
+| `D` | download the whole current directory |
+| `r` | refresh the current listing |
+| `i` | info on the selected entry: HEAD size for files, the listing count for folders |
+| `/` | filter the tree: type to narrow, enter keeps, esc clears |
+| `tab`/`backtab`, `1`-`9` | switch server tabs |
+| `s` | servers overlay, `a` opens the add form |
+| `?` | keybindings overlay |
+| `esc`/`backspace` | up one level, then back to the repositories |
+| `q`/`ctrl-c` | quit; twice while a download runs |
+| mouse | wheel scrolls, click selects, double click opens |
+
+Only `format == "raw"` repositories are enterable.
+Repositories of other formats stay visible, dimmed, with the format as a badge such as `[maven2]`, and `enter` only prints a status hint.
+`--all-formats` lifts the filter.
+The derived `.sha256` siblings stay hidden, exactly as in `nxr ls`.
+
+## Config
+
+The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`; `--config` overrides both.
+A missing file is the default config, so the TUI works with nothing on disk.
+`nxr-tui --init-config` writes a commented template and refuses to overwrite an existing one.
+
+```toml
+version = 1
+
+[download]
+# Where downloads land, relative to the working directory of nxr-tui.
+dir = "nxr-tui-downloads"
+
+[tui]
+# Let repositories of every format be opened, not only raw.
+all_formats = false
+
+[[server]]
+name = "main"
+url = "http://127.0.0.1:8081/"
+```
+
+| Key | Default | Meaning |
+|:----|:--------|:--------|
+| `version` | `1` | the format version, for future migrations |
+| `download.dir` | `nxr-tui-downloads` | where downloads land, relative to the working directory |
+| `tui.all_formats` | `false` | let repositories of every format be opened |
+| `server` (list) | none | the presets: `name` for the tab and `--server`, `url` for the server root |
+
+Passwords never live in the config.
+Credentials come from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order, and apply to every server of the session.
+Values never appear in logs or on screen.
+
+## Downloads
+
+A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
+For a file entry the plan is that one name; for a folder entry (`d` on a folder, `D` on the current directory) the TUI walks the subtree with `ls_entries()` recursively and downloads the whole set in one transfer.
+The plan count is shown before the transfer starts.
+
+Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
+A panel shows the plan, the files in flight with byte progress and the final summary, and stays until the next download replaces it.
+Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.
+
+## Headless smoke mode
+
+`--smoke` runs the browse-and-download flow without the terminal and prints what it sees:
+
+```console
+$ nxr-tui --smoke http://127.0.0.1:8081/
+server http://127.0.0.1:8081/
+  raw-main     raw     hosted
+tree of raw-main:
+  app/
+  docs/
+  README.txt
+level 1: app/
+    core/
+    readme.txt
+plan: 3 files -> nxr-tui-smoke/raw-main (subtree app)
+diff: 3 to download, 0 already complete
+  done app/core/util/helpers.py
+  done app/core/lib.rs
+  done app/readme.txt
+summary: downloaded 3, skipped 0, failed 0
+smoke ok: 3 complete under nxr-tui-smoke/raw-main
+$ echo $?
+0
+```
+
+It lists the repositories of every server, walks the tree of the first hosted raw repository two levels deep, downloads the subtree of the first root folder and prints the summary.
+The exit code follows `Error::exit_code()`.
+CI uses the same mode: `cargo test -p nxr-tui` drives the real binary against `mock-nexus`, including a run driven entirely by a config preset.
+
+## Flags
+
+| Flag | Meaning |
+|:-----|:--------|
+| `BASE_URL...` | server root URLs to open (positional, repeatable) |
+| `-s, --server <NAME>` | open the named config preset (repeatable) |
+| `-u, --user <USER:PASS>` | credentials, curl style; env fallback as in `nxr` |
+| `-a, --all-formats` | let repositories of every format be opened, not only raw |
+| `--smoke` | the headless browse-and-download flow |
+| `--config <PATH>` | alternative config file path |
+| `--init-config` | write the commented template to the config path and exit |
+
+## Limitations
+
+- One credential set per session: `-u` or the environment applies to every server.
+- The search page cap of the core (100 pages) bounds every listing; a repository with more files needs the manifest enumeration path instead, which the TUI does not expose.
+- A group repository passes the raw filter, but the search API it needs may refuse on the server, which the status bar shows as an error with its hint.
+- TLS verification is always on; there is no `--insecure` flag.
+- The tree listing is best-effort: the search API must exist on the server.
+
+Embedding the same operations without a terminal: [the API](api.md), [the CLI](cli.md).

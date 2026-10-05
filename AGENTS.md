@@ -1,6 +1,6 @@
 # Working in nexus-raw
 
-This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, and the `mock-nexus` failure-scenario server that the conformance tests run against.
+This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, the `nxr-tui` terminal browser, and the `mock-nexus` failure-scenario server that the conformance tests run against.
 `nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, no config file, no profiles.
 [README.md](README.md) is the user-facing entry.
 The protocol summary lives in the `crates/nexus-raw-core/src/protocol.md` crate docs.
@@ -44,6 +44,7 @@ The canonical protocol text is kept outside this repository.
 | the wire protocol, store shape, errors, forbiddances|`crates/nexus-raw-core/src/protocol.md` (the crate docs)|
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
 | CLI flags, credentials order, output examples | [README.md](README.md) |
+| the TUI (keys, config, presets, smoke) | `crates/nxr-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
@@ -79,6 +80,7 @@ New fields are additive.
 |`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
+| `crates/nxr-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just example-rust` |
 
 ## Commits
