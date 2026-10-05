@@ -34,6 +34,11 @@ dir = \"nxr-tui-downloads\"
 [tui]
 # Let repositories of every format be opened, not only raw.
 all_formats = false
+# Left/right navigation in the tree:
+#   \"enter\"  - right enters a folder, left goes back up;
+#   \"expand\" - right expands a folder inline, left collapses it or jumps to the parent.
+# Toggled inside the TUI with `e`.
+nav = \"enter\"
 
 # Every server is a preset: open it with `nxr-tui --server <name>`,
 # or with no arguments at all. The `s` overlay inside the TUI adds one here.
@@ -98,12 +103,46 @@ impl Default for DownloadCfg {
     }
 }
 
+/// How left/right arrows navigate the tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Nav {
+    /// Right enters a folder, left goes back up (the current listing only).
+    #[default]
+    Enter,
+    /// Right expands a folder inline, left collapses it or jumps to the parent.
+    Expand,
+}
+
+impl Nav {
+    /// The other mode.
+    #[must_use]
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Enter => Self::Expand,
+            Self::Expand => Self::Enter,
+        }
+    }
+
+    /// The short label for the status line.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Enter => "enter",
+            Self::Expand => "expand",
+        }
+    }
+}
+
 /// TUI behavior switches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct TuiCfg {
     /// Let repositories of every format be opened, not only raw.
     #[serde(default)]
     pub all_formats: bool,
+    /// The left/right navigation mode.
+    #[serde(default)]
+    pub nav: Nav,
 }
 
 /// The whole config file.
@@ -251,6 +290,7 @@ mod tests {
         assert_eq!(cfg.version, 1);
         assert_eq!(cfg.download.dir, PathBuf::from("nxr-tui-downloads"));
         assert!(!cfg.tui.all_formats);
+        assert_eq!(cfg.tui.nav, Nav::Enter);
         assert_eq!(cfg.servers.len(), 1);
         assert_eq!(cfg.servers[0].name, "main");
         assert_eq!(cfg.servers[0].url, "http://127.0.0.1:8081/");

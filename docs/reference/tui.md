@@ -39,7 +39,9 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `up`/`down`, `k`/`j` | move the selection |
 | `pgup`/`pgdown` | move by page |
 | `home`/`end`, `g`/`G` | first/last row |
-| `enter` | open a folder or repository, download a file |
+| `right`, `enter` | open a folder or repository, download a file |
+| `left`, `esc`/`backspace` | up one level, then back to the repositories |
+| `e` | toggle the tree navigation mode (see below) |
 | `d` | download the selected entry: a folder downloads its subtree |
 | `D` | download the whole current directory |
 | `r` | refresh the current listing |
@@ -48,9 +50,15 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay, `a` opens the add form |
 | `?` | keybindings overlay |
-| `esc`/`backspace` | up one level, then back to the repositories |
 | `q`/`ctrl-c` | quit; twice while a download runs |
 | mouse | wheel scrolls, click selects, double click opens |
+
+## Tree modes
+
+`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`); the choice is saved to the config file.
+
+- `nav enter` (default): `right` enters a folder, `left` goes back up.
+- `nav expand`: `right` expands a folder inline (`▸`/`▾` markers, indented children, loading folders show `…`), `left` collapses it or jumps to the parent row. `enter` keeps entering folders, and the expansion folds on descend, on refresh and on the mode switch.
 
 Only `format == "raw"` repositories are enterable.
 Repositories of other formats stay visible, dimmed, with the format as a badge such as `[maven2]`, and `enter` only prints a status hint.
@@ -73,6 +81,8 @@ dir = "nxr-tui-downloads"
 [tui]
 # Let repositories of every format be opened, not only raw.
 all_formats = false
+# Left/right navigation in the tree: "enter" or "expand" (toggled with `e`).
+nav = "enter"
 
 [[server]]
 name = "main"
@@ -84,6 +94,7 @@ url = "http://127.0.0.1:8081/"
 | `version` | `1` | the format version, for future migrations |
 | `download.dir` | `nxr-tui-downloads` | where downloads land, relative to the working directory |
 | `tui.all_formats` | `false` | let repositories of every format be opened |
+| `tui.nav` | `enter` | the left/right navigation mode: `enter` or `expand` |
 | `server` (list) | none | the presets: `name` for the tab and `--server`, `url` for the server root |
 
 Passwords never live in the config.

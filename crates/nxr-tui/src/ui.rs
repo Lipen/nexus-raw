@@ -109,7 +109,8 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
             (title, tab.repos_cursor, items)
         }
         Screen::Tree => {
-            let idx = tab.filter_idx();
+            let rows = tab.rows();
+            let idx = tab.row_idx();
             let shown = idx.len();
             let filtered = tab
                 .filter
@@ -123,17 +124,12 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
                     tab.breadcrumb()
                 },
                 shown,
-                tab.entries.len()
+                rows.len()
             );
             let items = idx
                 .into_iter()
-                .filter_map(|i| tab.entries.get(i))
-                .map(|entry| {
-                    ListItem::new(match entry.kind {
-                        EntryKind::Dir => format!("{}/", entry.name),
-                        EntryKind::File => entry.name.clone(),
-                    })
-                })
+                .filter_map(|i| rows.get(i))
+                .map(|row| ListItem::new(tree_line(row)))
                 .collect();
             (title, tab.tree_cursor, items)
         }
@@ -152,6 +148,25 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(selected())
         .highlight_symbol("> ");
     f.render_stateful_widget(list, area, &mut app.list_state);
+}
+
+/// One tree row: indentation, the expand marker for folders, then the name.
+fn tree_line(row: &crate::app::Row) -> String {
+    let indent = "  ".repeat(row.depth);
+    match row.kind {
+        EntryKind::Dir => format!(
+            "{indent}{} {}/",
+            if row.loading {
+                "…"
+            } else if row.expanded {
+                "▾"
+            } else {
+                "▸"
+            },
+            row.name
+        ),
+        EntryKind::File => format!("{indent}  {}", row.name),
+    }
 }
 
 /// One repository row: name, then the format and kind.
@@ -273,12 +288,13 @@ fn self_status(app: &App) -> String {
     };
     let (cursor, len) = match tab.screen {
         Screen::Repos => (tab.repos_cursor, tab.repos.len()),
-        Screen::Tree => (tab.tree_cursor, tab.filter_idx().len()),
+        Screen::Tree => (tab.tree_cursor, tab.row_idx().len()),
     };
     format!(
-        "tab {}/{} · {} · {}/{}",
+        "tab {}/{} · nav {} · {} · {}/{}",
         app.tab + 1,
         app.tabs.len(),
+        app.nav.label(),
         tab.server.name,
         if len == 0 { 0 } else { cursor + 1 },
         len
@@ -288,47 +304,57 @@ fn self_status(app: &App) -> String {
 fn draw_overlay(f: &mut Frame, app: &mut App, area: Rect) {
     match app.mode.clone() {
         Mode::Normal => {}
-        Mode::Help => help_overlay(f, area),
+        Mode::Help => help_overlay(f, app, area),
         Mode::Servers => servers_overlay(f, app, area),
         Mode::AddServer(buffer) => add_server_overlay(f, &buffer, area),
     }
 }
 
-fn help_overlay(f: &mut Frame, area: Rect) {
-    const LINES: &[&str] = &[
-        "navigation",
-        "  up/down, k/j      move the selection",
-        "  pgup/pgdown       move by page",
-        "  home/end, g/G     jump to the first/last row",
-        "  tab / backtab     next/previous server tab",
-        "  1-9               jump to the n-th tab",
-        "  esc, backspace    up one level, then back to repositories",
-        "",
-        "actions",
-        "  enter             open a folder or repository, download a file",
-        "  d                 download the selected entry (folder: subtree)",
-        "  D                 download the whole current directory",
-        "  note              one download at a time; browsing never waits",
-        "  r                 refresh the current listing",
-        "  i                 info on the selected entry (HEAD size)",
-        "  /                 filter the tree: type to narrow, esc clears",
-        "  s                 servers: switch or add, the add saves a preset",
-        "  a                 (in servers) open the add-server form",
-        "  ?                 this help",
-        "  q, ctrl-c         quit (twice while a download runs)",
-        "",
-        "mouse: wheel scrolls, click selects, double click opens",
+fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
+    let config = app.config_path.as_ref().map_or_else(
+        || "config: none yet (--init-config writes one)".to_owned(),
+        |p| format!("config: {}", p.display()),
+    );
+    let lines: Vec<String> = vec![
+        "navigation".to_owned(),
+        "  up/down, k/j      move the selection".to_owned(),
+        "  pgup/pgdown       move by page".to_owned(),
+        "  home/end, g/G     jump to the first/last row".to_owned(),
+        "  tab / backtab     next/previous server tab".to_owned(),
+        "  1-9               jump to the n-th tab".to_owned(),
+        "  esc, backspace    up one level, then back to repositories".to_owned(),
+        String::new(),
+        "tree modes (e toggles, shown in the status line)".to_owned(),
+        "  nav enter         right enters a folder, left goes back up".to_owned(),
+        "  nav expand        right expands a folder inline, left collapses".to_owned(),
+        "                    it or jumps to the parent row".to_owned(),
+        String::new(),
+        "actions".to_owned(),
+        "  enter             open a folder or repository, download a file".to_owned(),
+        "  d                 download the selected entry (folder: subtree)".to_owned(),
+        "  D                 download the whole current directory".to_owned(),
+        "  note              one download at a time; browsing never waits".to_owned(),
+        "  r                 refresh the current listing (expansions fold)".to_owned(),
+        "  i                 info on the selected entry (HEAD size)".to_owned(),
+        "  /                 filter the tree: type to narrow, esc clears".to_owned(),
+        "  s                 servers: switch or add, the add saves a preset".to_owned(),
+        "  a                 (in servers) open the add-server form".to_owned(),
+        "  ?                 this help".to_owned(),
+        "  q, ctrl-c         quit (twice while a download runs)".to_owned(),
+        String::new(),
+        "mouse: wheel scrolls, click selects, double click opens".to_owned(),
+        config,
     ];
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" nxr-tui keys ");
     let inner = block.inner(area);
     let w = inner.width.min(74);
-    let h = (LINES.len() as u16 + 2).min(inner.height);
+    let h = (lines.len() as u16 + 2).min(inner.height);
     let popup = centered(area, w, h);
     f.render_widget(Clear, popup);
     f.render_widget(
-        Paragraph::new(LINES.iter().map(|l| Line::from(*l)).collect::<Vec<_>>())
+        Paragraph::new(lines.into_iter().map(Line::from).collect::<Vec<_>>())
             .block(block)
             .wrap(Wrap { trim: false }),
         popup,

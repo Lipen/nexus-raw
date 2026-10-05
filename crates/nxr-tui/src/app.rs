@@ -5,7 +5,7 @@
 //! [`Msg`] values: key presses, mouse events, listing results and download
 //! progress. Rendering lives in [`crate::ui`], the terminal loop in [`crate::tui`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use tokio::sync::mpsc;
 
-use crate::config::{self, ConfigFile, ServerCfg};
+use crate::config::{self, ConfigFile, Nav, ServerCfg};
 use crate::net;
 
 /// A double click is two clicks on the same row within this window.
@@ -48,6 +48,13 @@ pub struct Tab {
     pub path: Vec<String>,
     /// The child list of the current tree position.
     pub entries: Vec<Entry>,
+    /// Cached children of expanded folders, keyed by their path below the
+    /// current tree position.
+    pub expanded: BTreeMap<String, Vec<Entry>>,
+    /// The folders currently expanded inline.
+    pub open: BTreeSet<String>,
+    /// Expansion loads in flight, keyed by folder path.
+    pub loading_dirs: BTreeSet<String>,
     /// Cursor on the tree screen, indexing the filtered list.
     pub tree_cursor: usize,
     /// The live filter, set with `/`. `Some("")` filters nothing but stays active.
@@ -55,6 +62,24 @@ pub struct Tab {
     /// Request generation of this tab: results of an older generation are dropped.
     pub gen: u64,
     /// True while a listing of the current position is in flight.
+    pub loading: bool,
+}
+
+/// One row of the expandable tree: an entry of the current listing, or of an
+/// expanded folder's cached children.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    /// The entry name.
+    pub name: String,
+    /// The path below the current tree position (`app`, `app/core`).
+    pub rel: String,
+    /// Folder or file.
+    pub kind: EntryKind,
+    /// Indentation depth: 0 for the current listing.
+    pub depth: usize,
+    /// Whether this folder is expanded inline.
+    pub expanded: bool,
+    /// Whether this folder's children are loading.
     pub loading: bool,
 }
 
@@ -70,11 +95,88 @@ impl Tab {
             repo: None,
             path: Vec::new(),
             entries: Vec::new(),
+            expanded: BTreeMap::new(),
+            open: BTreeSet::new(),
+            loading_dirs: BTreeSet::new(),
             tree_cursor: 0,
             filter: None,
             gen: 0,
             loading: false,
         }
+    }
+
+    /// Drops the inline expansion state: the tree folds back to the current listing.
+    pub fn clear_expansion(&mut self) {
+        self.expanded.clear();
+        self.open.clear();
+        self.loading_dirs.clear();
+    }
+
+    /// The flattened tree rows: depth 0 is the current listing, deeper rows
+    /// come from expanded folders' cached children, in listing order.
+    #[must_use]
+    pub fn rows(&self) -> Vec<Row> {
+        let mut out = Vec::new();
+        self.collect_rows("", 0, &mut out);
+        out
+    }
+
+    fn collect_rows(&self, dir_rel: &str, depth: usize, out: &mut Vec<Row>) {
+        let children = if dir_rel.is_empty() {
+            &self.entries
+        } else {
+            match self.expanded.get(dir_rel) {
+                Some(children) => children,
+                None => return,
+            }
+        };
+        for entry in children {
+            let rel = if dir_rel.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{dir_rel}/{}", entry.name)
+            };
+            let expanded = entry.kind == EntryKind::Dir && self.open.contains(&rel);
+            let loading = entry.kind == EntryKind::Dir && self.loading_dirs.contains(&rel);
+            let row = Row {
+                name: entry.name.clone(),
+                rel: rel.clone(),
+                kind: entry.kind,
+                depth,
+                expanded,
+                loading,
+            };
+            let expand_into = expanded;
+            out.push(row);
+            if expand_into {
+                self.collect_rows(&rel, depth + 1, out);
+            }
+        }
+    }
+
+    /// The indices of the rows the filter lets through, in listing order.
+    #[must_use]
+    pub fn row_idx(&self) -> Vec<usize> {
+        match &self.filter {
+            None => (0..self.rows().len()).collect(),
+            Some(f) => {
+                let needle = f.to_lowercase();
+                self.rows()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, r)| r.name.to_lowercase().contains(&needle))
+                    .map(|(i, _)| i)
+                    .collect()
+            }
+        }
+    }
+
+    /// The selected tree row, through the filter.
+    #[must_use]
+    pub fn selected_row(&self) -> Option<Row> {
+        let idx = self.row_idx();
+        let at = *idx.get(self.tree_cursor)?;
+        self.rows().into_iter().nth(at)
     }
 
     /// Whether this repository can be opened: raw, unless the filter was lifted.
@@ -83,36 +185,12 @@ impl Tab {
         all_formats || repo.format == "raw"
     }
 
-    /// The indices of the entries the filter lets through, in listing order.
-    #[must_use]
-    pub fn filter_idx(&self) -> Vec<usize> {
-        match &self.filter {
-            None => (0..self.entries.len()).collect(),
-            Some(f) => {
-                let needle = f.to_lowercase();
-                self.entries
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, e)| e.name.to_lowercase().contains(&needle))
-                    .map(|(i, _)| i)
-                    .collect()
-            }
-        }
-    }
-
-    /// The selected entry of the tree screen, through the filter.
-    #[must_use]
-    pub fn selected(&self) -> Option<&Entry> {
-        let idx = self.filter_idx();
-        self.entries.get(*idx.get(self.tree_cursor)?)
-    }
-
     /// The length of the visible list of the active screen.
     #[must_use]
     pub fn visible_len(&self) -> usize {
         match self.screen {
             Screen::Repos => self.repos.len(),
-            Screen::Tree => self.filter_idx().len(),
+            Screen::Tree => self.row_idx().len(),
         }
     }
 
@@ -139,15 +217,6 @@ impl Tab {
         }
         segs.extend(self.path.iter().cloned());
         segs.join(" / ")
-    }
-}
-
-/// `app/core` + `lib.rs` → `app/core/lib.rs`.
-fn rel_of(path: &[String], name: &str) -> String {
-    if path.is_empty() {
-        name.to_owned()
-    } else {
-        format!("{}/{}", path.join("/"), name)
     }
 }
 
@@ -255,6 +324,13 @@ pub enum Msg {
         gen: u64,
         res: Result<Vec<Entry>, Error>,
     },
+    /// The children of one folder expanded inline.
+    Expand {
+        tab: usize,
+        gen: u64,
+        dir_rel: String,
+        res: Result<Vec<Entry>, Error>,
+    },
     /// The file walk behind a download request.
     Walk {
         tab: usize,
@@ -280,6 +356,8 @@ pub struct App {
     pub auth: Option<String>,
     /// Repositories of every format may be opened, not only raw.
     pub all_formats: bool,
+    /// The left/right navigation mode of the tree.
+    pub nav: Nav,
     /// Where downloads land, from the config.
     pub download_dir: PathBuf,
     /// The live config: presets added in the `s` overlay are saved here.
@@ -336,10 +414,12 @@ impl App {
         auth: Option<String>,
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Self {
+        let nav = config.tui.nav;
         Self {
             servers,
             auth,
             all_formats,
+            nav,
             download_dir,
             config,
             config_path,
@@ -391,6 +471,15 @@ impl App {
                 self.pending = self.pending.saturating_sub(1);
                 self.on_entries(tab, gen, res);
             }
+            Msg::Expand {
+                tab,
+                gen,
+                dir_rel,
+                res,
+            } => {
+                self.pending = self.pending.saturating_sub(1);
+                self.on_expand(tab, gen, dir_rel, res);
+            }
             Msg::Walk { tab, gen, res } => {
                 self.pending = self.pending.saturating_sub(1);
                 self.on_walk(tab, gen, res);
@@ -438,6 +527,8 @@ impl App {
             KeyCode::Char('q') if key.modifiers.is_empty() => self.request_quit(),
             KeyCode::Up => self.move_cursor(-1),
             KeyCode::Down => self.move_cursor(1),
+            KeyCode::Left => self.on_left(),
+            KeyCode::Right => self.on_right(),
             KeyCode::Char('k') if key.modifiers.is_empty() => self.move_cursor(-1),
             KeyCode::Char('j') if key.modifiers.is_empty() => self.move_cursor(1),
             KeyCode::PageUp => self.move_page(-1),
@@ -449,6 +540,7 @@ impl App {
             KeyCode::Char('d') if key.modifiers.is_empty() => self.request_download_entry(),
             KeyCode::Char('D') if key.modifiers.is_empty() => self.request_download_dir(),
             KeyCode::Char('r') if key.modifiers.is_empty() => self.refresh(),
+            KeyCode::Char('e') if key.modifiers.is_empty() => self.toggle_nav(),
             KeyCode::Char('i') if key.modifiers.is_empty() => self.request_info(),
             KeyCode::Char('s') if key.modifiers.is_empty() => self.open_servers_overlay(),
             KeyCode::Char('?') if key.modifiers.is_empty() => self.mode = Mode::Help,
@@ -479,8 +571,8 @@ impl App {
                 self.status = hint_tree();
             }
             KeyCode::Enter => {
-                let shown = t.filter_idx().len();
-                let total = t.entries.len();
+                let shown = t.row_idx().len();
+                let total = t.rows().len();
                 self.status = format!("filter kept: {shown} of {total}");
             }
             KeyCode::Backspace => {
@@ -499,8 +591,8 @@ impl App {
         self.status = match &t.filter {
             Some(f) => format!(
                 "filter {f:?}: {} of {} shown",
-                t.filter_idx().len(),
-                t.entries.len()
+                t.row_idx().len(),
+                t.rows().len()
             ),
             None => hint_tree(),
         };
@@ -657,7 +749,7 @@ impl App {
             return;
         };
         let repos = t.repos.len();
-        let entries = t.filter_idx().len();
+        let entries = t.row_idx().len();
         t.repos_cursor = t.repos_cursor.min(repos.saturating_sub(1));
         t.tree_cursor = t.tree_cursor.min(entries.saturating_sub(1));
     }
@@ -721,11 +813,11 @@ impl App {
         match t.screen {
             Screen::Repos => self.open_repo(),
             Screen::Tree => {
-                let Some(entry) = t.selected().cloned() else {
+                let Some(row) = t.selected_row() else {
                     return;
                 };
-                match entry.kind {
-                    EntryKind::Dir => self.descend(entry.name),
+                match row.kind {
+                    EntryKind::Dir => self.descend(row.name),
                     EntryKind::File => self.request_download_entry(),
                 }
             }
@@ -749,6 +841,7 @@ impl App {
         t.repo = Some(row.clone());
         t.path.clear();
         t.entries.clear();
+        t.clear_expansion();
         t.filter = None;
         t.tree_cursor = 0;
         t.gen += 1;
@@ -773,6 +866,7 @@ impl App {
         t.path.push(name);
         let url = t.here_url();
         t.entries.clear();
+        t.clear_expansion();
         t.filter = None;
         t.tree_cursor = 0;
         t.gen += 1;
@@ -797,6 +891,7 @@ impl App {
             Screen::Tree if t.path.is_empty() => {
                 t.screen = Screen::Repos;
                 t.entries.clear();
+                t.clear_expansion();
                 t.filter = None;
                 t.tree_cursor = 0;
                 self.status = hint_repos();
@@ -829,6 +924,159 @@ impl App {
         self.status = "filter: type to narrow, enter keeps, esc clears".into();
     }
 
+    /// The left arrow: mode-dependent navigation.
+    fn on_left(&mut self) {
+        if self
+            .tabs
+            .get(self.tab)
+            .is_some_and(|t| t.screen == Screen::Repos)
+        {
+            return;
+        }
+        match self.nav {
+            Nav::Enter => self.on_back(),
+            Nav::Expand => self.collapse_or_up(),
+        }
+    }
+
+    /// The right arrow: mode-dependent navigation.
+    fn on_right(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        match t.screen {
+            // On the repository screen right opens, in both modes.
+            Screen::Repos => self.on_enter(),
+            Screen::Tree => match self.nav {
+                Nav::Enter => {
+                    if self.listing_busy() {
+                        self.status = "a listing is in flight".into();
+                        return;
+                    }
+                    match t.selected_row() {
+                        Some(row) if row.kind == EntryKind::Dir && row.depth == 0 => {
+                            self.descend(row.name);
+                        }
+                        Some(_) => self.status = "right enters folders: this is a file".into(),
+                        None => {}
+                    }
+                }
+                Nav::Expand => self.expand_selected(),
+            },
+        }
+    }
+
+    /// Expand mode: the right arrow expands the selected folder inline.
+    /// Collapsed-but-cached folders reopen without the network.
+    fn expand_selected(&mut self) {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
+            return;
+        }
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let Some(row) = t.selected_row() else {
+            return;
+        };
+        if row.kind != EntryKind::Dir {
+            self.status = "folders expand, this is a file".into();
+            return;
+        }
+        if row.expanded {
+            if let Some(t) = self.tabs.get_mut(self.tab) {
+                t.open.remove(&row.rel);
+            }
+            self.sync_cursor();
+            self.status = format!("collapsed {}/", row.rel);
+            return;
+        }
+        if !t.expanded.contains_key(&row.rel) {
+            // Not cached: load the children in the background.
+            let url = format!("{}{}/", t.here_url(), row.rel);
+            let (tab, gen) = (self.tab, t.gen);
+            if let Some(t) = self.tabs.get_mut(self.tab) {
+                t.loading_dirs.insert(row.rel.clone());
+            }
+            self.pending += 1;
+            self.status = format!("listing {}/", row.rel);
+            net::load_children(self.tx.clone(), tab, gen, row.rel, url, self.auth.clone());
+            return;
+        }
+        if let Some(t) = self.tabs.get_mut(self.tab) {
+            t.open.insert(row.rel.clone());
+        }
+        self.sync_cursor();
+    }
+
+    /// Expand mode, the left arrow: collapse the selected folder, or jump to
+    /// its parent row, or leave the tree position entirely.
+    fn collapse_or_up(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let Some(row) = t.selected_row() else {
+            return;
+        };
+        if row.kind == EntryKind::Dir && row.expanded {
+            if let Some(t) = self.tabs.get_mut(self.tab) {
+                t.open.remove(&row.rel);
+            }
+            self.sync_cursor();
+            return;
+        }
+        if row.depth == 0 {
+            self.on_back();
+            return;
+        }
+        // Jump to the nearest shallower visible row above the cursor.
+        let cursor = t.tree_cursor;
+        let rows = t.rows();
+        let idx = t.row_idx();
+        let Some(&current) = idx.get(cursor) else {
+            return;
+        };
+        let depth = rows[current].depth;
+        let mut target = None;
+        for (position, &i) in idx.iter().take(cursor).enumerate() {
+            if rows[i].depth < depth {
+                target = Some(position);
+            }
+        }
+        match target {
+            Some(position) => self.set_cursor(position),
+            None => self.on_back(),
+        }
+    }
+
+    /// The `e` toggle: flip the left/right navigation mode and remember it.
+    fn toggle_nav(&mut self) {
+        self.nav = self.nav.toggled();
+        for tab in &mut self.tabs {
+            tab.clear_expansion();
+        }
+        self.sync_cursor();
+        let saved = self.persist_nav();
+        self.status = format!(
+            "navigation: {}{}",
+            self.nav.label(),
+            if saved {
+                ", saved to the config"
+            } else {
+                ", the config is not saved"
+            }
+        );
+    }
+
+    /// Persists the navigation mode: true when the config file took it.
+    fn persist_nav(&mut self) -> bool {
+        self.config.tui.nav = self.nav;
+        let Some(path) = self.config_path.clone() else {
+            return false;
+        };
+        config::save(&path, &self.config).is_ok()
+    }
+
     fn refresh(&mut self) {
         if self.listing_busy() {
             self.status = "a listing is in flight".into();
@@ -838,6 +1086,8 @@ impl App {
             return;
         };
         t.gen += 1;
+        // A refresh redraws the current listing: the inline expansion folds too.
+        t.clear_expansion();
         match t.screen {
             Screen::Repos => {
                 t.loading = true;
@@ -870,21 +1120,21 @@ impl App {
         if t.screen != Screen::Tree {
             return;
         }
-        let Some(entry) = t.selected().cloned() else {
+        let Some(row) = t.selected_row() else {
             return;
         };
         let (tab, gen) = (self.tab, t.gen);
-        match entry.kind {
+        match row.kind {
             EntryKind::Dir => {
                 self.info = Some(format!(
                     "{}/ · folder, {} entries in this listing",
-                    entry.name,
+                    row.name,
                     t.entries.len()
                 ));
             }
             EntryKind::File => {
-                let url = format!("{}{}", t.here_url(), entry.name);
-                let name = entry.name.clone();
+                let url = format!("{}{}", t.here_url(), row.rel);
+                let name = row.name.clone();
                 self.info = Some(format!("{name}: …"));
                 self.pending += 1;
                 net::head_size(self.tx.clone(), tab, gen, name, url, self.auth.clone());
@@ -1006,11 +1256,11 @@ impl App {
         let Some(repo) = t.repo.clone() else {
             return;
         };
-        let Some(entry) = t.selected().cloned() else {
+        let Some(row) = t.selected_row() else {
             return;
         };
-        let rel = rel_of(&t.path, &entry.name);
-        self.start_walk(repo, rel, entry.kind);
+        let rel = row.rel;
+        self.start_walk(repo, rel, row.kind);
     }
 
     /// Downloads the current directory: the whole subtree below the breadcrumb.
@@ -1168,6 +1418,34 @@ impl App {
         }
     }
 
+    /// Folds an expansion result into the tree: the folder opens with its
+    /// cached children; a stale result only drops the loading marker.
+    fn on_expand(&mut self, tab: usize, gen: u64, dir_rel: String, res: Result<Vec<Entry>, Error>) {
+        let Some(t) = self.tabs.get_mut(tab) else {
+            return;
+        };
+        t.loading_dirs.remove(&dir_rel);
+        if gen != t.gen {
+            return;
+        }
+        match res {
+            Ok(children) => {
+                let count = children.len();
+                t.expanded.insert(dir_rel.clone(), children);
+                t.open.insert(dir_rel);
+                if self.tab == tab {
+                    self.sync_cursor();
+                    self.status = format!("expanded: {count} entries");
+                }
+            }
+            Err(e) => {
+                if self.tab == tab {
+                    self.fail_err(e);
+                }
+            }
+        }
+    }
+
     fn on_walk(&mut self, tab: usize, gen: u64, res: Result<Vec<ArtifactName>, Error>) {
         let fresh = self.tabs.get(tab).is_some_and(|t| gen == t.gen);
         if !fresh {
@@ -1292,7 +1570,8 @@ pub fn hint_repos() -> String {
 /// The idle status hint of the tree screen.
 #[must_use]
 pub fn hint_tree() -> String {
-    "d: download · D: folder · /: filter · i: info · r: refresh · esc: up · q: quit".into()
+    "d: download · D: folder · /: filter · e: mode · i: info · r: refresh · esc: up · q: quit"
+        .into()
 }
 
 /// Formats a byte count for status and info lines: `834 B`, `1.2 MiB`.
@@ -1447,8 +1726,8 @@ mod tests {
         // The cursor selects within the filtered list.
         assert_eq!(app.tabs[0].tree_cursor, 0);
         assert_eq!(
-            app.tabs[0].selected().map(|e| e.name.as_str()),
-            Some("core")
+            app.tabs[0].selected_row().map(|r| r.name),
+            Some("core".to_owned())
         );
         // Enter keeps the filter, esc clears it.
         app.handle(Msg::Key(key(KeyCode::Enter)));
@@ -1823,6 +2102,122 @@ mod tests {
             res: Ok(vec![repo("raw", "raw", "hosted")]),
         });
         assert_eq!(app.connecting, 0);
+    }
+
+    #[tokio::test]
+    async fn arrows_enter_and_return_in_enter_mode() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        assert_eq!(app.nav, Nav::Enter);
+        // Right on the folder enters it, exactly like enter.
+        app.handle(Msg::Key(key(KeyCode::Right)));
+        assert_eq!(app.tabs[0].path, vec!["app".to_owned()]);
+        assert_eq!(app.pending, 1);
+        // Left climbs back up.
+        app.handle(Msg::Key(key(KeyCode::Left)));
+        assert!(app.tabs[0].path.is_empty());
+        // The reload lands, then right on a file only reports.
+        let Msg::Entries { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the listing");
+        };
+        app.handle(Msg::Entries {
+            tab,
+            gen,
+            res: Ok(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Right)));
+        assert!(app.status.contains("this is a file"), "{:?}", app.status);
+    }
+
+    #[tokio::test]
+    async fn expand_mode_expands_collapses_and_jumps() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('e'))));
+        assert_eq!(app.nav, Nav::Expand);
+        // Right on the folder spawns the expansion load.
+        app.handle(Msg::Key(key(KeyCode::Right)));
+        assert!(app.tabs[0].loading_dirs.contains("app"));
+        assert_eq!(app.pending, 1);
+        // The real load dies against the dead port: drain it, then land ours.
+        let Msg::Expand {
+            tab, gen, dir_rel, ..
+        } = rx.recv().await.unwrap()
+        else {
+            panic!("expected the expansion");
+        };
+        assert_eq!((tab, dir_rel.as_str()), (0, "app"));
+        app.handle(Msg::Expand {
+            tab,
+            gen,
+            dir_rel: "app".into(),
+            res: Ok(vec![
+                entry("core", EntryKind::Dir),
+                entry("lib.rs", EntryKind::File),
+            ]),
+        });
+        // The children sit inline under their folder, one level deeper.
+        let rows = app.tabs[0].rows();
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[1].rel, "app/core");
+        assert_eq!(rows[1].depth, 1);
+        assert!(!rows[1].expanded);
+        // Left on the child jumps to the parent row.
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Left)));
+        assert_eq!(app.tabs[0].tree_cursor, 0);
+        // Right on the expanded folder collapses it; right again reopens it
+        // from the cache without another load.
+        app.handle(Msg::Key(key(KeyCode::Right)));
+        assert!(!app.tabs[0].open.contains("app"));
+        assert_eq!(app.tabs[0].rows().len(), 2);
+        app.handle(Msg::Key(key(KeyCode::Right)));
+        assert!(app.tabs[0].open.contains("app"));
+        assert_eq!(app.tabs[0].rows().len(), 4);
+        assert!(rx.try_recv().is_err(), "the cache reopened without a load");
+    }
+
+    #[tokio::test]
+    async fn the_mode_toggle_persists_into_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mut app = App::new(
+            vec![server()],
+            vec![tab_with(vec![])],
+            ConfigFile::default(),
+            Some(path.clone()),
+            false,
+            PathBuf::from("dl"),
+            None,
+            tx,
+        );
+        app.boot();
+        app.handle(Msg::Key(key(KeyCode::Char('e'))));
+        assert_eq!(app.nav, Nav::Expand);
+        assert!(
+            app.status.contains("saved to the config"),
+            "{:?}",
+            app.status
+        );
+        assert_eq!(crate::config::load(&path).unwrap().tui.nav, Nav::Expand);
+        app.handle(Msg::Key(key(KeyCode::Char('e'))));
+        assert_eq!(app.nav, Nav::Enter);
+        assert_eq!(crate::config::load(&path).unwrap().tui.nav, Nav::Enter);
     }
 
     #[tokio::test]

@@ -66,4 +66,4 @@ pub mod ui;
 // The flat public surface: binaries and wrappers import from the crate root.
 pub use crate::app::{App, DlEv, DlOutcome, Download, Mode, Msg, Screen, Tab};
 pub use crate::args::Args;
-pub use crate::config::{ConfigFile, ServerCfg};
+pub use crate::config::{ConfigFile, Nav, ServerCfg};

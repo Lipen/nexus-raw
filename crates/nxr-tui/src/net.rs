@@ -146,6 +146,33 @@ pub fn head_size(
     });
 }
 
+/// Lists the children of one folder for the inline expansion.
+/// `dir_rel` is the path below the current tree position.
+pub fn load_children(
+    tx: mpsc::UnboundedSender<Msg>,
+    tab: usize,
+    gen: u64,
+    dir_rel: String,
+    dir_url: String,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let res = async {
+            let (events, _drain) = mpsc::unbounded_channel::<Event>();
+            Nxr::new(config(dir_url.clone(), auth.clone()), events)?
+                .ls_entries()
+                .await
+        }
+        .await;
+        let _ = tx.send(Msg::Expand {
+            tab,
+            gen,
+            dir_rel,
+            res,
+        });
+    });
+}
+
 /// Collects the names behind a download request and reports them to the app.
 /// A folder entry walks the whole subtree, a file entry is a single-name plan.
 pub fn walk_for_download(
