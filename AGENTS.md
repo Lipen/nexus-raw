@@ -85,6 +85,6 @@ New fields are additive.
 
 ## Commits
 
-Conventional, subject-only, no body: `scope: short imperative summary` with scopes `core`, `cli`, `mock`, `docs`, `chore`.
+Conventional, subject-only, no body: `scope: short imperative summary` with scopes `core`, `cli`, `mock`, `tui`, `docs`, `chore`.
 One feature or fix per commit, straight to master.
 Never commit credentials or `target/`.
