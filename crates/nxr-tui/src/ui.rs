@@ -251,7 +251,8 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         vec![Span::raw(format!(" {} ", app.status))]
     };
     let right = self_status(app);
-    let left_w = area.width.saturating_sub(right.len() as u16);
+    // `·` is two UTF-8 bytes but one column: width math goes by chars.
+    let left_w = area.width.saturating_sub(right.chars().count() as u16);
     // The label is right-aligned in the full width; the left part is clipped
     // to the remaining width, so the two can never overwrite each other.
     f.render_widget(Line::from(Span::styled(right, dim())).right_aligned(), area);
@@ -306,6 +307,7 @@ fn help_overlay(f: &mut Frame, area: Rect) {
         "  enter             open a folder or repository, download a file",
         "  d                 download the selected entry (folder: subtree)",
         "  D                 download the whole current directory",
+        "  note              one download at a time; browsing never waits",
         "  r                 refresh the current listing",
         "  i                 info on the selected entry (HEAD size)",
         "  /                 filter the tree: type to narrow, esc clears",
@@ -320,7 +322,7 @@ fn help_overlay(f: &mut Frame, area: Rect) {
         .borders(Borders::ALL)
         .title(" nxr-tui keys ");
     let inner = block.inner(area);
-    let w = inner.width.min(64);
+    let w = inner.width.min(74);
     let h = (LINES.len() as u16 + 2).min(inner.height);
     let popup = centered(area, w, h);
     f.render_widget(Clear, popup);

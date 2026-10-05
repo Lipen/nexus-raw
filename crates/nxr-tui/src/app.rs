@@ -240,11 +240,13 @@ pub enum Msg {
     Paste(String),
     /// A redraw request (terminal resize).
     Redraw,
-    /// The repository list of one server: `slot` is `tabs.len()` for a server
-    /// being added, an existing tab index for a refresh.
+    /// The repository list of one server: `tab` is `tabs.len()` for a server
+    /// being added, an existing tab index for a refresh. `connect` says which:
+    /// only a connect holds the single connect slot.
     Repos {
         tab: usize,
         server: ServerCfg,
+        connect: bool,
         res: Result<Vec<RepoInfo>, Error>,
     },
     /// The child list of one tree directory.
@@ -292,6 +294,8 @@ pub struct App {
     pub mode: Mode,
     /// Cursor of the servers overlay.
     pub servers_cursor: usize,
+    /// Server connects in flight: one at a time, the slot collides otherwise.
+    pub connecting: usize,
     /// Loads, walks and HEADs in flight.
     pub pending: usize,
     /// The current or last download, if any.
@@ -342,6 +346,7 @@ impl App {
             tab: 0,
             mode: Mode::Normal,
             servers_cursor: 0,
+            connecting: 0,
             pending: 0,
             download: None,
             status: String::new(),
@@ -372,9 +377,14 @@ impl App {
             Msg::Mouse(mouse) => self.on_mouse(mouse),
             Msg::Paste(text) => self.on_paste(&text),
             Msg::Redraw => {}
-            Msg::Repos { tab, server, res } => {
+            Msg::Repos {
+                tab,
+                server,
+                connect,
+                res,
+            } => {
                 self.pending = self.pending.saturating_sub(1);
-                self.on_repos(tab, server, res);
+                self.on_repos(tab, server, connect, res);
             }
             Msg::Entries { tab, gen, res } => {
                 self.pending = self.pending.saturating_sub(1);
@@ -678,17 +688,16 @@ impl App {
 
     // ---- actions ---------------------------------------------------------
 
-    /// True while a load, a walk or a download is in flight: drills, downloads and refreshes wait.
-    fn busy(&mut self) -> bool {
-        if self.pending > 0 {
-            self.status = "a listing is in flight".into();
-            return true;
-        }
-        if self.download.as_ref().is_some_and(Download::is_running) {
-            self.status = "a download is running".into();
-            return true;
-        }
-        false
+    /// True while THIS tab's listing is in flight: its drills and refreshes wait.
+    /// Another tab's listing never blocks here: the tabs are independent.
+    fn listing_busy(&self) -> bool {
+        self.tabs.get(self.tab).is_some_and(|t| t.loading)
+    }
+
+    /// True while a transfer is running: downloads are single-flight, the next
+    /// one waits for the panel to resolve. Browsing never waits on it.
+    fn download_busy(&self) -> bool {
+        self.download.as_ref().is_some_and(Download::is_running)
     }
 
     fn request_quit(&mut self) {
@@ -701,7 +710,8 @@ impl App {
     }
 
     fn on_enter(&mut self) {
-        if self.busy() {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
             return;
         }
         let Some(t) = self.tabs.get(self.tab) else {
@@ -819,7 +829,8 @@ impl App {
     }
 
     fn refresh(&mut self) {
-        if self.busy() {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
             return;
         }
         let Some(t) = self.tabs.get_mut(self.tab) else {
@@ -833,7 +844,7 @@ impl App {
                 self.status = format!("refreshing {}", t.server.name);
                 let server = t.server.clone();
                 let (slot, auth) = (self.tab, self.auth.clone());
-                net::load_repos(self.tx.clone(), server, slot, auth);
+                net::load_repos(self.tx.clone(), server, slot, false, auth);
             }
             Screen::Tree => {
                 let url = t.here_url();
@@ -848,7 +859,8 @@ impl App {
 
     /// The `i` info action: a folder reports its listing, a file HEADs its size.
     fn request_info(&mut self) {
-        if self.busy() {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
             return;
         }
         let Some(t) = self.tabs.get(self.tab) else {
@@ -925,13 +937,22 @@ impl App {
     }
 
     fn connect_server(&mut self, server: ServerCfg) {
-        if self.busy() {
+        // One connect at a time: two results for the same slot would collide.
+        if self.connecting > 0 {
+            self.status = "already connecting to a server".into();
             return;
         }
+        self.connecting += 1;
         self.pending += 1;
         self.error = None;
         self.status = format!("connecting to {}…", server.url);
-        net::load_repos(self.tx.clone(), server, self.tabs.len(), self.auth.clone());
+        net::load_repos(
+            self.tx.clone(),
+            server,
+            self.tabs.len(),
+            true,
+            self.auth.clone(),
+        );
     }
 
     /// The tab's server joins the config as a preset, under a fresh unique name.
@@ -970,7 +991,12 @@ impl App {
 
     /// Downloads the selected entry: a folder walks its whole subtree, a file itself.
     fn request_download_entry(&mut self) {
-        if self.busy() {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
+            return;
+        }
+        if self.download_busy() {
+            self.status = "download in flight: one at a time".into();
             return;
         }
         let Some(t) = self.tabs.get(self.tab) else {
@@ -988,7 +1014,12 @@ impl App {
 
     /// Downloads the current directory: the whole subtree below the breadcrumb.
     fn request_download_dir(&mut self) {
-        if self.busy() {
+        if self.listing_busy() {
+            self.status = "a listing is in flight".into();
+            return;
+        }
+        if self.download_busy() {
+            self.status = "download in flight: one at a time".into();
             return;
         }
         let Some(t) = self.tabs.get(self.tab) else {
@@ -1039,7 +1070,16 @@ impl App {
 
     // ---- message application --------------------------------------------
 
-    fn on_repos(&mut self, slot: usize, server: ServerCfg, res: Result<Vec<RepoInfo>, Error>) {
+    fn on_repos(
+        &mut self,
+        slot: usize,
+        server: ServerCfg,
+        connect: bool,
+        res: Result<Vec<RepoInfo>, Error>,
+    ) {
+        if connect {
+            self.connecting = self.connecting.saturating_sub(1);
+        }
         match res {
             Ok(repos) if slot < self.tabs.len() => {
                 // A refresh of an existing tab.
@@ -1245,13 +1285,13 @@ pub fn hint_of(screen: Screen) -> String {
 /// The idle status hint of the repository screen.
 #[must_use]
 pub fn hint_repos() -> String {
-    "enter: open · r: refresh · s: servers · tab: switch · 1-9: jump · ?: help · q: quit".into()
+    "enter: open · r: refresh · s: servers · tab: switch · ?: help · q: quit".into()
 }
 
 /// The idle status hint of the tree screen.
 #[must_use]
 pub fn hint_tree() -> String {
-    "enter: open/download · d: download · D: folder · /: filter · i: info · r: refresh · esc: up · q: quit".into()
+    "d: download · D: folder · /: filter · i: info · r: refresh · esc: up · q: quit".into()
 }
 
 /// Formats a byte count for status and info lines: `834 B`, `1.2 MiB`.
@@ -1656,7 +1696,7 @@ mod tests {
         });
         assert!(rx.try_recv().is_err(), "no download was spawned");
         assert!(app.download.is_none(), "the stale walk released the slot");
-        assert!(!app.busy(), "the app is usable again");
+        assert!(!app.download_busy(), "the app is usable again");
     }
 
     #[tokio::test]
@@ -1679,7 +1719,10 @@ mod tests {
             panic!("the download panel exists");
         };
         assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
-        assert!(!app.busy(), "enter and friends work after the failure");
+        assert!(
+            !app.download_busy(),
+            "a new download can start after the failure"
+        );
     }
 
     #[tokio::test]
@@ -1699,7 +1742,10 @@ mod tests {
             panic!("the download panel exists");
         };
         assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
-        assert!(!app.busy(), "enter and friends work after the empty walk");
+        assert!(
+            !app.download_busy(),
+            "a new download can start after the empty walk"
+        );
     }
 
     #[tokio::test]
@@ -1713,6 +1759,7 @@ mod tests {
         app.handle(Msg::Repos {
             tab: 0,
             server: server(),
+            connect: false,
             res: Err(Error::Transport {
                 url: "http://127.0.0.1:1/".into(),
                 detail: "connection refused".into(),
@@ -1720,6 +1767,61 @@ mod tests {
         });
         assert!(!app.tabs[0].loading, "no phantom loading marker");
         assert!(app.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn browsing_continues_while_a_download_runs() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        // A download of the file starts and runs.
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let Msg::Walk { tab, gen, res } = rx.recv().await.unwrap() else {
+            panic!("expected the walk result");
+        };
+        app.handle(Msg::Walk { tab, gen, res });
+        let Msg::Dl(DlEv::Start { files, .. }) = rx.recv().await.unwrap() else {
+            panic!("expected the transfer start");
+        };
+        assert_eq!(files, 1);
+        assert!(app.download_busy());
+        // Browsing does not wait on the transfer: the folder above opens.
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.tabs[0].loading, "the descent listing spawned");
+        // The listing lands, then a second download politely waits its turn.
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert_eq!(app.status, "download in flight: one at a time");
+        assert!(rx.try_recv().is_err(), "no second walk was spawned");
+    }
+
+    #[tokio::test]
+    async fn a_second_connect_while_connecting_is_refused() {
+        let (mut app, mut rx) = app_with(vec![tab_with(vec![])], false);
+        app.mode = Mode::AddServer("http://x:2/".into());
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(app.connecting, 1);
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(app.connecting, 1);
+        assert_eq!(app.status, "already connecting to a server");
+        assert!(rx.try_recv().is_err(), "no second connect was spawned");
+        app.handle(Msg::Repos {
+            tab: 1,
+            server: ServerCfg::from_base("http://x:2/".to_owned()),
+            connect: true,
+            res: Ok(vec![repo("raw", "raw", "hosted")]),
+        });
+        assert_eq!(app.connecting, 0);
     }
 
     #[tokio::test]
@@ -1741,6 +1843,7 @@ mod tests {
         app.handle(Msg::Repos {
             tab: 0,
             server: server(),
+            connect: false,
             res: Ok(vec![repo("fresh", "raw", "hosted")]),
         });
         assert_eq!(app.tabs[0].repos.len(), 1);
@@ -1819,6 +1922,7 @@ mod tests {
         app.handle(Msg::Repos {
             tab: 1,
             server: ServerCfg::from_base("http://x:2/".to_owned()),
+            connect: true,
             res: Ok(vec![repo("raw", "raw", "hosted")]),
         });
         assert_eq!(app.tabs.len(), 2);
@@ -1850,6 +1954,7 @@ mod tests {
         app.handle(Msg::Repos {
             tab: 1,
             server: ServerCfg::from_base("http://x:2/".to_owned()),
+            connect: true,
             res: Ok(vec![repo("raw", "raw", "hosted")]),
         });
         assert!(app.status.contains("saved to"), "{:?}", app.status);

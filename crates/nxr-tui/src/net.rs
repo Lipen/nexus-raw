@@ -78,11 +78,13 @@ pub async fn server_repos(
 
 /// Loads the repository list of one server in the background.
 /// `slot` is the tab index the result lands in: `tabs.len()` for a server
-/// being added, an existing index for a refresh.
+/// being added, an existing index for a refresh. `connect` tags the message
+/// so the app releases its single connect slot only for a connect.
 pub fn load_repos(
     tx: mpsc::UnboundedSender<Msg>,
     server: ServerCfg,
     slot: usize,
+    connect: bool,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
@@ -90,6 +92,7 @@ pub fn load_repos(
         let _ = tx.send(Msg::Repos {
             tab: slot,
             server,
+            connect,
             res,
         });
     });
