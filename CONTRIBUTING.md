@@ -57,13 +57,16 @@ The recorded session in `docs/assets/cast/` is the exception — it names the bi
 ```bash
 just check                        # green on master
 just version X.Y.Z
-git commit -am "chore: release X.Y.Z"
+# Finalize CHANGELOG.md in the same commit: turn [Unreleased] into [X.Y.Z]
+# with today's date, add the compare link, and start a fresh [Unreleased].
+git commit -am "chore: bump the workspace to X.Y.Z"
 git tag -s vX.Y.Z -m "vX.Y.Z"
 git push origin master --follow-tags
+gh release edit vX.Y.Z --notes-file <(sed -n "/^## \[X.Y.Z\]/,/^## /p" CHANGELOG.md | sed '$d')
 ```
 
 The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw`, then `nxr-tui` with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
-The generated release notes are the changelog. There is no `CHANGELOG.md` to rot.
+The release body is the section of the same name in `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)): work lands under `[Unreleased]`, and the bump commit finalizes it.
 
 `nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.
 The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `darwin-x64`, `darwin-arm64`) through npm trusted publishing.

@@ -51,6 +51,7 @@ fi
 # Pages may name the command, never the current number: a pinned version is a
 # lie on the next release. The recorded session under docs/assets is exempt —
 # it names the binary that made the recording, and `just demo-cast` refreshes it.
+# CHANGELOG.md is exempt too: naming past releases is its job.
 if grep -rEn --exclude-dir=assets 'nxr [0-9]+\.[0-9]+\.[0-9]+' \
     README.md README.ru.md crates/nexus-raw/README.md docs; then
   echo "version-check: a page pins the current version" >&2

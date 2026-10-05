@@ -117,6 +117,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Документация
 
 Гайды и справочник: <https://lipen.github.io/nexus-raw/>.
+Что изменилось между релизами: [CHANGELOG.md](CHANGELOG.md).
 Исходники в [docs/](docs/).
 Локально сайт поднимается `just docs`.
 
