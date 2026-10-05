@@ -121,15 +121,15 @@ else
 fi
 expect_ok "--if-forward takes a newer version" "$NXR" channel set "$URL/latest" 1.4.1 --if-forward
 
-# 16-17. The search-backed listing shows the version and its objects. The
-# index lags the writes, so the version listing polls; the object listing is
-# the `--assets` form, since a bare URL lists versions, not objects.
+# 16-17. The search-backed listing shows the tree: the version folder among the
+# entries, then the objects of the version through `--assets`. The index lags
+# the writes, so both listings poll.
 seen=0
 for _ in 1 2 3 4 5 6; do
-    if "$NXR" ls "$URL" 2> /dev/null | grep -q 1.4.0; then seen=1; break; fi
+    if "$NXR" ls "$URL" 2> /dev/null | grep -q '1.4.0/'; then seen=1; break; fi
     sleep 2
 done
-if [ "$seen" = 1 ]; then ok "ls lists the version"; else no "ls lists the version"; fi
+if [ "$seen" = 1 ]; then ok "ls lists the version folder"; else no "ls lists the version folder"; fi
 seen=0
 for _ in 1 2 3 4 5 6; do
     if "$NXR" ls "$VER" --assets 2> /dev/null | grep -q 'big.bin'; then seen=1; break; fi
