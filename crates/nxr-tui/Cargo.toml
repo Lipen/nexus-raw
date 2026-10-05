@@ -1,0 +1,28 @@
+[package]
+name = "nxr-tui"
+description = "A terminal browser over Nexus raw repositories: tabs, presets, filters and downloads"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+crossterm = "0.28"
+nexus-raw-core = { path = "../nexus-raw-core", version = "0.4.0" }
+ratatui = "0.28"
+serde = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+mock-nexus = { path = "../mock-nexus" }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "nxr-tui"
+path = "src/main.rs"

@@ -5,6 +5,7 @@ members = [
     "crates/nexus-raw",
     "crates/mock-nexus",
     "crates/nexus-raw-napi",
+    "crates/nxr-tui",
 ]
 exclude = ["examples"]
 
@@ -18,6 +19,7 @@ homepage = "https://github.com/Lipen/nexus-raw"
 documentation = "https://lipen.github.io/nexus-raw/"
 
 [workspace.dependencies]
+anyhow = "1"
 base64 = "0.23"
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }

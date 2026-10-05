@@ -9,10 +9,12 @@ use nexus_raw_core::creds;
 use nexus_raw_core::{ArtifactName, Config, EntryKind, Enumeration, Error, Event, Nxr};
 use tokio::sync::mpsc;
 
-use crate::app::{DlEv, Msg, RepoRow};
+use crate::app::{DlEv, Msg};
+use crate::config::ServerCfg;
 
 /// Resolves the `Authorization` header value from `-u user:pass` and the environment.
 /// The fallback order matches the `nxr` CLI: `-u`, then `NXR_AUTH`, then `NXR_USERNAME` + `NXR_PASSWORD`.
+/// One credential set per invocation: it applies to every server of the session.
 ///
 /// # Errors
 ///
@@ -52,32 +54,48 @@ pub fn dir_url(url: &str) -> String {
     }
 }
 
-/// The fail-fast bootstrap: every base must resolve and answer `service_repos()`.
-/// The result is the first screen, already populated, so the TUI only opens on known ground.
+/// The repository list of one server through `service_repos`.
 ///
 /// # Errors
 ///
-/// Returns the core error of the first refusing base: the caller prints `error:` + `hint:`
-/// and exits with `Error::exit_code()` before the terminal ever changes mode.
-pub async fn bootstrap(bases: &[String], auth: Option<String>) -> Result<Vec<RepoRow>, Error> {
-    let mut rows = Vec::new();
-    for (server, base) in bases.iter().enumerate() {
-        let repos = {
-            let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(dir_url(base), auth.clone()), events)?
-                .service_repos()
-                .await?
-        };
-        rows.extend(repos.into_iter().map(|repo| RepoRow { server, repo }));
-    }
-    Ok(rows)
+/// Returns the core error of the refusing server: the caller decides between
+/// the fail-fast shutdown (startup) and a status line (the `s` overlay).
+pub async fn server_repos(
+    server: &ServerCfg,
+    auth: Option<String>,
+) -> Result<Vec<nexus_raw_core::service::RepoInfo>, Error> {
+    let (events, _drain) = mpsc::unbounded_channel::<Event>();
+    Nxr::new(config(dir_url(&server.url), auth), events)?
+        .service_repos()
+        .await
+}
+
+/// Loads the repository list of one server in the background.
+/// `slot` is the tab index the result lands in: `tabs.len()` for a server
+/// being added, an existing index for a refresh.
+pub fn load_repos(
+    tx: mpsc::UnboundedSender<Msg>,
+    server: ServerCfg,
+    slot: usize,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let res = server_repos(&server, auth).await;
+        let _ = tx.send(Msg::Repos {
+            tab: slot,
+            server,
+            res,
+        });
+    });
 }
 
 /// Lists the immediate children of one directory URL through `ls_entries`.
+/// `gen` is the generation of the request: a stale result is dropped by the app.
 pub fn load_entries(
     tx: mpsc::UnboundedSender<Msg>,
-    dir_url: String,
+    tab: usize,
     gen: u64,
+    dir_url: String,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
@@ -88,7 +106,34 @@ pub fn load_entries(
                 .await
         }
         .await;
-        let _ = tx.send(Msg::Entries { gen, res });
+        let _ = tx.send(Msg::Entries { tab, gen, res });
+    });
+}
+
+/// HEADs one file URL: the size line of the `i` info action.
+/// `name` rides along so the app can label the info line on arrival.
+pub fn head_size(
+    tx: mpsc::UnboundedSender<Msg>,
+    tab: usize,
+    gen: u64,
+    name: String,
+    url: String,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let res = async {
+            let (events, _drain) = mpsc::unbounded_channel::<Event>();
+            Nxr::new(config(url.clone(), auth.clone()), events)?
+                .head(&url)
+                .await
+        }
+        .await;
+        let _ = tx.send(Msg::Head {
+            tab,
+            gen,
+            name,
+            res,
+        });
     });
 }
 
@@ -96,10 +141,11 @@ pub fn load_entries(
 /// A folder entry walks the whole subtree, a file entry is a single-name plan.
 pub fn walk_for_download(
     tx: mpsc::UnboundedSender<Msg>,
+    tab: usize,
+    gen: u64,
     repo_url: String,
     rel: String,
     kind: EntryKind,
-    gen: u64,
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
@@ -110,7 +156,7 @@ pub fn walk_for_download(
             }
         }
         .await;
-        let _ = tx.send(Msg::Walk { gen, res });
+        let _ = tx.send(Msg::Walk { tab, gen, res });
     });
 }
 
@@ -254,30 +300,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bootstrap_lists_the_repos_of_every_base() {
+    async fn server_repos_lists_the_mock_repositories() {
         let mock = MockNexus::start(Scenario::Atomic).unwrap();
-        let rows = bootstrap(&[mock.base_url()], None).await.unwrap();
-        let names: Vec<&str> = rows.iter().map(|r| r.repo.name.as_str()).collect();
+        let server = ServerCfg::from_base(mock.base_url());
+        let rows = server_repos(&server, None).await.unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, vec!["raw-main", "raw-all"]);
-        assert!(rows.iter().all(|r| r.repo.format == "raw"));
-        assert_eq!(rows[0].server, 0);
+        assert!(rows.iter().all(|r| r.format == "raw"));
     }
 
     #[tokio::test]
-    async fn bootstrap_refuses_an_unreachable_base() {
+    async fn server_repos_refuses_an_unreachable_base() {
         // Port 1 on loopback: connection refused, nothing listens there.
-        let err = bootstrap(&["http://127.0.0.1:1/".to_owned()], None)
-            .await
-            .unwrap_err();
+        let server = ServerCfg::from_base("http://127.0.0.1:1/".to_owned());
+        let err = server_repos(&server, None).await.unwrap_err();
         assert_eq!(err.exit_code(), 3);
         assert!(err.hint().is_some());
     }
 
     #[tokio::test]
-    async fn bootstrap_refuses_a_malformed_base() {
-        let err = bootstrap(&["not a url".to_owned()], None)
-            .await
-            .unwrap_err();
+    async fn server_repos_refuses_a_malformed_base() {
+        let server = ServerCfg::from_base("not a url".to_owned());
+        let err = server_repos(&server, None).await.unwrap_err();
         assert_eq!(err.exit_code(), 2);
     }
 
@@ -327,5 +371,28 @@ mod tests {
             .await
             .unwrap();
         assert!(none.is_empty());
+    }
+
+    #[tokio::test]
+    async fn head_size_reports_the_object_size() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        mock.insert("repository/raw-main/README.txt", b"content of README.txt\n");
+        let url = format!("{}repository/raw-main/README.txt", mock.base_url());
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        head_size(tx, 0, 7, "README.txt".into(), url, None);
+        match rx.recv().await.unwrap() {
+            Msg::Head {
+                tab,
+                gen,
+                name,
+                res,
+            } => {
+                assert_eq!((tab, gen), (0, 7));
+                assert_eq!(name, "README.txt");
+                let info = res.unwrap();
+                assert_eq!(info.size, Some(22));
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
     }
 }

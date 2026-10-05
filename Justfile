@@ -23,6 +23,13 @@ nxr *args:
     @set -- {{args}} && { [ "${1:-}" = -- ] && shift || :; } && \
         exec {{cargo}} run -p nexus-raw --quiet -- "$@"
 
+# The same passthrough for the terminal browser: `just tui http://127.0.0.1:8081/`,
+# `just tui -- --smoke http://127.0.0.1:8081/`, `just tui -- --init-config`.
+[doc('Run the nxr-tui browser against your base URL.')]
+tui *args:
+    @set -- {{args}} && { [ "${1:-}" = -- ] && shift || :; } && \
+        exec {{cargo}} run -p nxr-tui --quiet -- "$@"
+
 # `--auth user:pass` and scenario flags come after the scenario name.
 [doc('Serve the mock Nexus: `just mock atomic --port 8080`.')]
 [group('mock')]

@@ -38,7 +38,7 @@ Transcripts in the docs come from a real run: paste what the binary printed, nev
 ## Versioning
 
 One version for the whole workspace, `[workspace.package] version` in `Cargo.toml`.
-`nexus-raw-core`, `nexus-raw` and `mock-nexus` inherit it; `nexus-raw-napi` inherits it too, because the npm package carries the same number.
+`nexus-raw-core`, `nexus-raw` and `mock-nexus` inherit it; `nexus-raw-napi` inherits it too, because the npm package carries the same number; `nxr-tui` inherits it as well.
 
 Before 1.0 a minor release may break anything. A patch release may not.
 The public surface is larger than the Rust API: CLI flags and their defaults, exit codes 0/1/2/3, the `--json` shapes, the `hint:` text the docs quote, and the wire invariants (the `<name>.sha256` marker, the enumeration document, claim-first, the refusal to overwrite a diverged object).
@@ -62,7 +62,7 @@ git tag -s vX.Y.Z -m "vX.Y.Z"
 git push origin master --follow-tags
 ```
 
-The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw` with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
+The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw`, then `nxr-tui` with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
 The generated release notes are the changelog. There is no `CHANGELOG.md` to rot.
 
 `nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.

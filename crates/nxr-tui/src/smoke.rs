@@ -1,6 +1,7 @@
 //! `--smoke`: the browse-and-download flow without the terminal.
-//! Lists the repositories, walks the tree two levels deep, downloads one subtree
-//! and prints the summary.
+//! Lists the repositories, walks the tree two levels deep, downloads one
+//! subtree and prints the summary. The same server resolution as the TUI:
+//! positional URLs, `--server` presets, or the config file.
 
 use std::path::Path;
 
@@ -9,6 +10,7 @@ use nexus_raw_core::{Entry, EntryKind, Enumeration, Event, Nxr};
 use tokio::sync::mpsc;
 
 use crate::args::Args;
+use crate::config::ConfigFile;
 use crate::net;
 
 /// Runs the headless browse-and-download flow.
@@ -16,31 +18,31 @@ use crate::net;
 /// # Errors
 ///
 /// Returns an error when the bootstrap, any listing, the walk or the download fails.
-pub async fn run(args: &Args) -> anyhow::Result<()> {
+pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     let auth = net::auth_header(&args.user)?;
-    // The same fail-fast bootstrap the TUI uses: every base must answer.
-    let repos = net::bootstrap(&args.bases, auth.clone()).await?;
+    let servers = args.resolve_servers(&cfg)?;
 
-    let mut picked = None;
-    for (server, base) in args.bases.iter().enumerate() {
-        println!("server {base}");
-        for row in repos.iter().filter(|r| r.server == server) {
-            println!(
-                "  {:<12} {:<7} {}",
-                row.repo.name, row.repo.format, row.repo.kind
-            );
-            // A hosted raw repository accepts uploads and holds files: the download target of choice.
-            if picked.is_none() && row.repo.format == "raw" && row.repo.kind == "hosted" {
-                picked = Some(row.repo.clone());
-            }
+    // The same fail-fast bootstrap the TUI uses: every server must answer.
+    let mut all = Vec::new();
+    for server in &servers {
+        let repos = net::server_repos(server, auth.clone())
+            .await
+            .with_context(|| format!("server {}", server.name))?;
+        println!("server {}", server.url);
+        for repo in &repos {
+            println!("  {:<12} {:<7} {}", repo.name, repo.format, repo.kind);
+            all.push(repo.clone());
         }
     }
-    let Some(repo) = picked.or_else(|| {
-        repos
-            .iter()
-            .find(|r| r.repo.format == "raw")
-            .map(|r| r.repo.clone())
-    }) else {
+
+    // A hosted raw repository accepts uploads and holds files: the download
+    // target of choice. The first plain raw repository is the fallback.
+    let picked = all
+        .iter()
+        .find(|r| r.format == "raw" && r.kind == "hosted")
+        .or_else(|| all.iter().find(|r| r.format == "raw"))
+        .cloned();
+    let Some(repo) = picked else {
         bail!("no raw repository found on any server");
     };
     let repo_url = net::dir_url(&repo.url);
