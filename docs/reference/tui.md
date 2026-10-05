@@ -43,7 +43,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `d` | download the selected entry: a folder downloads its subtree |
 | `D` | download the whole current directory |
 | `r` | refresh the current listing |
-| `i` | info on the selected entry: HEAD size for files, the listing count for folders |
+| `i` | info on the selected entry: HEAD size for files, the length of the current listing for folders |
 | `/` | filter the tree: type to narrow, enter keeps, esc clears |
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay, `a` opens the add form |

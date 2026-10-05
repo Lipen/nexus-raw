@@ -27,10 +27,17 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     for server in &servers {
         let repos = net::server_repos(server, auth.clone())
             .await
-            .with_context(|| format!("server {}", server.name))?;
-        println!("server {}", server.url);
+            .with_context(|| format!("server {}", server.name.escape_debug()))?;
+        // Server-derived strings print escaped: a hostile name must not
+        // drive the terminal.
+        println!("server {}", server.url.escape_debug());
         for repo in &repos {
-            println!("  {:<12} {:<7} {}", repo.name, repo.format, repo.kind);
+            println!(
+                "  {:<12} {:<7} {}",
+                repo.name.escape_debug(),
+                repo.format.escape_debug(),
+                repo.kind.escape_debug()
+            );
             all.push(repo.clone());
         }
     }
@@ -49,7 +56,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
 
     // The tree walk: the root listing, then two descents along the first folder.
     let root = listing(&repo_url, "", &auth).await?;
-    println!("tree of {}:", repo.name);
+    println!("tree of {}:", repo.name.escape_debug());
     print_entries("", &root);
     let mut dir_rel = String::new();
     for level in 1..=2 {
@@ -63,7 +70,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
         };
         dir_rel = format!("{dir_rel}{name}/");
         let entries = listing(&repo_url, &dir_rel, &auth).await?;
-        println!("level {level}: {dir_rel}");
+        println!("level {level}: {}", dir_rel.escape_debug());
         print_entries("  ", &entries);
     }
 
@@ -162,11 +169,12 @@ async fn listing(
 }
 
 /// Prints one listing: `name/` for folders, `name` for files.
+/// Names come from the server, so they print escaped.
 fn print_entries(indent: &str, entries: &[Entry]) {
     for entry in entries {
         match entry.kind {
-            EntryKind::Dir => println!("{indent}  {}/", entry.name),
-            EntryKind::File => println!("{indent}  {}", entry.name),
+            EntryKind::Dir => println!("{indent}  {}/", entry.name.escape_debug()),
+            EntryKind::File => println!("{indent}  {}", entry.name.escape_debug()),
         }
     }
 }

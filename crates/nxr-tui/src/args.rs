@@ -62,11 +62,16 @@ impl Args {
     /// Returns an error when a preset name is unknown or the resolution ends
     /// with no server at all (a misuse: exit code 2).
     pub fn resolve_servers(&self, cfg: &ConfigFile) -> anyhow::Result<Vec<ServerCfg>> {
-        let mut out: Vec<ServerCfg> = self
-            .bases
-            .iter()
-            .map(|b| ServerCfg::from_base(b.clone()))
-            .collect();
+        let mut out: Vec<ServerCfg> = Vec::new();
+        for base in &self.bases {
+            let server = ServerCfg::from_base(base.clone());
+            // The same URL twice is one tab, like every other open path.
+            let key = server.url.trim_end_matches('/');
+            if out.iter().any(|s| s.url.trim_end_matches('/') == key) {
+                continue;
+            }
+            out.push(server);
+        }
         for name in &self.server {
             let Some(preset) = cfg.servers.iter().find(|s| &s.name == name) else {
                 let known = cfg
@@ -124,6 +129,13 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name, "127.0.0.1:8081");
         assert_eq!(got[0].url, "http://127.0.0.1:8081/");
+    }
+
+    #[test]
+    fn the_same_url_twice_opens_one_tab() {
+        let parsed = args(&["http://a/", "http://a/", "http://a/"], &[]);
+        let got = parsed.resolve_servers(&ConfigFile::default()).unwrap();
+        assert_eq!(got.len(), 1);
     }
 
     #[test]

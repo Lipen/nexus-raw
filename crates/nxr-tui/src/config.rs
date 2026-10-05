@@ -65,10 +65,17 @@ impl ServerCfg {
 }
 
 /// `http://127.0.0.1:8081/repository/raw-main/` → `127.0.0.1:8081`.
+/// The userinfo never reaches a name: `http://user:pass@host/` derives `host`,
+/// so a password in the URL cannot end up in the tab bar, the status line or
+/// error output.
 #[must_use]
 pub fn host_of(url: &str) -> String {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    rest.split('/').next().unwrap_or(rest).to_owned()
+    let authority = rest.split('/').next().unwrap_or(rest);
+    authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host)
+        .to_owned()
 }
 
 /// Where downloads land.
@@ -256,6 +263,16 @@ mod tests {
             host_of("https://nexus.example.com/repository/raw-main/"),
             "nexus.example.com"
         );
+    }
+
+    #[test]
+    fn host_of_never_carries_the_userinfo() {
+        assert_eq!(
+            host_of("http://user:pass@127.0.0.1:8081/"),
+            "127.0.0.1:8081"
+        );
+        assert_eq!(host_of("http://user@host/"), "host");
+        assert_eq!(host_of("http://user:pass@host/"), "host");
     }
 
     #[test]

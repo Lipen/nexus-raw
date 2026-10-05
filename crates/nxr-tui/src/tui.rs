@@ -49,10 +49,16 @@ pub async fn run(
     for server in &servers {
         let repos = net::server_repos(server, auth.clone())
             .await
-            .with_context(|| format!("server {}", server.name))?;
+            .with_context(|| format!("server {}", server.name.escape_debug()))?;
         tabs.push(Tab::new(server.clone(), repos));
     }
     open_terminal(servers, tabs, cfg, cfg_path, args, auth).await
+}
+
+/// The effective format filter: the flag lifts it, the config default fills it in.
+#[must_use]
+pub fn all_formats_of(args: &Args, cfg: &ConfigFile) -> bool {
+    args.all_formats || cfg.tui.all_formats
 }
 
 /// The terminal session: raw mode, the input thread, the pump and the restore.
@@ -66,12 +72,13 @@ async fn open_terminal(
 ) -> anyhow::Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
     let download_dir = cfg.download.dir.clone();
+    let all_formats = all_formats_of(&args, &cfg);
     let mut app = App::new(
         servers,
         tabs,
         cfg,
         cfg_path,
-        args.all_formats,
+        all_formats,
         download_dir,
         auth,
         tx,
@@ -81,13 +88,7 @@ async fn open_terminal(
     // A panic mid-frame must not leave the terminal in raw mode.
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(
-            stdout(),
-            LeaveAlternateScreen,
-            DisableMouseCapture,
-            DisableBracketedPaste
-        );
+        restore_terminal();
         previous_hook(info);
     }));
 
@@ -101,31 +102,58 @@ async fn open_terminal(
                 break;
             }
             // A bounded poll keeps the thread joinable after quit: a bare `read` would sleep forever.
-            if crossterm::event::poll(Duration::from_millis(100)).unwrap_or(false) {
-                match crossterm::event::read() {
+            // A poll error means the input source is gone: break, like a read error.
+            match crossterm::event::poll(Duration::from_millis(100)) {
+                Ok(true) => match crossterm::event::read() {
                     Ok(ev) => {
                         if input_tx.blocking_send(ev).is_err() {
                             break;
                         }
                     }
                     Err(_) => break,
-                }
+                },
+                Ok(false) => continue,
+                Err(_) => break,
             }
         }
     });
 
-    enable_raw_mode().context("enable raw mode")?;
-    execute!(
-        stdout(),
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        EnableBracketedPaste
-    )
-    .context("enter alternate screen")?;
-    let mut terminal =
-        Terminal::new(CrosstermBackend::new(stdout())).context("terminal backend")?;
+    // Setup failures route through the same restore as normal exits: a tty
+    // left in raw mode or in the alternate screen stays broken until `reset`.
+    let setup = (|| -> anyhow::Result<Terminal<CrosstermBackend<std::io::Stdout>>> {
+        enable_raw_mode().context("enable raw mode")?;
+        execute!(
+            stdout(),
+            EnterAlternateScreen,
+            EnableMouseCapture,
+            EnableBracketedPaste
+        )
+        .context("enter alternate screen")?;
+        Terminal::new(CrosstermBackend::new(stdout())).context("terminal backend")
+    })();
+    let mut terminal = match setup {
+        Ok(terminal) => terminal,
+        Err(e) => {
+            restore_terminal();
+            stop.store(true, Ordering::Relaxed);
+            let _ = input.join();
+            return Err(e);
+        }
+    };
     let result = pump(&mut terminal, &mut app, &mut rx, &mut input_rx).await;
 
+    restore_terminal();
+    // The queue owner goes first: a full channel must not block the join.
+    drop(input_rx);
+    drop(rx);
+    stop.store(true, Ordering::Relaxed);
+    let _ = input.join();
+    result
+}
+
+/// Returns the terminal to the shell: raw mode off, main screen, no capture,
+/// no paste bracket, visible cursor. Every exit path runs through this.
+fn restore_terminal() {
     let _ = disable_raw_mode();
     let _ = execute!(
         stdout(),
@@ -133,9 +161,9 @@ async fn open_terminal(
         DisableMouseCapture,
         DisableBracketedPaste
     );
-    stop.store(true, Ordering::Relaxed);
-    let _ = input.join();
-    result
+    // ratatui hides the cursor on every frame; leaving the alternate screen
+    // does not bring it back.
+    let _ = execute!(stdout(), crossterm::cursor::Show);
 }
 
 async fn pump(
@@ -170,5 +198,23 @@ async fn pump(
                 None => return Ok(()),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser as _;
+
+    #[test]
+    fn the_flag_and_the_config_both_lift_the_format_filter() {
+        let cfg = ConfigFile::default();
+        let flag_only = Args::parse_from(["nxr-tui", "--all-formats", "http://a/"]);
+        assert!(all_formats_of(&flag_only, &cfg));
+        let plain = Args::parse_from(["nxr-tui", "http://a/"]);
+        assert!(!all_formats_of(&plain, &cfg));
+        let mut cfg_on = ConfigFile::default();
+        cfg_on.tui.all_formats = true;
+        assert!(all_formats_of(&plain, &cfg_on));
     }
 }

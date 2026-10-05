@@ -18,13 +18,19 @@ use crate::config::ServerCfg;
 ///
 /// # Errors
 ///
-/// Returns an error when `-u` carries no `:` separator or the credential environment is inconsistent.
+/// Returns an error when `-u` carries no `:` separator (a misuse, without
+/// echoing the value) or the credential environment is inconsistent.
 pub fn auth_header(user: &Option<String>) -> anyhow::Result<Option<String>> {
     let explicit = user
         .as_deref()
-        .map(|raw| match raw.split_once(':') {
-            Some((user, pass)) => Ok((user, pass)),
-            None => Err(anyhow::anyhow!("-u expects user:pass, got {raw:?}")),
+        .map(|raw| -> anyhow::Result<(&str, &str)> {
+            match raw.split_once(':') {
+                Some((user, pass)) => Ok((user, pass)),
+                None => Err(Error::Misuse(
+                    "-u expects user:pass with a single ':'; the value carries none".to_owned(),
+                )
+                .into()),
+            }
         })
         .transpose()?;
     Ok(creds::resolve(explicit)?.map(|creds| creds.header))

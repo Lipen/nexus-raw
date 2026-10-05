@@ -476,7 +476,7 @@ impl App {
                 filter.pop();
                 t.tree_cursor = 0;
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c) if key.modifiers.is_empty() => {
                 filter.push(c);
                 t.tree_cursor = 0;
             }
@@ -534,7 +534,7 @@ impl App {
                 buffer.pop();
                 self.mode = Mode::AddServer(buffer);
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c) if key.modifiers.is_empty() => {
                 buffer.push(c);
                 self.mode = Mode::AddServer(buffer);
             }
@@ -1085,6 +1085,10 @@ impl App {
                 self.persist_server(&server);
             }
             Err(e) => {
+                // A refresh of an existing tab must not leave the loading marker on.
+                if slot < self.tabs.len() {
+                    self.tabs[slot].loading = false;
+                }
                 // The overlay stays open with the input preserved.
                 self.error = Some((format!("server {}: {e}", server.name), e.hint()));
             }
@@ -1126,10 +1130,16 @@ impl App {
     fn on_walk(&mut self, tab: usize, gen: u64, res: Result<Vec<ArtifactName>, Error>) {
         let fresh = self.tabs.get(tab).is_some_and(|t| gen == t.gen);
         if !fresh {
+            // The tab navigated away while the walk ran: the request is void,
+            // and the download it prepared must not stay "running" forever.
+            self.download = None;
             return;
         }
         match res {
             Ok(names) if names.is_empty() => {
+                if let Some(dl) = self.download.as_mut() {
+                    dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
+                }
                 self.status = "the subtree holds no files".into();
             }
             Ok(names) => {
@@ -1143,7 +1153,12 @@ impl App {
                 self.status = format!("plan: {count} {unit} -> {}", dst.display());
                 net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
             }
-            Err(e) => self.fail_err(e),
+            Err(e) => {
+                if let Some(dl) = self.download.as_mut() {
+                    dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
+                }
+                self.fail_err(e);
+            }
         }
     }
 
@@ -1632,14 +1647,79 @@ mod tests {
             false,
         );
         app.handle(Msg::Key(key(KeyCode::Enter)));
-        // A walk of an older generation lands: dropped, nothing transfers.
+        // A walk of an older generation lands: dropped, nothing transfers,
+        // and the download it prepared does not stay "running" forever.
         app.handle(Msg::Walk {
             tab: 0,
             gen: app.tabs[0].gen - 1,
             res: Ok(vec![ArtifactName::parse("README.txt").unwrap()]),
         });
         assert!(rx.try_recv().is_err(), "no download was spawned");
-        assert!(app.download.as_ref().and_then(|d| d.files).is_none());
+        assert!(app.download.is_none(), "the stale walk released the slot");
+        assert!(!app.busy(), "the app is usable again");
+    }
+
+    #[tokio::test]
+    async fn a_failed_walk_releases_the_app() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let Msg::Walk { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the walk result");
+        };
+        // The walk refused (the mock port is dead): the panel resolves as failed.
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Err(Error::Transport {
+                url: "http://127.0.0.1:1/".into(),
+                detail: "connection refused".into(),
+            }),
+        });
+        let Some(dl) = app.download.as_ref() else {
+            panic!("the download panel exists");
+        };
+        assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
+        assert!(!app.busy(), "enter and friends work after the failure");
+    }
+
+    #[tokio::test]
+    async fn an_empty_walk_releases_the_app() {
+        let (mut app, mut rx) =
+            app_with(vec![tree_tab(vec![entry("empty", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let Msg::Walk { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the walk result");
+        };
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Ok(vec![]),
+        });
+        let Some(dl) = app.download.as_ref() else {
+            panic!("the download panel exists");
+        };
+        assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
+        assert!(!app.busy(), "enter and friends work after the empty walk");
+    }
+
+    #[tokio::test]
+    async fn a_refused_repos_refresh_clears_the_loading_marker() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('r'))));
+        assert!(app.tabs[0].loading);
+        app.handle(Msg::Repos {
+            tab: 0,
+            server: server(),
+            res: Err(Error::Transport {
+                url: "http://127.0.0.1:1/".into(),
+                detail: "connection refused".into(),
+            }),
+        });
+        assert!(!app.tabs[0].loading, "no phantom loading marker");
+        assert!(app.error.is_some());
     }
 
     #[tokio::test]

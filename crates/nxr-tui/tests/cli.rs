@@ -67,6 +67,22 @@ fn a_malformed_url_is_misuse() {
 }
 
 #[test]
+fn a_bad_user_value_is_misuse_without_echoing_it() {
+    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+        .args(["-u", "nosplit", "http://127.0.0.1:1/"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "misuse exit code");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("error:"), "stderr was: {stderr}");
+    assert!(stderr.contains("hint:"), "stderr was: {stderr}");
+    assert!(
+        !stderr.contains("nosplit"),
+        "the value must not echo: {stderr}"
+    );
+}
+
+#[test]
 fn no_servers_anywhere_is_misuse_with_guidance() {
     // No config in the isolated XDG dir and no positional URL: exit 2 with
     // a message that names both ways out.

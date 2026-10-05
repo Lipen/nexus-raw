@@ -255,7 +255,13 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     // The label is right-aligned in the full width; the left part is clipped
     // to the remaining width, so the two can never overwrite each other.
     f.render_widget(Line::from(Span::styled(right, dim())).right_aligned(), area);
-    f.render_widget(Line::from(left), Rect { width: left_w, ..area });
+    f.render_widget(
+        Line::from(left),
+        Rect {
+            width: left_w,
+            ..area
+        },
+    );
 }
 
 /// The right side of the status line: tab position, server and cursor.

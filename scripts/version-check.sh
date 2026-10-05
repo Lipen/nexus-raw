@@ -11,9 +11,10 @@ ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 
 pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
 dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
+tui="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nxr-tui/Cargo.toml)"
 
 failed=0
-for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep"; do
+for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nxr-tui's dependency on nexus-raw-core:$tui"; do
   name="${pair%%:*}"; got="${pair#*:}"
   if [ "$got" != "$ws" ]; then
     echo "version-check: $name is '$got', the workspace is '$ws'" >&2

@@ -116,7 +116,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/nx/rt/nxr-tui" | grep -q "\"vers\":\"$version\""; then
+          if curl -sf "https://index.crates.io/nx/r-/nxr-tui" | grep -q "\"vers\":\"$version\""; then
             echo "nxr-tui@$version is already on crates.io, skipping"
           else
             cargo publish --locked -p nxr-tui
