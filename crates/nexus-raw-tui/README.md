@@ -12,9 +12,8 @@ nxr-tui --server main --server backup   # two named presets as two tabs
 A quick way to get a server is the repository mock:
 
 ```bash
-cargo build -q -p mock-nexus -p nxr-tui
-target/debug/mock-nexus atomic --port 8081
-cargo run -p nxr-tui -- http://127.0.0.1:8081/
+just mock &          # the mock server: cargo run -p mock-nexus -- atomic --port 8081
+just tui http://127.0.0.1:8081/
 ```
 
 ## The fail-fast contract
@@ -110,7 +109,7 @@ The exit code follows `Error::exit_code()`.
 ## Tests
 
 ```bash
-cargo test -p nxr-tui
+cargo test -p nexus-raw-tui
 ```
 
 The suite covers argument resolution, the config roundtrip, navigation including the arrow keys, the filter, per-tab generations and stale-result drops, the add-server flow with config persistence, the quit guard, mouse wheel and click, the fail-fast bootstrap against a live mock and against dead and malformed URLs, the recursive subtree walk, and end-to-end binary runs including a config-preset smoke.

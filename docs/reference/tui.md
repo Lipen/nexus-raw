@@ -151,7 +151,7 @@ CI uses the same mode: `cargo test -p nexus-raw-tui` drives the real binary agai
 | `BASE_URL...` | server root URLs to open (positional, repeatable) |
 | `-s, --server <NAME>` | open the named config preset (repeatable) |
 | `-u, --user <USER:PASS>` | credentials, curl style; env fallback as in `nxr` |
-| `-a, --all-formats` | let repositories of every format be opened, not only raw |
+| `--all-formats` | let repositories of every format be opened, not only raw |
 | `--smoke` | the headless browse-and-download flow |
 | `--config <PATH>` | alternative config file path |
 | `--init-config` | write the commented template to the config path and exit |

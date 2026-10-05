@@ -2,7 +2,7 @@
 
 Every failure names its kind, the object and both sides of a disagreement.
 Every error also prints one `hint:` line on stderr telling you what to check next.
-The taxonomy has eleven variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+The taxonomy has twelve variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 
 ## The taxonomy
 
@@ -22,7 +22,8 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
 | `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
-| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health`; a 429 gets its own hint: honor `Retry-After` or lower `--workers` | a proxy answered 429, or the path hit a non-artifact route |
+| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route; a 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
+| `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
 | `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken transport.
@@ -233,7 +234,7 @@ The taxonomy is `nexus_raw_core::Error`.
 Wrappers call these instead of re-deriving either.
 
 ```rust
-match nxr.up(dir, None, true, None, None).await {
+match nxr.up(dir, None, true, None).await {
     Ok(summary) => info!("published: {summary:?}"),
     Err(e) if e.exit_code() == 3 => warn!("transport, retry later: {e}"),
     Err(e) => error!("data or invocation problem, hint: {:?}", e.hint()),

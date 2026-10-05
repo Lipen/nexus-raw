@@ -44,7 +44,7 @@ The canonical protocol text is kept outside this repository.
 | the wire protocol, store shape, errors, forbiddances|`crates/nexus-raw-core/src/protocol.md` (the crate docs)|
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
 | CLI flags, credentials order, output examples | [README.md](README.md) |
-| the TUI (keys, config, presets, smoke) | `crates/nxr-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
+| the TUI (keys, config, presets, smoke) | `crates/nexus-raw-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
@@ -75,12 +75,12 @@ New fields are additive.
 | Path | Role |
 |:-----|:-----|
 | `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, manifest, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
-| `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `ls`, `verify`, `doctor`), `render/` (human, NDJSON) |
+| `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `doctor`), `render/` (human, NDJSON) |
 |`crates/mock-nexus/`|the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites|
 |`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
-| `crates/nxr-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
+| `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just example-rust` |
 
 ## Commits

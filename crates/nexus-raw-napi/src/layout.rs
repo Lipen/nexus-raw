@@ -186,7 +186,8 @@ pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<
         .collect())
 }
 
-/// List the version tokens the server search API reports for this directory, like `ls`.
+/// List the version tokens the server search API reports for this directory.
+/// The CLI `ls` prints the raw tree, so the version view lives only in the library API.
 #[napi]
 pub async fn ls_versions(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<String>> {
     let o = opts.unwrap_or_default();

@@ -40,7 +40,7 @@ flowchart BT
 
 ```toml
 [dependencies]
-nexus-raw-core = "0.3"
+nexus-raw-core = "0.4"
 ```
 
 ## The facade
@@ -96,11 +96,14 @@ Every method mirrors a CLI command one-to-one.
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
-| `up(dir, names, gen_markers, claim, plan)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
-| `down(dst, enum_src, fresh, plan)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
+| `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `mirror_plan(dst, enum_src)` | `Vec<MirrorAction>` | `mirror --dry-run` | probe both sides and classify, emit the plan, move nothing |
 | `mirror(dst, enum_src)` | `Summary` | `nxr mirror` | pour the enumerated names into a second facade's base: staged through the `down` machinery, written in `up`'s order |
 | `rm(enum_src)` | `Summary` | `nxr rm` | DELETE the enumerated names, marker before bytes: 404 is success, divergence is never checked |
 | `rm_plan(enum_src)` | `Vec<RmAction>` | `rm --dry-run` | `Remove`/`Missing` per name by remote existence, nothing deleted |
+| `enumerate(enum_src)` | `Vec<ArtifactName>` | - | resolve any enumeration source to its deduplicated names |
+| `service_repos()` | `Vec<RepoInfo>` | `nxr service repos` | server metadata through the service REST API, not storage protocol |
 | `point_clear(url)` | `ClearOutcome` | `nxr point --clear` | DELETE the pointer: `Cleared` or `Absent` |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
@@ -111,11 +114,10 @@ Every method mirrors a CLI command one-to-one.
 | `ls_versions()` | `Vec<String>` | - | the version view through the search API, experimental |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 
-Two parameters deserve their one-liners:
+One parameter deserves its one-liner:
 
 - `names: Option<Vec<ArtifactName>>` restricts a transfer to a manifest's names.
 `None` scans the directory.
-- `plan: Option<Vec<Action>>` accepts a precomputed diff: print the plan, then execute exactly it.
 
 Failures collect per name into `Summary.failed` while the rest of the transfer completes.
 Refusals (`Verdict`) abort before any byte moves and convert into `Error` (see [errors](#errors)).
@@ -208,6 +210,7 @@ The variants mirror the CLI's enumeration flags:
 | `Enumeration::Manifest(Manifest)` | `--manifest <file\|url|->` | exact: the parsed name list |
 | `Enumeration::Names(Vec<ArtifactName>)` | `--name` (repeatable) | exact: every name grammar-checked at parse time |
 | `Enumeration::Search` | `--ls` | best-effort: walks the server search API with continuation tokens |
+| `Enumeration::Filtered { inner, prefixes }` | `--prefix` | the inner source, narrowed to whole-segment prefixes after resolution |
 
 An enumeration that produces zero names refuses with `Enumerate`, because an empty plan is treated as a wrong URL rather than as success.
 
@@ -248,14 +251,14 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `Misuse`, `Io`.
+`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `ServiceMissing`, `Misuse`, `Io`.
 `Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint.
 Both are covered variant by variant in [errors and exit codes](errors.md).
-`Verdict` (diff refusals: `Mismatch`, `Missing`, `LocalIncomplete`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
+`Verdict` (diff refusals: `Mismatch`, `Missing`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 
 ## Node bindings
 
-The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), `up`, `down`, `verify` and the channel operations.
+The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
 Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
 Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.

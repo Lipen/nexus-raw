@@ -22,7 +22,7 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `mirror` | pour a version from one repository into another: read the source, write the destination through the `up` rules |
 | `get`, `put`, `head`, `sha` | curl-grade primitives, digest computed on the fly |
 | `channel get`, `channel set` | name versions through token files, with the forward-only guard |
-| `ls` | version and object listings through the search API (experimental) |
+| `ls` | the raw-tree listing of a directory URL, any depth (`--assets`: flat artifact names); search-API based, best-effort |
 | `verify` | offline check of bytes, markers and digests |
 | `doctor` | credentials, TLS and reachability, without printing secrets |
 
@@ -41,7 +41,7 @@ Take it as a version dependency:
 
 ```toml
 [dependencies]
-nexus-raw-core = "0.3"
+nexus-raw-core = "0.4"
 ```
 
 A git pin or a vendored copy still works for special cases.
@@ -79,7 +79,7 @@ let nxr = Nxr::new(
 
 // The enumeration source is mandatory, exactly like `nxr down`.
 let summary = nxr
-    .down("vendor/app/".as_ref(), Enumeration::Search, false, None)
+    .down("vendor/app/".as_ref(), Enumeration::Search, false)
     .await?;
 println!("downloaded {}, skipped {}", summary.downloaded, summary.skipped);
 

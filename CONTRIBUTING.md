@@ -19,7 +19,7 @@ Its scenario list is the contract: a scenario added for one client lands with th
 
 ## Commits
 
-Conventional, subject-only, no body, one change per commit: `scope: short imperative summary` with scopes `core`, `cli`, `mock`, `docs`, `chore`.
+Conventional, subject-only, no body, one change per commit: `scope: short imperative summary` with scopes `core`, `cli`, `mock`, `tui`, `docs`, `chore`.
 Commits go straight to master.
 Commits must be signed: the remote rejects unsigned pushes.
 

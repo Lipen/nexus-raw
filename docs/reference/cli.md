@@ -2,7 +2,7 @@
 
 `nxr` moves files to and from a Nexus raw repository.
 Single-object commands: `get`, `put`, `head`, `sha`.
-Directory transfers with sha-sibling verification: `up`, `down`, `mirror`.
+Directory transfers with sha-sibling verification: `up`, `down`, `mirror`, `mv`.
 Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 
@@ -652,7 +652,7 @@ Treat both as conveniences only.
 | `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/...` |
 | `3` | transport or auth failure |
 
-`--json` prints one object per line: `{"version":"1.4.0"}` or `{"name":"app.zip"}`.
+`--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file"}` from the tree, `{"name":"app.zip"}` from `--assets`.
 
 ## nxr channel get
 
