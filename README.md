@@ -105,7 +105,7 @@ Every error prints a `hint:` line.
 `nxr-tui` browses a raw repository in the terminal: one tab per server, the repository tree at any depth, subtree downloads, a live filter and server presets.
 
 ```bash
-cargo install nxr-tui
+cargo install nexus-raw-tui
 nxr-tui https://nexus.example.com/     # or with no arguments: the config presets
 ```
 

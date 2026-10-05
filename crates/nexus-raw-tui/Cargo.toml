@@ -1,5 +1,5 @@
 [package]
-name = "nxr-tui"
+name = "nexus-raw-tui"
 description = "A terminal browser over Nexus raw repositories: tabs, presets, filters and downloads"
 version.workspace = true
 edition.workspace = true

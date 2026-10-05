@@ -28,9 +28,9 @@
 //! use std::sync::Arc;
 //!
 //! use clap::Parser as _;
-//! use nxr_tui::args::Args;
-//! use nxr_tui::config::ConfigFile;
-//! use nxr_tui::{app::App, net};
+//! use nexus_raw_tui::args::Args;
+//! use nexus_raw_tui::config::ConfigFile;
+//! use nexus_raw_tui::{app::App, net};
 //!
 //! // A runtime context, because the app spawns loads onto tokio.
 //! let rt = tokio::runtime::Builder::new_current_thread()

@@ -110,16 +110,17 @@ jobs:
         run: sleep 30
 
       # The TUI is a leaf: it carries nexus-raw-core, so it publishes after
-      # the library it depends on is already indexed.
-      - name: Publish nxr-tui
+      # the library it depends on is already indexed. The crate is
+      # nexus-raw-tui; the binary inside keeps the nxr-tui name.
+      - name: Publish nexus-raw-tui
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/nx/r-/nxr-tui" | grep -q "\"vers\":\"$version\""; then
-            echo "nxr-tui@$version is already on crates.io, skipping"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-tui@$version is already on crates.io, skipping"
           else
-            cargo publish --locked -p nxr-tui
+            cargo publish --locked -p nexus-raw-tui
           fi
 
       - name: Open the GitHub release

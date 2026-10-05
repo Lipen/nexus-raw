@@ -142,7 +142,7 @@ $ echo $?
 
 It lists the repositories of every server, walks the tree of the first hosted raw repository two levels deep, downloads the subtree of the first root folder and prints the summary.
 The exit code follows `Error::exit_code()`.
-CI uses the same mode: `cargo test -p nxr-tui` drives the real binary against `mock-nexus`, including a run driven entirely by a config preset.
+CI uses the same mode: `cargo test -p nexus-raw-tui` drives the real binary against `mock-nexus`, including a run driven entirely by a config preset.
 
 ## Flags
 

@@ -5,7 +5,7 @@ members = [
     "crates/nexus-raw",
     "crates/mock-nexus",
     "crates/nexus-raw-napi",
-    "crates/nxr-tui",
+    "crates/nexus-raw-tui",
 ]
 exclude = ["examples"]
 

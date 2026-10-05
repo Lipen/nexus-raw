@@ -8,7 +8,7 @@ use anyhow::Context;
 use clap::Parser;
 use nexus_raw_core::Error;
 
-use nxr_tui::{args::Args, config, smoke, tui};
+use nexus_raw_tui::{args::Args, config, smoke, tui};
 
 fn main() -> ExitCode {
     let args = Arc::new(Args::parse());

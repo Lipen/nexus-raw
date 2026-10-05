@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- The TUI crate ships as `nexus-raw-tui`; the binary inside stays `nxr-tui`, and so do its config paths and smoke directory names.
 - `nxr ls <url>` prints the raw tree: directories with a trailing slash, files bare, at any depth.
 - The version view left the CLI and remains in the library API as `ls_versions`; `--assets` still lists the artifacts of a version.
 - The human and NDJSON render contract is pinned by golden tests and documented in the CLI reference.
