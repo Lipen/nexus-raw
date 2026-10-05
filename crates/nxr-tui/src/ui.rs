@@ -252,7 +252,8 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     };
     let right = self_status(app);
     // `·` is two UTF-8 bytes but one column: width math goes by chars.
-    let left_w = area.width.saturating_sub(right.chars().count() as u16);
+    // Two spare columns keep a mid-word crop from touching the label.
+    let left_w = area.width.saturating_sub(right.chars().count() as u16 + 2);
     // The label is right-aligned in the full width; the left part is clipped
     // to the remaining width, so the two can never overwrite each other.
     f.render_widget(Line::from(Span::styled(right, dim())).right_aligned(), area);

@@ -296,7 +296,8 @@ pub struct App {
     pub servers_cursor: usize,
     /// Server connects in flight: one at a time, the slot collides otherwise.
     pub connecting: usize,
-    /// Loads, walks and HEADs in flight.
+    /// Loads, walks and HEADs in flight, across every tab: a diagnostic count,
+    /// not a gate (the gates are the per-tab `loading` and the running download).
     pub pending: usize,
     /// The current or last download, if any.
     pub download: Option<Download>,
