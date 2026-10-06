@@ -22,6 +22,9 @@ _nxr() {
             nxr,complete)
                 cmd="nxr__subcmd__complete"
                 ;;
+            nxr,diff)
+                cmd="nxr__subcmd__diff"
+                ;;
             nxr,doctor)
                 cmd="nxr__subcmd__doctor"
                 ;;
@@ -90,6 +93,9 @@ _nxr() {
                 ;;
             nxr__subcmd__help,complete)
                 cmd="nxr__subcmd__help__subcmd__complete"
+                ;;
+            nxr__subcmd__help,diff)
+                cmd="nxr__subcmd__help__subcmd__diff"
                 ;;
             nxr__subcmd__help,doctor)
                 cmd="nxr__subcmd__help__subcmd__doctor"
@@ -164,7 +170,7 @@ _nxr() {
 
     case "${cmd}" in
         nxr)
-            opts="-u -q -v -h -V --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help --version get put head sha up down rm point mirror mv ls channel verify doctor service complete help"
+            opts="-u -q -v -h -V --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help --version get put head sha up down diff rm point mirror mv ls channel verify doctor service complete help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -409,6 +415,56 @@ _nxr() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        nxr__subcmd__diff)
+            opts="-u -q -v -h --manifest --name --ls --prefix --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --manifest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --prefix)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --user)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -u)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --workers)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --retry)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --connect-timeout-secs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --stall-secs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         nxr__subcmd__doctor)
             opts="-u -q -v -h --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
@@ -448,7 +504,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__down)
-            opts="-u -q -v -h --manifest --name --ls --fresh --dry-run --prefix --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -q -v -h --manifest --name --ls --fresh --dry-run --plan --prefix --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -582,7 +638,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__help)
-            opts="get put head sha up down rm point mirror mv ls channel verify doctor service complete help"
+            opts="get put head sha up down diff rm point mirror mv ls channel verify doctor service complete help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -638,6 +694,20 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__help__subcmd__complete)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        nxr__subcmd__help__subcmd__diff)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -1320,7 +1390,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__up)
-            opts="-u -q -v -h --manifest --claim-first --no-sha --dry-run --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -q -v -h --manifest --claim-first --no-sha --dry-run --plan --user --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

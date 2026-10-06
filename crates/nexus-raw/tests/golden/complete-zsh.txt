@@ -133,6 +133,7 @@ _arguments "${_arguments_options[@]}" : \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
 '--no-sha[Skip marker generation and marker uploads]' \
+'--plan[Print the plan without transferring anything]' \
 '--dry-run[Print the plan without transferring anything]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -159,6 +160,7 @@ _arguments "${_arguments_options[@]}" : \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
 '--ls[Best-effort enumeration through the server search API]' \
 '--fresh[Ignore existing part files\: every name downloads from zero]' \
+'--plan[Print the plan without transferring anything]' \
 '--dry-run[Print the plan without transferring anything]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -170,6 +172,30 @@ _arguments "${_arguments_options[@]}" : \
 '--help[Print help]' \
 ':src -- The remote directory URL:_default' \
 ':dst -- The target directory:_files' \
+&& ret=0
+;;
+(diff)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--ls[Best-effort enumeration through the server search API]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':local -- The local directory:_files' \
+':src -- The remote directory URL:_default' \
 && ret=0
 ;;
 (rm)
@@ -555,6 +581,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(diff)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (rm)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -653,6 +683,7 @@ _nxr_commands() {
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'diff:Compare a local directory against a remote one\: the delta report' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
@@ -715,6 +746,11 @@ _nxr__subcmd__complete_commands() {
     local commands; commands=()
     _describe -t commands 'nxr complete commands' commands "$@"
 }
+(( $+functions[_nxr__subcmd__diff_commands] )) ||
+_nxr__subcmd__diff_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr diff commands' commands "$@"
+}
 (( $+functions[_nxr__subcmd__doctor_commands] )) ||
 _nxr__subcmd__doctor_commands() {
     local commands; commands=()
@@ -744,6 +780,7 @@ _nxr__subcmd__help_commands() {
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'diff:Compare a local directory against a remote one\: the delta report' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
@@ -780,6 +817,11 @@ _nxr__subcmd__help__subcmd__channel__subcmd__set_commands() {
 _nxr__subcmd__help__subcmd__complete_commands() {
     local commands; commands=()
     _describe -t commands 'nxr help complete commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__diff_commands] )) ||
+_nxr__subcmd__help__subcmd__diff_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help diff commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__doctor_commands] )) ||
 _nxr__subcmd__help__subcmd__doctor_commands() {

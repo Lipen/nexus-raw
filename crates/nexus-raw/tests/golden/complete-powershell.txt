@@ -43,6 +43,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
             [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
             [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
             [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
             [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
@@ -140,6 +141,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--no-sha', '--no-sha', [CompletionResultType]::ParameterName, 'Skip marker generation and marker uploads')
+            [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
@@ -163,7 +165,29 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
             [CompletionResult]::new('--fresh', '--fresh', [CompletionResultType]::ParameterName, 'Ignore existing part files: every name downloads from zero')
+            [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;diff' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
+            [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
@@ -456,6 +480,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
             [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
             [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
             [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
             [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
@@ -485,6 +510,9 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;help;down' {
+            break
+        }
+        'nxr;help;diff' {
             break
         }
         'nxr;help;rm' {
