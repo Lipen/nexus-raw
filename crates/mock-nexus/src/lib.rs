@@ -19,10 +19,14 @@
 //! A group repository is a separate deployment kind, not a scenario:
 //! [`MockNexus::start_group`] aggregates two or more running members, forwarding reads in member order and refusing writes.
 //! On a group handle the store mutators ([`MockNexus::insert`], [`MockNexus::enable_drift`]) are no-ops: a group stores nothing.
+//!
+//! The client-facing contract page `docs/reference/invariants.md` is rendered from [`SCENARIO_DOCS`].
+//! A drift test in the `invariants` module fails when a scenario change does not regenerate it.
 
 mod base64;
 mod group;
 mod handle;
+mod invariants;
 mod scenario;
 mod server;
 mod store;
@@ -30,5 +34,6 @@ mod store;
 mod tests;
 
 pub use handle::MockNexus;
+pub use invariants::{render_invariants_markdown, ScenarioDoc, SCENARIO_DOCS};
 pub use scenario::{Scenario, SCENARIOS};
 pub use store::{Outcome, ReqLog};

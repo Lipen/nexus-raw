@@ -52,6 +52,7 @@ nav:
       - reference/cli.md
       - reference/tui.md
       - Wire protocol: reference/protocol.md
+      - Wire invariants: reference/invariants.md
       - Errors and exit codes: reference/errors.md
       - Rust API: reference/api.md
   - Explanation:

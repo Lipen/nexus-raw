@@ -22,6 +22,7 @@ Group search is not modeled: the search API reads the metadata database rather t
 ## The matrix
 
 Every scenario, the invariant it pins, and the tests that pin it.
+The client-facing contract page rendered from the same table: [wire invariants](../reference/invariants.md).
 `atomic` is the control group: it is what the server does when nothing goes wrong, so most semantics tests run against it.
 
 | Scenario | The server does | Invariant pinned | Pinned by |
