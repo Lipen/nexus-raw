@@ -35,7 +35,7 @@ fn text_char(key: &KeyEvent) -> Option<char> {
     }
 }
 use nexus_raw_core::service::RepoInfo;
-use nexus_raw_core::{ArtifactName, Entry, EntryKind, Error, HeadInfo, Summary};
+use nexus_raw_core::{ArtifactName, Dir, Entry, EntryKind, Error, HeadInfo, Summary};
 use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use tokio::sync::mpsc;
@@ -388,6 +388,13 @@ pub struct DestPicker {
     pub pending_repo: Option<RepoRow>,
 }
 
+/// The source picker of a put: a local folder to upload from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickSource {
+    /// The path typed so far, prefilled with the last upload source.
+    pub buffer: String,
+}
+
 /// Which field of the download-as dialog the keystrokes edit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SaveAsField {
@@ -464,6 +471,13 @@ pub enum Retry {
         /// The destination folder.
         dst: PathBuf,
     },
+    /// Upload the same local folder again.
+    Put {
+        /// The local source folder.
+        src: PathBuf,
+        /// The remote base URL the folder uploads into.
+        base: String,
+    },
 }
 
 /// The error modal: cause, facts, next steps, full text.
@@ -494,20 +508,25 @@ pub struct Toast {
     born: Instant,
 }
 
-/// Live download state shown in the progress panel.
-#[derive(Debug, Default)]
-pub struct Download {
-    /// The repository URL the names are relative to.
+/// Live transfer state shown in the progress panel, either direction.
+#[derive(Debug)]
+pub struct Transfer {
+    /// The direction: the panel, the fold and the statuses branch on it.
+    pub dir: Dir,
+    /// Transfer: the repository URL the names are relative to.
+    /// Upload: the remote base URL the folder uploads into.
     pub repo_url: String,
     /// The server label, for error facts.
     pub server: Option<String>,
     /// The repository name, for error facts.
     pub repo_name: Option<String>,
-    /// Local target directory.
+    /// Transfer: the local target directory. Empty for an upload.
     pub dst: PathBuf,
+    /// Upload: the local source directory. None for a download.
+    pub src: Option<PathBuf>,
     /// The plan count of the walk, shown before the transfer starts.
     pub files: Option<usize>,
-    /// `(to download, skipped)` from the plan event.
+    /// `(to transfer, skipped)` from the plan event.
     pub planned: Option<(usize, usize)>,
     /// Names currently in flight: `(done, total)` bytes.
     pub active: BTreeMap<String, (u64, Option<u64>)>,
@@ -528,7 +547,31 @@ pub struct Download {
     pub retry: Option<Retry>,
 }
 
-impl Download {
+impl Default for Transfer {
+    /// A download: the historical direction of the panel.
+    fn default() -> Self {
+        Self {
+            dir: Dir::Down,
+            repo_url: String::new(),
+            server: None,
+            repo_name: None,
+            dst: PathBuf::new(),
+            src: None,
+            files: None,
+            planned: None,
+            active: BTreeMap::new(),
+            finished: 0,
+            skipped: 0,
+            note: None,
+            outcome: None,
+            scope: String::new(),
+            scope_relative: false,
+            retry: None,
+        }
+    }
+}
+
+impl Transfer {
     /// True until the final result arrives.
     #[must_use]
     pub fn is_running(&self) -> bool {
@@ -536,13 +579,19 @@ impl Download {
     }
 }
 
-/// Download progress events folded from the core event stream.
+/// Transfer progress events folded from the core event stream.
 #[derive(Debug)]
 pub enum DlEv {
-    /// The transfer is set up: destination and the plan count of the walk.
-    Start { dst: PathBuf, files: usize },
-    /// The diff plan: `(to download, skipped)`.
-    Plan { download: usize, skip: usize },
+    /// The transfer is set up: the local side (destination or source) and the
+    /// plan count when the walk already knows it.
+    Start {
+        /// Transfer: the destination folder. Upload: the source folder.
+        local: PathBuf,
+        /// The plan count, when it is known before the plan event.
+        files: Option<usize>,
+    },
+    /// The diff plan: `(to transfer, skipped)`.
+    Plan { transfer: usize, skip: usize },
     /// Coalesced byte progress of one name.
     Bytes {
         name: String,
@@ -574,6 +623,8 @@ pub enum Mode {
     Help,
     /// The destination picker: `o`, or a download waiting for a folder.
     Dest(DestPicker),
+    /// The source picker of a put: a local folder to upload.
+    PickSource(PickSource),
     /// The card over a repository or a file.
     Card(Card),
     /// The download-as dialog.
@@ -679,8 +730,11 @@ pub struct App {
     /// Loads, walks and HEADs in flight, across every tab: a diagnostic count,
     /// not a gate (the gates are the per-tab `loading` and the running download).
     pub pending: usize,
-    /// The current or last download, if any.
-    pub download: Option<Download>,
+    /// The current or last transfer, either direction, if any.
+    pub transfer: Option<Transfer>,
+    /// The local folder the last confirmed put uploaded from: the seed of
+    /// the source picker. A session value, never written to the config.
+    pub upload_source: Option<PathBuf>,
     /// The plain status line.
     pub status: String,
     /// The toasts on screen, oldest first.
@@ -733,7 +787,8 @@ impl App {
             connecting: 0,
             connect_open: false,
             pending: 0,
-            download: None,
+            transfer: None,
+            upload_source: None,
             status: String::new(),
             toasts: VecDeque::new(),
             quit: false,
@@ -797,6 +852,9 @@ impl App {
         }
         if let Some(destination) = &ctx.destination {
             facts.push(("destination".into(), destination.display().to_string()));
+        }
+        if let Some(source) = &ctx.source {
+            facts.push(("source".into(), source.display().to_string()));
         }
         let http = match e {
             Error::Http { status, .. } | Error::ReadOnly { status, .. } => Some(*status),
@@ -907,6 +965,7 @@ impl App {
             Mode::Servers => self.on_key_servers(key),
             Mode::AddServer(buffer) => self.on_key_add(key, buffer),
             Mode::Dest(picker) => self.on_key_dest(key, picker),
+            Mode::PickSource(picker) => self.on_key_source(key, picker),
             Mode::Card(card) => self.on_key_card(key, card),
             Mode::SaveAs(dialog) => self.on_key_save_as(key, dialog),
             Mode::Error(modal) => self.on_key_error(key, modal),
@@ -937,6 +996,7 @@ impl App {
             KeyCode::Esc | KeyCode::Backspace => self.on_back(),
             KeyCode::Char(_) if pressed(&key, 'o') => self.open_dest_picker(None, None),
             KeyCode::Char(_) if pressed(&key, 'd') => self.quick_download(),
+            KeyCode::Char(_) if pressed(&key, 'p') => self.open_source_picker(),
             KeyCode::Char(_) if pressed(&key, 'D') => self.open_save_as(),
             KeyCode::Char(_) if pressed(&key, 'r') => self.refresh(),
             KeyCode::Char(_) if pressed(&key, 'e') => self.toggle_nav(),
@@ -1094,6 +1154,23 @@ impl App {
         }
     }
 
+    /// The source picker: enter uploads, esc cancels, typing edits.
+    fn on_key_source(&mut self, key: KeyEvent, mut picker: PickSource) {
+        match key.code {
+            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Enter => self.confirm_source(picker),
+            KeyCode::Backspace => {
+                picker.buffer.pop();
+                self.mode = Mode::PickSource(picker);
+            }
+            KeyCode::Char(c) if text_char(&key) == Some(c) => {
+                picker.buffer.push(c);
+                self.mode = Mode::PickSource(picker);
+            }
+            _ => {}
+        }
+    }
+
     /// The card: inspect, download, recopy, or leave.
     fn on_key_card(&mut self, key: KeyEvent, card: Card) {
         match key.code {
@@ -1183,6 +1260,10 @@ impl App {
             Mode::Dest(mut picker) => {
                 picker.buffer.push_str(&clean);
                 self.mode = Mode::Dest(picker);
+            }
+            Mode::PickSource(mut picker) => {
+                picker.buffer.push_str(&clean);
+                self.mode = Mode::PickSource(picker);
             }
             Mode::SaveAs(mut dialog) => {
                 match dialog.field {
@@ -1328,14 +1409,14 @@ impl App {
 
     /// True while a transfer is running: downloads are single-flight, the next
     /// one waits for the panel to resolve. Browsing never waits on it.
-    fn download_busy(&self) -> bool {
-        self.download.as_ref().is_some_and(Download::is_running)
+    fn transfer_busy(&self) -> bool {
+        self.transfer.as_ref().is_some_and(Transfer::is_running)
     }
 
     fn request_quit(&mut self) {
-        if self.download.as_ref().is_some_and(Download::is_running) && !self.quit_armed {
+        if self.transfer.as_ref().is_some_and(Transfer::is_running) && !self.quit_armed {
             self.quit_armed = true;
-            self.status = "download in flight: press q again to quit".into();
+            self.status = "transfer in flight: press q again to quit".into();
             return;
         }
         self.quit = true;
@@ -1634,20 +1715,36 @@ impl App {
     }
 
     fn refresh(&mut self) {
-        self.refresh_tab(self.tab);
+        self.refresh_tab_inner(self.tab, false);
     }
 
     /// Refreshes one tab's current screen. The applied filter survives and the
     /// cursor returns to the row it sat on, by name: `r` rereads a listing
     /// without throwing the user's place away.
     fn refresh_tab(&mut self, idx: usize) {
+        self.refresh_tab_inner(idx, false);
+    }
+
+    /// The quiet refresh of a finished put: no status lines, the uploaded
+    /// summary stays on screen.
+    fn quiet_refresh_at(&mut self, base: &str) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        if t.loading || t.here_url() != base {
+            return;
+        }
+        self.refresh_tab_inner(self.tab, true);
+    }
+
+    fn refresh_tab_inner(&mut self, idx: usize, quiet: bool) {
         if idx >= self.tabs.len() {
             return;
         }
         let keep = {
             let t = &self.tabs[idx];
             if t.loading {
-                if idx == self.tab {
+                if idx == self.tab && !quiet {
                     self.status = "a listing is in flight".into();
                 }
                 return;
@@ -1668,7 +1765,7 @@ impl App {
             Screen::Repos => {
                 t.loading = true;
                 self.pending += 1;
-                if idx == self.tab {
+                if idx == self.tab && !quiet {
                     self.status = format!("refreshing {}", t.server.name);
                 }
                 let server = t.server.clone();
@@ -1679,7 +1776,7 @@ impl App {
                 let url = t.here_url();
                 t.loading = true;
                 self.pending += 1;
-                if idx == self.tab {
+                if idx == self.tab && !quiet {
                     self.status = format!("refreshing {}/", t.breadcrumb());
                 }
                 let (tab, gen, auth) = (idx, t.gen, self.auth.clone());
@@ -1899,6 +1996,85 @@ impl App {
         }
     }
 
+    // ---- uploads ---------------------------------------------------------
+
+    /// The `p` verb: put a local folder into the current tree position.
+    /// A running transfer waits, the repositories screen refuses.
+    fn open_source_picker(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        if t.screen != Screen::Tree {
+            self.status = "the put works in the tree".into();
+            return;
+        }
+        if self.transfer_busy() {
+            self.status = "transfer in flight: one at a time".into();
+            return;
+        }
+        let seed = self
+            .upload_source
+            .clone()
+            .unwrap_or_else(|| self.base_dir.clone());
+        self.mode = Mode::PickSource(PickSource {
+            buffer: seed.display().to_string(),
+        });
+    }
+
+    /// The Enter of the source picker: the folder is checked locally, nothing
+    /// leaves the machine before it. A refused path keeps the picker open.
+    fn confirm_source(&mut self, picker: PickSource) {
+        let raw = picker.buffer.trim().to_owned();
+        if raw.is_empty() {
+            self.status = "the source is empty".into();
+            return;
+        }
+        let src = self.resolve_path(Path::new(&raw));
+        if !src.is_dir() {
+            self.status = format!("not a directory: {}", src.display());
+            return;
+        }
+        self.upload_source = Some(src.clone());
+        self.mode = Mode::Normal;
+        let base = self
+            .tabs
+            .get(self.tab)
+            .map(|t| t.here_url())
+            .unwrap_or_default();
+        self.start_put(base, src);
+    }
+
+    /// Uploads `src` into the remote `base`: the slot is taken, the position
+    /// is fixed at start, navigation never retargets the run.
+    fn start_put(&mut self, base: String, src: PathBuf) {
+        if self.transfer_busy() {
+            self.status = "transfer in flight: one at a time".into();
+            return;
+        }
+        let (server, repo_name, pos) = match self.tabs.get(self.tab) {
+            Some(t) => (
+                Some(t.server.name.clone()),
+                t.repo.as_ref().map(|r| r.name.clone()),
+                t.breadcrumb(),
+            ),
+            None => (None, None, String::new()),
+        };
+        self.transfer = Some(Transfer {
+            dir: Dir::Up,
+            repo_url: base.clone(),
+            server,
+            repo_name,
+            src: Some(src.clone()),
+            retry: Some(Retry::Put {
+                src: src.clone(),
+                base: base.clone(),
+            }),
+            ..Transfer::default()
+        });
+        self.status = format!("put {} -> {}", src.display(), pos);
+        net::start_upload(self.tx.clone(), base, src, self.auth.clone());
+    }
+
     // ---- downloads -------------------------------------------------------
 
     /// The `d` verb: on Repos the whole repository of the row, on Tree the
@@ -1919,8 +2095,8 @@ impl App {
                 self.download_repo(&repo);
             }
             Screen::Tree => {
-                if self.download_busy() {
-                    self.status = "download in flight: one at a time".into();
+                if self.transfer_busy() {
+                    self.status = "transfer in flight: one at a time".into();
                     return;
                 }
                 let Some(row) = t.selected_row() else {
@@ -2046,8 +2222,8 @@ impl App {
         let Some(t) = self.tabs.get(self.tab) else {
             return;
         };
-        if self.download_busy() {
-            self.status = "download in flight: one at a time".into();
+        if self.transfer_busy() {
+            self.status = "transfer in flight: one at a time".into();
             return;
         }
         let Some(repo) = t.repo.clone() else {
@@ -2057,7 +2233,7 @@ impl App {
         let url = format!("{}{}", t.here_url(), row.rel);
         let out = self.destination.join(&rel);
         let repo_row = RepoRow::from(&repo);
-        self.download = Some(Download {
+        self.transfer = Some(Transfer {
             repo_url: repo_row.dir_url(),
             server: Some(host_of(&repo_row.url)),
             repo_name: Some(repo_row.name.clone()),
@@ -2069,7 +2245,7 @@ impl App {
                 dst: self.destination.clone(),
                 repo: repo_row,
             }),
-            ..Download::default()
+            ..Transfer::default()
         });
         self.status = format!("downloading {}", row.name);
         net::fetch_one(
@@ -2094,8 +2270,8 @@ impl App {
     /// the collected names, so they land straight under `dst` (the dialog's
     /// `{dir}/{name}`); from-root names mirror the repository under `dst`.
     fn begin_walk(&mut self, repo: RepoRow, rel: String, dst: PathBuf, scope_relative: bool) {
-        if self.download_busy() {
-            self.status = "download in flight: one at a time".into();
+        if self.transfer_busy() {
+            self.status = "transfer in flight: one at a time".into();
             return;
         }
         let Some(t) = self.tabs.get(self.tab) else {
@@ -2110,7 +2286,7 @@ impl App {
         } else {
             format!("{rel}/")
         };
-        self.download = Some(Download {
+        self.transfer = Some(Transfer {
             repo_url: repo.dir_url(),
             server: Some(host_of(&repo.url)),
             repo_name: Some(repo.name.clone()),
@@ -2124,7 +2300,7 @@ impl App {
                 dst: dst.clone(),
                 scope_relative,
             }),
-            ..Download::default()
+            ..Transfer::default()
         });
         let gen = {
             let t = self.tabs.get_mut(self.tab);
@@ -2239,6 +2415,7 @@ impl App {
                     }),
                     repository: None,
                     destination: None,
+                    source: None,
                 };
                 let kind = if connect {
                     ErrKind::Connect
@@ -2331,18 +2508,18 @@ impl App {
         if !fresh {
             // The tab navigated away while the walk ran: the request is void,
             // and the download it prepared must not stay "running" forever.
-            self.download = None;
+            self.transfer = None;
             return;
         }
         match res {
             Ok(names) if names.is_empty() => {
-                if let Some(dl) = self.download.as_mut() {
+                if let Some(dl) = self.transfer.as_mut() {
                     dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
                 }
                 self.status = "the subtree holds no files".into();
             }
             Ok(mut names) => {
-                let Some(dl) = self.download.as_ref() else {
+                let Some(dl) = self.transfer.as_ref() else {
                     return;
                 };
                 let mut base = dl.repo_url.clone();
@@ -2356,7 +2533,7 @@ impl App {
                                 reason: "does not sit below the walked scope".into(),
                             };
                             let ctx = ErrCtx::of(self, tab);
-                            if let Some(dl) = self.download.as_mut() {
+                            if let Some(dl) = self.transfer.as_mut() {
                                 dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
                                 dl.retry = None;
                             }
@@ -2367,7 +2544,7 @@ impl App {
                             Ok(parsed) => stripped.push(parsed),
                             Err(e) => {
                                 let ctx = ErrCtx::of(self, tab);
-                                if let Some(dl) = self.download.as_mut() {
+                                if let Some(dl) = self.transfer.as_mut() {
                                     dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
                                     dl.retry = None;
                                 }
@@ -2382,7 +2559,7 @@ impl App {
                 let count = names.len();
                 let unit = if count == 1 { "file" } else { "files" };
                 let dst = dl.dst.clone();
-                if let Some(dl) = self.download.as_mut() {
+                if let Some(dl) = self.transfer.as_mut() {
                     dl.retry = Some(Retry::Transfer {
                         repo_url: base.clone(),
                         names: names.clone(),
@@ -2395,10 +2572,10 @@ impl App {
             Err(e) => {
                 let ctx = ErrCtx::of(self, tab);
                 let retry = self
-                    .download
+                    .transfer
                     .as_ref()
                     .and_then(|dl| (e.exit_code() != 2).then(|| dl.retry.clone()).flatten());
-                if let Some(dl) = self.download.as_mut() {
+                if let Some(dl) = self.transfer.as_mut() {
                     dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
                 }
                 self.raise_error(ErrKind::Download, &e, ctx, retry);
@@ -2448,15 +2625,22 @@ impl App {
     }
 
     fn on_dl(&mut self, ev: DlEv) {
-        let Some(dl) = self.download.as_mut() else {
+        let Some(dl) = self.transfer.as_mut() else {
             return;
         };
         match ev {
-            DlEv::Start { dst, files } => {
-                dl.dst = dst;
-                dl.files = Some(files);
+            DlEv::Start { local, files } => {
+                match dl.dir {
+                    Dir::Down => dl.dst = local,
+                    Dir::Up => dl.src = Some(local),
+                }
+                // An upload starts with an unknown count: the scan inside the
+                // task answers, the plan event carries it in.
+                if files.is_some() {
+                    dl.files = files;
+                }
             }
-            DlEv::Plan { download, skip } => dl.planned = Some((download, skip)),
+            DlEv::Plan { transfer, skip } => dl.planned = Some((transfer, skip)),
             DlEv::Bytes { name, done, total } => {
                 dl.active.insert(name, (done, total));
             }
@@ -2477,13 +2661,32 @@ impl App {
             }
             DlEv::Done(Ok(summary)) => {
                 dl.outcome = Some(DlOutcome::Done(summary.clone()));
-                self.status = format!(
-                    "downloaded {}, skipped {}, failed {} -> {}",
-                    summary.downloaded,
-                    summary.skipped,
-                    summary.failed.len(),
-                    dl.dst.display()
-                );
+                match dl.dir {
+                    Dir::Up => {
+                        let pos = self
+                            .tabs
+                            .get(self.tab)
+                            .map(|t| t.breadcrumb())
+                            .unwrap_or_default();
+                        self.status = format!(
+                            "uploaded {}, skipped {} -> {}",
+                            summary.uploaded, summary.skipped, pos
+                        );
+                        // A finished put quietly refreshes the position it
+                        // went into, when the tab still stands there.
+                        let base = dl.repo_url.clone();
+                        self.quiet_refresh_at(&base);
+                    }
+                    Dir::Down => {
+                        self.status = format!(
+                            "downloaded {}, skipped {}, failed {} -> {}",
+                            summary.downloaded,
+                            summary.skipped,
+                            summary.failed.len(),
+                            dl.dst.display()
+                        );
+                    }
+                }
             }
             DlEv::Done(Err(e)) => {
                 let hint = e.hint();
@@ -2492,9 +2695,14 @@ impl App {
                 let ctx = ErrCtx {
                     server: dl.server.clone(),
                     repository: dl.repo_name.clone(),
-                    destination: Some(dl.dst.clone()),
+                    destination: (dl.dir == Dir::Down).then(|| dl.dst.clone()),
+                    source: dl.src.clone(),
                 };
-                self.raise_error(ErrKind::Download, &e, ctx, retry);
+                let kind = match dl.dir {
+                    Dir::Up => ErrKind::Upload,
+                    Dir::Down => ErrKind::Download,
+                };
+                self.raise_error(kind, &e, ctx, retry);
             }
         }
     }
@@ -2520,11 +2728,11 @@ impl App {
                 dst,
                 repo,
             } => {
-                if self.download_busy() {
-                    self.status = "download in flight: one at a time".into();
+                if self.transfer_busy() {
+                    self.status = "transfer in flight: one at a time".into();
                     return;
                 }
-                self.download = Some(Download {
+                self.transfer = Some(Transfer {
                     repo_url: repo.dir_url(),
                     server: Some(host_of(&repo.url)),
                     repo_name: Some(repo.name.clone()),
@@ -2536,7 +2744,7 @@ impl App {
                         dst: dst.clone(),
                         repo,
                     }),
-                    ..Download::default()
+                    ..Transfer::default()
                 });
                 self.status = format!("downloading {}", url.rsplit('/').next().unwrap_or(&url));
                 net::fetch_one(self.tx.clone(), url, out, dst, self.auth.clone());
@@ -2546,14 +2754,15 @@ impl App {
                 names,
                 dst,
             } => {
-                if self.download_busy() {
-                    self.status = "download in flight: one at a time".into();
+                if self.transfer_busy() {
+                    self.status = "transfer in flight: one at a time".into();
                     return;
                 }
                 let count = names.len();
                 self.status = format!("plan: {count} files -> {}", dst.display());
                 net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
             }
+            Retry::Put { src, base } => self.start_put(base, src),
         }
     }
 }
@@ -2563,6 +2772,8 @@ impl App {
 enum ErrKind {
     /// A walk, a get or a transfer refused.
     Download,
+    /// A scan, a marker run or an upload refused.
+    Upload,
     /// A listing refused.
     Listing,
     /// A connect refused.
@@ -2577,6 +2788,7 @@ impl ErrKind {
         }
         match self {
             ErrKind::Download => "download failed",
+            ErrKind::Upload => "upload failed",
             ErrKind::Listing => "listing failed",
             ErrKind::Connect => "connect failed",
         }
@@ -2592,6 +2804,8 @@ struct ErrCtx {
     repository: Option<String>,
     /// The destination folder.
     destination: Option<PathBuf>,
+    /// The source folder of an upload.
+    source: Option<PathBuf>,
 }
 
 impl ErrCtx {
@@ -2604,6 +2818,7 @@ impl ErrCtx {
             server: Some(t.server.name.clone()),
             repository: t.repo.as_ref().map(|r| r.name.clone()),
             destination: None,
+            source: None,
         }
     }
 }
@@ -3039,7 +3254,7 @@ mod tests {
         );
         assert_eq!(app.pending, 2);
         assert!(
-            app.download.is_none(),
+            app.transfer.is_none(),
             "the primary verb never starts a transfer"
         );
         assert!(app.needs_tick(), "the card waits for its metadata");
@@ -3166,16 +3381,16 @@ mod tests {
         // The card stays open, the transfer takes the single slot.
         assert!(matches!(app.mode, Mode::Card(_)));
         match rx.recv().await.unwrap() {
-            Msg::Dl(DlEv::Start { dst, files }) => {
-                assert_eq!(files, 1);
+            Msg::Dl(DlEv::Start { local: dst, files }) => {
+                assert_eq!(files, Some(1));
                 assert_eq!(dst, PathBuf::from("dl"));
             }
             other => panic!("unexpected message: {other:?}"),
         }
-        assert!(app.download_busy(), "the card download holds the slot");
+        assert!(app.transfer_busy(), "the card download holds the slot");
         // A second `s` waits its turn.
         app.handle(Msg::Key(key(KeyCode::Char('s'))));
-        assert_eq!(app.status, "download in flight: one at a time");
+        assert_eq!(app.status, "transfer in flight: one at a time");
         // `c` copies the url: the copied toast is the confirmation.
         app.handle(Msg::Key(key(KeyCode::Char('c'))));
         assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
@@ -3248,7 +3463,7 @@ mod tests {
         assert!(matches!(app.mode, Mode::SaveAs(_)));
         app.handle(Msg::Key(key(KeyCode::Enter)));
         assert_eq!(app.status, "walking app/");
-        let dst = app.download.as_ref().map(|dl| dl.dst.clone()).unwrap();
+        let dst = app.transfer.as_ref().map(|dl| dl.dst.clone()).unwrap();
         assert!(dst.ends_with("app"), "{dst:?}");
         // The walk runs over the scope, names stripped to it.
         let mut msg = rx.recv().await.unwrap();
@@ -3304,10 +3519,10 @@ mod tests {
         assert!(app.dest_confirmed);
         assert_eq!(app.status, "walking raw-main/");
         // Once confirmed, the next d goes straight to the walk.
-        app.download = None;
+        app.transfer = None;
         app.handle(Msg::Key(key(KeyCode::Char('d'))));
         assert_eq!(app.status, "walking raw-main/");
-        let dst = app.download.as_ref().map(|dl| dl.dst.clone()).unwrap();
+        let dst = app.transfer.as_ref().map(|dl| dl.dst.clone()).unwrap();
         assert!(dst.ends_with("raw-main"), "{dst:?}");
     }
 
@@ -3384,6 +3599,260 @@ mod tests {
         );
     }
 
+    /// Types the given text into the open source picker and confirms it.
+    fn confirm_source_with(app: &mut App, path: &Path) {
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("the source picker is open");
+        };
+        for _ in 0..picker.buffer.chars().count() {
+            app.handle(Msg::Key(key(KeyCode::Backspace)));
+        }
+        for c in path.display().to_string().chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+    }
+
+    /// A real local folder with one file inside: the put source of the tests.
+    fn put_source() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("lib.rs"), b"fn main() {}\n").unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn the_source_picker_prefills_and_confirms_a_real_folder() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.base_dir = PathBuf::from("/tmp/put-seed");
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("p opens the source picker");
+        };
+        assert_eq!(
+            picker.buffer, "/tmp/put-seed",
+            "the picker prefills the launch directory"
+        );
+        let dir = put_source();
+        confirm_source_with(&mut app, dir.path());
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.upload_source.as_deref(), Some(dir.path()));
+        assert_eq!(
+            app.status,
+            format!("put {} -> raw-main", dir.path().display())
+        );
+        let dl = app.transfer.as_ref().expect("the put takes the slot");
+        assert_eq!(dl.dir, Dir::Up);
+        assert_eq!(dl.src.as_deref(), Some(dir.path()));
+        assert_eq!(dl.repo_url, "http://127.0.0.1:1/repository/raw-main/");
+        assert!(
+            matches!(dl.retry, Some(Retry::Put { .. })),
+            "a failed put runs again"
+        );
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { local, files }) => {
+                assert_eq!(local, dir.path());
+                assert_eq!(files, None, "the scan inside the task knows the count");
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        // The next put prefills with the confirmed source.
+        app.transfer = None;
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("p opens the source picker again");
+        };
+        assert_eq!(
+            picker.buffer,
+            dir.path().display().to_string(),
+            "the picker prefills the last confirmed source"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_source_picker_refuses_a_file_and_esc_cancels() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let file = tempfile::tempdir().unwrap();
+        let path = file.path().join("plain.txt");
+        std::fs::write(&path, b"x").unwrap();
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        confirm_source_with(&mut app, &path);
+        assert!(matches!(app.mode, Mode::PickSource(_)), "the picker stays");
+        assert_eq!(app.status, format!("not a directory: {}", path.display()));
+        assert!(app.transfer.is_none(), "nothing was prepared");
+        // Esc cancels: nothing spawned, nothing remembered.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.upload_source.is_none());
+        assert!(
+            rx.try_recv().is_err(),
+            "the picker never touches the network"
+        );
+    }
+
+    #[tokio::test]
+    async fn put_on_the_repositories_screen_is_refused() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        assert_eq!(app.status, "the put works in the tree");
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.transfer.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_put_holds_the_single_transfer_slot() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let dir = put_source();
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        confirm_source_with(&mut app, dir.path());
+        let msg = rx.recv().await.unwrap();
+        assert!(matches!(msg, Msg::Dl(DlEv::Start { .. })), "{msg:?}");
+        assert!(app.transfer_busy(), "the put holds the slot");
+        // A second transfer politely waits its turn, from both verbs.
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert_eq!(app.status, "transfer in flight: one at a time");
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        assert_eq!(app.status, "transfer in flight: one at a time");
+        assert_eq!(app.mode, Mode::Normal, "the gate never opens the picker");
+        assert!(rx.try_recv().is_err(), "no second transfer was spawned");
+    }
+
+    /// A prepared upload the fold tests can feed events into: no network.
+    fn upload_in_flight(app: &mut App) {
+        let dir = put_source();
+        app.transfer = Some(Transfer {
+            dir: Dir::Up,
+            repo_url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            server: Some("127.0.0.1:1".into()),
+            repo_name: Some("raw-main".into()),
+            src: Some(dir.path().to_path_buf()),
+            retry: Some(Retry::Put {
+                src: dir.path().to_path_buf(),
+                base: "http://127.0.0.1:1/repository/raw-main/".into(),
+            }),
+            ..Transfer::default()
+        });
+    }
+
+    #[tokio::test]
+    async fn an_upload_folds_the_plan_bytes_and_a_summary() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        app.handle(Msg::Dl(DlEv::Plan {
+            transfer: 3,
+            skip: 1,
+        }));
+        app.handle(Msg::Dl(DlEv::Bytes {
+            name: "a.rs".into(),
+            done: 40,
+            total: Some(100),
+        }));
+        {
+            let dl = app.transfer.as_ref().unwrap();
+            assert_eq!(dl.planned, Some((3, 1)));
+            assert_eq!(dl.active.get("a.rs"), Some(&(40, Some(100))));
+        }
+        app.handle(Msg::Dl(DlEv::Retry {
+            name: "a.rs".into(),
+            attempt: 1,
+            reason: "reset by peer".into(),
+        }));
+        assert_eq!(
+            app.transfer.as_ref().unwrap().note.as_deref(),
+            Some("a.rs: retry 1: reset by peer")
+        );
+        app.handle(Msg::Dl(DlEv::FileDone {
+            name: "a.rs".into(),
+            skipped: false,
+        }));
+        app.handle(Msg::Dl(DlEv::FileDone {
+            name: "b.rs".into(),
+            skipped: true,
+        }));
+        {
+            let dl = app.transfer.as_ref().unwrap();
+            assert_eq!(dl.finished, 1);
+            assert_eq!(dl.skipped, 1);
+            assert!(dl.active.is_empty());
+        }
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            uploaded: 3,
+            downloaded: 0,
+            skipped: 1,
+            removed: 0,
+            failed: Vec::new(),
+        }))));
+        assert_eq!(app.status, "uploaded 3, skipped 1 -> raw-main");
+        let dl = app.transfer.as_ref().unwrap();
+        assert!(matches!(dl.outcome, Some(DlOutcome::Done(_))));
+        assert!(!app.transfer_busy(), "the slot is free again");
+        // The position the put went into quietly refreshes.
+        assert!(
+            app.tabs[0].loading,
+            "the finished put refreshed the position"
+        );
+        match rx.recv().await.unwrap() {
+            Msg::Entries { tab, gen, .. } => {
+                assert_eq!(tab, 0);
+                assert_eq!(gen, app.tabs[0].gen, "the refresh rides the new gen");
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_upload_opens_the_upload_modal_with_a_retry() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        let src = app.transfer.as_ref().unwrap().src.clone().unwrap();
+        let e = Error::Transport {
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            detail: "connection refused".into(),
+        };
+        app.handle(Msg::Dl(DlEv::Done(Err(e))));
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the upload refusal opens the error modal");
+        };
+        assert_eq!(modal.title, "upload failed");
+        assert!(
+            modal
+                .facts
+                .contains(&("source".into(), src.display().to_string())),
+            "{:?}",
+            modal.facts
+        );
+        assert!(matches!(modal.retry, Some(Retry::Put { .. })));
+        assert!(!app.transfer_busy(), "the slot is free again");
+        // r reruns the same put into the same base.
+        modal_retry_runs(&mut app);
+        assert_eq!(app.status, format!("put {} -> raw-main", src.display()));
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { local, .. }) => assert_eq!(local, src),
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_empty_source_opens_the_upload_modal_without_retry() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        let src = app.transfer.as_ref().unwrap().src.clone().unwrap();
+        let e = Error::Misuse(format!(
+            "nothing to upload: {} holds no artifacts",
+            src.display()
+        ));
+        app.handle(Msg::Dl(DlEv::Done(Err(e))));
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the empty scan opens the error modal");
+        };
+        assert_eq!(modal.title, "upload failed");
+        assert!(modal.cause.contains("malformed"), "{:?}", modal.cause);
+        assert!(modal.retry.is_none(), "a misuse cannot be retried");
+        assert!(!app.transfer_busy());
+    }
+
     #[tokio::test]
     async fn download_plan_starts_the_transfer() {
         let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
@@ -3400,7 +3869,7 @@ mod tests {
         });
         assert_eq!(app.status, "plan: 1 file -> dl");
         match rx.recv().await.unwrap() {
-            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, Some(1)),
             other => panic!("unexpected message: {other:?}"),
         }
     }
@@ -3417,8 +3886,8 @@ mod tests {
             res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
         });
         assert!(rx.try_recv().is_err(), "no download was spawned");
-        assert!(app.download.is_none(), "the stale walk released the slot");
-        assert!(!app.download_busy(), "the app is usable again");
+        assert!(app.transfer.is_none(), "the stale walk released the slot");
+        assert!(!app.transfer_busy(), "the app is usable again");
     }
 
     #[tokio::test]
@@ -3437,12 +3906,12 @@ mod tests {
                 detail: "connection refused".into(),
             }),
         });
-        let Some(dl) = app.download.as_ref() else {
+        let Some(dl) = app.transfer.as_ref() else {
             panic!("the download panel exists");
         };
         assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
         assert!(
-            !app.download_busy(),
+            !app.transfer_busy(),
             "a new download can start after the failure"
         );
         // The refusal speaks through the error modal, with a retry at hand.
@@ -3472,12 +3941,12 @@ mod tests {
             gen,
             res: Ok(vec![]),
         });
-        let Some(dl) = app.download.as_ref() else {
+        let Some(dl) = app.transfer.as_ref() else {
             panic!("the download panel exists");
         };
         assert!(matches!(dl.outcome, Some(DlOutcome::Failed(..))));
         assert!(
-            !app.download_busy(),
+            !app.transfer_busy(),
             "a new download can start after the empty walk"
         );
     }
@@ -3522,10 +3991,10 @@ mod tests {
         app.handle(Msg::Key(key(KeyCode::Down)));
         app.handle(Msg::Key(key(KeyCode::Char('d'))));
         match rx.recv().await.unwrap() {
-            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, Some(1)),
             other => panic!("unexpected message: {other:?}"),
         }
-        assert!(app.download_busy());
+        assert!(app.transfer_busy());
         // Browsing does not wait on the transfer: the folder above opens.
         app.handle(Msg::Key(key(KeyCode::Up)));
         app.handle(Msg::Key(key(KeyCode::Enter)));
@@ -3537,7 +4006,7 @@ mod tests {
             res: Ok(vec![]),
         });
         app.handle(Msg::Key(key(KeyCode::Char('d'))));
-        assert_eq!(app.status, "download in flight: one at a time");
+        assert_eq!(app.status, "transfer in flight: one at a time");
         assert!(rx.try_recv().is_err(), "no second walk was spawned");
     }
 
@@ -3896,7 +4365,7 @@ mod tests {
             matches!(app.mode, Mode::Card(_)),
             "the double click inspects, it never downloads"
         );
-        assert!(app.download.is_none());
+        assert!(app.transfer.is_none());
     }
 
     #[tokio::test]
@@ -3987,7 +4456,7 @@ mod tests {
         assert!(matches!(app.mode, Mode::Error(_)));
         app.handle(Msg::Key(key(KeyCode::Esc)));
         assert_eq!(app.mode, Mode::Normal);
-        assert!(!app.download_busy(), "the failed walk released the slot");
+        assert!(!app.transfer_busy(), "the failed walk released the slot");
     }
 
     #[tokio::test]
@@ -3996,7 +4465,7 @@ mod tests {
             vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
             false,
         );
-        app.download = Some(Download::default());
+        app.transfer = Some(Transfer::default());
         app.handle(Msg::Key(key(KeyCode::Char('q'))));
         assert!(!app.quit);
         assert!(app.quit_armed);
@@ -4148,7 +4617,7 @@ mod tests {
         };
         assert_eq!(card.rel, "a/c.txt");
         app.handle(Msg::Key(key(KeyCode::Char('s'))));
-        let download = app.download.expect("the card download starts");
+        let download = app.transfer.expect("the card download starts");
         let Retry::Get { url, out, .. } = download.retry.expect("the get retry") else {
             panic!("the card download retries as a get");
         };

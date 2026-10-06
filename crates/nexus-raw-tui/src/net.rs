@@ -10,7 +10,7 @@ use nexus_raw_core::model::sibling;
 use nexus_raw_core::primitive;
 use nexus_raw_core::transport::client::NexusClient;
 use nexus_raw_core::{
-    ArtifactName, Config, EntryKind, Enumeration, Error, Event, Nxr, Progress, Summary,
+    ArtifactName, Config, Dir, EntryKind, Enumeration, Error, Event, Nxr, Progress, Summary,
 };
 use tokio::sync::mpsc;
 
@@ -189,7 +189,10 @@ pub fn fetch_one(
     auth: Option<String>,
 ) {
     tokio::spawn(async move {
-        let _ = tx.send(Msg::Dl(DlEv::Start { dst, files: 1 }));
+        let _ = tx.send(Msg::Dl(DlEv::Start {
+            local: dst,
+            files: Some(1),
+        }));
         let res = fetch_one_inner(url, out, auth).await;
         let _ = tx.send(Msg::Dl(DlEv::Done(res.map(|_size| Summary {
             uploaded: 0,
@@ -351,14 +354,17 @@ pub fn start_download(
 ) {
     tokio::spawn(async move {
         let _ = tx.send(Msg::Dl(DlEv::Start {
-            dst: dst.clone(),
-            files: names.len(),
+            local: dst.clone(),
+            files: Some(names.len()),
         }));
         let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
         let forward_tx = tx.clone();
         let forwarder = tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                let _ = forward_tx.send(fold_event(event));
+                let Some(msg) = fold_event(event, Dir::Down) else {
+                    continue;
+                };
+                let _ = forward_tx.send(msg);
             }
         });
         let res = async {
@@ -372,22 +378,76 @@ pub fn start_download(
     });
 }
 
-/// Folds a core event into a download progress message.
-fn fold_event(event: Event) -> Msg {
+/// Uploads the local directory `src` into the remote directory `base`,
+/// always generating the `.sha256` markers, streaming progress into the app channel.
+pub fn start_upload(
+    tx: mpsc::UnboundedSender<Msg>,
+    base: String,
+    src: PathBuf,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let _ = tx.send(Msg::Dl(DlEv::Start {
+            local: src.clone(),
+            files: None,
+        }));
+        let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
+        let forward_tx = tx.clone();
+        let forwarder = tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                let Some(msg) = fold_event(event, Dir::Up) else {
+                    continue;
+                };
+                let _ = forward_tx.send(msg);
+            }
+        });
+        let res = async {
+            let nxr = Nxr::new(config(base.clone(), auth.clone()), events)?;
+            nxr.up(&src, None, true, None).await
+        }
+        .await;
+        let _ = tx.send(Msg::Dl(DlEv::Done(res)));
+        // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
+        let _ = forwarder.await;
+    });
+}
+
+/// Folds a core event into a transfer progress message of the given direction.
+/// Events of the other direction are dropped: the panel shows one transfer.
+fn fold_event(event: Event, dir: Dir) -> Option<Msg> {
     let dl = match event {
-        Event::Plan { download, skip, .. } => DlEv::Plan {
-            download: download.len(),
-            skip: skip.len(),
-        },
-        Event::ArtifactStarted { name, total, .. } => DlEv::Bytes {
+        Event::Plan {
+            upload,
+            download,
+            skip,
+        } => {
+            let (transfer, skip) = match dir {
+                Dir::Up => (upload.len(), skip.len()),
+                Dir::Down => (download.len(), skip.len()),
+            };
+            DlEv::Plan { transfer, skip }
+        }
+        Event::ArtifactStarted {
+            name,
+            total,
+            dir: seen,
+        } if seen == dir => DlEv::Bytes {
             name,
             done: 0,
             total,
         },
         Event::ArtifactBytes {
-            name, done, total, ..
-        } => DlEv::Bytes { name, done, total },
-        Event::ArtifactDone { name, skipped, .. } => DlEv::FileDone { name, skipped },
+            name,
+            done,
+            total,
+            dir: seen,
+        } if seen == dir => DlEv::Bytes { name, done, total },
+        Event::ArtifactDone {
+            name,
+            skipped,
+            dir: seen,
+            ..
+        } if seen == dir => DlEv::FileDone { name, skipped },
         Event::Retrying {
             name,
             attempt,
@@ -397,13 +457,11 @@ fn fold_event(event: Event) -> Msg {
             attempt,
             reason,
         },
-        // The summary arrives as the call result; deletion events never fire on `down`.
-        Event::Summary(_)
-        | Event::Removing { .. }
-        | Event::Removed { .. }
-        | Event::Missing { .. } => return Msg::Redraw,
+        // The summary arrives as the call result, deletion events never fire
+        // on a transfer, and the other direction belongs to another panel.
+        _ => return None,
     };
-    Msg::Dl(dl)
+    Some(Msg::Dl(dl))
 }
 
 #[cfg(test)]
@@ -541,7 +599,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
         fetch_one(tx, url, out.clone(), dir.path().to_path_buf(), None);
         match rx.recv().await.unwrap() {
-            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, Some(1)),
             other => panic!("unexpected message: {other:?}"),
         }
         match rx.recv().await.unwrap() {
@@ -590,6 +648,147 @@ mod tests {
                 assert_eq!((tab, gen), (0, 3));
                 assert_eq!(rel, "README.txt");
                 assert_eq!(res.unwrap(), Some(digest.as_str().to_owned()));
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_up_fold_maps_the_plan_bytes_and_retries() {
+        let up = Dir::Up;
+        let msg = fold_event(
+            Event::Plan {
+                upload: vec!["a.rs".into(), "b.rs".into()],
+                download: vec![],
+                skip: vec!["c.rs".into()],
+            },
+            up,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::Plan { transfer, skip }) => {
+                assert_eq!(transfer, 2, "the plan counts the upload side");
+                assert_eq!(skip, 1);
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        let msg = fold_event(
+            Event::ArtifactStarted {
+                name: "a.rs".into(),
+                dir: up,
+                total: Some(100),
+            },
+            up,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::Bytes { name, done, total }) => {
+                assert_eq!(name, "a.rs");
+                assert_eq!(done, 0);
+                assert_eq!(total, Some(100));
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        let msg = fold_event(
+            Event::ArtifactBytes {
+                name: "a.rs".into(),
+                dir: up,
+                done: 40,
+                total: Some(100),
+            },
+            up,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::Bytes { name, done, total }) => {
+                assert_eq!(name, "a.rs");
+                assert_eq!(done, 40);
+                assert_eq!(total, Some(100));
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        let msg = fold_event(
+            Event::ArtifactDone {
+                name: "a.rs".into(),
+                dir: up,
+                skipped: false,
+                done: 100,
+                total: Some(100),
+            },
+            up,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::FileDone { name, skipped }) => {
+                assert_eq!(name, "a.rs");
+                assert!(!skipped);
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        let msg = fold_event(
+            Event::Retrying {
+                name: "a.rs".into(),
+                attempt: 2,
+                reason: "reset by peer".into(),
+            },
+            up,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::Retry {
+                name,
+                attempt,
+                reason,
+            }) => {
+                assert_eq!(name, "a.rs");
+                assert_eq!(attempt, 2);
+                assert_eq!(reason, "reset by peer");
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_fold_drops_the_other_direction_and_the_summary() {
+        let up = Dir::Up;
+        let down = Dir::Down;
+        // An event of the other direction never leaks into this panel.
+        assert!(fold_event(
+            Event::ArtifactStarted {
+                name: "x.rs".into(),
+                dir: down,
+                total: None,
+            },
+            up,
+        )
+        .is_none());
+        assert!(fold_event(
+            Event::ArtifactDone {
+                name: "x.rs".into(),
+                dir: up,
+                skipped: false,
+                done: 1,
+                total: None,
+            },
+            down,
+        )
+        .is_none());
+        // The summary arrives as the call result, never as an event.
+        assert!(fold_event(Event::Summary(Summary::default()), up).is_none());
+        // The down fold counts the download side of the plan.
+        let msg = fold_event(
+            Event::Plan {
+                upload: vec!["a.rs".into()],
+                download: vec!["b.rs".into(), "c.rs".into()],
+                skip: vec![],
+            },
+            down,
+        )
+        .unwrap();
+        match msg {
+            Msg::Dl(DlEv::Plan { transfer, skip }) => {
+                assert_eq!(transfer, 2, "the plan counts the download side");
+                assert_eq!(skip, 0);
             }
             other => panic!("unexpected message: {other:?}"),
         }

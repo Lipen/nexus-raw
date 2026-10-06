@@ -44,6 +44,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `e` | toggle the tree navigation mode (see below) |
 | `d` | download the selected entry into the destination folder |
 | `D` | download with a dialog: folder and name, prefilled from the selection |
+| `p` | upload a local folder into the current tree position (source picker) |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
@@ -51,7 +52,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay, `a` opens the add form |
 | `?` | keybindings overlay |
-| `q`/`ctrl-c` | quit; twice while a download runs; inside an overlay or a modal, `q` closes it |
+| `q`/`ctrl-c` | quit; twice while a transfer runs; inside an overlay or a modal, `q` closes it |
 | mouse | wheel scrolls, click selects, double click opens a folder or the file card |
 
 ## The file card
@@ -68,6 +69,25 @@ The session starts with `download.dir` from the config.
 `o` opens a picker prefilled with the current destination: edit and press enter, or esc to cancel.
 A file lands as `{destination}/{name}`, a subtree as `{destination}/{name}/...`, a whole repository as `{destination}/{repo}/...`.
 Nothing is written outside the destination, and nothing is written before a dialog is confirmed.
+
+## Put
+
+`p` on the tree uploads a local folder into the current position: the breadcrumb of the tree is the remote target, and to fill a nested folder you descend into it first.
+On the repositories screen `p` only reports: `the put works in the tree`.
+
+The picker is prefilled with the last confirmed source of the session, with the working directory of `nxr-tui` on the first put.
+It shows the resolved path live, paste works, and nothing leaves the machine before enter.
+Enter resolves the buffer against the working directory and checks it locally: a path that is not a folder answers `not a directory: {path}` and keeps the picker open.
+A confirmed folder starts the upload immediately: `put {folder} -> {position}`.
+
+The upload drives the same core pipeline as `nxr up`: a local scan (hidden files, `.sha256` markers and `.part` files stay out, one unsafe name refuses the whole run before the first byte), marker generation for markerless files, the symmetric diff against the remote, then the transfer.
+Markers are always generated: the TUI has no `--no-sha`.
+Same-digest objects are skipped, a divergence refuses the whole run, and an upload never deletes anything on the server.
+
+While the upload runs, the panel shows the remote base, the source folder, the plan, the files in flight with byte progress and the summary.
+Navigation, filters, cards and tab switches keep working: the position the put goes into is fixed at the start, browsing never retargets it.
+A finished put quietly refreshes the tree position it went into, so the new names appear without a manual `r`.
+An empty source opens the error modal without a retry, every other refusal offers `r` to rerun the same put into the same base.
 
 ## Errors
 
@@ -132,11 +152,11 @@ A file entry downloads through the direct `get` primitive into `{destination}/{r
 A folder entry (`d` on a folder, `D` on the current directory) and a whole repository (`d` on the repositories screen) walk the subtree with `ls_entries()` recursively and download the set in one transfer.
 The `D` dialog shows the target path live before anything starts, and nothing is written until it is confirmed.
 
-Downloads are one at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`.
+Downloads are one at a time: while the panel runs, `d` and `D` answer `transfer in flight: one at a time`.
 Everything else keeps working: browsing, filters, refreshes, cards, tab switches, even adding a server.
 A running transfer is never interrupted by the UI.
 Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
-A panel shows the plan, the files in flight with byte progress and the final summary, and stays until the next download replaces it.
+A panel titled `download` or `upload` shows the plan, the files in flight with byte progress and the final summary, and stays until the next transfer replaces it.
 Failures open the error modal and never close the TUI.
 
 ## Headless smoke mode

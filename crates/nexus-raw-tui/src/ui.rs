@@ -14,10 +14,10 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::{
-    fmt_bytes, App, Card, DestPicker, DlOutcome, Download, ErrorModal, Mode, SaveAsDialog,
-    SaveAsField, Screen, ShaState, SizeState, Toast,
+    fmt_bytes, App, Card, DestPicker, DlOutcome, ErrorModal, Mode, PickSource, SaveAsDialog,
+    SaveAsField, Screen, ShaState, SizeState, Toast, Transfer,
 };
-use nexus_raw_core::EntryKind;
+use nexus_raw_core::{Dir, EntryKind};
 
 /// The dim style for secondary and non-enterable text.
 fn dim() -> Style {
@@ -74,19 +74,19 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 fn draw_body(f: &mut Frame, app: &mut App, area: Rect) {
     // The panel stays after the transfer ends: the outcome stays readable
     // until the next download replaces it.
-    if app.download.is_none() {
+    if app.transfer.is_none() {
         draw_list(f, app, area);
         return;
     }
     // Content: dst, plan, up to four transfers, one status line, plus borders.
-    let active = app.download.as_ref().map_or(0, |dl| dl.active.len().min(4)) as u16;
+    let active = app.transfer.as_ref().map_or(0, |dl| dl.active.len().min(4)) as u16;
     let panel_h = (3 + active + 2).min(area.height);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(panel_h)])
         .split(area);
     draw_list(f, app, chunks[0]);
-    draw_download(f, app, chunks[1]);
+    draw_transfer(f, app, chunks[1]);
 }
 
 /// The repository list or the tree, with the geometry written back for hit-testing.
@@ -190,22 +190,46 @@ fn repo_line(enterable: bool, repo: &nexus_raw_core::service::RepoInfo) -> Line<
     Line::from(spans)
 }
 
-fn draw_download(f: &mut Frame, app: &App, area: Rect) {
-    let Some(dl) = app.download.as_ref() else {
+fn draw_transfer(f: &mut Frame, app: &App, area: Rect) {
+    let Some(dl) = app.transfer.as_ref() else {
         return;
     };
+    let title = match dl.dir {
+        Dir::Up => "upload",
+        Dir::Down => "download",
+    };
     let mut lines = Vec::new();
-    lines.push(Line::from(format!("-> {}", dl.dst.display())));
-    match dl.files {
-        Some(files) => {
-            let unit = if files == 1 { "file" } else { "files" };
-            lines.push(Line::from(format!("plan: {files} {unit}")));
+    match dl.dir {
+        Dir::Up => {
+            lines.push(Line::from(format!("-> {}", dl.repo_url)));
+            if let Some(src) = &dl.src {
+                lines.push(Line::from(format!("from {}", src.display())));
+            }
         }
-        None => lines.push(Line::from("plan: walking the subtree")),
+        Dir::Down => {
+            lines.push(Line::from(format!("-> {}", dl.dst.display())));
+        }
     }
-    if let Some((download, skip)) = dl.planned {
+    match dl.files {
+        Some(files) => match dl.dir {
+            Dir::Up => lines.push(Line::from(format!("plan: {files} to upload"))),
+            Dir::Down => {
+                let unit = if files == 1 { "file" } else { "files" };
+                lines.push(Line::from(format!("plan: {files} {unit}")));
+            }
+        },
+        None => match dl.dir {
+            Dir::Up => lines.push(Line::from("plan: scanning the folder")),
+            Dir::Down => lines.push(Line::from("plan: walking the subtree")),
+        },
+    }
+    if let Some((transfer, skip)) = dl.planned {
+        let verb = match dl.dir {
+            Dir::Up => "upload",
+            Dir::Down => "download",
+        };
         lines.push(Line::from(format!(
-            "diff: {download} to download, {skip} already complete"
+            "diff: {transfer} to {verb}, {skip} already complete"
         )));
     }
     for (name, (done, total)) in dl.active.iter().take(4) {
@@ -216,13 +240,12 @@ fn draw_download(f: &mut Frame, app: &App, area: Rect) {
         )));
     }
     lines.push(outcome_line(dl));
-    let panel =
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("download"));
+    let panel = Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(panel, area);
 }
 
 /// The last line of the download panel: retry note, running count or the outcome.
-fn outcome_line(dl: &Download) -> Line<'static> {
+fn outcome_line(dl: &Transfer) -> Line<'static> {
     match &dl.outcome {
         Some(DlOutcome::Done(s)) => Line::from(Span::styled(
             format!(
@@ -345,6 +368,7 @@ fn draw_overlay(f: &mut Frame, app: &mut App, area: Rect) {
         Mode::Servers => servers_overlay(f, app, area),
         Mode::AddServer(buffer) => add_server_overlay(f, &buffer, area),
         Mode::Dest(picker) => dest_picker_overlay(f, app, &picker, area),
+        Mode::PickSource(picker) => source_picker_overlay(f, app, &picker, area),
         Mode::Card(card) => card_overlay(f, &card, area),
         Mode::SaveAs(dialog) => save_as_overlay(f, &dialog, area),
         Mode::Error(modal) => error_overlay(&modal, area, f),
@@ -373,6 +397,7 @@ fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
             "  left              enter mode: back up. expand mode: fold or jump".to_owned(),
             "  d                 download the selection (folder: subtree)".to_owned(),
             "  D                 download the current folder as".to_owned(),
+            "  p                 upload a local folder into this position".to_owned(),
             "  /                 filter, type to narrow, backspace to empty closes".to_owned(),
             String::new(),
         ],
@@ -510,6 +535,37 @@ fn dest_picker_overlay(f: &mut Frame, app: &App, picker: &DestPicker, area: Rect
             Block::default()
                 .borders(Borders::ALL)
                 .title(" destination · enter: set · esc: cancel "),
+        ),
+        popup,
+    );
+}
+
+/// The source picker of a put: the buffer, the resolved preview, the position.
+fn source_picker_overlay(f: &mut Frame, app: &App, picker: &PickSource, area: Rect) {
+    let resolved = app
+        .resolve_path(Path::new(picker.buffer.trim()))
+        .display()
+        .to_string();
+    let pos = app
+        .tabs
+        .get(app.tab)
+        .map(|t| t.breadcrumb())
+        .unwrap_or_default();
+    let lines = vec![
+        Line::from(format!("local folder to upload into {pos}:")),
+        Line::from(vec![
+            Span::styled("> ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(format!("{}█", picker.buffer)),
+        ]),
+        Line::from(Span::styled(format!("→ {resolved}"), dim())),
+    ];
+    let popup = centered(area, 64.min(area.width), 5);
+    f.render_widget(Clear, popup);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" put source · enter: upload · esc: cancel "),
         ),
         popup,
     );
