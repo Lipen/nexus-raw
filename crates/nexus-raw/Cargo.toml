@@ -43,7 +43,7 @@ pkg-url = "{ repo }/releases/download/v{ version }/nxr-windows-x64.tar.gz"
 clap = { workspace = true }
 log = { workspace = true }
 # The version is what crates.io resolves; the path is what this workspace builds.
-nexus-raw-core = { path = "../nexus-raw-core", version = "0.4.0" }
+nexus-raw-core = { path = "../nexus-raw-core", version = "0.5.0" }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 

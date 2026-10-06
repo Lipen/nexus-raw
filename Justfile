@@ -99,6 +99,7 @@ version v:
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{v}}\"/" Cargo.toml
     perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/version = \"\Q$old\E\"/version = \"{{v}}\"/" crates/nexus-raw/Cargo.toml
+    perl -pi -e "s/(nexus-raw-core = \{ path = \".\/nexus-raw-core\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
     # Resolve once so Cargo.lock carries the new workspace version.
     cargo metadata --format-version 1 >/dev/null
     # The recipe owns every asserted copy: a failed edit must fail the recipe,
