@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::sync::mpsc;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::sync::diff::Action;
 
 /// Transfer direction.
@@ -276,6 +277,7 @@ impl Progress {
     }
 
     /// Plan event from an action list: for down, Upload actions mean "the local copy is complete" and land in skip.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn plan(&self, actions: &[Action], dir: Dir) {
         let mut upload = Vec::new();
         let mut download = Vec::new();
@@ -301,6 +303,7 @@ impl Progress {
     }
 
     /// Plan event for a mirror: copies are destination-facing writes and land in `upload`, so the event keeps the transfer schema untouched.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn plan_mirror(&self, actions: &[crate::sync::mirror::MirrorAction]) {
         let mut upload = Vec::new();
         let mut skip = Vec::new();

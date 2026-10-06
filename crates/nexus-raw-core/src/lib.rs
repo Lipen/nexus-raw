@@ -11,6 +11,8 @@ pub mod model;
 pub mod nxr;
 pub mod primitive;
 pub mod service;
+// The sync family walks and writes the local filesystem: no wasm32 surface.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod sync;
 pub mod transport;
 
@@ -24,7 +26,10 @@ pub use crate::model::digest::Digest;
 pub use crate::model::name::{ArtifactName, NamePrefix};
 pub use crate::model::state::{LocalStatus, RemoteStatus};
 pub use crate::nxr::{Enumeration, Nxr};
+#[cfg(not(target_arch = "wasm32"))]
 pub use crate::primitive::{GetOutcome, ShaSource};
+#[cfg(not(target_arch = "wasm32"))]
 pub use crate::sync::mirror::{staging_dir, MirrorAction, VERSION_DOCUMENT};
+#[cfg(not(target_arch = "wasm32"))]
 pub use crate::sync::{Action, Mode, RmAction};
 pub use crate::transport::client::{DeleteOutcome, HeadInfo, NexusClient};

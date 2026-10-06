@@ -1,6 +1,12 @@
 //! The `Nxr` facade: the single entry point for CLI and wrappers.
+//!
+//! On wasm32 the surface carries the read paths only: `ls`, `head`, manifests,
+//! channels, pointers and the service API. Everything that reads or writes the
+//! local filesystem, or fans out over spawned tasks, is native-only.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -8,13 +14,23 @@ use tokio::sync::{mpsc, Semaphore};
 
 use crate::config::Config;
 use crate::error::Error;
-use crate::events::{Dir, Event, Progress, Summary};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::events::{Dir, Summary};
+use crate::events::{Event, Progress};
 use crate::layout::{self, Manifest};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
-use crate::model::state::{LocalStatus, RemoteStatus};
-use crate::primitive::{self, GetOutcome, HeadInfo, ShaSource};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::model::state::LocalStatus;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::model::state::RemoteStatus;
+use crate::primitive;
+use crate::primitive::HeadInfo;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::primitive::{GetOutcome, ShaSource};
 use crate::service;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::sync::{
     self, down,
     mirror::{self, MirrorAction},
@@ -105,6 +121,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns transport, auth or HTTP errors from the GET, [`Error::Io`] when writing or renaming `out` fails, and [`Error::Misuse`] when stdout cannot be written.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn get(
         &self,
         url: &str,
@@ -119,6 +136,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when `src` cannot be read or hashed, [`Error::Misuse`] when `src` is not a file, and transport, auth or HTTP errors from the uploads.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn put(
         &self,
         url: &str,
@@ -142,6 +160,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when a file source cannot be read and transport, auth or HTTP errors for a URL source.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn sha(&self, src: ShaSource) -> Result<Digest, Error> {
         primitive::sha(&self.client, src).await
     }
@@ -153,6 +172,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when the directory cannot be listed and [`Error::UnsafeName`] when a file path violates the name grammar.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn scan(&self, dir: &Path) -> Result<Vec<ArtifactName>, Error> {
         sync::scan_dir(dir)
     }
@@ -162,6 +182,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns the first [`Verdict`](crate::error::Verdict) refusal of the symmetric diff, transport, auth or HTTP errors while probing the remote states, and [`Error::Misuse`] if a classification task panicked.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn diff(
         &self,
         dir: &Path,
@@ -192,6 +213,7 @@ impl Nxr {
     ///
     /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the scan, [`Error::Misuse`] when `dir` is not a directory, the scan is empty, or the claim is unknown, and [`Error::Missing`] when a requested name is absent from the scan.
     /// Returns [`Error::Mismatch`] when a local object is broken or as the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure or [`Error::Io`] from marker generation.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn up(
         &self,
         dir: &Path,
@@ -271,6 +293,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when `dir` cannot be created or its orphans cleaned, [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure of the download.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn down(
         &self,
         dir: &Path,
@@ -314,6 +337,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Enumerate`] when the enumeration is empty, [`Error::ReadOnly`] on a 403/405, and the transport, auth or HTTP error that stopped the deletion walk.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn rm(&self, enum_src: Enumeration) -> Result<Summary, Error> {
         let names = self.resolve_names(enum_src).await?;
         sync::rm::execute(self.client.clone(), self.base.clone(), names).await
@@ -327,6 +351,8 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Enumerate`] when the enumeration is empty and transport, auth or HTTP errors while probing the remote states.
+    // rm_plan fans the probes out over spawned tasks: native-only like the transfers it plans.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn rm_plan(&self, enum_src: Enumeration) -> Result<Vec<RmAction>, Error> {
         let names = self.resolve_names(enum_src).await?;
         let remotes = self.remote_states_for(&names).await?;
@@ -411,6 +437,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Enumerate`] when the enumeration is empty and the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn mirror_plan(
         &self,
         dst: &Nxr,
@@ -441,6 +468,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Enumerate`] when the enumeration is empty, the first [`Verdict`](crate::error::Verdict) refusal of the mirror diff, [`Error::Mismatch`] on a staged-body divergence, [`Error::Misuse`] if a task panicked, and [`Error::Io`] when the staging directory cannot be managed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
         let actions = self.mirror_plan(dst, enum_src).await?;
         // Claim-first: the version document, when the enumeration leads with it.
@@ -507,6 +535,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] via the scan when the directory cannot be listed and [`Error::Incomplete`] naming the broken, markerless or absent entries.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn verify(
         &self,
         dir: &Path,
@@ -616,6 +645,7 @@ impl Nxr {
     // ---- internals ---------------------------------------------------------
 
     /// Remote states for the given names, in order.
+    #[cfg(not(target_arch = "wasm32"))]
     async fn remote_states_for<'a>(
         &self,
         names: impl IntoIterator<Item = &'a ArtifactName>,

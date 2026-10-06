@@ -2,31 +2,48 @@
 //! Auth, TLS, retries, stall detection, Range resume (spec §5.1).
 
 use std::future::Future;
+// The fs-bound methods below are native-only (see the module tail): their
+// imports gate with them.
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Mutex;
 use std::time::Duration;
 
 use futures_util::StreamExt;
+#[cfg(not(target_arch = "wasm32"))]
 use sha2::{Digest as _, Sha256};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{mpsc, Semaphore};
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::sync::mpsc;
+use tokio::sync::Semaphore;
 
 use crate::config::Config;
 use crate::error::Error;
 use crate::events::{Dir, Event, Progress};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::RemoteStatus;
 use crate::transport::retry::{is_retryable, AttemptFailure, RetryPolicy};
 
-/// Outgoing body chunk size: small enough that a full outbound buffer drains well inside the stall timeout, so channel backpressure means a real stall.
+// Outgoing body chunk size: small enough that a full outbound buffer drains well inside the stall timeout, so channel backpressure means a real stall.
+#[cfg(not(target_arch = "wasm32"))]
 const UPLOAD_CHUNK: usize = 16 * 1024;
-/// Depth of the outgoing body channel.
+// Depth of the outgoing body channel.
+#[cfg(not(target_arch = "wasm32"))]
 const UPLOAD_CHANNEL: usize = 4;
 
+// The attempt future carries the reqwest call: on wasm the fetch future is
+// `!Send` (JS objects), so the boxed alias keeps the `Send` bound native-only.
+#[cfg(not(target_arch = "wasm32"))]
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + Send + 'a>>;
+#[cfg(target_arch = "wasm32")]
+type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + 'a>>;
 
 /// Upper bound for "small" GETs: siblings, manifests, channel tokens, search pages.
 const SMALL_CAP: u64 = 16 * 1024 * 1024;
@@ -35,6 +52,7 @@ const SMALL_CAP: u64 = 16 * 1024 * 1024;
 ///
 /// The append arm deliberately lacks `create`: it may only open a part whose prefix was just read.
 /// A part that vanished in between must fail loudly — a silently recreated file would yield a truncated "complete" artifact whose digest still matches (the hash covers the prefix that was read, not the bytes on disk).
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true);
@@ -52,7 +70,7 @@ pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
 }
 
 /// The blocking counterpart of `write_options` for `spawn_blocking` code.
-#[cfg(unix)]
+#[cfg(all(not(target_arch = "wasm32"), unix))]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     use std::os::unix::fs::OpenOptionsExt;
     let mut options = std::fs::OpenOptions::new();
@@ -68,7 +86,7 @@ pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
 
 /// Non-unix targets have no O_NOFOLLOW: the plain options keep them building.
 /// The name grammar still blocks traversal.
-#[cfg(not(unix))]
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
     let mut options = std::fs::OpenOptions::new();
     options.write(true);
@@ -115,15 +133,25 @@ impl NexusClient {
     /// Returns [`Error::Misuse`] when [`Config::validate`] refuses the config or the HTTP client cannot be built.
     pub fn new(cfg: &Config, events: Progress) -> Result<Self, Error> {
         cfg.validate()?;
-        let mut builder = reqwest::Client::builder()
-            .connect_timeout(cfg.connect_timeout)
-            // Control requests (probe, marker PUT, delete, small get/put) have no body
-            // loop to watch: this read timeout is their only stall guard.
-            .read_timeout(cfg.stall_timeout)
-            .redirect(reqwest::redirect::Policy::none());
-        if cfg.tls_insecure {
-            builder = builder.danger_accept_invalid_certs(true);
-        }
+        // On wasm the browser owns the connect and read timeouts, the TLS trust
+        // store and the redirect policy, and fetch has no knobs for them:
+        // the native builder options are gated to native targets.
+        #[cfg(not(target_arch = "wasm32"))]
+        let builder = {
+            let b = reqwest::Client::builder()
+                .connect_timeout(cfg.connect_timeout)
+                // Control requests (probe, marker PUT, delete, small get/put) have no body
+                // loop to watch: this read timeout is their only stall guard.
+                .read_timeout(cfg.stall_timeout)
+                .redirect(reqwest::redirect::Policy::none());
+            if cfg.tls_insecure {
+                b.danger_accept_invalid_certs(true)
+            } else {
+                b
+            }
+        };
+        #[cfg(target_arch = "wasm32")]
+        let builder = reqwest::Client::builder();
         let http = builder
             .build()
             .map_err(|e| Error::misuse(format!("http client: {e}")))?;
@@ -493,6 +521,7 @@ impl NexusClient {
     /// # Errors
     ///
     /// Returns [`Error::Io`] when the part file cannot be opened, read or written, and transport, auth or HTTP errors after the retry loop is exhausted.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn download_resumable(
         &self,
         subject: (&str, Dir),
@@ -604,6 +633,7 @@ impl NexusClient {
     /// # Errors
     ///
     /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn upload_file(
         &self,
         subject: (&str, Dir),

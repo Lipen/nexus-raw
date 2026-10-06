@@ -21,6 +21,10 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 
+# The addon pumps async work on a multi-thread runtime; that scheduler is native-only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
 [build-dependencies]
 napi-build = { workspace = true }
 

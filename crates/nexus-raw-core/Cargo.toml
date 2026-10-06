@@ -23,6 +23,11 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
+# The fs-bound half of the crate (part files, scan, sync) is native-only:
+# `fs` and `io-std` have no wasm32 implementation (see the gate comment on the workspace tokio).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["fs", "io-std"] }
+
 # Part files and local markers are opened without following symlinks.
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

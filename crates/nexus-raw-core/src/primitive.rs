@@ -4,22 +4,34 @@
 //! Primitives never classify, never diff and never refuse to overwrite:
 //! that is the transfer layer's job.
 
+use crate::transport::client::NexusClient;
+
+// Everything below except `head` touches the local filesystem or stdout:
+// neither exists on wasm32, so the fs-bound surface gates with the target.
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_arch = "wasm32"))]
 use futures_util::StreamExt;
+#[cfg(not(target_arch = "wasm32"))]
 use sha2::{Digest as _, Sha256};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::io::AsyncWriteExt;
 
 use crate::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::events::Dir;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest::{self, Digest};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::model::name::{percent_decode, ArtifactName};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::model::sibling;
 pub use crate::transport::client::HeadInfo;
-use crate::transport::client::NexusClient;
 
 /// The `get` result.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(not(target_arch = "wasm32"))]
 pub struct GetOutcome {
     /// Final size in bytes (stdout mode: bytes written).
     pub size: u64,
@@ -37,6 +49,7 @@ pub struct GetOutcome {
 /// # Errors
 ///
 /// Returns transport, auth or HTTP errors from the GET, [`Error::Io`] when the part file cannot be written or renamed, and [`Error::Misuse`] when stdout cannot be written.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn get(
     client: &NexusClient,
     url: &str,
@@ -108,6 +121,7 @@ pub async fn get(
 /// # Errors
 ///
 /// Returns [`Error::Io`] when `src` cannot be read or hashed, [`Error::Misuse`] when `src` is not a file, and transport, auth or HTTP errors from the uploads.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn put(
     client: &NexusClient,
     url: &str,
@@ -158,6 +172,7 @@ pub async fn head(client: &NexusClient, url: &str) -> Result<HeadInfo, Error> {
 
 /// The digest of a local file or of a remote object.
 #[derive(Debug, Clone)]
+#[cfg(not(target_arch = "wasm32"))]
 pub enum ShaSource {
     File(PathBuf),
     Url(String),
@@ -168,6 +183,7 @@ pub enum ShaSource {
 /// # Errors
 ///
 /// Returns [`Error::Io`] when a file source cannot be read and transport, auth or HTTP errors for a URL source.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn sha(client: &NexusClient, src: ShaSource) -> Result<Digest, Error> {
     match src {
         ShaSource::File(path) => digest::sha256_file(&path).map_err(|e| Error::io(&path, e)),
@@ -185,6 +201,7 @@ pub async fn sha(client: &NexusClient, src: ShaSource) -> Result<Digest, Error> 
 }
 
 /// `<out>.part` next to the output file.
+#[cfg(not(target_arch = "wasm32"))]
 fn part_of(out: &Path) -> PathBuf {
     let mut s = out.as_os_str().to_os_string();
     s.push(".part");
@@ -192,6 +209,7 @@ fn part_of(out: &Path) -> PathBuf {
 }
 
 /// The final path segment of a URL, percent-decoded: the marker's name field.
+#[cfg(not(target_arch = "wasm32"))]
 fn last_segment(url: &str) -> String {
     let raw = reqwest::Url::parse(url)
         .ok()
@@ -200,7 +218,7 @@ fn last_segment(url: &str) -> String {
     percent_decode(&raw)
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 

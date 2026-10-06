@@ -37,7 +37,11 @@ serde_json = "1"
 sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "fs", "io-util", "io-std"] }
+# Only features `sync,macros,io-util,rt,time` exist on wasm32: the rest of the set
+# lives in per-crate `cfg(not(target_arch = "wasm32"))` sections.
+# `net` is absent everywhere: no crate uses `tokio::net`, and the feature pulls
+# in `mio`, which has no wasm32 implementation.
+tokio = { version = "1", features = ["macros", "rt", "sync", "time", "io-util"] }
 toml = "1.1"
 
 [profile.release]
