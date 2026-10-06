@@ -35,7 +35,7 @@ All failures go to stderr in one shape: an `error:` line, then a `hint:` line.
 This refusal was produced by a real run: a local sibling that no longer matches its bytes stops the run before any byte moves.
 
 ```console
-$ nxr up dist-bad/ https://nexus.example.com/repository/raw-main/1.4.0/ --dry-run
+$ nxr up dist-bad/ https://nexus.example.com/repository/raw-main/1.4.0/ --plan
 error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 48f92f1ecbe87b5702a77327c4b1da6bb3f78218eb93edfcdb9c21624d430413, actual f7324dec778c7f17852694ef8c8624e9f1f55289010f77bf7f8b56e0d9088989
 hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
 $ echo $?

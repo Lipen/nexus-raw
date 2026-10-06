@@ -80,8 +80,9 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh] [--plan]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha); exit 1 when different, nothing written |
 | `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | enumerate at the source, diff at the destination, copy bytes + markers |
 | `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
@@ -94,7 +95,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr service repos <URL>` | list the repositories of a server (the service REST API, any URL of that server works) |
 | `nxr complete <shell>` | print a shell completion script to stdout (bash, zsh, fish, powershell) |
 
-`down`, `mirror` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+`down`, `diff`, `mirror` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 With none of them they refuse.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.

@@ -34,12 +34,12 @@ Every relative path under the directory is an artifact name.
 Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` suffix is reserved: `latest`, `nightly` and `version.json` are ordinary names if your convention uses them.
 Before anything touches the network, every local file is classified against its sibling marker (see [the four states of an object](troubleshoot.md#the-four-states-of-an-object)).
 
-## Look before you leap: the dry run
+## Look before you leap: the plan
 
-`--dry-run` prints the plan and transfers nothing:
+`--plan` prints the planned actions and transfers nothing:
 
 ```console
-$ nxr up --dry-run dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+$ nxr up --plan dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 upload app-1.4.0.zip
 upload bom/linux-x86_64.json
 upload manifest.json
@@ -48,6 +48,7 @@ upload pinned.xml
 
 Against a directory the server already holds, the same command prints `skip <name>` per up-to-date artifact.
 The plan lists artifact names, not marker uploads, because each name carries its marker along automatically.
+`nxr diff <local-dir> <url>` goes further: it reports the whole delta (`same`, `missing-local`, `missing-remote`, `diverged`) without writing anything.
 
 ## Publish
 

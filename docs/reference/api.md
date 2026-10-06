@@ -95,7 +95,8 @@ Every method mirrors a CLI command one-to-one.
 | `head(url)` | `HeadInfo` | `nxr head` | status and metadata: 404 is a normal result, not an error |
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
-| `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --dry-run` | the symmetric plan without transferring |
+| `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --plan` | the symmetric plan without transferring |
+| `delta(dir, enum_src)` | `Vec<Delta>` | `nxr diff` | the local-against-storage report: `Same`, `MissingLocal`, `MissingRemote`, `Diverged` (size and/or sha), nothing written |
 | `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
 | `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `mirror_plan(dst, enum_src)` | `Vec<MirrorAction>` | `mirror --dry-run` | probe both sides and classify, emit the plan, move nothing |

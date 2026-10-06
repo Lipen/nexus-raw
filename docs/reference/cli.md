@@ -3,6 +3,7 @@
 `nxr` moves files to and from a Nexus raw repository.
 Single-object commands: `get`, `put`, `head`, `sha`.
 Directory transfers with sha-sibling verification: `up`, `down`, `mirror`, `mv`.
+Comparing a local directory against the storage without writing: `diff`.
 Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 Shell completions: `complete`.
@@ -225,7 +226,7 @@ $ echo $?
 ## nxr up
 
 ```
-nxr up <SRC_DIR> <DST_URL> [--manifest FILE|URL|-] [--no-sha] [--dry-run] [--claim-first <NAME>]
+nxr up <SRC_DIR> <DST_URL> [--manifest FILE|URL|-] [--no-sha] [--plan] [--claim-first <NAME>]
 ```
 
 Upload a local directory.
@@ -237,7 +238,7 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 |:-----|:--------|
 | `--manifest <FILE\|URL\|->` | restrict the transfer to these names, all of which must exist locally |
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
-| `--dry-run` | print the plan without transferring anything |
+| `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
 
 Markers are on by default, in both directions:
@@ -272,11 +273,11 @@ $ echo $?
 0
 ```
 
-A new file uploads alone, and `--dry-run` shows the plan of exactly that:
+A new file uploads alone, and `--plan` shows the plan of exactly that:
 
 ```console
 $ printf 'release notes\n' > dist/1.4.0/release-notes.txt
-$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --dry-run
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --plan
 skip app-1.4.0.zip
 skip bom/linux-x86_64.json
 skip pinned.xml
@@ -294,7 +295,7 @@ $ echo $?
 0
 ```
 
-With `--json`, `--dry-run` prints one object per plan line:
+With `--json`, `--plan` prints one object per plan line:
 
 ```json
 {"action":"skip","name":"app-1.4.0.zip"}
@@ -323,12 +324,12 @@ $ echo $?
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--dry-run]
+nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--plan]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
 Every artifact is streamed into a part file, hashed on the fly, checked against the remote marker when one exists, then renamed into place and given a local sibling computed from the received bytes.
-`--dry-run` probes the server and prints the plan (`upload`/`download`/`skip` lines, exactly like `up --dry-run`) without writing into `DST_DIR`.
+`--plan` probes the server and prints the plan (`upload`/`download`/`skip` lines, exactly like `up --plan`) without writing into `DST_DIR`.
 
 | Flag | Meaning |
 |:-----|:--------|
@@ -336,6 +337,7 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
+| `--plan` | probe the server and print the plan without writing into `DST_DIR` (the `--dry-run` spelling works as an alias) |
 | `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 
 The prefix filter applies after the enumeration resolves: a name survives when it matches at least one prefix, and a filter that keeps nothing refuses the run (exit 1).
@@ -393,6 +395,56 @@ Part files are named `.nxr-part-<32 hex>` and are stable per artifact name, so a
 `--fresh` ignores the parts and downloads every name from zero.
 A resumed part that belongs to an older remote version fails the digest check and is discarded once: the name restarts from zero under the same digest check.
 A fresh download that still diverges refuses the run (exit 1), so nothing divergent is ever written.
+
+## nxr diff
+
+```
+nxr diff <LOCAL_DIR> <SRC_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--prefix PREFIX]...
+```
+
+Compare a local directory against a remote one and print the delta, changing nothing on either side.
+The enumeration is the one `down` uses: a `manifest.json` at the directory URL by convention, or `--manifest`, repeatable `--name`, best-effort `--ls`.
+The name set is the union of the local scan and the enumeration, so a local-only name shows up as `missing-remote` even when the enumeration is restricted.
+
+| Section | Meaning |
+|:--------|:--------|
+| `same` | both sides carry the same digest |
+| `missing-local` | the storage holds (or lists) the name, the local directory does not |
+| `missing-remote` | the local directory holds the name, the storage enumeration does not |
+| `diverged` | both sides hold the name, and the copies differ in size and/or sha, or cannot be compared |
+
+The facts come from the same probes `up` and `down` see: the local marker and bytes, the remote HEAD and `.sha256` sibling.
+A local file without its marker is hashed on the fly, so an unfinished local copy still compares by digest.
+An entry diverges by `size`, by `sha`, or is `unverifiable` when no digest pair and no size contrast exists anywhere (a markerless pair of equal size, for example).
+
+```console
+$ nxr diff dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+same app-1.4.0.zip
+missing-local pinned.xml
+missing-remote release-notes.txt
+diverged bom/linux-x86_64.json (sha)
+$ echo $?
+1
+```
+
+A fully converged directory reports every name as `same` and exits 0.
+The conventional `manifest.json` lists artifacts only, so the diff reports the manifest itself as `missing-remote` unless the manifest lists it too.
+
+`--json` prints one object per entry, where `digest` and `size` are `null` when a side carries none:
+
+```json
+{"delta":"same","digest":"a8a24209…","name":"app-1.4.0.zip"}
+{"delta":"missing-local","name":"pinned.xml","remote":{"digest":"a8a24209…","size":16}}
+{"delta":"missing-remote","local":{"digest":"b8b24209…","size":17},"name":"release-notes.txt"}
+{"delta":"diverged","local":{"digest":"c1c24209…","size":45},"name":"bom/linux-x86_64.json","remote":{"digest":"d2d24209…","size":45},"sha":true,"size":false}
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the delta holds only `same` entries |
+| `1` | differences found, or a data refusal: `cannot enumerate` |
+| `2` | misuse: the local path is not a directory, an unsafe `--name` or `--prefix`, an unscannable local name |
+| `3` | transport or auth failure while enumerating or probing |
 
 ## nxr mirror
 

@@ -54,7 +54,7 @@ cargo test -p nexus-raw --test cli                # the binary against the mock
 ```
 
 The core suite drives the facade directly and pins transfer semantics.
-The CLI suite runs the real `nxr` binary over HTTP against the same mock and pins the user-visible surface on top: exit codes (0/1/2/3), the `hint:` line on stderr, `down` refusing without an enumeration source, `--dry-run` writing nothing, NDJSON event shapes, `doctor` verdicts.
+The CLI suite runs the real `nxr` binary over HTTP against the same mock and pins the user-visible surface on top: exit codes (0/1/2/3), the `hint:` line on stderr, `down` refusing without an enumeration source, `--plan` writing nothing, NDJSON event shapes, `doctor` verdicts.
 Every scenario in the table is driven by the CLI suite at least once.
 
 Core suite, by intent:
@@ -73,10 +73,11 @@ CLI suite, by intent:
 - **enumeration**: `down_without_enumeration_needs_a_source`, `down_explicit_name`, `down_manifest_from_local_file`, `rm_without_a_source_refuses`
 - **mirror**: `mirror_pours_the_version_and_reruns_are_pure_skips`, `mirror_refuses_a_diverged_destination`
 - **rm and point**: `rm_removes_whole_version_and_reruns_clean`, `rm_readonly_refuses_and_keeps_bytes`, `rm_dry_run_touches_no_bytes`, `rm_json_events_parse_and_summarize`, `point_clear_roundtrip_and_readonly`
-- **planning and observability**: `dry_run_prints_plan_without_uploading`, `ndjson_events_parse_and_summarize`, `rate_limit_up_retries_and_succeeds`, `failing_up_still_flushes_ndjson_events`
-- **golden ndjson**: `golden_ndjson_up_down_hold`, `golden_ndjson_mirror_holds`, `golden_ndjson_retrying_holds`, `golden_ndjson_doctor_holds`
+- **planning and observability**: `up_plan_prints_actions_without_uploading`, `down_plan_prints_plan_without_writing`, `ndjson_events_parse_and_summarize`, `rate_limit_up_retries_and_succeeds`, `failing_up_still_flushes_ndjson_events`
+- **diff**: `diff_equal_directory_exits_zero`, `diff_reports_the_sections_and_writes_nothing`, `diff_without_enumeration_needs_a_source`, `diff_misuse_exits_two`
+- **golden ndjson**: `golden_ndjson_up_down_hold`, `golden_ndjson_diff_holds`, `golden_ndjson_mirror_holds`, `golden_ndjson_retrying_holds`, `golden_ndjson_doctor_holds`
 - **verification and pointers**: `verify_accepts_then_rejects_tampering`, `channel_set_get_and_if_forward`
-- **exit codes and doctor**: `auth401_exit_codes` (3), `auth403_exit_3` (3), `redirect_exit_3` (3), `unsafe_name_is_misuse_exit_2` (2), `dead_base_exit_3` (3), `rm_exit_matrix_rows` (2 and 3), `doctor_exit_codes` (0 and 2), `doctor_json_lines`
+- **exit codes and doctor**: `auth401_exit_codes` (3), `auth403_exit_3` (3), `redirect_exit_3` (3), `unsafe_name_is_misuse_exit_2` (2), `dead_base_exit_3` (3), `rm_exit_matrix_rows` (2 and 3), `diff_misuse_exits_two` (2), `doctor_exit_codes` (0 and 2), `doctor_json_lines`
 - **scenario coverage**: `sizeless_up_refuses_instead_of_overwriting`, `markerless_down_writes_computed_marker`, `foreign_marker_down_refuses`
 
 ## The composition

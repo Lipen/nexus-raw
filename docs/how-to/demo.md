@@ -51,7 +51,7 @@ The examples below work as written against it:
 ```bash
 nxr head http://127.0.0.1:8734/1.4.0/app-1.4.0.zip
 nxr get  http://127.0.0.1:8734/1.4.0/manifest.json
-nxr up   examples/demo/dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --dry-run
+nxr up   examples/demo/dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --plan
 ```
 
 ```console
@@ -61,7 +61,7 @@ $ nxr get http://127.0.0.1:8734/1.4.0/manifest.json
 {
   "artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json", "pinned.xml"]
 }
-$ nxr up examples/demo/dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --dry-run
+$ nxr up examples/demo/dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --plan
 skip app-1.4.0.zip
 skip bom/linux-x86_64.json
 skip manifest.json

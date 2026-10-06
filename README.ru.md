@@ -80,8 +80,9 @@ nxr verify vendor/prebuilt
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--dry-run] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
+| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh] [--plan]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha); код 1 при различиях, ничего не пишет |
 | `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
 | `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror в приёмник, затем удаление в источнике (пока перенос не сошёлся, ничего не удаляется) |
@@ -94,7 +95,7 @@ nxr verify vendor/prebuilt
 | `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
 | `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
 
-`down`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
+- `down`, `diff`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 Без любого из них команда отказывает.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
