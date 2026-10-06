@@ -637,8 +637,14 @@ pub enum Mode {
     Card(Card),
     /// The download-as dialog.
     SaveAs(SaveAsDialog),
-    /// The error modal.
-    Error(ErrorModal),
+    /// The error modal, with the dialog layer it covered: restored on close.
+    Error {
+        /// The modal itself: cause, facts, hint, full text, retry.
+        modal: ErrorModal,
+        /// The dialog the modal covered. `None` over the normal screen:
+        /// errors never restore a plain browse.
+        back: Option<Box<Mode>>,
+    },
 }
 
 /// Events the app reacts to: input, listing results and download progress.
@@ -899,14 +905,28 @@ impl App {
             Some(h) => format!("error: {e}\nhint: {h}"),
             None => format!("error: {e}"),
         };
-        self.mode = Mode::Error(ErrorModal {
-            title: kind.title(e),
-            cause: cause_of(e),
-            facts,
-            hint,
-            full,
-            retry,
-        });
+        // A background failure never kills a dialog: the layer comes back
+        // when the modal closes. The normal screen is not worth remembering.
+        let back = match self.mode.clone() {
+            Mode::Dest(_)
+            | Mode::PickSource(_)
+            | Mode::SaveAs(_)
+            | Mode::AddServer(_)
+            | Mode::Servers
+            | Mode::Card(_) => Some(Box::new(self.mode.clone())),
+            _ => None,
+        };
+        self.mode = Mode::Error {
+            modal: ErrorModal {
+                title: kind.title(e),
+                cause: cause_of(e),
+                facts,
+                hint,
+                full,
+                retry,
+            },
+            back,
+        };
     }
 
     /// Handles one message from the pump.
@@ -976,7 +996,7 @@ impl App {
             Mode::PickSource(picker) => self.on_key_source(key, picker),
             Mode::Card(card) => self.on_key_card(key, card),
             Mode::SaveAs(dialog) => self.on_key_save_as(key, dialog),
-            Mode::Error(modal) => self.on_key_error(key, modal),
+            Mode::Error { modal, back } => self.on_key_error(key, modal, back),
         }
     }
 
@@ -1237,14 +1257,19 @@ impl App {
         }
     }
 
-    /// The error modal: esc leaves, `y` copies the full text, `r` reruns.
-    fn on_key_error(&mut self, key: KeyEvent, modal: ErrorModal) {
+    /// The error modal: esc leaves to the covered layer, `y` copies the full
+    /// text, `r` reruns. A remembered dialog gets its layer back on close.
+    fn on_key_error(&mut self, key: KeyEvent, modal: ErrorModal, back: Option<Box<Mode>>) {
+        let restore = || match back {
+            Some(layer) => *layer,
+            None => Mode::Normal,
+        };
         match key.code {
             KeyCode::Esc | KeyCode::Enter => {
-                self.mode = Mode::Normal;
+                self.mode = restore();
             }
             KeyCode::Char(_) if pressed(&key, 'q') => {
-                self.mode = Mode::Normal;
+                self.mode = restore();
             }
             KeyCode::Char(_) if pressed(&key, 'y') => {
                 clipboard::copy(&modal.full, self.config.tui.osc52);
@@ -1252,7 +1277,7 @@ impl App {
             }
             KeyCode::Char(_) if pressed(&key, 'r') => {
                 if let Some(retry) = modal.retry {
-                    self.mode = Mode::Normal;
+                    self.mode = restore();
                     self.run_retry(retry);
                 }
             }
@@ -3060,15 +3085,12 @@ mod tests {
 
     /// Presses the `r` of the open error modal.
     fn modal_retry_runs(app: &mut App) {
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("no error modal is open");
         };
-        let Some(retry) = modal.retry else {
-            panic!("the modal carries no retry");
-        };
-        // The key handler closes the modal before the retry runs.
-        app.mode = Mode::Normal;
-        app.run_retry(retry);
+        assert!(modal.retry.is_some(), "the modal carries no retry");
+        // The real key handler closes the modal before the retry runs.
+        app.handle(Msg::Key(key(KeyCode::Char('r'))));
     }
 
     #[test]
@@ -3882,7 +3904,7 @@ mod tests {
             detail: "connection refused".into(),
         };
         app.handle(Msg::Dl(DlEv::Done(Err(e))));
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the upload refusal opens the error modal");
         };
         assert_eq!(modal.title, "upload failed");
@@ -3914,7 +3936,7 @@ mod tests {
             src.display()
         ));
         app.handle(Msg::Dl(DlEv::Done(Err(e))));
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the empty scan opens the error modal");
         };
         assert_eq!(modal.title, "upload failed");
@@ -3995,6 +4017,114 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_failed_transfer_keeps_the_add_server_form_intact() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        // The add form is open, the URL is half typed.
+        app.handle(Msg::Key(key(KeyCode::Char('s'))));
+        app.handle(Msg::Key(key(KeyCode::Char('a'))));
+        for c in "http://10.0.0".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        // A background transfer fails over the form.
+        let e = Error::Transport {
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            detail: "connection refused".into(),
+        };
+        app.handle(Msg::Dl(DlEv::Done(Err(e))));
+        let Mode::Error { modal, back } = app.mode.clone() else {
+            panic!("the failure opens the error modal");
+        };
+        assert_eq!(modal.title, "upload failed");
+        assert!(
+            matches!(back.as_deref(), Some(Mode::AddServer(url)) if url == "http://10.0.0"),
+            "the modal remembers the form: {back:?}"
+        );
+        // Esc gives the layer back, text and all.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::AddServer("http://10.0.0".into()));
+        // The form still works: the rest of the URL types on.
+        for c in ".4:8081/".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        assert_eq!(app.mode, Mode::AddServer("http://10.0.0.4:8081/".into()));
+    }
+
+    #[tokio::test]
+    async fn a_failed_transfer_keeps_the_destination_picker_intact() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!("o opens the picker");
+        };
+        for _ in 0..picker.buffer.chars().count() {
+            app.handle(Msg::Key(key(KeyCode::Backspace)));
+        }
+        for c in "/tmp/kept".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        let e = Error::Io {
+            path: "/tmp/put-src".into(),
+            detail: "permission denied".into(),
+        };
+        app.handle(Msg::Dl(DlEv::Done(Err(e))));
+        let Mode::Error { modal, back } = app.mode.clone() else {
+            panic!("the failure opens the error modal");
+        };
+        assert_eq!(modal.title, "upload failed");
+        assert!(
+            matches!(back.as_deref(), Some(Mode::Dest(_))),
+            "the modal remembers the picker: {back:?}"
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(matches!(app.mode, Mode::Dest(_)), "the picker is back");
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!("the picker is back");
+        };
+        assert_eq!(picker.buffer, "/tmp/kept");
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn a_dialog_survives_a_retry_behind_the_modal() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        let src = app.transfer.as_ref().unwrap().src.clone().unwrap();
+        // The download-as dialog is open with an edited name.
+        app.handle(Msg::Key(key(KeyCode::Char('D'))));
+        let Mode::SaveAs(dialog) = app.mode.clone() else {
+            panic!("D opens the dialog");
+        };
+        app.handle(Msg::Key(key(KeyCode::Tab)));
+        for _ in 0..dialog.name.chars().count() {
+            app.handle(Msg::Key(key(KeyCode::Backspace)));
+        }
+        for c in "kept".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        // The upload fails behind the dialog.
+        let e = Error::Transport {
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            detail: "connection refused".into(),
+        };
+        app.handle(Msg::Dl(DlEv::Done(Err(e))));
+        assert!(matches!(app.mode, Mode::Error { .. }));
+        // r reruns the put and hands the layer straight back.
+        modal_retry_runs(&mut app);
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { local, .. }) => assert_eq!(local, src),
+            other => panic!("unexpected message: {other:?}"),
+        }
+        let Mode::SaveAs(dialog) = app.mode.clone() else {
+            panic!("the dialog comes back behind the retry");
+        };
+        assert_eq!(dialog.name, "kept");
+        assert_eq!(dialog.field, SaveAsField::Name);
+    }
+
+    #[tokio::test]
     async fn download_plan_starts_the_transfer() {
         let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
         app.handle(Msg::Key(key(KeyCode::Char('d'))));
@@ -4056,7 +4186,7 @@ mod tests {
             "a new download can start after the failure"
         );
         // The refusal speaks through the error modal, with a retry at hand.
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the walk refusal must open the error modal");
         };
         assert_eq!(modal.title, "download failed");
@@ -4111,7 +4241,7 @@ mod tests {
         });
         assert!(!app.tabs[0].loading, "no phantom loading marker");
         // Errors live in their modal now, never in the status line.
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the refusal must open the error modal");
         };
         assert_eq!(modal.title, "listing failed");
@@ -4525,7 +4655,7 @@ mod tests {
             gen: app.tabs[0].gen,
             res: Err(e),
         });
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the listing failure opens the modal");
         };
         assert_eq!(modal.title, "listing failed");
@@ -4565,7 +4695,7 @@ mod tests {
             gen: app.tabs[0].gen,
             res: Err(e2),
         });
-        assert!(matches!(app.mode, Mode::Error(_)));
+        assert!(matches!(app.mode, Mode::Error { .. }));
         app.handle(Msg::Key(key(KeyCode::Esc)));
         assert_eq!(app.mode, Mode::Normal);
     }
@@ -4587,14 +4717,14 @@ mod tests {
             gen,
             res: Err(e),
         });
-        let Mode::Error(modal) = app.mode.clone() else {
+        let Mode::Error { modal, .. } = app.mode.clone() else {
             panic!("the walk refusal opens the modal");
         };
         assert!(modal.cause.contains("not a legal artifact path"));
         assert!(modal.retry.is_none(), "a grammar error cannot be retried");
         // Without a retry the modal only leaves through esc.
         app.handle(Msg::Key(key(KeyCode::Char('r'))));
-        assert!(matches!(app.mode, Mode::Error(_)));
+        assert!(matches!(app.mode, Mode::Error { .. }));
         app.handle(Msg::Key(key(KeyCode::Esc)));
         assert_eq!(app.mode, Mode::Normal);
         assert!(!app.transfer_busy(), "the failed walk released the slot");

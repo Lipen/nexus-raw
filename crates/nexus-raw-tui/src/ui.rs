@@ -375,7 +375,7 @@ fn draw_overlay(f: &mut Frame, app: &mut App, area: Rect) {
         Mode::PickSource(picker) => source_picker_overlay(f, app, &picker, area),
         Mode::Card(card) => card_overlay(f, &card, area),
         Mode::SaveAs(dialog) => save_as_overlay(f, &dialog, area),
-        Mode::Error(modal) => error_overlay(&modal, area, f),
+        Mode::Error { modal, .. } => error_overlay(&modal, area, f),
     }
 }
 

@@ -103,6 +103,8 @@ An upload cancelled in the middle leaves markerless objects behind, exactly like
 A failed listing or download opens an error modal instead of the status line.
 It shows a plain-language cause, the facts (server, repository, names, destination, HTTP status), the hint from the core error, and the full error text.
 `y` copies the full text to the clipboard (OSC52 with a fallback to the system clipboard, `tui.osc52` disables OSC52), `r` retries where a retry makes sense, `esc`/`enter` closes.
+The modal never destroys what is under it: a destination picker, the source picker, a dialog, the servers overlay, an add form or a card comes back exactly as it was when the modal closes, typed text included.
+A retry hands the layer straight back too: the rerun proceeds behind the dialog.
 
 ## Tree modes
 
