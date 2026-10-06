@@ -39,19 +39,41 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `up`/`down`, `k`/`j` | move the selection |
 | `pgup`/`pgdown` | move by page |
 | `home`/`end`, `g`/`G` | first/last row |
-| `right`, `enter` | open a folder or repository, download a file |
+| `right`, `enter` | open a folder or repository; on a file, open the file card |
 | `left`, `esc`/`backspace` | up one level, then back to the repositories |
 | `e` | toggle the tree navigation mode (see below) |
-| `d` | download the selected entry: a folder downloads its subtree |
-| `D` | download the whole current directory |
-| `r` | refresh the current listing |
-| `i` | info on the selected entry: HEAD size for files, the length of the current listing for folders |
-| `/` | filter the tree: type to narrow, enter keeps, esc clears |
+| `d` | download the selected entry into the destination folder |
+| `D` | download with a dialog: folder and name, prefilled from the selection |
+| `o` | pick the destination folder of the session |
+| `i` | card of the selected repository (repositories screen) |
+| `r` | refresh the current listing, keeping the filter and the cursor |
+| `/` | filter the tree: type to narrow, enter applies, esc closes; backspace to empty closes too |
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay, `a` opens the add form |
 | `?` | keybindings overlay |
-| `q`/`ctrl-c` | quit; twice while a download runs |
-| mouse | wheel scrolls, click selects, double click opens |
+| `q`/`ctrl-c` | quit; twice while a download runs; inside an overlay or a modal, `q` closes it |
+| mouse | wheel scrolls, click selects, double click opens a folder or the file card |
+
+## The file card
+
+`enter` on a file opens a card, never a download.
+The card shows the name, the path from the repository root, the full URL, the size from a HEAD request and the sha256 from the `.sha256` marker when the server has one.
+Inside the card: `s` downloads the file into the destination folder, `o` picks another destination and returns to the card, `c` copies the URL, `esc`/`enter`/`q` close.
+The download is a direct `get` with the digest verified against the marker: no enumeration is involved.
+
+## The destination folder
+
+Downloads always land in an explicitly chosen folder, shown as `→ path` in the status bar.
+The session starts with `download.dir` from the config.
+`o` opens a picker prefilled with the current destination: edit and press enter, or esc to cancel.
+A file lands as `{destination}/{name}`, a subtree as `{destination}/{name}/...`, a whole repository as `{destination}/{repo}/...`.
+Nothing is written outside the destination, and nothing is written before a dialog is confirmed.
+
+## Errors
+
+A failed listing or download opens an error modal instead of the status line.
+It shows a plain-language cause, the facts (server, repository, names, destination, HTTP status), the hint from the core error, and the full error text.
+`y` copies the full text to the clipboard (OSC52 with a fallback to the system clipboard, `tui.osc52` disables OSC52), `r` retries where a retry makes sense, `esc`/`enter` closes.
 
 ## Tree modes
 
@@ -83,6 +105,8 @@ dir = "nxr-tui-downloads"
 all_formats = false
 # Left/right navigation in the tree: "enter" or "expand" (toggled with `e`).
 nav = "enter"
+# Copy through the terminal (OSC52) in addition to the system clipboard.
+osc52 = true
 
 [[server]]
 name = "main"
@@ -95,6 +119,7 @@ url = "http://127.0.0.1:8081/"
 | `download.dir` | `nxr-tui-downloads` | where downloads land, relative to the working directory |
 | `tui.all_formats` | `false` | let repositories of every format be opened |
 | `tui.nav` | `enter` | the left/right navigation mode: `enter` or `expand` |
+| `tui.osc52` | `true` | copy through the terminal (OSC52) alongside the system clipboard |
 | `server` (list) | none | the presets: `name` for the tab and `--server`, `url` for the server root |
 
 Passwords never live in the config.
@@ -103,16 +128,16 @@ Values never appear in logs or on screen.
 
 ## Downloads
 
-A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
-For a file entry the plan is that one name; for a folder entry (`d` on a folder, `D` on the current directory) the TUI walks the subtree with `ls_entries()` recursively and downloads the whole set in one transfer.
-The plan count is shown before the transfer starts.
+A file entry downloads through the direct `get` primitive into `{destination}/{rel}`, with the `.sha256` marker verified when the server has one.
+A folder entry (`d` on a folder, `D` on the current directory) and a whole repository (`d` on the repositories screen) walk the subtree with `ls_entries()` recursively and download the set in one transfer.
+The `D` dialog shows the target path live before anything starts, and nothing is written until it is confirmed.
 
 Downloads are one at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`.
-Everything else keeps working: browsing, filters, refreshes, info, tab switches, even adding a server.
-Navigation within the tab cancels a still-walking request; a running transfer is never interrupted by the UI.
+Everything else keeps working: browsing, filters, refreshes, cards, tab switches, even adding a server.
+A running transfer is never interrupted by the UI.
 Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
 A panel shows the plan, the files in flight with byte progress and the final summary, and stays until the next download replaces it.
-Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.
+Failures open the error modal and never close the TUI.
 
 ## Headless smoke mode
 

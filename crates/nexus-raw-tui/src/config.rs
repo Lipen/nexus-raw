@@ -34,6 +34,8 @@ dir = \"nxr-tui-downloads\"
 [tui]
 # Let repositories of every format be opened, not only raw.
 all_formats = false
+# Copy through the OSC 52 terminal escape before the external tools.
+osc52 = true
 # Left/right navigation in the tree:
 #   \"enter\"  - right enters a folder, left goes back up;
 #   \"expand\" - right expands a folder inline, left collapses it or jumps to the parent.
@@ -134,8 +136,12 @@ impl Nav {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// TUI behavior switches.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TuiCfg {
     /// Let repositories of every format be opened, not only raw.
     #[serde(default)]
@@ -143,6 +149,19 @@ pub struct TuiCfg {
     /// The left/right navigation mode.
     #[serde(default)]
     pub nav: Nav,
+    /// Copy through the OSC 52 terminal escape before the external tools.
+    #[serde(default = "default_true")]
+    pub osc52: bool,
+}
+
+impl Default for TuiCfg {
+    fn default() -> Self {
+        Self {
+            all_formats: false,
+            nav: Nav::default(),
+            osc52: true,
+        }
+    }
 }
 
 /// The whole config file.
@@ -290,10 +309,34 @@ mod tests {
         assert_eq!(cfg.version, 1);
         assert_eq!(cfg.download.dir, PathBuf::from("nxr-tui-downloads"));
         assert!(!cfg.tui.all_formats);
+        assert!(cfg.tui.osc52);
         assert_eq!(cfg.tui.nav, Nav::Enter);
         assert_eq!(cfg.servers.len(), 1);
         assert_eq!(cfg.servers[0].name, "main");
         assert_eq!(cfg.servers[0].url, "http://127.0.0.1:8081/");
+    }
+
+    #[test]
+    fn a_config_without_the_new_keys_parses() {
+        // A pre-osc52 config: every key added later must fall back to its default.
+        let old = "\
+version = 1
+
+[download]
+dir = \"dl\"
+
+[tui]
+all_formats = false
+nav = \"expand\"
+
+[[server]]
+name = \"main\"
+url = \"http://127.0.0.1:8081/\"
+";
+        let cfg: ConfigFile = toml::from_str(old).unwrap();
+        assert_eq!(cfg.download.dir, PathBuf::from("dl"));
+        assert!(cfg.tui.osc52, "osc52 defaults to true");
+        assert_eq!(cfg.tui.nav, Nav::Expand);
     }
 
     #[test]

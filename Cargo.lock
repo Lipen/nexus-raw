@@ -1168,6 +1168,7 @@ name = "nexus-raw-tui"
 version = "0.4.0"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "crossterm",
  "mock-nexus",

@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The `nxr-tui` terminal browser joins as the `nexus-raw-tui` crate.
 One tab per server, the raw tree at any depth, subtree downloads, a live filter and server presets.
+`enter` on a file opens a card with the size, the digest and the URL, and downloads start from the card or from `d`.
+Downloads land in an explicitly picked destination folder (`o`), shown in the status bar, with a dialog form (`D`) that previews the target path.
+Failures open an error modal with a plain-language cause, the core hint, and a clipboard copy of the full text.
 - `nxr mv <src-url> <dst-url>`: renames a subtree as `mirror` plus `rm`, and nothing is deleted until the copy converges on the destination.
 - `--prefix <path>` on `down`, `mirror`, `rm` and `mv`: scope the operation to one subtree of the repository.
 - `nxr service repos`: lists the repositories of the Nexus instance with their format and writability.
@@ -29,6 +32,7 @@ The binary inside stays `nxr-tui`, and so do its config paths and smoke director
 ### Fixed
 
 - The real-Nexus battery checks the entry listing (a version folder) instead of the old version-only listing.
+- Uppercase letters type into every TUI input field: a real terminal delivers capitals with the Shift modifier, and the fields ignored them.
 - The bundled Inter and Space Grotesk webfonts ship their SIL OFL 1.1 license texts.
 
 ## [0.4.0] - 2026-10-04

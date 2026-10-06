@@ -120,7 +120,8 @@ impl Error {
         }
     }
 
-    pub(crate) fn io(path: &std::path::Path, source: std::io::Error) -> Self {
+    /// Wraps a filesystem error at `path`: downloads surface it as exit 1 data.
+    pub fn io(path: &std::path::Path, source: std::io::Error) -> Self {
         Error::Io {
             path: path.display().to_string(),
             detail: source.to_string(),

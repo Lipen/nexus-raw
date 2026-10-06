@@ -5,22 +5,53 @@
 //! [`Msg`] values: key presses, mouse events, listing results and download
 //! progress. Rendering lives in [`crate::ui`], the terminal loop in [`crate::tui`].
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+/// A bare action key: capitals arrive with Shift, so Shift is allowed.
+/// Control, Alt and Super combos never trigger actions.
+fn pressed(key: &KeyEvent, expected: char) -> bool {
+    key.code == KeyCode::Char(expected)
+        && !key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+}
+
+/// A text character for an input field: Shift is part of the character,
+/// so uppercase paths and names type as typed.
+fn text_char(key: &KeyEvent) -> Option<char> {
+    if key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+    {
+        return None;
+    }
+    match key.code {
+        KeyCode::Char(c) => Some(c),
+        _ => None,
+    }
+}
 use nexus_raw_core::service::RepoInfo;
 use nexus_raw_core::{ArtifactName, Entry, EntryKind, Error, HeadInfo, Summary};
 use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use tokio::sync::mpsc;
 
-use crate::config::{self, ConfigFile, Nav, ServerCfg};
+use crate::clipboard;
+use crate::config::{self, host_of, ConfigFile, Nav, ServerCfg};
 use crate::net;
 
 /// A double click is two clicks on the same row within this window.
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
+
+/// How long a toast stays on screen.
+const TOAST_TTL: Duration = Duration::from_millis(2000);
+
+/// How many toasts stack at once.
+const TOAST_STACK: usize = 3;
 
 /// The two screens of one tab: the server repositories, then the tree of the
 /// selected repository.
@@ -57,8 +88,14 @@ pub struct Tab {
     pub loading_dirs: BTreeSet<String>,
     /// Cursor on the tree screen, indexing the filtered list.
     pub tree_cursor: usize,
-    /// The live filter, set with `/`. `Some("")` filters nothing but stays active.
+    /// The applied filter. An empty filter is off: no zombie state.
     pub filter: Option<String>,
+    /// True while the filter input is open: `/` opens it, enter applies and
+    /// closes, esc clears and closes, backspace to empty closes it off.
+    pub filter_edit: bool,
+    /// The row name the cursor sat on when a refresh started: the landing
+    /// listing puts the cursor back on it instead of resetting to the top.
+    pub keep_cursor_name: Option<String>,
     /// Request generation of this tab: results of an older generation are dropped.
     pub gen: u64,
     /// True while a listing of the current position is in flight.
@@ -100,6 +137,8 @@ impl Tab {
             loading_dirs: BTreeSet::new(),
             tree_cursor: 0,
             filter: None,
+            filter_edit: false,
+            keep_cursor_name: None,
             gen: 0,
             loading: false,
         }
@@ -229,11 +268,241 @@ pub enum DlOutcome {
     Failed(String, Option<String>),
 }
 
+/// A repository flattened to plain fields, so cards and dialogs can hold,
+/// compare and clone it without borrowing the tab's list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoRow {
+    /// Repository name.
+    pub name: String,
+    /// Repository format (`raw`, `maven2`, ...).
+    pub format: String,
+    /// Repository kind (`hosted`, `proxy`, `group`).
+    pub kind: String,
+    /// Repository URL.
+    pub url: String,
+}
+
+impl From<&RepoInfo> for RepoRow {
+    fn from(repo: &RepoInfo) -> Self {
+        Self {
+            name: repo.name.clone(),
+            format: repo.format.clone(),
+            kind: repo.kind.clone(),
+            url: repo.url.clone(),
+        }
+    }
+}
+
+impl RepoRow {
+    /// The directory URL every request of this repository resolves against.
+    #[must_use]
+    pub fn dir_url(&self) -> String {
+        net::dir_url(&self.url)
+    }
+}
+
+/// The size line of a file card while its HEAD is in flight.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SizeState {
+    /// The HEAD has not landed yet.
+    Pending,
+    /// The server sent no Content-Length.
+    Unknown,
+    /// The Content-Length arrived.
+    Known(u64),
+    /// The HEAD failed.
+    Failed(String),
+}
+
+/// The sha256 line of a file card while its `.sha256` sibling is in flight.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShaState {
+    /// The sibling GET has not landed yet.
+    Pending,
+    /// The server has no `.sha256` marker.
+    Absent,
+    /// The marker parsed: the pinned digest.
+    Hex(String),
+    /// The marker fetch failed or the marker does not parse.
+    Failed(String),
+}
+
+/// The card over one file of the tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileCard {
+    /// The tab the file lives in: part of the HEAD row token.
+    pub tab: usize,
+    /// The generation at open time: part of the HEAD row token.
+    pub gen: u64,
+    /// The path from the repository root: the row token and the target name.
+    pub rel: String,
+    /// The file name.
+    pub name: String,
+    /// The full URL of the file.
+    pub url: String,
+    /// The repository the file belongs to.
+    pub repo: RepoRow,
+    /// The HEAD outcome.
+    pub size: SizeState,
+    /// The `.sha256` sibling outcome.
+    pub sha: ShaState,
+}
+
+/// The card over one repository row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoCard {
+    /// The repository details.
+    pub repo: RepoRow,
+    /// Whether the repository can be opened under the current format filter.
+    pub enterable: bool,
+}
+
+/// One card: a repository inspection or a file inspection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Card {
+    /// The card over a repository row of the Repos screen.
+    Repo(RepoCard),
+    /// The card over a file of the Tree screen.
+    File(Box<FileCard>),
+}
+
+impl Card {
+    /// The URL the `c` copy action carries: the file or the repository.
+    #[must_use]
+    pub fn url(&self) -> &str {
+        match self {
+            Card::Repo(c) => &c.repo.url,
+            Card::File(c) => &c.url,
+        }
+    }
+}
+
+/// The destination picker: a path buffer with an optional deferred action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DestPicker {
+    /// The path typed so far, prefilled with the current destination.
+    pub buffer: String,
+    /// The card to return to on close, when `o` came from inside a card.
+    pub back_to_card: Option<Card>,
+    /// The repository download deferred until the destination is confirmed.
+    pub pending_repo: Option<RepoRow>,
+}
+
+/// Which field of the download-as dialog the keystrokes edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveAsField {
+    /// The target folder.
+    Dir,
+    /// The top-level name below the folder.
+    Name,
+}
+
+/// The subtree a download-as dialog downloads: the repository and the path
+/// below its root, empty for the whole repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DlScope {
+    /// The repository.
+    pub repo: RepoRow,
+    /// The path from the repository root, empty for the whole repository.
+    pub rel: String,
+}
+
+/// The download-as dialog: folder and name, nothing written until Enter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveAsDialog {
+    /// The target folder, prefilled with the session destination.
+    pub dir: String,
+    /// The top-level name, prefilled with the folder or repository name.
+    pub name: String,
+    /// The field the keystrokes go to.
+    pub field: SaveAsField,
+    /// What the download covers.
+    pub scope: DlScope,
+}
+
+/// What `r` in the error modal runs again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Retry {
+    /// Refresh the current screen of one tab.
+    Listing {
+        /// The tab to refresh.
+        tab: usize,
+    },
+    /// Connect the same server again.
+    Connect {
+        /// The server preset.
+        server: ServerCfg,
+    },
+    /// Walk the same scope again and transfer into the same destination.
+    Walk {
+        /// The repository.
+        repo: RepoRow,
+        /// The path from the repository root, empty for the whole repository.
+        rel: String,
+        /// The destination folder the transfer lands in.
+        dst: PathBuf,
+        /// Whether the names strip to the scope (the dialog's rename target).
+        scope_relative: bool,
+    },
+    /// Get the same file again.
+    Get {
+        /// The file URL.
+        url: String,
+        /// The local target path of the file.
+        out: PathBuf,
+        /// The destination folder, for the panel.
+        dst: PathBuf,
+        /// The repository, for the facts.
+        repo: RepoRow,
+    },
+    /// Re-run the same transfer plan.
+    Transfer {
+        /// The repository URL the names are relative to.
+        repo_url: String,
+        /// The names to download.
+        names: Vec<ArtifactName>,
+        /// The destination folder.
+        dst: PathBuf,
+    },
+}
+
+/// The error modal: cause, facts, next steps, full text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorModal {
+    /// The class headline: download failed, listing failed, connect failed,
+    /// access denied.
+    pub title: &'static str,
+    /// One human sentence without colon chains.
+    pub cause: String,
+    /// Non-empty `key: value` facts: server, repository, names, destination,
+    /// HTTP status.
+    pub facts: Vec<(String, String)>,
+    /// The core hint, verbatim.
+    pub hint: Option<String>,
+    /// The canonical text for a bug report, copied by `y`.
+    pub full: String,
+    /// What `r` runs again. Hidden for misuse and unsafe names.
+    pub retry: Option<Retry>,
+}
+
+/// A confirmation living two seconds in the lower right corner.
+#[derive(Debug, Clone)]
+pub struct Toast {
+    /// The text.
+    pub text: String,
+    /// When the toast was raised.
+    born: Instant,
+}
+
 /// Live download state shown in the progress panel.
 #[derive(Debug, Default)]
 pub struct Download {
     /// The repository URL the names are relative to.
     pub repo_url: String,
+    /// The server label, for error facts.
+    pub server: Option<String>,
+    /// The repository name, for error facts.
+    pub repo_name: Option<String>,
     /// Local target directory.
     pub dst: PathBuf,
     /// The plan count of the walk, shown before the transfer starts.
@@ -250,6 +519,13 @@ pub struct Download {
     pub note: Option<String>,
     /// Set when the transfer ends, one way or the other.
     pub outcome: Option<DlOutcome>,
+    /// The walk scope: the path from the repository root, empty for the whole.
+    pub scope: String,
+    /// True when the collected names are stripped to the scope, so they land
+    /// straight under `{dst}` (the dialog's `{dir}/{name}` target).
+    pub scope_relative: bool,
+    /// What `r` in a failure modal runs again.
+    pub retry: Option<Retry>,
 }
 
 impl Download {
@@ -296,6 +572,14 @@ pub enum Mode {
     AddServer(String),
     /// The keybindings overlay.
     Help,
+    /// The destination picker: `o`, or a download waiting for a folder.
+    Dest(DestPicker),
+    /// The card over a repository or a file.
+    Card(Card),
+    /// The download-as dialog.
+    SaveAs(SaveAsDialog),
+    /// The error modal.
+    Error(ErrorModal),
 }
 
 /// Events the app reacts to: input, listing results and download progress.
@@ -337,13 +621,22 @@ pub enum Msg {
         gen: u64,
         res: Result<Vec<ArtifactName>, Error>,
     },
-    /// The HEAD result behind the `i` info action.
+    /// The HEAD result behind a file card, `rel` being the row token.
     Head {
         tab: usize,
         gen: u64,
-        name: String,
+        rel: String,
         res: Result<HeadInfo, Error>,
     },
+    /// The `.sha256` sibling result behind a file card, `rel` being the row token.
+    Sibling {
+        tab: usize,
+        gen: u64,
+        rel: String,
+        res: Result<Option<String>, Error>,
+    },
+    /// The 500 ms tick: toasts expire, card placeholders refresh.
+    Tick,
     /// A download progress event.
     Dl(DlEv),
 }
@@ -358,8 +651,14 @@ pub struct App {
     pub all_formats: bool,
     /// The left/right navigation mode of the tree.
     pub nav: Nav,
-    /// Where downloads land, from the config.
+    /// The download directory from the config: the seed of the session destination.
     pub download_dir: PathBuf,
+    /// The folder downloads land in this session: `{dst}/{name}`.
+    pub destination: PathBuf,
+    /// True once the user confirmed the destination with `o`, the picker or a dialog.
+    pub dest_confirmed: bool,
+    /// The working directory at launch: relative picker input resolves against it.
+    pub base_dir: PathBuf,
     /// The live config: presets added in the `s` overlay are saved here.
     pub config: ConfigFile,
     /// The config path, when one could be resolved.
@@ -374,6 +673,9 @@ pub struct App {
     pub servers_cursor: usize,
     /// Server connects in flight: one at a time, the slot collides otherwise.
     pub connecting: usize,
+    /// True while a connect was started from a live form: when the user
+    /// cancels the form, the result no longer opens a tab or writes the config.
+    connect_open: bool,
     /// Loads, walks and HEADs in flight, across every tab: a diagnostic count,
     /// not a gate (the gates are the per-tab `loading` and the running download).
     pub pending: usize,
@@ -381,10 +683,8 @@ pub struct App {
     pub download: Option<Download>,
     /// The plain status line.
     pub status: String,
-    /// The last error: message plus the core hint.
-    pub error: Option<(String, Option<String>)>,
-    /// The `i` info line of the selected tree entry.
-    pub info: Option<String>,
+    /// The toasts on screen, oldest first.
+    pub toasts: VecDeque<Toast>,
     /// Set when the loop should stop.
     pub quit: bool,
     /// Set after the first `q` while a download is running: the second `q` quits.
@@ -415,12 +715,15 @@ impl App {
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Self {
         let nav = config.tui.nav;
+        let base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             servers,
             auth,
             all_formats,
             nav,
-            download_dir,
+            destination: download_dir.clone(),
+            dest_confirmed: false,
+            base_dir,
             config,
             config_path,
             tabs,
@@ -428,16 +731,17 @@ impl App {
             mode: Mode::Normal,
             servers_cursor: 0,
             connecting: 0,
+            connect_open: false,
             pending: 0,
             download: None,
             status: String::new(),
-            error: None,
-            info: None,
+            toasts: VecDeque::new(),
             quit: false,
             quit_armed: false,
             list_state: ListState::default(),
             list_area: Rect::default(),
             last_click: None,
+            download_dir,
             tx,
         }
     }
@@ -446,9 +750,97 @@ impl App {
     pub fn boot(&mut self) {
         let repos: usize = self.tabs.iter().map(|t| t.repos.len()).sum();
         self.status = format!(
-            "{repos} repositories on {} server(s), enter opens a raw repository",
+            "{repos} repositories on {} server(s), enter opens a raw repository, d downloads it",
             self.tabs.len()
         );
+    }
+
+    /// True while the 500 ms tick has something to do: a live toast, or a
+    /// card with metadata still in flight. The rest of the time the pump
+    /// pays nothing for the tick.
+    #[must_use]
+    pub fn needs_tick(&self) -> bool {
+        if !self.toasts.is_empty() {
+            return true;
+        }
+        matches!(
+            self.mode.clone(),
+            Mode::Card(Card::File(c)) if c.size == SizeState::Pending || c.sha == ShaState::Pending
+        )
+    }
+
+    /// Drops expired toasts. Called on every tick.
+    pub fn tick(&mut self) {
+        self.toasts.retain(|t| t.born.elapsed() < TOAST_TTL);
+    }
+
+    /// Raises a toast: the last [`TOAST_STACK`] survive, the oldest dies first.
+    fn toast(&mut self, text: &str) {
+        self.toasts.push_back(Toast {
+            text: text.to_owned(),
+            born: Instant::now(),
+        });
+        while self.toasts.len() > TOAST_STACK {
+            self.toasts.pop_front();
+        }
+    }
+
+    /// Opens the error modal over whatever is on screen: errors never live in
+    /// the status line.
+    fn raise_error(&mut self, kind: ErrKind, e: &Error, ctx: ErrCtx, retry: Option<Retry>) {
+        let mut facts: Vec<(String, String)> = Vec::new();
+        if let Some(server) = &ctx.server {
+            facts.push(("server".into(), server.escape_debug().to_string()));
+        }
+        if let Some(repository) = &ctx.repository {
+            facts.push(("repository".into(), repository.escape_debug().to_string()));
+        }
+        if let Some(destination) = &ctx.destination {
+            facts.push(("destination".into(), destination.display().to_string()));
+        }
+        let http = match e {
+            Error::Http { status, .. } | Error::ReadOnly { status, .. } => Some(*status),
+            Error::ServiceMissing { .. } => Some(404),
+            _ => None,
+        };
+        if let Some(status) = http {
+            facts.push(("http status".into(), status.to_string()));
+        }
+        match e {
+            Error::Mismatch { name, .. } => {
+                facts.push(("name".into(), name.escape_debug().to_string()));
+            }
+            Error::UnsafeName { name, .. } => {
+                facts.push(("name".into(), name.escape_debug().to_string()));
+            }
+            Error::Io { path, .. } => {
+                facts.push(("path".into(), path.escape_debug().to_string()));
+            }
+            Error::Incomplete { names } | Error::Missing { names } if !names.is_empty() => {
+                facts.push((
+                    "names".into(),
+                    names
+                        .iter()
+                        .map(|n| n.escape_debug().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ));
+            }
+            _ => {}
+        }
+        let hint = e.hint();
+        let full = match &hint {
+            Some(h) => format!("error: {e}\nhint: {h}"),
+            None => format!("error: {e}"),
+        };
+        self.mode = Mode::Error(ErrorModal {
+            title: kind.title(e),
+            cause: cause_of(e),
+            facts,
+            hint,
+            full,
+            retry,
+        });
     }
 
     /// Handles one message from the pump.
@@ -484,15 +876,15 @@ impl App {
                 self.pending = self.pending.saturating_sub(1);
                 self.on_walk(tab, gen, res);
             }
-            Msg::Head {
-                tab,
-                gen,
-                name,
-                res,
-            } => {
+            Msg::Head { tab, gen, rel, res } => {
                 self.pending = self.pending.saturating_sub(1);
-                self.on_head(tab, gen, name, res);
+                self.on_head(tab, gen, rel, res);
             }
+            Msg::Sibling { tab, gen, rel, res } => {
+                self.pending = self.pending.saturating_sub(1);
+                self.on_sibling(tab, gen, rel, res);
+            }
+            Msg::Tick => self.tick(),
             Msg::Dl(ev) => self.on_dl(ev),
         }
     }
@@ -505,7 +897,7 @@ impl App {
             return;
         }
         // Any key but the arming one disarms the quit guard.
-        let is_q = key.code == KeyCode::Char('q') && key.modifiers.is_empty();
+        let is_q = pressed(&key, 'q');
         if !is_q {
             self.quit_armed = false;
         }
@@ -514,37 +906,44 @@ impl App {
             Mode::Help => self.on_key_help(key),
             Mode::Servers => self.on_key_servers(key),
             Mode::AddServer(buffer) => self.on_key_add(key, buffer),
+            Mode::Dest(picker) => self.on_key_dest(key, picker),
+            Mode::Card(card) => self.on_key_card(key, card),
+            Mode::SaveAs(dialog) => self.on_key_save_as(key, dialog),
+            Mode::Error(modal) => self.on_key_error(key, modal),
         }
     }
 
     fn on_key_normal(&mut self, key: KeyEvent) {
-        let filtering = self.tabs.get(self.tab).is_some_and(|t| t.filter.is_some());
-        if filtering {
+        let editing = self.tabs.get(self.tab).is_some_and(|t| t.filter_edit);
+        if editing {
             self.on_key_filter(key);
             return;
         }
         match key.code {
-            KeyCode::Char('q') if key.modifiers.is_empty() => self.request_quit(),
+            KeyCode::Char(_) if pressed(&key, 'q') => self.request_quit(),
             KeyCode::Up => self.move_cursor(-1),
             KeyCode::Down => self.move_cursor(1),
             KeyCode::Left => self.on_left(),
             KeyCode::Right => self.on_right(),
-            KeyCode::Char('k') if key.modifiers.is_empty() => self.move_cursor(-1),
-            KeyCode::Char('j') if key.modifiers.is_empty() => self.move_cursor(1),
+            KeyCode::Char(_) if pressed(&key, 'k') => self.move_cursor(-1),
+            KeyCode::Char(_) if pressed(&key, 'j') => self.move_cursor(1),
             KeyCode::PageUp => self.move_page(-1),
             KeyCode::PageDown => self.move_page(1),
-            KeyCode::Home | KeyCode::Char('g') if key.modifiers.is_empty() => self.cursor_edge(0),
-            KeyCode::End | KeyCode::Char('G') if key.modifiers.is_empty() => self.cursor_edge(1),
+            KeyCode::Home => self.cursor_edge(0),
+            KeyCode::Char(_) if pressed(&key, 'g') => self.cursor_edge(0),
+            KeyCode::End => self.cursor_edge(1),
+            KeyCode::Char(_) if pressed(&key, 'G') => self.cursor_edge(1),
             KeyCode::Enter => self.on_enter(),
             KeyCode::Esc | KeyCode::Backspace => self.on_back(),
-            KeyCode::Char('d') if key.modifiers.is_empty() => self.request_download_entry(),
-            KeyCode::Char('D') if key.modifiers.is_empty() => self.request_download_dir(),
-            KeyCode::Char('r') if key.modifiers.is_empty() => self.refresh(),
-            KeyCode::Char('e') if key.modifiers.is_empty() => self.toggle_nav(),
-            KeyCode::Char('i') if key.modifiers.is_empty() => self.request_info(),
-            KeyCode::Char('s') if key.modifiers.is_empty() => self.open_servers_overlay(),
-            KeyCode::Char('?') if key.modifiers.is_empty() => self.mode = Mode::Help,
-            KeyCode::Char('/') if key.modifiers.is_empty() => self.start_filter(),
+            KeyCode::Char(_) if pressed(&key, 'o') => self.open_dest_picker(None, None),
+            KeyCode::Char(_) if pressed(&key, 'd') => self.quick_download(),
+            KeyCode::Char(_) if pressed(&key, 'D') => self.open_save_as(),
+            KeyCode::Char(_) if pressed(&key, 'r') => self.refresh(),
+            KeyCode::Char(_) if pressed(&key, 'e') => self.toggle_nav(),
+            KeyCode::Char(_) if pressed(&key, 'i') => self.open_card(),
+            KeyCode::Char(_) if pressed(&key, 's') => self.open_servers_overlay(),
+            KeyCode::Char(_) if pressed(&key, '?') => self.mode = Mode::Help,
+            KeyCode::Char(_) if pressed(&key, '/') => self.start_filter(),
             KeyCode::Tab => self.switch_tab(1),
             KeyCode::BackTab => self.switch_tab(-1),
             KeyCode::Char(c) if key.modifiers.is_empty() && c.is_ascii_digit() && c != '0' => {
@@ -554,33 +953,47 @@ impl App {
         }
     }
 
-    /// The filter eats every key while it is active: characters extend it,
-    /// backspace shortens it, esc clears it, enter keeps it.
+    /// The filter input eats every key while it is open: characters extend
+    /// the live pattern, backspace shortens it, esc clears it, enter applies
+    /// and closes. An empty pattern is off: backspace to empty closes the
+    /// input instead of leaving a zombie filter.
     fn on_key_filter(&mut self, key: KeyEvent) {
         let Some(t) = self.tabs.get_mut(self.tab) else {
             return;
         };
-        let Some(filter) = t.filter.as_mut() else {
+        if !t.filter_edit {
             return;
-        };
+        }
         match key.code {
             KeyCode::Esc => {
+                t.filter_edit = false;
                 t.filter = None;
                 t.tree_cursor = 0;
-                self.info = None;
                 self.status = hint_tree();
+                return;
             }
             KeyCode::Enter => {
-                let shown = t.row_idx().len();
-                let total = t.rows().len();
-                self.status = format!("filter kept: {shown} of {total}");
+                t.filter_edit = false;
+                if t.filter.as_deref().is_none_or(str::is_empty) {
+                    t.filter = None;
+                    self.status = hint_tree();
+                } else {
+                    let shown = t.row_idx().len();
+                    let total = t.rows().len();
+                    self.status = format!("filter kept: {shown} of {total}");
+                }
+                return;
             }
             KeyCode::Backspace => {
-                filter.pop();
+                if let Some(f) = t.filter.as_mut() {
+                    f.pop();
+                }
                 t.tree_cursor = 0;
             }
-            KeyCode::Char(c) if key.modifiers.is_empty() => {
-                filter.push(c);
+            KeyCode::Char(c) if text_char(&key) == Some(c) => {
+                if let Some(f) = t.filter.as_mut() {
+                    f.push(c);
+                }
                 t.tree_cursor = 0;
             }
             _ => return,
@@ -589,12 +1002,19 @@ impl App {
             return;
         };
         self.status = match &t.filter {
-            Some(f) => format!(
-                "filter {f:?}: {} of {} shown",
+            Some(f) if !f.is_empty() => format!(
+                "filter \"{f}\": {} of {} shown",
                 t.row_idx().len(),
                 t.rows().len()
             ),
-            None => hint_tree(),
+            _ => {
+                // Backspace to empty: the mode closes, the filter is off.
+                if let Some(t) = self.tabs.get_mut(self.tab) {
+                    t.filter = None;
+                    t.filter_edit = false;
+                }
+                hint_tree()
+            }
         };
     }
 
@@ -609,8 +1029,15 @@ impl App {
 
     fn on_key_servers(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
-            KeyCode::Char('q') if key.modifiers.is_empty() => self.request_quit(),
+            // q closes the overlay: quitting the app is a Normal-screen act.
+            KeyCode::Esc => {
+                self.detach_connect();
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(_) if pressed(&key, 'q') => {
+                self.detach_connect();
+                self.mode = Mode::Normal;
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.servers_cursor = self.servers_cursor.saturating_sub(1);
             }
@@ -619,7 +1046,7 @@ impl App {
                     (self.servers_cursor + 1).min(self.servers.len().saturating_sub(1));
             }
             KeyCode::Enter => self.open_server(self.servers_cursor),
-            KeyCode::Char('a') if key.modifiers.is_empty() => {
+            KeyCode::Char(_) if pressed(&key, 'a') => {
                 self.mode = Mode::AddServer(String::new());
             }
             _ => {}
@@ -628,7 +1055,12 @@ impl App {
 
     fn on_key_add(&mut self, key: KeyEvent, mut buffer: String) {
         match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
+            // One layer: back to the servers overlay, not straight to Normal.
+            // A connect already flying is detached: no tab, no config write.
+            KeyCode::Esc => {
+                self.detach_connect();
+                self.mode = Mode::Servers;
+            }
             KeyCode::Enter => {
                 self.mode = Mode::AddServer(buffer.clone());
                 self.submit_server(buffer);
@@ -637,7 +1069,7 @@ impl App {
                 buffer.pop();
                 self.mode = Mode::AddServer(buffer);
             }
-            KeyCode::Char(c) if key.modifiers.is_empty() => {
+            KeyCode::Char(c) if text_char(&key) == Some(c) => {
                 buffer.push(c);
                 self.mode = Mode::AddServer(buffer);
             }
@@ -645,15 +1077,126 @@ impl App {
         }
     }
 
+    /// The destination picker: enter confirms, esc cancels, typing edits.
+    fn on_key_dest(&mut self, key: KeyEvent, mut picker: DestPicker) {
+        match key.code {
+            KeyCode::Esc => self.close_dest_picker(picker),
+            KeyCode::Enter => self.confirm_destination(picker),
+            KeyCode::Backspace => {
+                picker.buffer.pop();
+                self.mode = Mode::Dest(picker);
+            }
+            KeyCode::Char(c) if text_char(&key) == Some(c) => {
+                picker.buffer.push(c);
+                self.mode = Mode::Dest(picker);
+            }
+            _ => {}
+        }
+    }
+
+    /// The card: inspect, download, recopy, or leave.
+    fn on_key_card(&mut self, key: KeyEvent, card: Card) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(_) if pressed(&key, 'q') => {
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(_) if pressed(&key, 'c') => {
+                let url = card.url().to_owned();
+                clipboard::copy(&url, self.config.tui.osc52);
+                self.toast("copied");
+            }
+            KeyCode::Char(_) if pressed(&key, 's') => self.card_download(card),
+            KeyCode::Char(_) if pressed(&key, 'o') => {
+                self.open_dest_picker(Some(card), None);
+            }
+            _ => {}
+        }
+    }
+
+    /// The download-as dialog: two fields, enter walks them, esc cancels.
+    fn on_key_save_as(&mut self, key: KeyEvent, mut dialog: SaveAsDialog) {
+        match key.code {
+            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Tab | KeyCode::Down | KeyCode::Up => {
+                dialog.field = match dialog.field {
+                    SaveAsField::Dir => SaveAsField::Name,
+                    SaveAsField::Name => SaveAsField::Dir,
+                };
+                self.mode = Mode::SaveAs(dialog);
+            }
+            KeyCode::Enter => self.confirm_save_as(dialog),
+            KeyCode::Backspace => {
+                match dialog.field {
+                    SaveAsField::Dir => {
+                        dialog.dir.pop();
+                    }
+                    SaveAsField::Name => {
+                        dialog.name.pop();
+                    }
+                }
+                self.mode = Mode::SaveAs(dialog);
+            }
+            KeyCode::Char(c) if text_char(&key) == Some(c) => {
+                match dialog.field {
+                    SaveAsField::Dir => dialog.dir.push(c),
+                    SaveAsField::Name => dialog.name.push(c),
+                }
+                self.mode = Mode::SaveAs(dialog);
+            }
+            _ => {}
+        }
+    }
+
+    /// The error modal: esc leaves, `y` copies the full text, `r` reruns.
+    fn on_key_error(&mut self, key: KeyEvent, modal: ErrorModal) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(_) if pressed(&key, 'q') => {
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char(_) if pressed(&key, 'y') => {
+                clipboard::copy(&modal.full, self.config.tui.osc52);
+                self.toast("copied");
+            }
+            KeyCode::Char(_) if pressed(&key, 'r') => {
+                if let Some(retry) = modal.retry {
+                    self.mode = Mode::Normal;
+                    self.run_retry(retry);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn on_paste(&mut self, text: &str) {
-        match &mut self.mode {
-            Mode::AddServer(buffer) => {
-                buffer.extend(text.chars().filter(|c| !c.is_control()));
+        let clean: String = text.chars().filter(|c| !c.is_control()).collect();
+        match self.mode.clone() {
+            Mode::AddServer(mut buffer) => {
+                buffer.push_str(&clean);
+                self.mode = Mode::AddServer(buffer);
+            }
+            Mode::Dest(mut picker) => {
+                picker.buffer.push_str(&clean);
+                self.mode = Mode::Dest(picker);
+            }
+            Mode::SaveAs(mut dialog) => {
+                match dialog.field {
+                    SaveAsField::Dir => dialog.dir.push_str(&clean),
+                    SaveAsField::Name => dialog.name.push_str(&clean),
+                }
+                self.mode = Mode::SaveAs(dialog);
             }
             _ => {
                 if let Some(t) = self.tabs.get_mut(self.tab) {
-                    if let Some(filter) = t.filter.as_mut() {
-                        filter.extend(text.chars().filter(|c| !c.is_control()));
+                    if t.filter_edit {
+                        if let Some(filter) = t.filter.as_mut() {
+                            filter.push_str(&clean);
+                        }
                         t.tree_cursor = 0;
                     }
                 }
@@ -714,7 +1257,6 @@ impl App {
             Screen::Tree => &mut t.tree_cursor,
         };
         *cursor = ((*cursor as i64) + delta as i64).clamp(0, len as i64 - 1) as usize;
-        self.info = None;
     }
 
     fn move_page(&mut self, pages: i32) {
@@ -740,7 +1282,6 @@ impl App {
             Screen::Repos => t.repos_cursor = idx,
             Screen::Tree => t.tree_cursor = idx,
         }
-        self.info = None;
     }
 
     /// Clamps both cursors of the active tab into their visible lists.
@@ -761,7 +1302,6 @@ impl App {
         }
         let len = self.tabs.len() as i32;
         self.tab = ((self.tab as i32) + delta).rem_euclid(len) as usize;
-        self.info = None;
         self.sync_cursor();
         self.status = hint_of(self.tabs[self.tab].screen);
     }
@@ -774,7 +1314,6 @@ impl App {
             return;
         }
         self.tab = idx;
-        self.info = None;
         self.sync_cursor();
         self.status = hint_of(self.tabs[idx].screen);
     }
@@ -803,10 +1342,6 @@ impl App {
     }
 
     fn on_enter(&mut self) {
-        if self.listing_busy() {
-            self.status = "a listing is in flight".into();
-            return;
-        }
         let Some(t) = self.tabs.get(self.tab) else {
             return;
         };
@@ -817,8 +1352,15 @@ impl App {
                     return;
                 };
                 match row.kind {
-                    EntryKind::Dir => self.descend(row.name),
-                    EntryKind::File => self.request_download_entry(),
+                    // The primary verb inspects: downloading is `d` or the card's `s`.
+                    EntryKind::File => self.open_file_card(t.path.clone(), row),
+                    EntryKind::Dir => {
+                        if self.listing_busy() {
+                            self.status = "a listing is in flight".into();
+                            return;
+                        }
+                        self.descend(row.name);
+                    }
                 }
             }
         }
@@ -843,12 +1385,12 @@ impl App {
         t.entries.clear();
         t.clear_expansion();
         t.filter = None;
+        t.filter_edit = false;
+        t.keep_cursor_name = None;
         t.tree_cursor = 0;
         t.gen += 1;
         t.loading = true;
         self.pending += 1;
-        self.error = None;
-        self.info = None;
         self.status = format!("listing {}/", row.name);
         let url = net::dir_url(&row.url);
         let (tab, gen) = (self.tab, t.gen);
@@ -868,19 +1410,17 @@ impl App {
         t.entries.clear();
         t.clear_expansion();
         t.filter = None;
+        t.filter_edit = false;
+        t.keep_cursor_name = None;
         t.tree_cursor = 0;
         t.gen += 1;
         t.loading = true;
         self.pending += 1;
-        self.error = None;
-        self.info = None;
         let (tab, gen) = (self.tab, t.gen);
         net::load_entries(self.tx.clone(), tab, gen, url, self.auth.clone());
     }
 
     fn on_back(&mut self) {
-        self.error = None;
-        self.info = None;
         let Some(t) = self.tabs.get_mut(self.tab) else {
             return;
         };
@@ -889,11 +1429,17 @@ impl App {
         match t.screen {
             Screen::Repos => self.status = "press q to quit".into(),
             Screen::Tree if t.path.is_empty() => {
+                // The tab returns virgin: no hidden repository, no hidden mine.
                 t.screen = Screen::Repos;
+                t.repo = None;
+                t.path.clear();
                 t.entries.clear();
                 t.clear_expansion();
                 t.filter = None;
+                t.filter_edit = false;
+                t.keep_cursor_name = None;
                 t.tree_cursor = 0;
+                t.loading = false;
                 self.status = hint_repos();
             }
             Screen::Tree => {
@@ -901,6 +1447,8 @@ impl App {
                 let url = t.here_url();
                 t.entries.clear();
                 t.filter = None;
+                t.filter_edit = false;
+                t.keep_cursor_name = None;
                 t.tree_cursor = 0;
                 t.loading = true;
                 self.pending += 1;
@@ -919,7 +1467,11 @@ impl App {
             self.status = "the filter works in the tree".into();
             return;
         }
-        t.filter = Some(String::new());
+        // Reopening the input keeps the applied pattern for editing.
+        if t.filter.is_none() {
+            t.filter = Some(String::new());
+        }
+        t.filter_edit = true;
         t.tree_cursor = 0;
         self.status = "filter: type to narrow, enter keeps, esc clears".into();
     }
@@ -957,7 +1509,11 @@ impl App {
                         Some(row) if row.kind == EntryKind::Dir && row.depth == 0 => {
                             self.descend(row.name);
                         }
-                        Some(_) => self.status = "right enters folders: this is a file".into(),
+                        // Both verbs of a file inspect now: no refusal class.
+                        Some(row) if row.kind == EntryKind::File => {
+                            self.open_file_card(t.path.clone(), row);
+                        }
+                        Some(_) => {}
                         None => {}
                     }
                 }
@@ -1078,13 +1634,33 @@ impl App {
     }
 
     fn refresh(&mut self) {
-        if self.listing_busy() {
-            self.status = "a listing is in flight".into();
+        self.refresh_tab(self.tab);
+    }
+
+    /// Refreshes one tab's current screen. The applied filter survives and the
+    /// cursor returns to the row it sat on, by name: `r` rereads a listing
+    /// without throwing the user's place away.
+    fn refresh_tab(&mut self, idx: usize) {
+        if idx >= self.tabs.len() {
             return;
         }
-        let Some(t) = self.tabs.get_mut(self.tab) else {
+        let keep = {
+            let t = &self.tabs[idx];
+            if t.loading {
+                if idx == self.tab {
+                    self.status = "a listing is in flight".into();
+                }
+                return;
+            }
+            match t.screen {
+                Screen::Repos => t.repos.get(t.repos_cursor).map(|r| r.name.clone()),
+                Screen::Tree => t.selected_row().map(|r| r.name),
+            }
+        };
+        let Some(t) = self.tabs.get_mut(idx) else {
             return;
         };
+        t.keep_cursor_name = keep;
         t.gen += 1;
         // A refresh redraws the current listing: the inline expansion folds too.
         t.clear_expansion();
@@ -1092,54 +1668,83 @@ impl App {
             Screen::Repos => {
                 t.loading = true;
                 self.pending += 1;
-                self.status = format!("refreshing {}", t.server.name);
+                if idx == self.tab {
+                    self.status = format!("refreshing {}", t.server.name);
+                }
                 let server = t.server.clone();
-                let (slot, auth) = (self.tab, self.auth.clone());
+                let (slot, auth) = (idx, self.auth.clone());
                 net::load_repos(self.tx.clone(), server, slot, false, auth);
             }
             Screen::Tree => {
                 let url = t.here_url();
                 t.loading = true;
                 self.pending += 1;
-                self.status = format!("refreshing {}/", t.breadcrumb());
-                let (tab, gen, auth) = (self.tab, t.gen, self.auth.clone());
+                if idx == self.tab {
+                    self.status = format!("refreshing {}/", t.breadcrumb());
+                }
+                let (tab, gen, auth) = (idx, t.gen, self.auth.clone());
                 net::load_entries(self.tx.clone(), tab, gen, url, auth);
             }
         }
     }
 
-    /// The `i` info action: a folder reports its listing, a file HEADs its size.
-    fn request_info(&mut self) {
-        if self.listing_busy() {
-            self.status = "a listing is in flight".into();
-            return;
-        }
+    /// The `i` action on Repos: the repository card. On Tree the key is cut:
+    /// the Enter card covers files, the title line covers folders.
+    fn open_card(&mut self) {
         let Some(t) = self.tabs.get(self.tab) else {
             return;
         };
-        if t.screen != Screen::Tree {
+        if t.screen != Screen::Repos {
             return;
         }
-        let Some(row) = t.selected_row() else {
+        let Some(repo) = t.repos.get(t.repos_cursor) else {
             return;
         };
-        let (tab, gen) = (self.tab, t.gen);
-        match row.kind {
-            EntryKind::Dir => {
-                self.info = Some(format!(
-                    "{}/ · folder, {} entries in this listing",
-                    row.name,
-                    t.entries.len()
-                ));
-            }
-            EntryKind::File => {
-                let url = format!("{}{}", t.here_url(), row.rel);
-                let name = row.name.clone();
-                self.info = Some(format!("{name}: …"));
-                self.pending += 1;
-                net::head_size(self.tx.clone(), tab, gen, name, url, self.auth.clone());
-            }
-        }
+        let card = RepoCard {
+            repo: RepoRow::from(repo),
+            enterable: t.enterable(repo, self.all_formats),
+        };
+        self.mode = Mode::Card(Card::Repo(card));
+    }
+
+    /// Opens the file card: the metadata HEADs in the background while the
+    /// card shows placeholders. The row token (`tab`, `gen`, `rel`) guards the
+    /// answers: a late HEAD of another row never paints over this card.
+    fn open_file_card(&mut self, path: Vec<String>, row: Row) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let Some(repo) = t.repo.clone() else {
+            return;
+        };
+        let rel = if path.is_empty() {
+            row.rel.clone()
+        } else {
+            format!("{}/{}", path.join("/"), row.rel)
+        };
+        let url = format!("{}{}", t.here_url(), row.rel);
+        let card = FileCard {
+            tab: self.tab,
+            gen: t.gen,
+            name: row.name.clone(),
+            rel: rel.clone(),
+            url: url.clone(),
+            repo: RepoRow::from(&repo),
+            size: SizeState::Pending,
+            sha: ShaState::Pending,
+        };
+        self.mode = Mode::Card(Card::File(Box::new(card)));
+        self.pending += 2;
+        let (tab, gen, auth) = (self.tab, t.gen, self.auth.clone());
+        net::head_size(self.tx.clone(), tab, gen, rel.clone(), url.clone(), auth);
+        net::fetch_sibling(
+            self.tx.clone(),
+            tab,
+            gen,
+            rel,
+            format!("{url}.sha256"),
+            self.auth.clone(),
+        );
     }
 
     fn open_servers_overlay(&mut self) {
@@ -1194,8 +1799,8 @@ impl App {
             return;
         }
         self.connecting += 1;
+        self.connect_open = true;
         self.pending += 1;
-        self.error = None;
         self.status = format!("connecting to {}…", server.url);
         net::load_repos(
             self.tx.clone(),
@@ -1238,88 +1843,321 @@ impl App {
         }
     }
 
+    // ---- destination -----------------------------------------------------
+
+    /// Opens the destination picker. `pending_repo` defers a repository
+    /// download until the folder is confirmed, `back_to_card` returns into a
+    /// card instead of the normal screen.
+    fn open_dest_picker(&mut self, back_to_card: Option<Card>, pending_repo: Option<RepoRow>) {
+        let picker = DestPicker {
+            buffer: self.destination.display().to_string(),
+            back_to_card,
+            pending_repo,
+        };
+        self.mode = Mode::Dest(picker);
+    }
+
+    /// Cancels the picker: nothing changes, the deferred download dies.
+    fn close_dest_picker(&mut self, picker: DestPicker) {
+        self.mode = match picker.back_to_card {
+            Some(card) => Mode::Card(card),
+            None => Mode::Normal,
+        };
+    }
+
+    /// Confirms the picker: the session destination is set, the deferred
+    /// repository download starts, a card gets its layer back.
+    fn confirm_destination(&mut self, picker: DestPicker) {
+        let raw = picker.buffer.trim().to_owned();
+        if raw.is_empty() {
+            self.status = "the destination is empty".into();
+            return;
+        }
+        self.destination = self.resolve_path(Path::new(&raw));
+        self.dest_confirmed = true;
+        if let Some(repo) = picker.pending_repo {
+            self.mode = Mode::Normal;
+            self.status = format!("destination: {}", self.destination.display());
+            self.download_repo(&repo);
+            return;
+        }
+        self.status = format!("destination: {}", self.destination.display());
+        self.mode = match picker.back_to_card {
+            Some(card) => Mode::Card(card),
+            None => Mode::Normal,
+        };
+    }
+
+    /// Absolute stays, relative resolves against the working directory at
+    /// launch. Tilde expansion is out of scope for this session.
+    #[must_use]
+    pub fn resolve_path(&self, raw: &Path) -> PathBuf {
+        if raw.is_absolute() {
+            raw.to_path_buf()
+        } else {
+            self.base_dir.join(raw)
+        }
+    }
+
     // ---- downloads -------------------------------------------------------
 
-    /// Downloads the selected entry: a folder walks its whole subtree, a file itself.
-    fn request_download_entry(&mut self) {
-        if self.listing_busy() {
-            self.status = "a listing is in flight".into();
+    /// The `d` verb: on Repos the whole repository of the row, on Tree the
+    /// selected entry. An unconfirmed destination is picked first, once.
+    fn quick_download(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
             return;
+        };
+        match t.screen {
+            Screen::Repos => {
+                let Some(repo) = t.repos.get(t.repos_cursor).map(RepoRow::from) else {
+                    return;
+                };
+                if !self.dest_confirmed {
+                    self.open_dest_picker(None, Some(repo));
+                    return;
+                }
+                self.download_repo(&repo);
+            }
+            Screen::Tree => {
+                if self.download_busy() {
+                    self.status = "download in flight: one at a time".into();
+                    return;
+                }
+                let Some(row) = t.selected_row() else {
+                    return;
+                };
+                let path = t.path.clone();
+                match row.kind {
+                    EntryKind::File => self.download_file(path, &row),
+                    EntryKind::Dir => {
+                        let rel = self.full_rel(&path, &row.rel);
+                        let Some(repo) = t.repo.clone() else {
+                            return;
+                        };
+                        // From-root names mirror the repository: {dst}/{rel}/...
+                        self.begin_walk(RepoRow::from(&repo), rel, self.destination.clone(), false);
+                    }
+                }
+            }
         }
+    }
+
+    /// The `D` verb: the download-as dialog. On Repos the whole repository,
+    /// on Tree the current catalog below the breadcrumb.
+    fn open_save_as(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let (repo, rel, name) = match t.screen {
+            Screen::Repos => {
+                let Some(repo) = t.repos.get(t.repos_cursor).map(RepoRow::from) else {
+                    return;
+                };
+                let name = repo.name.clone();
+                (repo, String::new(), name)
+            }
+            Screen::Tree => {
+                let Some(repo) = t.repo.clone() else {
+                    return;
+                };
+                let rel = t.path.join("/");
+                let name = t.path.last().cloned().unwrap_or_else(|| repo.name.clone());
+                (RepoRow::from(&repo), rel, name)
+            }
+        };
+        self.mode = Mode::SaveAs(SaveAsDialog {
+            dir: self.destination.display().to_string(),
+            name,
+            field: SaveAsField::Dir,
+            scope: DlScope { repo, rel },
+        });
+    }
+
+    /// The Enter of the download-as dialog: from the folder the cursor walks
+    /// to the name, from the name the walk starts. Nothing is written before.
+    fn confirm_save_as(&mut self, dialog: SaveAsDialog) {
+        match dialog.field {
+            SaveAsField::Dir => {
+                let mut next = dialog;
+                next.field = SaveAsField::Name;
+                self.mode = Mode::SaveAs(next);
+            }
+            SaveAsField::Name => {
+                let name = dialog.name.trim().to_owned();
+                if name.is_empty() || name == "." || name == ".." {
+                    self.status = "the name is empty or a dot segment".into();
+                    return;
+                }
+                if name.contains('/') || name.contains('\\') || name.contains('\0') {
+                    self.status = "the name carries a slash or a nul byte".into();
+                    return;
+                }
+                let raw_dir = dialog.dir.trim().to_owned();
+                if raw_dir.is_empty() {
+                    self.status = "the destination is empty".into();
+                    return;
+                }
+                let dst = self.resolve_path(Path::new(&raw_dir));
+                self.destination = dst.clone();
+                self.dest_confirmed = true;
+                self.mode = Mode::Normal;
+                // Scope-relative names land the subtree straight under {dir}/{name}.
+                self.begin_walk(dialog.scope.repo, dialog.scope.rel, dst.join(name), true);
+            }
+        }
+    }
+
+    /// The card's `s`: download the file into the session destination.
+    fn card_download(&mut self, card: Card) {
+        let Card::File(card) = card else {
+            return;
+        };
+        // `card.rel` is the path from the repository root, and `full_rel`
+        // appends the row name itself: the row carries only the name, so a
+        // nested file composes `{parents}/{name}` exactly once.
+        let mut path: Vec<String> = card
+            .rel
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect();
+        path.pop();
+        let row = Row {
+            name: card.name.clone(),
+            rel: card.name.clone(),
+            kind: EntryKind::File,
+            depth: 0,
+            expanded: false,
+            loading: false,
+        };
+        self.mode = Mode::Card(Card::File(card));
+        self.download_file(path, &row);
+    }
+
+    /// The whole repository of one row into `{destination}/{repo.name}`.
+    fn download_repo(&mut self, repo: &RepoRow) {
+        let dst = self.destination.join(&repo.name);
+        self.begin_walk(repo.clone(), String::new(), dst, false);
+    }
+
+    /// One file with the direct get primitive into `{destination}/{rel}`,
+    /// digest-checked against the `.sha256` sibling when present.
+    fn download_file(&mut self, path: Vec<String>, row: &Row) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
         if self.download_busy() {
             self.status = "download in flight: one at a time".into();
             return;
         }
-        let Some(t) = self.tabs.get(self.tab) else {
-            return;
-        };
         let Some(repo) = t.repo.clone() else {
             return;
         };
-        let Some(row) = t.selected_row() else {
-            return;
-        };
-        let rel = row.rel;
-        self.start_walk(repo, rel, row.kind);
-    }
-
-    /// Downloads the current directory: the whole subtree below the breadcrumb.
-    fn request_download_dir(&mut self) {
-        if self.listing_busy() {
-            self.status = "a listing is in flight".into();
-            return;
-        }
-        if self.download_busy() {
-            self.status = "download in flight: one at a time".into();
-            return;
-        }
-        let Some(t) = self.tabs.get(self.tab) else {
-            return;
-        };
-        let Some(repo) = t.repo.clone() else {
-            return;
-        };
-        let rel = t.path.join("/");
-        self.start_walk(repo, rel, EntryKind::Dir);
-    }
-
-    fn start_walk(&mut self, repo: RepoInfo, rel: String, kind: EntryKind) {
-        let dst = self.download_dir.join(&repo.name);
+        let rel = self.full_rel(&path, &row.rel);
+        let url = format!("{}{}", t.here_url(), row.rel);
+        let out = self.destination.join(&rel);
+        let repo_row = RepoRow::from(&repo);
         self.download = Some(Download {
-            repo_url: net::dir_url(&repo.url),
-            dst: dst.clone(),
+            repo_url: repo_row.dir_url(),
+            server: Some(host_of(&repo_row.url)),
+            repo_name: Some(repo_row.name.clone()),
+            dst: self.destination.clone(),
+            files: Some(1),
+            retry: Some(Retry::Get {
+                url: url.clone(),
+                out: out.clone(),
+                dst: self.destination.clone(),
+                repo: repo_row,
+            }),
             ..Download::default()
         });
-        self.error = None;
-        let Some(t) = self.tabs.get_mut(self.tab) else {
+        self.status = format!("downloading {}", row.name);
+        net::fetch_one(
+            self.tx.clone(),
+            url,
+            out,
+            self.destination.clone(),
+            self.auth.clone(),
+        );
+    }
+
+    /// The path from the repository root: the descended folders plus the row.
+    fn full_rel(&self, path: &[String], row_rel: &str) -> String {
+        if path.is_empty() {
+            row_rel.to_owned()
+        } else {
+            format!("{}/{}", path.join("/"), row_rel)
+        }
+    }
+
+    /// Starts a subtree walk. `scope_relative` strips the scope prefix from
+    /// the collected names, so they land straight under `dst` (the dialog's
+    /// `{dir}/{name}`); from-root names mirror the repository under `dst`.
+    fn begin_walk(&mut self, repo: RepoRow, rel: String, dst: PathBuf, scope_relative: bool) {
+        if self.download_busy() {
+            self.status = "download in flight: one at a time".into();
+            return;
+        }
+        let Some(t) = self.tabs.get(self.tab) else {
             return;
         };
-        t.gen += 1;
-        self.pending += 1;
-        self.status = match kind {
-            EntryKind::Dir if rel.is_empty() => {
-                format!(
-                    "walking the whole repo: {} files may follow -> {}",
-                    t.entries.len(),
-                    dst.display()
-                )
-            }
-            EntryKind::Dir => format!("walking {rel}/"),
-            EntryKind::File => format!("plan: 1 file -> {}", dst.display()),
+        if t.loading {
+            self.status = "a listing is in flight".into();
+            return;
+        }
+        let scope_label = if rel.is_empty() {
+            format!("{}/", repo.name)
+        } else {
+            format!("{rel}/")
         };
-        let (tab, gen) = (self.tab, t.gen);
+        self.download = Some(Download {
+            repo_url: repo.dir_url(),
+            server: Some(host_of(&repo.url)),
+            repo_name: Some(repo.name.clone()),
+            dst: dst.clone(),
+            files: None,
+            scope: rel.clone(),
+            scope_relative,
+            retry: Some(Retry::Walk {
+                repo: repo.clone(),
+                rel: rel.clone(),
+                dst: dst.clone(),
+                scope_relative,
+            }),
+            ..Download::default()
+        });
+        let gen = {
+            let t = self.tabs.get_mut(self.tab);
+            match t {
+                Some(t) => {
+                    t.gen += 1;
+                    t.gen
+                }
+                None => return,
+            }
+        };
+        self.pending += 1;
+        self.status = format!("walking {scope_label}");
         net::walk_for_download(
             self.tx.clone(),
-            tab,
+            self.tab,
             gen,
-            net::dir_url(&repo.url),
+            repo.dir_url(),
             rel,
-            kind,
+            EntryKind::Dir,
             self.auth.clone(),
         );
     }
 
     // ---- message application --------------------------------------------
+
+    /// Marks a flying connect as detached: its result opens no tab and
+    /// writes no config preset.
+    fn detach_connect(&mut self) {
+        if self.connecting > 0 {
+            self.connect_open = false;
+        }
+    }
 
     fn on_repos(
         &mut self,
@@ -1331,26 +2169,30 @@ impl App {
         if connect {
             self.connecting = self.connecting.saturating_sub(1);
         }
+        let attached = !connect || self.connect_open;
         match res {
             Ok(repos) if slot < self.tabs.len() => {
-                // A refresh of an existing tab.
+                // A refresh of an existing tab. The cursor returns to the row
+                // it sat on, by name.
+                let keep = self.tabs[slot].keep_cursor_name.take();
                 let t = &mut self.tabs[slot];
                 let count = repos.len();
                 t.repos = repos;
-                t.repos_cursor = 0;
                 t.loading = false;
-                // An opened repository may have vanished from the server.
-                if let Some(open) = &t.repo {
-                    if !t.repos.iter().any(|r| r.url == open.url) {
-                        t.repo = None;
-                        t.screen = Screen::Repos;
-                        t.path.clear();
-                        t.entries.clear();
-                    }
-                }
+                t.repos_cursor = keep
+                    .and_then(|name| t.repos.iter().position(|r| r.name == name))
+                    .unwrap_or(0);
                 if self.tab == slot {
                     self.status = format!("{count} repositories on {}", t.server.name);
                 }
+            }
+            Ok(_repos) if !attached => {
+                // The form was cancelled while the connect flew: the server
+                // joins the overlay list only, and the config stays untouched.
+                if !self.servers.iter().any(|s| s.url == server.url) {
+                    self.servers.push(server.clone());
+                }
+                self.status = format!("server {} connected, press s to open", server.url);
             }
             Ok(_repos) if self.tabs.iter().any(|t| t.server.url == server.url) => {
                 // A duplicate connect: focus the tab that is already open.
@@ -1380,8 +2222,30 @@ impl App {
                 if slot < self.tabs.len() {
                     self.tabs[slot].loading = false;
                 }
-                // The overlay stays open with the input preserved.
-                self.error = Some((format!("server {}: {e}", server.name), e.hint()));
+                let retry = (e.exit_code() != 2).then(|| {
+                    if connect {
+                        Retry::Connect {
+                            server: server.clone(),
+                        }
+                    } else {
+                        Retry::Listing { tab: slot }
+                    }
+                });
+                let ctx = ErrCtx {
+                    server: Some(if connect {
+                        server.url.clone()
+                    } else {
+                        server.name.clone()
+                    }),
+                    repository: None,
+                    destination: None,
+                };
+                let kind = if connect {
+                    ErrKind::Connect
+                } else {
+                    ErrKind::Listing
+                };
+                self.raise_error(kind, &e, ctx, retry);
             }
         }
     }
@@ -1398,10 +2262,26 @@ impl App {
             Ok(entries) => {
                 let empty = entries.is_empty();
                 t.entries = entries;
-                t.tree_cursor = 0;
-                t.filter = None;
                 t.screen = Screen::Tree;
-                self.info = None;
+                // A refresh keeps the filter and puts the cursor back on its
+                // row; a descend or an open starts clean.
+                match t.keep_cursor_name.take() {
+                    Some(name) => {
+                        let rows = t.rows();
+                        t.tree_cursor = t
+                            .row_idx()
+                            .into_iter()
+                            .position(|i| rows.get(i).is_some_and(|r| r.name == name))
+                            .unwrap_or_else(|| {
+                                t.tree_cursor.min(t.row_idx().len().saturating_sub(1))
+                            });
+                    }
+                    None => {
+                        t.tree_cursor = 0;
+                        t.filter = None;
+                        t.filter_edit = false;
+                    }
+                }
                 if self.tab == tab {
                     self.status = if empty {
                         "the folder is empty, esc goes back up".into()
@@ -1411,9 +2291,9 @@ impl App {
                 }
             }
             Err(e) => {
-                if self.tab == tab {
-                    self.fail_err(e);
-                }
+                let ctx = ErrCtx::of(self, tab);
+                let retry = (e.exit_code() != 2).then_some(Retry::Listing { tab });
+                self.raise_error(ErrKind::Listing, &e, ctx, retry);
             }
         }
     }
@@ -1439,9 +2319,9 @@ impl App {
                 }
             }
             Err(e) => {
-                if self.tab == tab {
-                    self.fail_err(e);
-                }
+                let ctx = ErrCtx::of(self, tab);
+                let retry = (e.exit_code() != 2).then_some(Retry::Listing { tab });
+                self.raise_error(ErrKind::Listing, &e, ctx, retry);
             }
         }
     }
@@ -1461,44 +2341,110 @@ impl App {
                 }
                 self.status = "the subtree holds no files".into();
             }
-            Ok(names) => {
-                let count = names.len();
-                let unit = if count == 1 { "file" } else { "files" };
+            Ok(mut names) => {
                 let Some(dl) = self.download.as_ref() else {
                     return;
                 };
+                let mut base = dl.repo_url.clone();
+                if dl.scope_relative {
+                    let prefix = format!("{}/", dl.scope);
+                    let mut stripped = Vec::with_capacity(names.len());
+                    for name in names.drain(..) {
+                        let Some(rest) = name.as_str().strip_prefix(&prefix) else {
+                            let e = Error::UnsafeName {
+                                name: name.as_str().to_owned(),
+                                reason: "does not sit below the walked scope".into(),
+                            };
+                            let ctx = ErrCtx::of(self, tab);
+                            if let Some(dl) = self.download.as_mut() {
+                                dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
+                                dl.retry = None;
+                            }
+                            self.raise_error(ErrKind::Download, &e, ctx, None);
+                            return;
+                        };
+                        match ArtifactName::parse(rest) {
+                            Ok(parsed) => stripped.push(parsed),
+                            Err(e) => {
+                                let ctx = ErrCtx::of(self, tab);
+                                if let Some(dl) = self.download.as_mut() {
+                                    dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
+                                    dl.retry = None;
+                                }
+                                self.raise_error(ErrKind::Download, &e, ctx, None);
+                                return;
+                            }
+                        }
+                    }
+                    names = stripped;
+                    base = net::dir_url(&format!("{}{}", dl.repo_url, dl.scope));
+                }
+                let count = names.len();
+                let unit = if count == 1 { "file" } else { "files" };
                 let dst = dl.dst.clone();
-                let repo_url = dl.repo_url.clone();
+                if let Some(dl) = self.download.as_mut() {
+                    dl.retry = Some(Retry::Transfer {
+                        repo_url: base.clone(),
+                        names: names.clone(),
+                        dst: dst.clone(),
+                    });
+                }
                 self.status = format!("plan: {count} {unit} -> {}", dst.display());
-                net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
+                net::start_download(self.tx.clone(), base, names, dst, self.auth.clone());
             }
             Err(e) => {
+                let ctx = ErrCtx::of(self, tab);
+                let retry = self
+                    .download
+                    .as_ref()
+                    .and_then(|dl| (e.exit_code() != 2).then(|| dl.retry.clone()).flatten());
                 if let Some(dl) = self.download.as_mut() {
                     dl.outcome = Some(DlOutcome::Failed(e.to_string(), e.hint()));
                 }
-                self.fail_err(e);
+                self.raise_error(ErrKind::Download, &e, ctx, retry);
             }
         }
     }
 
-    fn on_head(&mut self, tab: usize, gen: u64, name: String, res: Result<HeadInfo, Error>) {
-        if tab != self.tab {
+    /// The HEAD answer lands on its card only when the card is still open on
+    /// the same tab, the same generation and the same path: the row token.
+    fn on_head(&mut self, tab: usize, gen: u64, rel: String, res: Result<HeadInfo, Error>) {
+        let Mode::Card(Card::File(mut card)) = self.mode.clone() else {
+            return;
+        };
+        if card.tab != tab || card.gen != gen || card.rel != rel {
             return;
         }
-        let fresh = self.tabs.get(tab).is_some_and(|t| gen == t.gen);
-        if !fresh {
-            return;
-        }
-        self.info = Some(match res {
+        card.size = match res {
             Ok(info) => match info.size {
-                Some(size) => {
-                    let ct = info.content_type.as_deref().unwrap_or("binary");
-                    format!("{name}: {} · {ct}", fmt_bytes(size))
-                }
-                None => format!("{name}: size unknown (no content-length)"),
+                Some(size) => SizeState::Known(size),
+                None => SizeState::Unknown,
             },
-            Err(e) => format!("{name}: head failed: {e}"),
-        });
+            Err(e) => SizeState::Failed(e.to_string()),
+        };
+        self.mode = Mode::Card(Card::File(card));
+    }
+
+    /// The `.sha256` sibling answer: the same row token rule as the HEAD.
+    fn on_sibling(
+        &mut self,
+        tab: usize,
+        gen: u64,
+        rel: String,
+        res: Result<Option<String>, Error>,
+    ) {
+        let Mode::Card(Card::File(mut card)) = self.mode.clone() else {
+            return;
+        };
+        if card.tab != tab || card.gen != gen || card.rel != rel {
+            return;
+        }
+        card.sha = match res {
+            Ok(None) => ShaState::Absent,
+            Ok(Some(hex)) => ShaState::Hex(hex),
+            Err(e) => ShaState::Failed(e.to_string()),
+        };
+        self.mode = Mode::Card(Card::File(card));
     }
 
     fn on_dl(&mut self, ev: DlEv) {
@@ -1542,13 +2488,183 @@ impl App {
             DlEv::Done(Err(e)) => {
                 let hint = e.hint();
                 dl.outcome = Some(DlOutcome::Failed(e.to_string(), hint.clone()));
-                self.error = Some((format!("download failed: {e}"), hint));
+                let retry = dl.retry.clone().filter(|_| e.exit_code() != 2);
+                let ctx = ErrCtx {
+                    server: dl.server.clone(),
+                    repository: dl.repo_name.clone(),
+                    destination: Some(dl.dst.clone()),
+                };
+                self.raise_error(ErrKind::Download, &e, ctx, retry);
             }
         }
     }
 
-    fn fail_err(&mut self, e: Error) {
-        self.error = Some((e.to_string(), e.hint()));
+    /// Reruns the operation behind the `r` of an error modal.
+    fn run_retry(&mut self, retry: Retry) {
+        match retry {
+            Retry::Listing { tab } => self.refresh_tab(tab),
+            Retry::Connect { server } => {
+                // The flag belongs to `connect_server`: a retry while another
+                // connect is still flying must not attach that old result.
+                self.connect_server(server);
+            }
+            Retry::Walk {
+                repo,
+                rel,
+                dst,
+                scope_relative,
+            } => self.begin_walk(repo, rel, dst, scope_relative),
+            Retry::Get {
+                url,
+                out,
+                dst,
+                repo,
+            } => {
+                if self.download_busy() {
+                    self.status = "download in flight: one at a time".into();
+                    return;
+                }
+                self.download = Some(Download {
+                    repo_url: repo.dir_url(),
+                    server: Some(host_of(&repo.url)),
+                    repo_name: Some(repo.name.clone()),
+                    dst: dst.clone(),
+                    files: Some(1),
+                    retry: Some(Retry::Get {
+                        url: url.clone(),
+                        out: out.clone(),
+                        dst: dst.clone(),
+                        repo,
+                    }),
+                    ..Download::default()
+                });
+                self.status = format!("downloading {}", url.rsplit('/').next().unwrap_or(&url));
+                net::fetch_one(self.tx.clone(), url, out, dst, self.auth.clone());
+            }
+            Retry::Transfer {
+                repo_url,
+                names,
+                dst,
+            } => {
+                if self.download_busy() {
+                    self.status = "download in flight: one at a time".into();
+                    return;
+                }
+                let count = names.len();
+                self.status = format!("plan: {count} files -> {}", dst.display());
+                net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
+            }
+        }
+    }
+}
+
+/// The operation that failed: the modal headline, refined by the error class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrKind {
+    /// A walk, a get or a transfer refused.
+    Download,
+    /// A listing refused.
+    Listing,
+    /// A connect refused.
+    Connect,
+}
+
+impl ErrKind {
+    /// The modal headline. Access refusals name themselves.
+    fn title(self, e: &Error) -> &'static str {
+        if matches!(e, Error::Auth { .. }) {
+            return "access denied";
+        }
+        match self {
+            ErrKind::Download => "download failed",
+            ErrKind::Listing => "listing failed",
+            ErrKind::Connect => "connect failed",
+        }
+    }
+}
+
+/// The non-empty facts an error modal can attach to the error itself.
+#[derive(Debug, Clone, Default)]
+struct ErrCtx {
+    /// The server label or URL.
+    server: Option<String>,
+    /// The repository name.
+    repository: Option<String>,
+    /// The destination folder.
+    destination: Option<PathBuf>,
+}
+
+impl ErrCtx {
+    /// The context of a tab: its server and, inside a tree, its repository.
+    fn of(app: &App, tab: usize) -> Self {
+        let Some(t) = app.tabs.get(tab) else {
+            return Self::default();
+        };
+        Self {
+            server: Some(t.server.name.clone()),
+            repository: t.repo.as_ref().map(|r| r.name.clone()),
+            destination: None,
+        }
+    }
+}
+
+/// The human cause of an error: one sentence, no colon chains, server-fed
+/// names escaped. The hint stays with the core, verbatim.
+#[must_use]
+pub fn cause_of(e: &Error) -> String {
+    match e {
+        Error::Mismatch { name, .. } => format!(
+            "the downloaded copy of '{}' does not match the digest the server pins",
+            name.escape_debug()
+        ),
+        Error::Incomplete { names } => {
+            let list = names
+                .iter()
+                .map(|n| n.escape_debug().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("these names did not finish: {list}")
+        }
+        Error::UnsafeName { name, .. } => format!(
+            "the name '{}' is not a legal artifact path",
+            name.escape_debug()
+        ),
+        Error::Missing { names } => {
+            let list = names
+                .iter()
+                .map(|n| n.escape_debug().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("nothing to download, '{list}' is on neither side")
+        }
+        Error::Enumerate { url, .. } => format!(
+            "the server cannot list the contents of '{}'",
+            url.escape_debug()
+        ),
+        Error::Auth { .. } => "the server refused the credentials or none were given".to_owned(),
+        Error::Transport { url, .. } => format!(
+            "the connection to '{}' failed on the way",
+            url.escape_debug()
+        ),
+        Error::Http { status, url } => format!(
+            "the server answered HTTP {status} for '{}'",
+            url.escape_debug()
+        ),
+        Error::ServiceMissing { url, .. } => format!(
+            "the server at '{}' has no Nexus service API",
+            url.escape_debug()
+        ),
+        Error::ReadOnly { url, status } => format!(
+            "the repository '{}' answered HTTP {status} to a deletion, it is read-only",
+            url.escape_debug()
+        ),
+        Error::Misuse(_) => "the request is malformed and cannot be retried".to_owned(),
+        Error::Io { path, .. } => format!(
+            "the local filesystem refused a step on '{}'",
+            path.escape_debug()
+        ),
+        // The core enum is non-exhaustive: new variants surface raw until mapped.
+        _ => format!("the operation failed: {e}"),
     }
 }
 
@@ -1564,13 +2680,14 @@ pub fn hint_of(screen: Screen) -> String {
 /// The idle status hint of the repository screen.
 #[must_use]
 pub fn hint_repos() -> String {
-    "enter: open · r: refresh · s: servers · tab: switch · ?: help · q: quit".into()
+    "enter: open · d: download · D: as · i: card · o: destination · r: refresh · ?: help · q: quit"
+        .into()
 }
 
 /// The idle status hint of the tree screen.
 #[must_use]
 pub fn hint_tree() -> String {
-    "d: download · D: folder · /: filter · e: mode · i: info · r: refresh · esc: up · q: quit"
+    "enter: inspect · d: download · D: as · o: destination · /: filter · r: refresh · ?: help · q: quit"
         .into()
 }
 
@@ -1636,6 +2753,11 @@ mod tests {
         KeyEvent::new(code, KeyModifiers::empty())
     }
 
+    /// A real terminal delivers capitals as the uppercase char plus Shift.
+    fn key_shifted(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::SHIFT)
+    }
+
     fn tree_tab(entries: Vec<Entry>) -> Tab {
         let mut tab = tab_with(vec![repo("raw-main", "raw", "hosted")]);
         tab.repo = tab.repos.first().cloned();
@@ -1649,6 +2771,19 @@ mod tests {
             name: name.to_owned(),
             kind,
         }
+    }
+
+    /// Presses the `r` of the open error modal.
+    fn modal_retry_runs(app: &mut App) {
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("no error modal is open");
+        };
+        let Some(retry) = modal.retry else {
+            panic!("the modal carries no retry");
+        };
+        // The key handler closes the modal before the retry runs.
+        app.mode = Mode::Normal;
+        app.run_retry(retry);
     }
 
     #[test]
@@ -1729,9 +2864,13 @@ mod tests {
             app.tabs[0].selected_row().map(|r| r.name),
             Some("core".to_owned())
         );
-        // Enter keeps the filter, esc clears it.
+        // Enter applies and closes the input: the tree is browsable again.
         app.handle(Msg::Key(key(KeyCode::Enter)));
         assert!(app.tabs[0].filter.is_some());
+        assert!(!app.tabs[0].filter_edit);
+        // Esc while the input is open clears the filter completely.
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        assert!(app.tabs[0].filter_edit, "the input reopens for editing");
         app.handle(Msg::Key(key(KeyCode::Esc)));
         assert!(app.tabs[0].filter.is_none());
         assert_eq!(app.visible_len(), 3);
@@ -1882,21 +3021,192 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn enter_on_a_file_downloads_it_directly() {
+    async fn enter_on_a_file_opens_the_card_instead_of_downloading() {
         let (mut app, mut rx) = app_with(
             vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
             false,
         );
         app.handle(Msg::Key(key(KeyCode::Enter)));
-        assert_eq!(app.status, "plan: 1 file -> dl/raw-main");
+        // The card is up, HEAD and the sha sibling fly, nothing downloads.
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("enter must open the card");
+        };
+        assert_eq!(card.name, "README.txt");
+        assert_eq!(card.rel, "README.txt");
+        assert_eq!(
+            card.url,
+            "http://127.0.0.1:1/repository/raw-main/README.txt"
+        );
+        assert_eq!(app.pending, 2);
+        assert!(
+            app.download.is_none(),
+            "the primary verb never starts a transfer"
+        );
+        assert!(app.needs_tick(), "the card waits for its metadata");
+        // HEAD and the sibling land in arrival order: both name the row.
+        for _ in 0..2 {
+            match rx.recv().await.unwrap() {
+                Msg::Head { tab, gen, rel, .. } => {
+                    assert_eq!((tab, gen), (0, app.tabs[0].gen));
+                    assert_eq!(rel, "README.txt");
+                }
+                Msg::Sibling { rel, .. } => assert_eq!(rel, "README.txt"),
+                other => panic!("unexpected message: {other:?}"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_head_answer_is_guarded_by_the_row_token() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let gen = app.tabs[0].gen;
+        // An answer of another row, another tab and another generation: dropped.
+        app.handle(Msg::Head {
+            tab: 0,
+            gen,
+            rel: "app".into(),
+            res: Ok(HeadInfo {
+                status: 200,
+                size: Some(1),
+                content_type: None,
+            }),
+        });
+        app.handle(Msg::Head {
+            tab: 1,
+            gen,
+            rel: "README.txt".into(),
+            res: Ok(HeadInfo {
+                status: 200,
+                size: Some(2),
+                content_type: None,
+            }),
+        });
+        app.handle(Msg::Head {
+            tab: 0,
+            gen: gen + 1,
+            rel: "README.txt".into(),
+            res: Ok(HeadInfo {
+                status: 200,
+                size: Some(3),
+                content_type: None,
+            }),
+        });
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card stays open");
+        };
+        assert_eq!(card.size, SizeState::Pending, "foreign answers never paint");
+        // The token match lands.
+        app.handle(Msg::Head {
+            tab: 0,
+            gen,
+            rel: "README.txt".into(),
+            res: Ok(HeadInfo {
+                status: 200,
+                size: Some(21),
+                content_type: Some("text/plain".into()),
+            }),
+        });
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card stays open");
+        };
+        assert_eq!(card.size, SizeState::Known(21));
+        assert!(!app.needs_tick() || card.sha == ShaState::Pending);
+    }
+
+    #[tokio::test]
+    async fn the_sibling_answer_fills_the_sha_line_of_the_card() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let gen = app.tabs[0].gen;
+        app.handle(Msg::Sibling {
+            tab: 0,
+            gen,
+            rel: "README.txt".into(),
+            res: Ok(Some("ab".repeat(32))),
+        });
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card stays open");
+        };
+        assert_eq!(card.sha, ShaState::Hex("ab".repeat(32)));
+        // No marker on the server: the card says so instead of guessing.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let gen = app.tabs[0].gen;
+        app.handle(Msg::Sibling {
+            tab: 0,
+            gen,
+            rel: "README.txt".into(),
+            res: Ok(None),
+        });
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card stays open");
+        };
+        assert_eq!(card.sha, ShaState::Absent);
+    }
+
+    #[tokio::test]
+    async fn the_card_downloads_with_s_and_copies_with_c() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Key(key(KeyCode::Char('s'))));
+        // The card stays open, the transfer takes the single slot.
+        assert!(matches!(app.mode, Mode::Card(_)));
         match rx.recv().await.unwrap() {
-            Msg::Walk { res, .. } => {
-                let names = res.unwrap();
-                assert_eq!(names.len(), 1);
-                assert_eq!(names[0].as_str(), "README.txt");
+            Msg::Dl(DlEv::Start { dst, files }) => {
+                assert_eq!(files, 1);
+                assert_eq!(dst, PathBuf::from("dl"));
             }
             other => panic!("unexpected message: {other:?}"),
         }
+        assert!(app.download_busy(), "the card download holds the slot");
+        // A second `s` waits its turn.
+        app.handle(Msg::Key(key(KeyCode::Char('s'))));
+        assert_eq!(app.status, "download in flight: one at a time");
+        // `c` copies the url: the copied toast is the confirmation.
+        app.handle(Msg::Key(key(KeyCode::Char('c'))));
+        assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
+    }
+
+    #[tokio::test]
+    async fn the_card_o_changes_the_destination_and_returns() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!("o opens the picker");
+        };
+        assert!(
+            picker.back_to_card.is_some(),
+            "the picker returns to the card"
+        );
+        assert_eq!(picker.buffer, "dl", "the picker prefills the destination");
+        for c in "/out".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.destination.ends_with("out"), "{:?}", app.destination);
+        assert!(app.dest_confirmed);
+        assert!(
+            matches!(app.mode, Mode::Card(_)),
+            "the card gets its layer back"
+        );
     }
 
     #[tokio::test]
@@ -1914,7 +3224,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_dir_grabs_the_whole_current_directory() {
+    async fn the_dialog_downloads_the_current_folder_as() {
         let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
         // Descend into app/ and let the child listing land.
         app.handle(Msg::Key(key(KeyCode::Enter)));
@@ -1923,12 +3233,24 @@ mod tests {
             gen: app.tabs[0].gen,
             res: Ok(vec![entry("core", EntryKind::Dir)]),
         });
-        // D downloads the folder itself: the walk runs over app/ below the root.
+        // D opens the dialog: folder prefilled with the destination, name with
+        // the folder. Nothing walks before Enter on the name.
         app.handle(Msg::Key(key(KeyCode::Char('D'))));
+        let Mode::SaveAs(dialog) = app.mode.clone() else {
+            panic!("D opens the dialog");
+        };
+        assert_eq!(dialog.dir, "dl");
+        assert_eq!(dialog.name, "app");
+        assert_eq!(dialog.scope.rel, "app");
+        assert!(rx.try_recv().is_err(), "no walk before the confirmation");
+        // Enter on the dir field walks to the name, Enter on the name starts.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(matches!(app.mode, Mode::SaveAs(_)));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
         assert_eq!(app.status, "walking app/");
-        assert_eq!(app.pending, 1);
-        // The real listing of the descend (the dead port refuses) races the
-        // walk result through the channel: drain until the walk arrives.
+        let dst = app.download.as_ref().map(|dl| dl.dst.clone()).unwrap();
+        assert!(dst.ends_with("app"), "{dst:?}");
+        // The walk runs over the scope, names stripped to it.
         let mut msg = rx.recv().await.unwrap();
         while matches!(msg, Msg::Entries { .. }) {
             msg = rx.recv().await.unwrap();
@@ -1940,20 +3262,143 @@ mod tests {
             }
             other => panic!("unexpected message: {other:?}"),
         }
+        // A slash in the name is refused before anything happens.
+        app.handle(Msg::Key(key(KeyCode::Char('D'))));
+        let Mode::SaveAs(dialog) = app.mode.clone() else {
+            panic!("D opens the dialog");
+        };
+        app.handle(Msg::Key(key(KeyCode::Tab)));
+        for c in "bad/name".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        let before = app.pending;
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.status.contains("slash"), "{:?}", app.status);
+        assert_eq!(app.pending, before, "nothing spawned");
+        assert!(matches!(app.mode, Mode::SaveAs(_)));
+        let _ = dialog;
+        // Esc cancels: nothing is created, no walk is flying.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn the_dialog_renames_the_whole_repository_from_repos() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        // d on Repos with the untouched default destination: the picker first.
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!("the unconfirmed destination asks first");
+        };
+        assert_eq!(
+            picker.pending_repo.as_ref().map(|r| r.name.as_str()),
+            Some("raw-main")
+        );
+        assert_eq!(picker.buffer, "dl");
+        // Confirm: the destination is set and the walk starts.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.destination.ends_with("dl"), "{:?}", app.destination);
+        assert!(app.dest_confirmed);
+        assert_eq!(app.status, "walking raw-main/");
+        // Once confirmed, the next d goes straight to the walk.
+        app.download = None;
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert_eq!(app.status, "walking raw-main/");
+        let dst = app.download.as_ref().map(|dl| dl.dst.clone()).unwrap();
+        assert!(dst.ends_with("raw-main"), "{dst:?}");
+    }
+
+    #[tokio::test]
+    async fn uppercase_paths_and_shift_d_survive_real_terminal_modifiers() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        // An uppercase path character arrives as Char with Shift.
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        app.handle(Msg::Key(key(KeyCode::Backspace)));
+        app.handle(Msg::Key(key(KeyCode::Backspace)));
+        for ch in "/tmp/Outs".chars() {
+            let code = KeyCode::Char(ch);
+            app.handle(Msg::Key(if ch.is_uppercase() {
+                key_shifted(code)
+            } else {
+                key(code)
+            }));
+        }
+        assert!(
+            matches!(&app.mode, Mode::Dest(p) if p.buffer == "/tmp/Outs"),
+            "{:?}",
+            app.mode
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.destination.ends_with("Outs"), "{:?}", app.destination);
+        // Shift+D opens the download-as dialog on the Tree screen.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        app.handle(Msg::Key(key_shifted(KeyCode::Char('D'))));
+        assert!(matches!(app.mode, Mode::SaveAs(_)), "{:?}", app.mode);
+        assert!(
+            rx.try_recv().is_err(),
+            "the dialog and picker never touch the network"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_destination_picker_confirms_and_cancels() {
+        let (mut app, mut rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        assert_eq!(
+            app.mode,
+            Mode::Dest(DestPicker {
+                buffer: "dl".into(),
+                back_to_card: None,
+                pending_repo: None,
+            })
+        );
+        for c in "/tmp/outs".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        // A relative buffer resolves against the launch directory.
+        assert!(app.destination.ends_with("outs"), "{:?}", app.destination);
+        assert!(app.destination.is_absolute());
+        assert!(app.status.starts_with("destination: "));
+        // Esc cancels: the destination stays.
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.destination.ends_with("outs"), "{:?}", app.destination);
+        assert!(
+            rx.try_recv().is_err(),
+            "the picker never touches the network"
+        );
     }
 
     #[tokio::test]
     async fn download_plan_starts_the_transfer() {
-        let (mut app, mut rx) = app_with(
-            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
-            false,
-        );
-        app.handle(Msg::Key(key(KeyCode::Enter)));
-        let Msg::Walk { tab, gen, res } = rx.recv().await.unwrap() else {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        // The real walk of the dead port lands: replace its result with the
+        // plan the transfer would see.
+        let Msg::Walk { tab, gen, .. } = rx.recv().await.unwrap() else {
             panic!("expected the walk result");
         };
-        app.handle(Msg::Walk { tab, gen, res });
-        assert_eq!(app.status, "plan: 1 file -> dl/raw-main");
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
+        });
+        assert_eq!(app.status, "plan: 1 file -> dl");
         match rx.recv().await.unwrap() {
             Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
             other => panic!("unexpected message: {other:?}"),
@@ -1962,17 +3407,14 @@ mod tests {
 
     #[tokio::test]
     async fn a_stale_walk_never_starts_a_transfer() {
-        let (mut app, mut rx) = app_with(
-            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
-            false,
-        );
-        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
         // A walk of an older generation lands: dropped, nothing transfers,
         // and the download it prepared does not stay "running" forever.
         app.handle(Msg::Walk {
             tab: 0,
             gen: app.tabs[0].gen - 1,
-            res: Ok(vec![ArtifactName::parse("README.txt").unwrap()]),
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
         });
         assert!(rx.try_recv().is_err(), "no download was spawned");
         assert!(app.download.is_none(), "the stale walk released the slot");
@@ -2003,6 +3445,18 @@ mod tests {
             !app.download_busy(),
             "a new download can start after the failure"
         );
+        // The refusal speaks through the error modal, with a retry at hand.
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the walk refusal must open the error modal");
+        };
+        assert_eq!(modal.title, "download failed");
+        assert!(modal.retry.is_some(), "the walk can run again");
+        modal_retry_runs(&mut app);
+        assert!(
+            matches!(app.mode, Mode::Normal),
+            "the modal closed on retry"
+        );
+        assert_eq!(app.status, "walking app/", "the retry rewalked");
     }
 
     #[tokio::test]
@@ -2046,7 +3500,13 @@ mod tests {
             }),
         });
         assert!(!app.tabs[0].loading, "no phantom loading marker");
-        assert!(app.error.is_some());
+        // Errors live in their modal now, never in the status line.
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the refusal must open the error modal");
+        };
+        assert_eq!(modal.title, "listing failed");
+        assert!(modal.cause.contains("connection"), "{:?}", modal.cause);
+        assert!(modal.retry.is_some(), "a transport failure can be retried");
     }
 
     #[tokio::test]
@@ -2060,15 +3520,11 @@ mod tests {
         );
         // A download of the file starts and runs.
         app.handle(Msg::Key(key(KeyCode::Down)));
-        app.handle(Msg::Key(key(KeyCode::Enter)));
-        let Msg::Walk { tab, gen, res } = rx.recv().await.unwrap() else {
-            panic!("expected the walk result");
-        };
-        app.handle(Msg::Walk { tab, gen, res });
-        let Msg::Dl(DlEv::Start { files, .. }) = rx.recv().await.unwrap() else {
-            panic!("expected the transfer start");
-        };
-        assert_eq!(files, 1);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
+            other => panic!("unexpected message: {other:?}"),
+        }
         assert!(app.download_busy());
         // Browsing does not wait on the transfer: the folder above opens.
         app.handle(Msg::Key(key(KeyCode::Up)));
@@ -2140,7 +3596,12 @@ mod tests {
         }
         app.handle(Msg::Key(key(KeyCode::Down)));
         app.handle(Msg::Key(key(KeyCode::Right)));
-        assert!(app.status.contains("this is a file"), "{:?}", app.status);
+        // Right on a file opens the card now: no refusal class exists anymore.
+        assert!(
+            matches!(app.mode, Mode::Card(_)),
+            "right on a file opens the card, got {:?}",
+            app.status
+        );
     }
 
     #[tokio::test]
@@ -2252,26 +3713,281 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn info_heads_the_selected_file() {
+    async fn i_on_repos_opens_the_repository_card() {
+        let (mut app, mut rx) = app_with(
+            vec![tab_with(vec![
+                repo("raw-main", "raw", "hosted"),
+                repo("maven-central", "maven2", "proxy"),
+            ])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('i'))));
+        let Mode::Card(Card::Repo(card)) = app.mode.clone() else {
+            panic!("i opens the repository card");
+        };
+        assert_eq!(card.repo.name, "raw-main");
+        assert!(card.enterable);
+        // The hidden format is named as such, no --all-formats needed to see it.
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        // The card has the focus: movement keys do not reach the list.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Char('i'))));
+        let Mode::Card(Card::Repo(card)) = app.mode.clone() else {
+            panic!("i opens the card of the second row too");
+        };
+        assert_eq!(card.repo.name, "maven-central");
+        assert!(!card.enterable);
+        // q closes the card like esc: the overlay never quits the app.
+        app.handle(Msg::Key(key(KeyCode::Char('q'))));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(!app.quit);
+        // `c` copies the url: the copied toast is the confirmation.
+        app.handle(Msg::Key(key(KeyCode::Char('i'))));
+        app.handle(Msg::Key(key(KeyCode::Char('c'))));
+        assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
+        assert!(rx.try_recv().is_err(), "the repo card spawns nothing");
+    }
+
+    #[tokio::test]
+    async fn esc_from_the_tree_root_leaves_no_hidden_repository() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        // Open the repository, then walk back out with esc.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![entry("README.txt", EntryKind::File)]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.tabs[0].screen, Screen::Repos);
+        // The tab is virgin: no repo, no path, no entries.
+        assert!(app.tabs[0].repo.is_none(), "no hidden repository state");
+        assert!(app.tabs[0].path.is_empty());
+        assert!(app.tabs[0].entries.is_empty());
+        // The old mine is closed: D on the row opens its dialog instead of
+        // silently downloading whatever repository was left in the tab.
+        app.handle(Msg::Key(key(KeyCode::Char('D'))));
+        assert!(
+            matches!(app.mode, Mode::SaveAs(_)),
+            "D is the explicit dialog"
+        );
+    }
+
+    #[tokio::test]
+    async fn q_in_the_servers_overlay_closes_it_instead_of_quitting() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('s'))));
+        assert_eq!(app.mode, Mode::Servers);
+        app.handle(Msg::Key(key(KeyCode::Char('q'))));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(!app.quit, "q never quits from an overlay");
+        // Quitting stays a normal-screen act.
+        app.handle(Msg::Key(key(KeyCode::Char('q'))));
+        assert!(app.quit);
+    }
+
+    #[tokio::test]
+    async fn the_filter_never_lingers_as_an_empty_zombie() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("core.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        app.handle(Msg::Key(key(KeyCode::Char('a'))));
+        assert_eq!(app.status, "filter \"a\": 1 of 2 shown");
+        // Backspace to empty closes the filter: no Some(""), no swallowed keys.
+        app.handle(Msg::Key(key(KeyCode::Backspace)));
+        assert!(app.tabs[0].filter.is_none(), "empty means off");
+        assert!(!app.tabs[0].filter_edit, "the input closed with the filter");
+        assert_eq!(app.status, hint_tree());
+        assert_eq!(app.visible_len(), 2);
+        // Enter on an empty buffer also just closes.
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.tabs[0].filter.is_none());
+        // After the filter is applied the rest of the keyboard is back:
+        // r, d, q do their own jobs instead of feeding the pattern.
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        for c in "co".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(app.tabs[0].filter.as_deref(), Some("co"));
+        assert!(!app.tabs[0].filter_edit);
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert!(app.tabs[0].filter.is_none(), "esc clears the filter");
+    }
+
+    #[tokio::test]
+    async fn refresh_keeps_the_filter_and_the_cursor_row() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("apple.txt", EntryKind::File),
+                entry("zzz.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        // Filter to the two apples and sit on the second one.
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        for c in "app".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        assert_eq!(
+            app.tabs[0].selected_row().map(|r| r.name),
+            Some("apple.txt".to_owned())
+        );
+        // r rereads; the landed listing keeps the filter and the cursor row.
+        app.handle(Msg::Key(key(KeyCode::Char('r'))));
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![
+                entry("apple.txt", EntryKind::File),
+                entry("app", EntryKind::Dir),
+                entry("zzz.txt", EntryKind::File),
+            ]),
+        });
+        assert_eq!(
+            app.tabs[0].filter.as_deref(),
+            Some("app"),
+            "the filter survives"
+        );
+        assert_eq!(
+            app.tabs[0].selected_row().map(|r| r.name),
+            Some("apple.txt".to_owned()),
+            "the cursor returns to its row by name"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_double_click_on_a_file_opens_the_card() {
         let (mut app, _rx) = app_with(
             vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
             false,
         );
-        app.handle(Msg::Key(key(KeyCode::Char('i'))));
-        assert_eq!(app.pending, 1);
-        assert_eq!(app.info.as_deref(), Some("README.txt: …"));
-        app.handle(Msg::Head {
+        app.list_area = Rect {
+            x: 0,
+            y: 1,
+            width: 40,
+            height: 5,
+        };
+        let click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 3,
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        };
+        app.handle(Msg::Mouse(click));
+        app.handle(Msg::Mouse(click));
+        assert!(
+            matches!(app.mode, Mode::Card(_)),
+            "the double click inspects, it never downloads"
+        );
+        assert!(app.download.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_error_modal_shows_cause_hint_and_full_text() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![entry("README.txt", EntryKind::File)])],
+            false,
+        );
+        let e = Error::Transport {
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            detail: "connection refused".into(),
+        };
+        let hint = e.hint();
+        app.handle(Msg::Entries {
             tab: 0,
             gen: app.tabs[0].gen,
-            name: "README.txt".into(),
-            res: Ok(HeadInfo {
-                status: 200,
-                size: Some(21),
-                content_type: Some("text/plain".into()),
-            }),
+            res: Err(e),
         });
-        assert_eq!(app.info.as_deref(), Some("README.txt: 21 B · text/plain"));
-        assert_eq!(app.pending, 0);
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the listing failure opens the modal");
+        };
+        assert_eq!(modal.title, "listing failed");
+        // One human sentence, no core spelling.
+        assert_eq!(
+            modal.cause,
+            "the connection to 'http://127.0.0.1:1/repository/raw-main/' failed on the way"
+        );
+        // The facts name the tab's server and repository.
+        assert!(modal
+            .facts
+            .contains(&("server".into(), "127.0.0.1:1".into())));
+        assert!(modal
+            .facts
+            .contains(&("repository".into(), "raw-main".into())));
+        // The hint stays verbatim, the full text carries both lines.
+        assert_eq!(modal.hint, hint);
+        let expected_full = match &hint {
+            Some(h) => format!("error: transport: http://127.0.0.1:1/repository/raw-main/: connection refused\nhint: {h}"),
+            None => "error: transport: http://127.0.0.1:1/repository/raw-main/: connection refused".to_owned(),
+        };
+        assert_eq!(modal.full, expected_full);
+        // y copies the full text: the copied toast is the confirmation.
+        app.handle(Msg::Key(key(KeyCode::Char('y'))));
+        assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
+        // r reruns the listing, esc closes.
+        modal_retry_runs(&mut app);
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.tabs[0].loading, "the retry refreshes the listing");
+        // Esc alone closes without any retry.
+        let e2 = Error::Transport {
+            url: "http://x/".into(),
+            detail: "refused".into(),
+        };
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Err(e2),
+        });
+        assert!(matches!(app.mode, Mode::Error(_)));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn misuse_and_unsafe_names_hide_the_retry() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        // Consume the dead port's transport answer, feed the grammar refusal.
+        let Msg::Walk { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the walk result");
+        };
+        let e = Error::UnsafeName {
+            name: "app/<bad>".into(),
+            reason: "character outside the grammar".into(),
+        };
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Err(e),
+        });
+        let Mode::Error(modal) = app.mode.clone() else {
+            panic!("the walk refusal opens the modal");
+        };
+        assert!(modal.cause.contains("not a legal artifact path"));
+        assert!(modal.retry.is_none(), "a grammar error cannot be retried");
+        // Without a retry the modal only leaves through esc.
+        app.handle(Msg::Key(key(KeyCode::Char('r'))));
+        assert!(matches!(app.mode, Mode::Error(_)));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(!app.download_busy(), "the failed walk released the slot");
     }
 
     #[tokio::test]
@@ -2352,6 +4068,9 @@ mod tests {
             tx,
         );
         app.boot();
+        // The connect goes through the live form, so the result is attached.
+        app.mode = Mode::AddServer("http://x:2/".into());
+        app.handle(Msg::Key(key(KeyCode::Enter)));
         app.handle(Msg::Repos {
             tab: 1,
             server: ServerCfg::from_base("http://x:2/".to_owned()),
@@ -2362,6 +4081,116 @@ mod tests {
         let saved = crate::config::load(&path).unwrap();
         assert_eq!(saved.servers.len(), 1);
         assert_eq!(saved.servers[0].url, "http://x:2/");
+    }
+
+    #[tokio::test]
+    async fn a_retry_while_flying_stays_detached_from_the_old_connect() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mut app = App::new(
+            vec![server()],
+            vec![tab_with(vec![])],
+            ConfigFile::default(),
+            Some(path.clone()),
+            false,
+            PathBuf::from("dl"),
+            None,
+            tx,
+        );
+        app.boot();
+        let server = ServerCfg::from_base("http://x:2/".to_owned());
+        // A connect flies, the form cancels: the flying result is detached.
+        app.mode = Mode::AddServer("http://x:2/".into());
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert!(!app.connect_open);
+        // Retrying while the old connect is still flying must be refused
+        // without arming the flag: the old result lands detached regardless.
+        app.run_retry(Retry::Connect {
+            server: server.clone(),
+        });
+        assert_eq!(app.status, "already connecting to a server");
+        assert!(!app.connect_open, "the retry must not arm the flag");
+        app.handle(Msg::Repos {
+            tab: 1,
+            server,
+            connect: true,
+            res: Ok(vec![repo("raw", "raw", "hosted")]),
+        });
+        assert_eq!(app.tabs.len(), 1, "the detached result opens no tab");
+        let saved = crate::config::load(&path).unwrap();
+        assert!(saved.servers.is_empty(), "the config stays untouched");
+    }
+
+    #[tokio::test]
+    async fn the_card_downloads_a_nested_file_once() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("a", EntryKind::Dir),
+                entry("c.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        // Descend into `a`, then open the card of `c.txt`.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let Msg::Entries { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the listing of a");
+        };
+        app.handle(Msg::Entries {
+            tab,
+            gen,
+            res: Ok(vec![entry("c.txt", EntryKind::File)]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("enter opens the card of the nested file");
+        };
+        assert_eq!(card.rel, "a/c.txt");
+        app.handle(Msg::Key(key(KeyCode::Char('s'))));
+        let download = app.download.expect("the card download starts");
+        let Retry::Get { url, out, .. } = download.retry.expect("the get retry") else {
+            panic!("the card download retries as a get");
+        };
+        assert!(url.ends_with("/a/c.txt"), "{url}");
+        assert!(out.ends_with("a/c.txt"), "{out:?}");
+        assert!(!out.to_string_lossy().contains("a/a"), "{out:?}");
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_form_detaches_the_flying_connect() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mut app = App::new(
+            vec![server()],
+            vec![tab_with(vec![])],
+            ConfigFile::default(),
+            Some(path.clone()),
+            false,
+            PathBuf::from("dl"),
+            None,
+            tx,
+        );
+        app.boot();
+        // Submit, then cancel the form while the connect flies.
+        app.mode = Mode::AddServer("http://x:2/".into());
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Servers, "esc goes back one layer");
+        // The answer lands: no tab, no config write, the server is named.
+        app.handle(Msg::Repos {
+            tab: 1,
+            server: ServerCfg::from_base("http://x:2/".to_owned()),
+            connect: true,
+            res: Ok(vec![repo("raw", "raw", "hosted")]),
+        });
+        assert_eq!(app.tabs.len(), 1, "no tab opens after the cancel");
+        assert_eq!(app.status, "server http://x:2/ connected, press s to open");
+        let saved = crate::config::load(&path).unwrap();
+        assert!(saved.servers.is_empty(), "the config stays untouched");
+        // The overlay knows the server, so `s` can still open it.
+        assert!(app.servers.iter().any(|s| s.url == "http://x:2/"));
     }
 
     #[tokio::test]

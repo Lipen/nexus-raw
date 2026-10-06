@@ -5,13 +5,18 @@
 //! overlay (help, servers, add-server form). The list geometry is written back
 //! into the app so mouse clicks can hit-test rows.
 
+use std::path::Path;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::app::{fmt_bytes, App, DlOutcome, Download, Mode, Screen};
+use crate::app::{
+    fmt_bytes, App, Card, DestPicker, DlOutcome, Download, ErrorModal, Mode, SaveAsDialog,
+    SaveAsField, Screen, ShaState, SizeState, Toast,
+};
 use nexus_raw_core::EntryKind;
 
 /// The dim style for secondary and non-enterable text.
@@ -24,7 +29,7 @@ fn selected() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
 }
 
-/// Draws one frame: header, body, download panel, status, overlay.
+/// Draws one frame: header, body, download panel, status, toasts, overlay.
 /// The mutable borrow carries the list geometry back into the app.
 pub fn draw(f: &mut Frame, app: &mut App) {
     let rows = Layout::default()
@@ -38,6 +43,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_header(f, app, rows[0]);
     draw_body(f, app, rows[1]);
     draw_status(f, app, rows[2]);
+    draw_toasts(f, app, f.area());
     draw_overlay(f, app, f.area());
 }
 
@@ -112,10 +118,9 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
             let rows = tab.rows();
             let idx = tab.row_idx();
             let shown = idx.len();
-            let filtered = tab
-                .filter
-                .as_ref()
-                .map_or(String::new(), |f| format!(" · filter {f:?}: {shown} kept"));
+            let filtered = tab.filter.as_ref().map_or(String::new(), |f| {
+                format!(" · filter \"{f}\": {shown} kept")
+            });
             let title = format!(
                 "{} · {} of {}{filtered}{loading}",
                 if tab.breadcrumb().is_empty() {
@@ -248,23 +253,11 @@ fn outcome_line(dl: &Download) -> Line<'static> {
     }
 }
 
-/// The last line: error, info, or the status with the position on the right.
-/// The left part is clipped to the width the right part does not use.
+/// The last line: the transient status with the position on the right, plus
+/// the constant destination indicator. Errors live in their own modal, never
+/// here.
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
-    let left = if let Some((msg, hint)) = &app.error {
-        let mut spans = vec![Span::styled(
-            format!(" error: {msg} "),
-            Style::default().fg(Color::Red),
-        )];
-        if let Some(hint) = hint {
-            spans.push(Span::styled(format!(" {hint}"), dim()));
-        }
-        spans
-    } else if let Some(info) = &app.info {
-        vec![Span::styled(format!(" {info} "), dim())]
-    } else {
-        vec![Span::raw(format!(" {} ", app.status))]
-    };
+    let left = vec![Span::raw(format!(" {} ", app.status))];
     let right = self_status(app);
     // `·` is two UTF-8 bytes but one column: width math goes by chars.
     // Two spare columns keep a mid-word crop from touching the label.
@@ -281,24 +274,68 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
-/// The right side of the status line: tab position, server and cursor.
+/// The right side of the status line: tab position, server, cursor and the
+/// session destination, always visible.
 fn self_status(app: &App) -> String {
-    let Some(tab) = app.tabs.get(app.tab) else {
-        return String::new();
-    };
-    let (cursor, len) = match tab.screen {
-        Screen::Repos => (tab.repos_cursor, tab.repos.len()),
-        Screen::Tree => (tab.tree_cursor, tab.row_idx().len()),
+    let base = match app.tabs.get(app.tab) {
+        Some(tab) => {
+            let (cursor, len) = match tab.screen {
+                Screen::Repos => (tab.repos_cursor, tab.repos.len()),
+                Screen::Tree => (tab.tree_cursor, tab.row_idx().len()),
+            };
+            format!(
+                "tab {}/{} · nav {} · {} · {}/{}",
+                app.tab + 1,
+                app.tabs.len(),
+                app.nav.label(),
+                tab.server.name,
+                if len == 0 { 0 } else { cursor + 1 },
+                len
+            )
+        }
+        None => String::new(),
     };
     format!(
-        "tab {}/{} · nav {} · {} · {}/{}",
-        app.tab + 1,
-        app.tabs.len(),
-        app.nav.label(),
-        tab.server.name,
-        if len == 0 { 0 } else { cursor + 1 },
-        len
+        "{base} · → {}",
+        short_dst(&app.destination.display().to_string())
     )
+}
+
+/// The destination shortened for the corner: a leading ellipsis keeps the tail,
+/// which is the part that distinguishes folders.
+fn short_dst(dst: &str) -> String {
+    const LIMIT: usize = 24;
+    let chars = dst.chars().count();
+    if chars <= LIMIT {
+        dst.to_owned()
+    } else {
+        let tail: String = dst.chars().skip(chars + 1 - LIMIT).collect();
+        format!("…{tail}")
+    }
+}
+
+/// The toast stack: the youngest at the bottom, right above the status line,
+/// right-aligned. Never takes focus, dies on its own timer.
+fn draw_toasts(f: &mut Frame, app: &App, area: Rect) {
+    let live: Vec<&Toast> = app.toasts.iter().rev().take(3).collect();
+    let width = 60.min(area.width);
+    for (i, toast) in live.iter().enumerate() {
+        let y = area.y + area.height.saturating_sub(2 + i as u16);
+        let row = Rect {
+            x: area.x + area.width.saturating_sub(width),
+            y,
+            width,
+            height: 1,
+        };
+        f.render_widget(
+            Line::from(Span::styled(
+                format!(" {} ", toast.text),
+                Style::default().fg(Color::Green),
+            ))
+            .right_aligned(),
+            row,
+        );
+    }
 }
 
 fn draw_overlay(f: &mut Frame, app: &mut App, area: Rect) {
@@ -307,6 +344,10 @@ fn draw_overlay(f: &mut Frame, app: &mut App, area: Rect) {
         Mode::Help => help_overlay(f, app, area),
         Mode::Servers => servers_overlay(f, app, area),
         Mode::AddServer(buffer) => add_server_overlay(f, &buffer, area),
+        Mode::Dest(picker) => dest_picker_overlay(f, app, &picker, area),
+        Mode::Card(card) => card_overlay(f, &card, area),
+        Mode::SaveAs(dialog) => save_as_overlay(f, &dialog, area),
+        Mode::Error(modal) => error_overlay(&modal, area, f),
     }
 }
 
@@ -315,36 +356,62 @@ fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
         || "config: none yet (--init-config writes one)".to_owned(),
         |p| format!("config: {}", p.display()),
     );
-    let lines: Vec<String> = vec![
+    let screen_section: Vec<String> = match app.tabs.get(app.tab).map(|t| t.screen) {
+        Some(Screen::Repos) => vec![
+            "here: repositories".to_owned(),
+            "  enter, right      open a raw repository".to_owned(),
+            "  d                 download the whole repository".to_owned(),
+            "  D                 download it as, with a name of your own".to_owned(),
+            "  i                 card with the repository details".to_owned(),
+            String::new(),
+        ],
+        Some(Screen::Tree) => vec![
+            "here: the tree of a repository".to_owned(),
+            "  enter on a folder descend, on a file open its card".to_owned(),
+            "  right             enter mode: the same as enter".to_owned(),
+            "                    expand mode: fold or unfold inline".to_owned(),
+            "  left              enter mode: back up. expand mode: fold or jump".to_owned(),
+            "  d                 download the selection (folder: subtree)".to_owned(),
+            "  D                 download the current folder as".to_owned(),
+            "  /                 filter, type to narrow, backspace to empty closes".to_owned(),
+            String::new(),
+        ],
+        None => vec![String::new()],
+    };
+    let mut lines: Vec<String> = vec![
         "navigation".to_owned(),
         "  up/down, k/j      move the selection".to_owned(),
         "  pgup/pgdown       move by page".to_owned(),
         "  home/end, g/G     jump to the first/last row".to_owned(),
-        "  tab / backtab     next/previous server tab".to_owned(),
-        "  1-9               jump to the n-th tab".to_owned(),
-        "  esc, backspace    up one level, then back to repositories".to_owned(),
+        "  tab / backtab     next/previous server tab, 1-9 jump".to_owned(),
+        "  esc, backspace    up one layer: filter, folder, repositories".to_owned(),
         String::new(),
-        "tree modes (e toggles, shown in the status line)".to_owned(),
-        "  nav enter         right enters a folder, left goes back up".to_owned(),
-        "  nav expand        right expands a folder inline, left collapses".to_owned(),
-        "                    it or jumps to the parent row".to_owned(),
+    ];
+    lines.extend(screen_section);
+    lines.extend([
+        "destination".to_owned(),
+        "  o                 pick the download folder of this session".to_owned(),
+        "                    files land as {destination}/{path}, a repository".to_owned(),
+        "                    as {destination}/{repo}, shown at the bottom right".to_owned(),
+        String::new(),
+        "card".to_owned(),
+        "  s                 download into the destination".to_owned(),
+        "  o                 change the destination, back to the card".to_owned(),
+        "  c                 copy the url".to_owned(),
+        "  esc, enter, q     close".to_owned(),
         String::new(),
         "actions".to_owned(),
-        "  enter             open a folder or repository, download a file".to_owned(),
-        "  d                 download the selected entry (folder: subtree)".to_owned(),
-        "  D                 download the whole current directory".to_owned(),
-        "  note              one download at a time; browsing never waits".to_owned(),
-        "  r                 refresh the current listing (expansions fold)".to_owned(),
-        "  i                 info on the selected entry (HEAD size)".to_owned(),
-        "  /                 filter the tree: type to narrow, esc clears".to_owned(),
+        "  e                 toggle enter/expand navigation (saved to the config)".to_owned(),
+        "  r                 refresh, keeps the filter and the cursor".to_owned(),
         "  s                 servers: switch or add, the add saves a preset".to_owned(),
         "  a                 (in servers) open the add-server form".to_owned(),
         "  ?                 this help".to_owned(),
-        "  q, ctrl-c         quit (twice while a download runs)".to_owned(),
+        "  q, ctrl-c         quit from the normal screen (twice while".to_owned(),
+        "                    a download runs); in an overlay q only closes it".to_owned(),
         String::new(),
         "mouse: wheel scrolls, click selects, double click opens".to_owned(),
         config,
-    ];
+    ]);
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" nxr-tui keys ");
@@ -420,4 +487,188 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
         width: w.min(area.width),
         height: h.min(area.height),
     }
+}
+
+/// The destination picker: the buffer, the resolved preview, the rules.
+fn dest_picker_overlay(f: &mut Frame, app: &App, picker: &DestPicker, area: Rect) {
+    let resolved = app
+        .resolve_path(Path::new(picker.buffer.trim()))
+        .display()
+        .to_string();
+    let lines = vec![
+        Line::from("folder downloads land in, relative to where nxr-tui started:"),
+        Line::from(vec![
+            Span::styled("> ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(format!("{}█", picker.buffer)),
+        ]),
+        Line::from(Span::styled(format!("→ {resolved}"), dim())),
+    ];
+    let popup = centered(area, 64.min(area.width), 5);
+    f.render_widget(Clear, popup);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" destination · enter: set · esc: cancel "),
+        ),
+        popup,
+    );
+}
+
+/// The card over a repository or a file.
+fn card_overlay(f: &mut Frame, card: &Card, area: Rect) {
+    let (title, lines): (String, Vec<Line>) = match card {
+        Card::Repo(c) => {
+            let enterable = if c.enterable {
+                "yes".to_owned()
+            } else {
+                format!(
+                    "no, the {} filter hides it (--all-formats lifts it)",
+                    c.repo.format
+                )
+            };
+            let body = vec![
+                Line::from(format!("format: {} ({})", c.repo.format, c.repo.kind)),
+                Line::from(format!("openable: {enterable}")),
+                Line::from(format!("url: {}", c.repo.url)),
+                Line::from(Span::styled(
+                    "c: copy url · esc, enter, q: close".to_owned(),
+                    dim(),
+                )),
+            ];
+            (format!(" {}", c.repo.name), body)
+        }
+        Card::File(c) => {
+            let size = match &c.size {
+                SizeState::Pending => "…".to_owned(),
+                SizeState::Unknown => "unknown (the server sent no Content-Length)".to_owned(),
+                SizeState::Known(n) => fmt_bytes(*n),
+                SizeState::Failed(e) => format!("head failed: {e}"),
+            };
+            let sha = match &c.sha {
+                ShaState::Pending => "…".to_owned(),
+                ShaState::Absent => "none (no .sha256 marker)".to_owned(),
+                ShaState::Hex(hex) => hex.clone(),
+                ShaState::Failed(e) => format!("marker failed: {e}"),
+            };
+            let body = vec![
+                Line::from(format!("path: {} (in {})", c.rel, c.repo.name)),
+                Line::from(format!("size: {size}")),
+                Line::from(format!("sha256: {sha}")),
+                Line::from(format!("url: {}", c.url)),
+                Line::from(Span::styled(
+                    "s: download · o: destination · c: copy url · esc, enter, q: close".to_owned(),
+                    dim(),
+                )),
+            ];
+            (format!(" {}", c.name), body)
+        }
+    };
+    let width = 74.min(area.width);
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let popup = centered(area, width, height);
+    f.render_widget(Clear, popup);
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .wrap(Wrap { trim: false }),
+        popup,
+    );
+}
+
+/// The download-as dialog: two fields, the live preview of the target path.
+fn save_as_overlay(f: &mut Frame, dialog: &SaveAsDialog, area: Rect) {
+    let field = |active: bool| {
+        if active {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        }
+    };
+    let cursor = |active: bool| if active { "█" } else { "" };
+    let lines = vec![
+        Line::styled(
+            format!(
+                "folder  {}{}",
+                dialog.dir,
+                cursor(dialog.field == SaveAsField::Dir)
+            ),
+            field(dialog.field == SaveAsField::Dir),
+        ),
+        Line::styled(
+            format!(
+                "name    {}{}",
+                dialog.name,
+                cursor(dialog.field == SaveAsField::Name)
+            ),
+            field(dialog.field == SaveAsField::Name),
+        ),
+        Line::from(Span::styled(
+            format!("→ {}/{}", dialog.dir, dialog.name),
+            dim(),
+        )),
+        Line::from(Span::styled(
+            "tab: field · enter: next or start · esc: cancel".to_owned(),
+            dim(),
+        )),
+    ];
+    let popup = centered(area, 64.min(area.width), 6);
+    f.render_widget(Clear, popup);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" download as "),
+        ),
+        popup,
+    );
+}
+
+/// The error modal: cause, facts, next steps, full text.
+fn error_overlay(modal: &ErrorModal, area: Rect, f: &mut Frame) {
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled(
+            modal.cause.clone(),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(String::new()),
+    ];
+    for (key, value) in &modal.facts {
+        lines.push(Line::from(vec![
+            Span::styled(format!("{key}: "), dim()),
+            Span::raw(value.clone()),
+        ]));
+    }
+    if !modal.facts.is_empty() {
+        lines.push(Line::from(String::new()));
+    }
+    if let Some(hint) = &modal.hint {
+        lines.push(Line::from(Span::styled("next steps:", dim())));
+        lines.push(Line::from(hint.clone()));
+        lines.push(Line::from(String::new()));
+    }
+    lines.push(Line::from(Span::styled("full text (y copies):", dim())));
+    for row in modal.full.lines() {
+        lines.push(Line::from(Span::styled(row.to_owned(), dim())));
+    }
+    let mut footer = "esc, enter: close · y: copy".to_owned();
+    if modal.retry.is_some() {
+        footer.push_str(" · r: retry");
+    }
+    lines.push(Line::from(String::new()));
+    lines.push(Line::from(Span::styled(footer, dim())));
+    let width = 74.min(area.width);
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let popup = centered(area, width, height);
+    f.render_widget(Clear, popup);
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" {} ", modal.title)),
+            )
+            .wrap(Wrap { trim: false }),
+        popup,
+    );
 }

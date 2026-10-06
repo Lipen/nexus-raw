@@ -57,6 +57,7 @@
 
 pub mod app;
 pub mod args;
+pub mod clipboard;
 pub mod config;
 pub mod net;
 pub mod smoke;
@@ -64,6 +65,9 @@ pub mod tui;
 pub mod ui;
 
 // The flat public surface: binaries and wrappers import from the crate root.
-pub use crate::app::{App, DlEv, DlOutcome, Download, Mode, Msg, Screen, Tab};
+pub use crate::app::{
+    cause_of, App, Card, DlEv, DlOutcome, Download, ErrorModal, Mode, Msg, RepoRow, Retry,
+    SaveAsDialog, Screen, ShaState, SizeState, Tab, Toast,
+};
 pub use crate::args::Args;
 pub use crate::config::{ConfigFile, Nav, ServerCfg};

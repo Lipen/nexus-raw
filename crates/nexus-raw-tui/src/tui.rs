@@ -197,6 +197,11 @@ async fn pump(
                 // The input thread is gone: nothing else will ever arrive.
                 None => return Ok(()),
             },
+            // The 500 ms tick runs only while a toast lives or a card waits
+            // for its metadata: idle time costs nothing.
+            _ = tokio::time::sleep(Duration::from_millis(500)), if app.needs_tick() => {
+                app.handle(Msg::Tick);
+            }
         }
     }
 }

@@ -6,7 +6,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use nexus_raw_core::creds;
-use nexus_raw_core::{ArtifactName, Config, EntryKind, Enumeration, Error, Event, Nxr};
+use nexus_raw_core::model::sibling;
+use nexus_raw_core::primitive;
+use nexus_raw_core::transport::client::NexusClient;
+use nexus_raw_core::{
+    ArtifactName, Config, EntryKind, Enumeration, Error, Event, Nxr, Progress, Summary,
+};
 use tokio::sync::mpsc;
 
 use crate::app::{DlEv, Msg};
@@ -119,13 +124,14 @@ pub fn load_entries(
     });
 }
 
-/// HEADs one file URL: the size line of the `i` info action.
-/// `name` rides along so the app can label the info line on arrival.
+/// HEADs one file URL for the file card: size and content type.
+/// `rel` rides along as the row token: the app drops answers of a card
+/// that is no longer open or shows a different path.
 pub fn head_size(
     tx: mpsc::UnboundedSender<Msg>,
     tab: usize,
     gen: u64,
-    name: String,
+    rel: String,
     url: String,
     auth: Option<String>,
 ) {
@@ -137,13 +143,102 @@ pub fn head_size(
                 .await
         }
         .await;
-        let _ = tx.send(Msg::Head {
-            tab,
-            gen,
-            name,
-            res,
-        });
+        let _ = tx.send(Msg::Head { tab, gen, rel, res });
     });
+}
+
+/// Fetches the `.sha256` sibling marker of one file for the file card.
+/// `None` when the server has no marker; a malformed marker is an error,
+/// because a digest that cannot be read cannot verify anything.
+pub fn fetch_sibling(
+    tx: mpsc::UnboundedSender<Msg>,
+    tab: usize,
+    gen: u64,
+    rel: String,
+    url: String,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let res = async {
+            let (events, _drain) = mpsc::unbounded_channel::<Event>();
+            let progress = Progress::new(events);
+            let client = NexusClient::new(&config(url.clone(), auth.clone()), progress)?;
+            match client.get_small(&url).await? {
+                None => Ok(None),
+                Some(raw) => sibling::parse_line(&String::from_utf8_lossy(&raw))
+                    .map(|sib| Some(sib.digest.as_str().to_owned()))
+                    .map_err(|reason| Error::Mismatch {
+                        name: url.clone(),
+                        detail: format!("the .sha256 marker does not parse: {reason}"),
+                    }),
+            }
+        }
+        .await;
+        let _ = tx.send(Msg::Sibling { tab, gen, rel, res });
+    });
+}
+
+/// Downloads one file with the direct `get` primitive into `out` under `dst`,
+/// verifying the result against the `.sha256` sibling when the server has one.
+/// No enumeration: a single GET, resumable through the `.part` file.
+pub fn fetch_one(
+    tx: mpsc::UnboundedSender<Msg>,
+    url: String,
+    out: PathBuf,
+    dst: PathBuf,
+    auth: Option<String>,
+) {
+    tokio::spawn(async move {
+        let _ = tx.send(Msg::Dl(DlEv::Start { dst, files: 1 }));
+        let res = fetch_one_inner(url, out, auth).await;
+        let _ = tx.send(Msg::Dl(DlEv::Done(res.map(|_size| Summary {
+            uploaded: 0,
+            downloaded: 1,
+            skipped: 0,
+            failed: Vec::new(),
+            removed: 0,
+        }))));
+    });
+}
+
+async fn fetch_one_inner(url: String, out: PathBuf, auth: Option<String>) -> Result<u64, Error> {
+    // The destination folder is explicit (picked with `o` or set in the
+    // config), so creating it here is not an implicit side effect.
+    // A single-file get cannot fall back to the walk's directory creation.
+    if let Some(dir) = out.parent() {
+        tokio::fs::create_dir_all(dir)
+            .await
+            .map_err(|e| Error::io(dir, e))?;
+    }
+    let (events, _drain) = mpsc::unbounded_channel::<Event>();
+    let progress = Progress::new(events);
+    let client = NexusClient::new(&config(url.clone(), auth), progress)?;
+    let expected = match client.get_small(&format!("{url}.sha256")).await? {
+        None => None,
+        Some(raw) => Some(
+            sibling::parse_line(&String::from_utf8_lossy(&raw))
+                .map_err(|reason| Error::Mismatch {
+                    name: url.clone(),
+                    detail: format!("the .sha256 marker does not parse: {reason}"),
+                })?
+                .digest,
+        ),
+    };
+    let got = primitive::get(&client, &url, Some(out), true).await?;
+    if let Some(want) = expected {
+        let have = got.digest.clone().map(|d| d.as_str().to_owned());
+        if have.as_deref() != Some(want.as_str()) {
+            return Err(Error::Mismatch {
+                name: url,
+                detail: format!(
+                    "the downloaded digest is {}, the marker pins {}",
+                    have.as_deref().unwrap_or("none"),
+                    want.as_str()
+                ),
+            });
+        }
+    }
+    Ok(got.size)
 }
 
 /// Lists the children of one folder for the inline expansion.
@@ -187,6 +282,9 @@ pub fn walk_for_download(
     tokio::spawn(async move {
         let res = async {
             match kind {
+                // The empty scope is the whole repository: no trailing slash,
+                // or every name would carry a leading one and fail the grammar.
+                EntryKind::Dir if rel.is_empty() => collect_dir(&repo_url, "", auth).await,
                 EntryKind::Dir => collect_dir(&repo_url, &format!("{rel}/"), auth).await,
                 EntryKind::File => Ok(vec![ArtifactName::parse(&rel)?]),
             }
@@ -313,6 +411,8 @@ mod tests {
     use super::*;
     use mock_nexus::{MockNexus, Scenario};
 
+    use nexus_raw_core::Digest;
+
     /// The search page the mock serves for every listing query: the whole repo in one page.
     fn seed_three_levels(mock: &MockNexus) {
         for path in [
@@ -417,16 +517,79 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
         head_size(tx, 0, 7, "README.txt".into(), url, None);
         match rx.recv().await.unwrap() {
-            Msg::Head {
-                tab,
-                gen,
-                name,
-                res,
-            } => {
+            Msg::Head { tab, gen, rel, res } => {
                 assert_eq!((tab, gen), (0, 7));
-                assert_eq!(name, "README.txt");
+                assert_eq!(rel, "README.txt");
                 let info = res.unwrap();
                 assert_eq!(info.size, Some(22));
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_one_downloads_and_verifies_the_marker() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let body = b"content of README.txt\n".to_vec();
+        mock.insert("repository/raw-main/README.txt", &body);
+        let digest = Digest::of_bytes(&body);
+        let marker = sibling::format_line("README.txt", &digest);
+        mock.insert("repository/raw-main/README.txt.sha256", marker.as_bytes());
+        let url = format!("{}repository/raw-main/README.txt", mock.base_url());
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("README.txt");
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        fetch_one(tx, url, out.clone(), dir.path().to_path_buf(), None);
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, 1),
+            other => panic!("unexpected message: {other:?}"),
+        }
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Done(Ok(summary))) => assert_eq!(summary.downloaded, 1),
+            other => panic!("unexpected message: {other:?}"),
+        }
+        assert_eq!(std::fs::read(&out).unwrap(), body);
+    }
+
+    #[tokio::test]
+    async fn fetch_one_reports_a_diverging_marker() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let body = b"content of README.txt\n";
+        mock.insert("repository/raw-main/README.txt", body.as_slice());
+        // The marker pins somebody else's digest: the transfer must fail loudly.
+        let other = Digest::of_bytes(b"not the payload");
+        let marker = sibling::format_line("README.txt", &other);
+        mock.insert("repository/raw-main/README.txt.sha256", marker.as_bytes());
+        let url = format!("{}repository/raw-main/README.txt", mock.base_url());
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("README.txt");
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        fetch_one(tx, url, out.clone(), dir.path().to_path_buf(), None);
+        while let Some(msg) = rx.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                let err = res.expect_err("the marker mismatch must fail the download");
+                assert!(err.to_string().contains("mismatch"), "{err}");
+                return;
+            }
+        }
+        panic!("the transfer never finished");
+    }
+
+    #[tokio::test]
+    async fn fetch_sibling_parses_the_marker_line() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let body = b"content of README.txt\n".to_vec();
+        let digest = Digest::of_bytes(&body);
+        let marker = sibling::format_line("README.txt", &digest);
+        mock.insert("repository/raw-main/README.txt.sha256", marker.as_bytes());
+        let url = format!("{}repository/raw-main/README.txt.sha256", mock.base_url());
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        fetch_sibling(tx, 0, 3, "README.txt".into(), url, None);
+        match rx.recv().await.unwrap() {
+            Msg::Sibling { tab, gen, rel, res } => {
+                assert_eq!((tab, gen), (0, 3));
+                assert_eq!(rel, "README.txt");
+                assert_eq!(res.unwrap(), Some(digest.as_str().to_owned()));
             }
             other => panic!("unexpected message: {other:?}"),
         }
