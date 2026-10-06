@@ -177,9 +177,11 @@ release v *mode:
       git commit -m "chore: bump the workspace to {{v}}"
     fi
     git push origin master
-    sha="$(git rev-parse HEAD)"
+    sha="$(git rev-parse origin/master)"
+    # The dispatch API takes a branch, not a raw SHA: master is the ref, and
+    # the gate validates whatever HEAD it gets.
     echo "dispatching the release on $sha"
-    gh workflow run release.yml --ref "$sha" $dry
+    gh workflow run release.yml --ref master $dry
     run=""
     for i in 1 2 3 4 5 6; do
       sleep 5
