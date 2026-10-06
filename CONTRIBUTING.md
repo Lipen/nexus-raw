@@ -55,18 +55,19 @@ The recorded session in `docs/assets/cast/` is the exception — it names the bi
 ## Release
 
 ```bash
-just check                        # green on master
-just version X.Y.Z
-# Finalize CHANGELOG.md in the same commit: turn [Unreleased] into [X.Y.Z]
-# with today's date, add the compare link, and start a fresh [Unreleased].
-git commit -am "chore: bump the workspace to X.Y.Z"
-git tag -s vX.Y.Z -m "vX.Y.Z"
-git push origin master --follow-tags
-gh release edit vX.Y.Z --notes-file <(sed -n "/^## \[X.Y.Z\]/,/^## /p" CHANGELOG.md | sed '$d')
+just release X.Y.Z      # bump, changelog, push, dispatch, watch
 ```
 
-The tag starts `.github/workflows/release.yml`: it refuses a tag that disagrees with the workspace version, publishes `nexus-raw-core`, then `mock-nexus`, then `nexus-raw`, then `nexus-raw-tui` (the binary inside stays `nxr-tui`) with the `CARGO_REGISTRY_TOKEN` repository secret, and opens the GitHub release.
-The release body is the section of the same name in `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)): work lands under `[Unreleased]`, and the bump commit finalizes it.
+`just release X.Y.Z` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then dispatches `.github/workflows/release.yml` on that exact commit and watches the run.
+
+The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and only then the finalize job creates the tag and the GitHub release with the notes taken from the same changelog section.
+A tag attests a tree that shipped whole: a failed run leaves no tag.
+A repeat `just release X.Y.Z` is the recovery path: the guards skip whatever is already published, and a hotfix on master rides the fresh dispatch.
+A permanent registry refusal burns the number: bump and go again.
+The tag is created by the workflow and is not signed: the signed commits and the npm provenance carry the trust.
+
+Append `dry` to rehearse: `just release X.Y.Z dry` runs the gate and every build without publishing anything and without creating a tag.
+
 
 `nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.
 The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `darwin-x64`, `darwin-arm64`) through npm trusted publishing.

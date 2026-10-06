@@ -1,135 +1,82 @@
 name: Release
 
-# A tag is the release. The workflow refuses a tag that disagrees with the
-# workspace version, publishes the crates in dependency order, builds the
-# platform binaries, and attaches them to the GitHub release whose generated
-# notes are the changelog.
-# `workflow_dispatch` runs the binary matrix alone: the same build jobs, no
-# crates.io, no release - the way to test this workflow without spending a
-# tag or a version number.
-# The `publish-npm` input is the recovery hatch for a failed tag run: it
-# publishes the npm main package from the dispatched ref.
+# A dispatch is the release. `just release X.Y.Z` bumps the version,
+# finalizes the changelog, pushes master and dispatches this workflow on
+# that exact commit. The pipeline gates on the full suite, builds every
+# platform, publishes the crates, the addons and the npm packages, and only
+# then the finalize job creates the tag and the GitHub release: a tag now
+# attests a tree that shipped whole, and a failed run leaves no tag.
+# `dry-run` runs the gate and every build and rehearsed staging without
+# publishing anything and without creating a tag: the way to test this
+# workflow without spending a version number.
 on:
-  push:
-    tags: [v*]
   workflow_dispatch:
     inputs:
-      publish-npm:
-        description: Publish the npm main package from this ref (recovery for a failed tag run)
+      dry-run:
+        description: Rehearse - gate and builds only, nothing is published, no tag
         type: boolean
         default: false
 
-# Least privilege: builds only read; the two jobs that touch the GitHub
-# release (publish opens it, attach uploads to it) grant the write locally.
+# One release at a time: a second dispatch queues behind the running one
+# instead of interleaving publishes.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# Least privilege: every job reads; the npm job exchanges the workflow
+# identity for a registry credential, and only the finalize job writes to
+# releases and tags.
 permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Publish the crates
-    if: github.event_name == 'push'
+  gate:
+    name: Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    # The job opens the GitHub release the binaries later ride on.
-    permissions:
-      contents: write
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          components: clippy
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
 
-      # The version lives in one place; a tag that disagrees with it would
-      # publish a number nobody wrote down.
-      - name: Tag matches the workspace version
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          workspace="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if [ "$tag" != "$workspace" ]; then
-            echo "tag $GITHUB_REF_NAME does not match workspace version $workspace" >&2
-            exit 1
-          fi
-          echo "releasing $workspace"
+      # The same checks `just check` asserts locally: nothing publishes
+      # until the exact dispatched tree passes the full suite.
+      - name: Run rustfmt
+        run: cargo fmt --all -- --check
 
-      # The same full agreement `just check` asserts locally: the internal
-      # dependency line and the npm package must not drift, and the tag gate
-      # cannot rely on the master CI run that races it here.
-      - name: The whole workspace agrees on the version
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Check the version agrees everywhere
         run: scripts/version-check.sh
 
-      # Order matters: nexus-raw depends on nexus-raw-core by version.
-      # A re-run after a transient failure mid-run must skip what is already
-      # out, or one bad moment would poison every retry forever.
-      - name: Publish nexus-raw-core
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # A re-release of a live number is a bump away; a silent second tag
+      # for the same number is not.
+      - name: The version is not released yet
+        if: ${{ !inputs.dry-run }}
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-core@$version is already on crates.io, skipping"
-          else
-            cargo publish --locked -p nexus-raw-core
+          if git ls-remote --exit-code origin "refs/tags/v$version" > /dev/null 2>&1; then
+            echo "tag v$version already exists: bump the version first" >&2
+            exit 1
           fi
-
-      # crates.io resolves a dependent only after the index carries the
-      # dependency, which takes a moment after the upload.
-      - name: Wait for the index
-        run: sleep 30
-
-      # The mock is a fixture other projects' harnesses drive; it depends on
-      # nothing inside the workspace, so it can publish on its own.
-      - name: Publish mock-nexus
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
-            echo "mock-nexus@$version is already on crates.io, skipping"
-          else
-            cargo publish --locked -p mock-nexus
-          fi
-
-      - name: Publish nexus-raw
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw@$version is already on crates.io, skipping"
-          else
-            cargo publish --locked -p nexus-raw
-          fi
-
-      - name: Wait for the index
-        run: sleep 30
-
-      # The TUI is a leaf: it carries nexus-raw-core, so it publishes after
-      # the library it depends on is already indexed. The crate is
-      # nexus-raw-tui; the binary inside keeps the nxr-tui name.
-      - name: Publish nexus-raw-tui
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-tui@$version is already on crates.io, skipping"
-          else
-            cargo publish --locked -p nexus-raw-tui
-          fi
-
-      - name: Open the GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          echo "releasing $version"
 
   build:
     name: Build ${{ matrix.name }}
+    needs: [gate]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -211,51 +158,89 @@ jobs:
             nxr-*.tar.gz.sha256
           if-no-files-found: error
 
-  attach:
-    name: Attach the binaries
-    needs: [publish, build]
-    # On a tag the archives ride on the release the publish job opened; a
-    # dispatch run has no release, so the files stop at the workflow
-    # artifacts.
-    if: ${{ always() && needs.build.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.publish.result == 'success') }}
+  # Order matters: nexus-raw depends on nexus-raw-core by version, and the
+  # crates go out only after the gate and every platform build agree the
+  # tree is shippable.
+  publish:
+    name: Publish the crates
+    needs: [gate, build]
+    if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # The only job that writes to the GitHub release.
-    permissions:
-      contents: write
+    timeout-minutes: 45
     steps:
-      - name: Collect the archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          pattern: bins-*
-          path: dist
-          merge-multiple: true
+          cache-on-failure: true
 
-      - name: Verify the checksums
-        run: |
-          cd dist
-          cat *.sha256 > SHA256SUMS
-          sha256sum -c SHA256SUMS
-
-      - name: Stop at the workflow artifacts
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: binaries
-          path: dist/*
-          if-no-files-found: error
-
-      - name: Upload to the release
-        if: github.event_name == 'push'
-        # The job has no checkout: without a git remote gh cannot infer the
-        # repository, so the release is named explicitly.
+      # A re-run after a transient failure mid-run must skip what is already
+      # out, or one bad moment would poison every retry forever.
+      - name: Publish nexus-raw-core
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-core@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p nexus-raw-core
+          fi
+
+      # crates.io resolves a dependent only after the index carries the
+      # dependency, which takes a moment after the upload.
+      - name: Wait for the index
+        run: sleep 30
+
+      # The mock is a fixture other projects' harnesses drive; it depends on
+      # nothing inside the workspace, so it can publish on its own.
+      - name: Publish mock-nexus
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
+            echo "mock-nexus@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p mock-nexus
+          fi
+
+      - name: Publish nexus-raw
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p nexus-raw
+          fi
+
+      - name: Wait for the index
+        run: sleep 30
+
+      # The TUI is a leaf: it carries nexus-raw-core, so it publishes after
+      # the library it depends on is already indexed. The crate is
+      # nexus-raw-tui; the binary inside keeps the nxr-tui name.
+      - name: Publish nexus-raw-tui
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-tui@$version is already on crates.io, skipping"
+          else
+            cargo publish --locked -p nexus-raw-tui
+          fi
 
   node:
     name: Node addon ${{ matrix.name }}
+    needs: [gate]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -360,8 +345,10 @@ jobs:
 
   npm:
     name: Publish the npm packages
-    needs: [node]
-    if: ${{ always() && needs.node.result == 'success' }}
+    needs: [node, publish]
+    # A real run publishes only after the crates are out; a rehearsal
+    # exercises the staging and validation with the publish steps off.
+    if: ${{ always() && needs.node.result == 'success' && (needs.publish.result == 'success' || inputs.dry-run) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -425,7 +412,7 @@ jobs:
       # A re-run after a partial publish must skip what is already out,
       # or the loop can never go green.
       - name: Publish the platform packages
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           for d in npm/npm-*/; do
@@ -439,11 +426,9 @@ jobs:
 
       # The dev manifest stays free of version pins: the platform packages
       # do not exist between releases, and a frozen pnpm install would fail
-      # on them, so the release manifest is composed here from the tag.
+      # on them, so the release manifest is composed here.
       # Staging is pure local file ops and runs on dispatch too: the
       # rehearsal must exercise the step that once burned a release.
-      # The version comes from the manifest, which the tag check has
-      # already matched against the ref.
       - name: Stage the main package
         run: |
           node <<'EOF'
@@ -469,10 +454,8 @@ jobs:
       # The main package declares the platform packages as its
       # optionalDependencies: publishing it while one of them is missing
       # would silently break `require` for every consumer of this version.
-      # The guard runs wherever the main package does, so a recovery
-      # dispatch cannot outpace the packages it depends on.
       - name: The platform packages are on the registry
-        if: ${{ github.event_name == 'push' || inputs.publish-npm == true }}
+        if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           for name in nexus-raw-linux-x64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
@@ -496,7 +479,7 @@ jobs:
           done
 
       - name: Publish the main package
-        if: ${{ github.event_name == 'push' || inputs.publish-npm == true }}
+        if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
@@ -504,6 +487,117 @@ jobs:
           else
             npm publish ./pkg-main --provenance --access public
           fi
+
+  # The last job, and the only one that touches tags: after every artifact
+  # is confirmed visible on its registry, the tree gets its tag and its
+  # release. A run that stops earlier leaves no tag, so a fix is a push and
+  # a fresh dispatch, never a moved tag.
+  finalize:
+    name: Tag and publish the release
+    needs: [publish, build, node, npm]
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      # The gate checked the tag before anything ran; this re-checks the
+      # outcome after everything ran. The 0.2.0 release once shipped green
+      # with a package missing from the registry: the tag only lands when
+      # every artifact of this version is actually served.
+      - name: Every artifact is visible on the registries
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          fail=0
+          for c in nexus-raw-core nexus-raw nexus-raw-tui; do
+            ok=0
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if curl -sf "https://index.crates.io/ne/xu/$c" | grep -q "\"vers\":\"$version\""; then
+                ok=1
+                break
+              fi
+              echo "$c@$version not visible yet (attempt $attempt), waiting"
+              sleep 30
+            done
+            [ "$ok" = 1 ] || { echo "$c@$version is not on crates.io" >&2; fail=1; }
+          done
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
+              ok=1
+              break
+            fi
+            echo "mock-nexus@$version not visible yet (attempt $attempt), waiting"
+            sleep 30
+          done
+          [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
+          for name in nexus-raw nexus-raw-linux-x64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
+            ok=0
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if npm view "$name@$version" version > /dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              echo "$name@$version not visible yet (attempt $attempt), waiting"
+              sleep 30
+            done
+            [ "$ok" = 1 ] || { echo "$name@$version is not on npm" >&2; fail=1; }
+          done
+          [ "$fail" = 0 ] || exit 1
+          echo "every artifact of $version is live"
+
+      - name: Collect the archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: bins-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify the checksums
+        run: |
+          cd dist
+          cat *.sha256 > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      # The release notes are the changelog: the same section `just release`
+      # finalized into the tree. A section that names no version falls back
+      # to the generated notes instead of shipping the wrong text.
+      - name: Notes from the changelog
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          python3 - "$version" <<'PYEOF'
+          import sys
+          version = sys.argv[1]
+          s = open('CHANGELOG.md').read()
+          marker = f'## [{version}]'
+          if marker not in s:
+              open('/tmp/notes.md', 'w').write('')
+              print(f'no {marker} section, the release falls back to generated notes')
+          else:
+              start = s.index(marker)
+              end = s.index('\n## [', start + 1)
+              open('/tmp/notes.md', 'w').write(s[start:end].rstrip() + '\n')
+          PYEOF
+
+      - name: Create the tag and the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if [ -s /tmp/notes.md ]; then
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file /tmp/notes.md
+          else
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --generate-notes
+          fi
+          gh release upload "v$version" dist/nxr-*.tar.gz dist/SHA256SUMS
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
 # weight, the npm registry above is the artifact channel.

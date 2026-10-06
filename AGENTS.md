@@ -61,7 +61,7 @@ just nxr -- --help
 just stand        # the real-Nexus battery (needs docker)
 ```
 
-[CONTRIBUTING.md](CONTRIBUTING.md) carries the release checklist: one version for the workspace, `just version X.Y.Z`, a signed tag, and a workflow that publishes the crates in dependency order.
+[CONTRIBUTING.md](CONTRIBUTING.md) carries the release checklist: `just release X.Y.Z` bumps, pushes and dispatches, and the workflow publishes everything, then tags the tree it shipped.
 
 The conformance suites drive `nexus-raw-core` and the `nxr` binary against `mock-nexus` scenarios: the core suite through the facade, the CLI suite through the real binary.
 The workspace also carries unit tests in the core library, unit tests in the napi bindings and doctests, and `cargo test --workspace` runs them all.

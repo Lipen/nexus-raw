@@ -132,6 +132,68 @@ bump part:
     echo "bumping $cur -> $next"
     exec just version "$next"
 
+# The whole release act: bump, changelog, push, dispatch, watch. A repeat
+# call for the same number is the recovery path: the version step is
+# idempotent, the changelog date refreshes to today, the guards in the
+# workflow skip whatever is already published.
+[doc('Release X.Y.Z: bump, changelog, push, dispatch, watch. Append "dry" to rehearse: `just release 0.6.0 dry`.')]
+[group('release')]
+release v *mode:
+    #!/bin/sh
+    set -eu
+    case "{{v}}" in
+      [0-9]*.[0-9]*.[0-9]*) ;;
+      *) echo "release: {{v}} is not X.Y.Z" >&2; exit 2 ;;
+    esac
+    dry=""
+    for m in {{mode}}; do
+      case "$m" in
+        dry) dry="-f dry-run=true" ;;
+        *) echo "release: unknown mode '$m' (want dry)" >&2; exit 2 ;;
+      esac
+    done
+    just version "{{v}}"
+    python3 - "{{v}}" <<'PYEOF'
+    import datetime, re, sys
+    v = sys.argv[1]
+    p = 'CHANGELOG.md'
+    s = open(p).read()
+    today = datetime.date.today().isoformat()
+    if f'## [{v}]' in s:
+        pat = '## \\[' + re.escape(v) + '\\] - \\d' + '{4}-\\d{2}-\\d{2}'
+        s = re.sub(pat, '## [' + v + '] - ' + today, s, count=1)
+        print(f'changelog: [{v}] moves to {today}')
+    else:
+        assert '## [Unreleased]' in s, 'no [Unreleased] section to finalize'
+        s = s.replace('## [Unreleased]', f'## [Unreleased]\n\nNothing yet.\n\n## [{v}] - {today}', 1)
+        m = re.search(r'\[Unreleased\]: (\S+/compare/)(v[\d.]+)\.\.\.HEAD', s)
+        assert m, 'the [Unreleased] compare link is missing'
+        s = s.replace(m.group(0), f'[Unreleased]: {m.group(1)}v{v}...HEAD\n[{v}]: {m.group(1)}{m.group(2)}...v{v}', 1)
+        print(f'changelog: [Unreleased] finalized as [{v}] - {today}')
+    open(p, 'w').write(s)
+    PYEOF
+    git add -A
+    if ! git diff --cached --quiet; then
+      git commit -m "chore: bump the workspace to {{v}}"
+    fi
+    git push origin master
+    sha="$(git rev-parse HEAD)"
+    echo "dispatching the release on $sha"
+    gh workflow run release.yml --ref "$sha" $dry
+    run=""
+    for i in 1 2 3 4 5 6; do
+      sleep 5
+      run="$(gh run list --workflow=Release --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+      [ -n "$run" ] && break
+    done
+    [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
+    gh run watch "$run" --interval 30 --exit-status
+    if [ -n "$dry" ]; then
+      echo "rehearsal green: $sha"
+    else
+      echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v{{v}}"
+    fi
+
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('release')]
 [group('check')]
@@ -145,7 +207,7 @@ build *args:
 
 [doc('Release build of the nxr binary (static-friendly, stripped).')]
 [group('build')]
-release:
+build-release:
     {{cargo}} build --release -p nexus-raw
 
 [doc('Run the Node example: link: dependency, claim-first up, channel, down, verify.')]
