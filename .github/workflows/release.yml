@@ -592,12 +592,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if [ -s /tmp/notes.md ]; then
-            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file /tmp/notes.md
+          # Idempotent like every publish guard: a rerun after a half-done
+          # finalize skips the create and refreshes the uploads.
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "release v$version already exists, keeping it"
           else
-            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --generate-notes
+            if [ -s /tmp/notes.md ]; then
+              gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file /tmp/notes.md
+            else
+              gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --generate-notes
+            fi
           fi
-          gh release upload "v$version" dist/nxr-*.tar.gz dist/SHA256SUMS
+          gh release upload "v$version" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead
 # weight, the npm registry above is the artifact channel.
