@@ -480,13 +480,13 @@ jobs:
             # right after the platform publish can miss a package that landed.
             # Retry before refusing, so a green release never dies to propagation.
             ok=0
-            for attempt in 1 2 3 4 5; do
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
               if npm view "$name@$version" version > /dev/null 2>&1; then
                 ok=1
                 break
               fi
               echo "$name@$version not visible yet (attempt $attempt), waiting"
-              sleep 15
+              sleep 30
             done
             if [ "$ok" != 1 ]; then
               echo "refusing to publish nexus-raw@$version: $name@$version is not on the registry, its optionalDependencies entry would fail to resolve" >&2
