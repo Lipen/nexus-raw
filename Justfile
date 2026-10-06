@@ -219,6 +219,41 @@ example-node:
     cargo build -q -p nexus-raw-napi
     cd examples/node && pnpm install && node publish-and-consume.mjs
 
+# The panel stand, exactly the README's run: build the addon and the mock,
+# serve the mock on :8099, seed a three-level tree, start the panel on :8123.
+# The mock dies with the recipe: Ctrl-C the panel and both are gone.
+[doc('Run the web panel against the mock: builds, seeds, serves on :8123.')]
+[group('examples')]
+panel *args:
+    #!/bin/sh
+    set -e
+    cargo build -q -p mock-nexus -p nexus-raw -p nexus-raw-napi
+    target/debug/mock-nexus atomic --port 8099 &
+    mock=$!
+    trap 'kill "$mock" 2>/dev/null || :' EXIT INT TERM
+    i=0
+    while ! curl -sf http://127.0.0.1:8099/service/rest/v1/repositories >/dev/null 2>&1; do
+        i=$((i + 1))
+        if [ "$i" -gt 100 ]; then
+            echo 'panel: the mock did not answer on :8099 (a busy port?)' >&2
+            exit 1
+        fi
+        sleep 0.1
+    done
+    rm -rf /tmp/panel-seed
+    mkdir -p /tmp/panel-seed/app/core/util /tmp/panel-seed/app/bin /tmp/panel-seed/dist
+    printf 'readme\n' > /tmp/panel-seed/README.txt
+    printf 'lib\n' > /tmp/panel-seed/app/core/lib.rs
+    printf 'math\n' > /tmp/panel-seed/app/core/util/math.rs
+    printf 'shebang\n' > /tmp/panel-seed/app/bin/nxr.sh
+    printf 'svg\n' > /tmp/panel-seed/dist/logo.svg
+    target/debug/nxr up /tmp/panel-seed http://127.0.0.1:8099/repository/raw-main/
+    printf '{"continuationToken":null,"items":[{"path":"README.txt"},{"path":"app/core/lib.rs"},{"path":"app/core/util/math.rs"},{"path":"app/bin/nxr.sh"},{"path":"dist/logo.svg"}]}' > /tmp/search-page.json
+    target/debug/nxr put http://127.0.0.1:8099/service/rest/v1/search/assets -f /tmp/search-page.json
+    cd examples/panel
+    pnpm install
+    node server.mjs --url http://127.0.0.1:8099/ {{args}}
+
 [doc('Run the Rust example: standalone crate on a path dependency.')]
 [group('examples')]
 example-rust:

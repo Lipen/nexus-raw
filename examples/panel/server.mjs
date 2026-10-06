@@ -7,6 +7,8 @@
 // - GET  /api/repos?url=      the repository list of a server
 // - GET  /api/entries?url=    the immediate children of a raw directory URL
 // - POST /api/down            starts a download job, answers `{id}`
+// - POST /api/rm              starts a delete job (or answers a dry-run plan)
+// - POST /api/put             uploads a raw body to `?url=` with the sha marker
 // - GET  /api/progress/<id>   the SSE stream of a job, one `data:` frame per step
 //
 // Startup is strict by default: every `--url` server is probed with
@@ -30,6 +32,9 @@ const indexHtml = await readFile(join(here, 'index.html'))
 // One kept job per download: the frame log doubles as the replay buffer.
 const jobs = new Map()
 const JOB_HISTORY_MAX = 50
+
+// The memory cap of one /api/put body: a single uploaded file.
+const PUT_BODY_CAP = 100 * 1024 * 1024
 
 function rememberJob(job) {
   jobs.set(job.id, job)
@@ -61,7 +66,7 @@ function publish(job, frame) {
 }
 
 async function runDownload(job, repoUrl, dir, names) {
-  publish(job, { type: 'start', url: repoUrl, dir, names: names.length })
+  publish(job, { type: 'start', op: 'down', url: repoUrl, dir, names: names.length })
   try {
     const summary = await nxr.down(repoUrl, dir, {
       names,
@@ -99,22 +104,36 @@ function sendJson(res, status, body) {
   res.end(data)
 }
 
-function readBody(req, limit = 1024 * 1024) {
+// The raw bytes of a request body, refusing anything past `limit`.
+function readRawBody(req, limit = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0
     const chunks = []
     req.on('data', (chunk) => {
       size += chunk.length
       if (size > limit) {
-        reject(badRequest('request body too large'))
-        req.destroy()
+        req.pause()
+        reject(badRequest(`request body too large (the cap is ${limit} bytes)`))
+        // The error reply needs a moment to flush before the socket dies.
+        setTimeout(() => req.destroy(), 250)
         return
       }
       chunks.push(chunk)
     })
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
+}
+
+// A JSON body with a size cap: only the parse failure becomes "must be JSON",
+// a cap error from `readRawBody` passes through with its own message.
+async function readJson(req, limit) {
+  const raw = (await readRawBody(req, limit)).toString('utf8')
+  try {
+    return JSON.parse(raw || '{}')
+  } catch {
+    throw badRequest('the request body must be JSON')
+  }
 }
 
 // The URL query parameter every GET endpoint shares.
@@ -174,14 +193,27 @@ async function walkFiles(dirUrl, prefix, out) {
 
 async function startDownload(body) {
   const { url, path, dir } = body ?? {}
+  if (typeof dir !== 'string' || dir.length === 0) {
+    throw badRequest('dir must be a local target directory path')
+  }
+  const split = validateSubtree(url, path)
+  const files = await walkFiles(subtreeUrl(split.repoUrl, path), path, [])
+  if (files.length === 0) {
+    throw badRequest(`no files under ${url}`)
+  }
+  const job = newJob()
+  runDownload(job, split.repoUrl, dir, files)
+  return { id: job.id }
+}
+
+// The URL validation every transferring or destructive call shares: a
+// repository directory URL whose subtree path agrees with the body.
+function validateSubtree(url, path) {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw badRequest('url must be an http(s) directory URL')
   }
   if (typeof path !== 'string' || !validSubtree(path)) {
     throw badRequest('path must be a relative subtree path inside the repository, possibly empty')
-  }
-  if (typeof dir !== 'string' || dir.length === 0) {
-    throw badRequest('dir must be a local target directory path')
   }
   const split = splitRepoUrl(url)
   if (split === null) {
@@ -190,18 +222,65 @@ async function startDownload(body) {
   if (split.subtree !== path) {
     throw badRequest(`path ${JSON.stringify(path)} does not match the URL subtree ${JSON.stringify(split.subtree)}`)
   }
-  const dirUrl = `${split.repoUrl}${path === '' ? '' : `${path.split('/').map(encodeURIComponent).join('/')}/`}`
-  // Names are repository-relative: the walk starts at the subtree but labels
-  // every file with the subtree prefix, exactly what `down` expects against
-  // the repository URL.
-  const files = await walkFiles(dirUrl, path, [])
-  if (files.length === 0) {
-    throw badRequest(`no files under ${url}`)
-  }
+  return split
+}
+
+// The browse URL of a subtree below the repository root.
+function subtreeUrl(repoUrl, path) {
+  return `${repoUrl}${path === '' ? '' : `${path.split('/').map(encodeURIComponent).join('/')}/`}`
+}
+
+function newJob() {
   const job = { id: randomUUID(), frames: [], listeners: new Set(), done: false }
   rememberJob(job)
-  runDownload(job, split.repoUrl, dir, files)
+  return job
+}
+
+// The delete twin of the download job: same walk, same SSE stream shape.
+// With `file` the scope is one entry of the directory at `path` and the name
+// list is that single file, no walk. With `dryRun` the answer is the plan
+// (`rm` vs `missing` plus sizes) and nothing is deleted: the browser shows
+// the list before the real run.
+async function startRemove(body) {
+  const { url, path, file, dryRun } = body ?? {}
+  if (file !== undefined && (typeof file !== 'string' || file === '' || file.includes('/') || !validSubtree(file))) {
+    throw badRequest('file must be one path segment naming an entry inside the directory at path')
+  }
+  const split = validateSubtree(url, path)
+  let names
+  let scope
+  if (file !== undefined) {
+    names = [path === '' ? file : `${path}/${file}`]
+    scope = names[0]
+  } else {
+    names = await walkFiles(subtreeUrl(split.repoUrl, path), path, [])
+    scope = path === '' ? '(repository root)' : path
+  }
+  if (dryRun === true) {
+    if (names.length === 0) {
+      return { actions: [] }
+    }
+    return nxr.rm(split.repoUrl, { names, dryRun: true })
+  }
+  if (names.length === 0) {
+    throw badRequest(`no files under ${url}`)
+  }
+  const job = newJob()
+  runRemove(job, split.repoUrl, scope, names)
   return { id: job.id }
+}
+
+async function runRemove(job, repoUrl, scope, names) {
+  publish(job, { type: 'start', op: 'rm', url: repoUrl, dir: scope, names: names.length })
+  try {
+    const summary = await nxr.rm(repoUrl, {
+      names,
+      onEvent: (event) => publish(job, { type: 'event', event }),
+    })
+    publish(job, { type: 'end', ok: true, summary })
+  } catch (err) {
+    publish(job, { type: 'end', ok: false, error: err?.message ?? String(err), exitCode: err?.exitCode, hint: err?.hint })
+  }
 }
 
 function serveProgress(req, res, id) {
@@ -256,13 +335,21 @@ async function route(req, res) {
     return
   }
   if (req.method === 'POST' && url.pathname === '/api/down') {
-    let body
-    try {
-      body = JSON.parse((await readBody(req)) || '{}')
-    } catch {
-      throw badRequest('the request body must be JSON')
-    }
-    sendJson(res, 200, await startDownload(body))
+    sendJson(res, 200, await startDownload(await readJson(req)))
+    return
+  }
+  if (req.method === 'POST' && url.pathname === '/api/rm') {
+    sendJson(res, 200, await startRemove(await readJson(req)))
+    return
+  }
+  // A single-file upload: the raw body IS the file, `nxr.put` stages it and
+  // writes the `.sha256` marker itself. The cap bounds one file in memory.
+  if (req.method === 'POST' && url.pathname === '/api/put') {
+    const target = queryUrl(url)
+    const withSha = url.searchParams.get('sha') !== '0'
+    const body = await readRawBody(req, PUT_BODY_CAP)
+    const result = await nxr.put(target, body, { sha: withSha })
+    sendJson(res, 200, { size: result.size, sha256: result.sha256 ?? null })
     return
   }
   const progress = req.method === 'GET' && url.pathname.match(/^\/api\/progress\/([A-Za-z0-9-]+)$/)
@@ -356,7 +443,12 @@ if (!lazy) {
 const server = createServer((req, res) => {
   route(req, res).catch((err) => {
     const payload = errorPayload(err)
-    sendJson(res, err instanceof HttpError ? err.status : 502, payload)
+    try {
+      sendJson(res, err instanceof HttpError ? err.status : 502, payload)
+    } catch {
+      // The socket is already gone (a destroyed upload, a dropped client):
+      // there is nothing left to answer.
+    }
   })
 })
 

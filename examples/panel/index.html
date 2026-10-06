@@ -4,16 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nexus-raw panel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='2' width='14' height='12' rx='2' fill='%234da3ff'/%3E%3Cpath d='M8 4.5v6M5.2 8l2.8 2.8L10.8 8' stroke='%2310151b' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #10151b;
     --panel: #171e26;
+    --input: #0d1218;
     --line: #26313c;
     --text: #d9e2ea;
     --dim: #8496a5;
     --accent: #4da3ff;
     --ok: #46c483;
     --bad: #e0716f;
+    --warn: #d8a657;
   }
   * { box-sizing: border-box; }
   body {
@@ -45,18 +48,30 @@
     padding: 12px;
     min-height: 220px;
   }
-  .pane h2 { font-size: 13px; margin: 0 0 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
-  form { display: flex; gap: 8px; margin-bottom: 10px; }
-  input[type="url"], input[type="text"] {
-    flex: 1;
-    background: #0d1218;
+  section.wide {
+    margin: 0 20px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  h2 {
+    font-size: 13px;
+    margin: 0 0 10px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  form { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  input {
+    background: var(--input);
     color: var(--text);
     border: 1px solid var(--line);
     border-radius: 6px;
     padding: 7px 9px;
     font: inherit;
   }
-  input:focus { outline: 1px solid var(--accent); }
+  input:disabled { opacity: 0.5; }
   button {
     background: #1d3450;
     color: var(--text);
@@ -65,32 +80,110 @@
     padding: 7px 12px;
     font: inherit;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
   }
-  button:hover { background: #24425f; }
+  button:hover:not(:disabled) { background: #24425f; }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.danger { background: #3d1f22; border-color: #6b2f31; }
+  button.danger:hover:not(:disabled) { background: #55282b; }
+  button.icon-btn { padding: 3px 7px; line-height: 0; }
+  button.retry { padding: 2px 10px; font-size: 12px; }
+  a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .hint { color: var(--dim); }
+  .form-error {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--bad);
+    font-size: 12.5px;
+    margin: 0 0 8px;
+  }
+  .form-error[hidden] { display: none; }
   ul.list { list-style: none; margin: 0; padding: 0; }
   ul.list li {
     padding: 6px 8px;
     border-radius: 6px;
     display: flex;
     gap: 8px;
-    align-items: baseline;
+    align-items: center;
+    transition: background 0.15s ease, color 0.15s ease;
   }
   ul.list li.clickable { cursor: pointer; }
+  #repo-list li:nth-child(even), #entry-list li:nth-child(even) { background: rgba(255, 255, 255, 0.025); }
   ul.list li.clickable:hover { background: #1f2933; }
   ul.list li.selected { background: #20324a; }
+  ul.list li.active { background: #20324a; box-shadow: inset 0 0 0 1px var(--accent); }
   ul.list li.disabled { opacity: 0.45; }
-  .name { color: var(--text); }
-  li.clickable .name:hover { color: var(--accent); }
-  .dir .name { font-weight: 600; }
-  .kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
-  .kind.group { color: #d8a657; }
+  ul.list li.empty { color: var(--dim); font-style: italic; }
+  .icon { flex: none; color: var(--dim); }
+  .dir .icon { color: var(--warn); }
+  .row-name {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--text);
+    text-decoration: none;
+    min-width: 0;
+  }
+  li.clickable:hover .row-name, a.row-name:hover { color: var(--accent); }
+  .row-name .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badges { display: flex; gap: 6px; align-items: center; margin-left: auto; flex: none; }
+  .kind {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--dim);
+  }
+  .kind.group { color: var(--warn); }
   .kind.hosted { color: var(--ok); }
-  .url { color: var(--dim); font-size: 12px; margin-left: auto; }
-  .hint { color: var(--dim); }
+  .url {
+    color: var(--dim);
+    font-size: 12px;
+    margin-left: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skeleton .bone {
+    height: 11px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #1a222c 25%, #232e3a 45%, #1a222c 65%);
+    background-size: 200% 100%;
+    animation: shimmer 1.1s infinite linear;
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  #tree-wrap { position: relative; }
+  #drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 12px;
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    background: rgba(16, 21, 27, 0.88);
+    color: var(--accent);
+    font-weight: 600;
+    pointer-events: none;
+  }
+  #drop-overlay[hidden] { display: none; }
   nav.crumbs {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
+    align-items: center;
     margin-bottom: 10px;
     font-size: 13px;
   }
@@ -98,30 +191,157 @@
   nav.crumbs a:hover { text-decoration: underline; }
   nav.crumbs .sep { color: var(--dim); }
   nav.crumbs .here { color: var(--text); font-weight: 600; }
-  section.wide {
-    margin: 0 20px 12px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 12px;
+  .actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+  .actions-row form { margin-bottom: 0; flex: 1; min-width: 300px; }
+  #down-note { color: var(--dim); font-size: 12.5px; margin: 8px 0 0; }
+  #uploads { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+  #uploads:empty { display: none; }
+  #uploads-tally { font-size: 12px; margin: 0 0 8px; }
+  #uploads-tally:empty { display: none; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 1fr) 2fr auto;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+    padding: 2px 4px;
   }
-  section.wide h2 { font-size: 13px; margin: 0 0 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
-  #down-note { color: var(--dim); }
-  #log {
-    margin: 0;
-    background: #0d1218;
+  .bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-name .icon { margin-right: 4px; }
+  .bar {
+    height: 8px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    transition: width 0.2s ease;
+    background: var(--accent);
+  }
+  .fill.uploading { background: var(--warn); }
+  .fill.downloading { background: var(--accent); }
+  .fill.failed { background: var(--bad); }
+  .fill.indet {
+    width: 35%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: slide 1.2s infinite ease-in-out;
+  }
+  .fill.indet.uploading { background: linear-gradient(90deg, transparent, var(--warn), transparent); }
+  @keyframes slide {
+    from { transform: translateX(-110%); }
+    to { transform: translateX(320%); }
+  }
+  .bar-num { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tally { font-size: 12px; color: var(--dim); }
+  .tally:empty { display: none; }
+  .bars { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+  details.job {
     border: 1px solid var(--line);
     border-radius: 6px;
-    padding: 10px;
-    max-height: 260px;
+    margin-bottom: 8px;
+    background: #131a22;
+  }
+  details.job summary {
+    cursor: pointer;
+    padding: 7px 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font: 12px/1.4 ui-monospace, monospace;
+    list-style: none;
+  }
+  details.job summary::-webkit-details-marker { display: none; }
+  .op-chip {
+    flex: none;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    background: #1d3450;
+    color: var(--accent);
+  }
+  .op-chip.rm { background: #3d1f22; color: var(--bad); }
+  .job-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job-status { margin-left: auto; flex: none; }
+  .job-status.ok { color: var(--ok); }
+  .job-status.bad { color: var(--bad); }
+  .job-status.warn { color: var(--warn); }
+  .job-body { padding: 0 10px 10px; }
+  .job-log, #log {
+    margin: 0;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
     overflow-y: auto;
     font: 12px/1.6 ui-monospace, monospace;
     white-space: pre-wrap;
     word-break: break-all;
   }
-  #log .ok { color: var(--ok); }
-  #log .bad { color: var(--bad); }
-  #log .dim { color: var(--dim); }
+  .job-log { max-height: 180px; }
+  #log { margin-top: 10px; max-height: 220px; padding: 10px; }
+  .job-log .ok, #log .ok { color: var(--ok); }
+  .job-log .bad, #log .bad { color: var(--bad); }
+  .job-log .dim, #log .dim { color: var(--dim); }
+  .job-log .warn, #log .warn { color: var(--warn); }
+  #toasts {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 360px;
+  }
+  .toast {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    animation: pop 0.18s ease;
+    word-break: break-word;
+  }
+  .toast.ok { border-left-color: var(--ok); }
+  .toast.bad { border-left-color: var(--bad); }
+  .toast.warn { border-left-color: var(--warn); }
+  @keyframes pop {
+    from { transform: translateY(-6px); opacity: 0; }
+  }
+  dialog {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    width: min(540px, 92vw);
+  }
+  dialog::backdrop { background: rgba(5, 8, 12, 0.6); }
+  dialog h3 { margin: 0 0 6px; font-size: 15px; }
+  ul.plan {
+    list-style: none;
+    margin: 8px 0;
+    padding: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: 12px/1.7 ui-monospace, monospace;
+  }
+  ul.plan li { display: flex; gap: 8px; align-items: baseline; }
+  ul.plan .mark { flex: none; }
+  ul.plan li.missing { color: var(--dim); }
+  ul.plan .size { margin-left: auto; color: var(--dim); }
+  .dialog-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -131,55 +351,173 @@
 </header>
 
 <main>
-  <section class="pane" id="pane-repos">
-    <h2>Server and repositories</h2>
+  <section class="pane" aria-labelledby="repos-h">
+    <h2 id="repos-h">Server and repositories</h2>
     <form id="server-form">
-      <input id="server-url" type="url" value="http://127.0.0.1:8099" required>
-      <button type="submit">List repositories</button>
+      <input id="server-url" type="url" value="http://127.0.0.1:8099" required aria-label="Nexus server URL" placeholder="http://127.0.0.1:8099">
+      <button type="submit" id="repos-btn">List repositories</button>
     </form>
-    <ul class="list" id="repo-list"></ul>
+    <p class="form-error" id="repo-error" role="alert" hidden></p>
+    <ul class="list" id="repo-list" aria-label="Repositories"></ul>
   </section>
 
-  <section class="pane" id="pane-browser">
-    <h2>Browser</h2>
-    <nav class="crumbs" id="crumbs"></nav>
-    <p class="hint" id="browser-hint">Pick a raw repository on the left.</p>
-    <ul class="list" id="entry-list"></ul>
+  <section class="pane" id="pane-browser" aria-labelledby="browser-h">
+    <h2 id="browser-h">Browser</h2>
+    <nav class="crumbs" id="crumbs" aria-label="Path"></nav>
+    <p class="form-error" id="entry-error" role="alert" hidden></p>
+    <p class="hint" id="browser-hint" aria-live="polite">Pick a raw repository on the left.</p>
+    <div id="tree-wrap">
+      <div id="drop-overlay" hidden></div>
+      <ul class="list" id="entry-list" role="listbox" aria-label="Directory entries" tabindex="0"></ul>
+    </div>
+    <div id="uploads" aria-label="Upload progress"></div>
+    <p class="tally dim" id="uploads-tally" aria-live="polite"></p>
+    <form id="upload-form">
+      <input id="upload-input" type="file" multiple aria-label="Files to upload into the current directory">
+      <button type="submit" id="upload-btn" disabled>Upload here</button>
+      <span class="hint">or drop files onto the tree</span>
+    </form>
   </section>
 </main>
 
-<section class="wide" id="download">
-  <h2>Download</h2>
-  <p class="hint" id="down-scope">Scope: nothing picked yet.</p>
-  <form id="down-form">
-    <input id="down-dir" type="text" value="panel-downloads" required>
-    <button type="submit">Download this directory</button>
-    <span id="down-note"></span>
-  </form>
+<section class="wide" id="transfer" aria-labelledby="transfer-h">
+  <h2 id="transfer-h">Transfer</h2>
+  <p class="hint" id="down-scope" aria-live="polite">Scope: nothing picked yet.</p>
+  <div class="actions-row">
+    <form id="down-form">
+      <input id="down-dir" type="text" value="panel-downloads" required aria-label="Local target directory">
+      <button type="submit" id="down-btn" disabled>Download this directory</button>
+    </form>
+    <button type="button" id="rm-btn" class="danger" disabled>Delete this directory…</button>
+  </div>
+  <p class="form-error" id="down-error" role="alert" hidden></p>
+  <p class="hint" id="down-note"></p>
 </section>
 
-<section class="wide" id="progress">
-  <h2>Progress</h2>
-  <pre id="log"></pre>
+<section class="wide" id="progress" aria-labelledby="progress-h">
+  <h2 id="progress-h">Progress</h2>
+  <div id="jobs"></div>
+  <pre id="log" aria-live="polite" aria-label="Job and stream log"></pre>
 </section>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<dialog id="rm-dialog" aria-labelledby="rm-dialog-h">
+  <h3 id="rm-dialog-h">Delete plan</h3>
+  <p class="hint" id="rm-dialog-scope"></p>
+  <ul class="plan" id="rm-plan"></ul>
+  <p class="hint" id="rm-dialog-tally"></p>
+  <div class="dialog-row">
+    <button type="button" id="rm-cancel">Cancel</button>
+    <button type="button" id="rm-confirm" class="danger">Delete</button>
+  </div>
+</dialog>
 
 <script>
 'use strict'
 
 // The browser is a plain file tree over `lsEntries`: breadcrumbs above,
 // `name/` rows for folders, `name` rows for files, any depth.
-const state = { serverUrl: null, repoUrl: null, repoName: null, dirSegs: [] }
+// Downloads, deletes and uploads report through SSE job cards with bars;
+// uploads stream their own XHR progress.
+const state = { serverUrl: null, repoUrl: null, repoName: null, dirSegs: [], activeIdx: -1 }
+
+const LS = { server: 'panel.serverUrl', dir: 'panel.downDir', pos: 'panel.position' }
 
 const $ = (id) => document.getElementById(id)
 
 const esc = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 
+function el(tag, cls, text) {
+  const n = document.createElement(tag)
+  if (cls) n.className = cls
+  if (text !== undefined) n.textContent = text
+  return n
+}
+
+function fmtBytes(n) {
+  if (n == null) return '?'
+  if (n < 1024) return `${n} B`
+  const units = ['KiB', 'MiB', 'GiB', 'TiB']
+  let v = n
+  let i = -1
+  do {
+    v /= 1024
+    i++
+  } while (v >= 1024 && i < units.length - 1)
+  return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`
+}
+
+const ICON = {
+  repo: `<svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"/><path d="M2.5 3.5v9c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2v-9"/><path d="M2.5 8c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2"/></svg>`,
+  dir: `<svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2c.42 0 .82.18 1.1.49L8.44 3.7h4.86c.94 0 1.7.76 1.7 1.7v6.9c0 .94-.76 1.7-1.7 1.7H3.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>`,
+  file: `<svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 1.5h5.2L13 5.3v8.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1z"/><path d="M9 1.8v3.7h3.7"/></svg>`,
+  trash: `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4"/><path d="M6.6 6.8v4.4M9.4 6.8v4.4"/></svg>`,
+}
+
+// ---- small UI services ----------------------------------------------------
+
+function toast(message, kind = 'info', ms = 5000) {
+  const t = el('div', `toast ${kind}`, message)
+  t.title = 'Click to dismiss'
+  const close = () => t.remove()
+  t.addEventListener('click', close)
+  $('toasts').append(t)
+  setTimeout(close, ms)
+}
+
 function logLine(text, cls) {
-  const line = document.createElement('div')
-  if (cls) line.className = cls
-  line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`
+  const line = el('div', cls, `[${new Date().toLocaleTimeString()}] ${text}`)
   $('log').append(line)
   $('log').scrollTop = $('log').scrollHeight
+}
+
+// An inline error under the form it belongs to, with an optional Retry.
+// The flow log stays reserved for job and stream output.
+function setError(box, message, retryFn) {
+  box.replaceChildren(el('span', null, message))
+  if (retryFn) {
+    const b = el('button', 'retry', 'Retry')
+    b.type = 'button'
+    b.addEventListener('click', () => {
+      clearError(box)
+      retryFn()
+    })
+    box.append(b)
+  }
+  box.hidden = false
+}
+
+function clearError(box) {
+  box.hidden = true
+  box.replaceChildren()
+}
+
+// Button busy state: disabled, relabelled, aria-busy, restored in finally.
+function busy(btn, label, run) {
+  if (btn.disabled) return Promise.resolve()
+  const orig = btn.textContent
+  btn.disabled = true
+  btn.setAttribute('aria-busy', 'true')
+  btn.textContent = label
+  return Promise.resolve()
+    .then(run)
+    .finally(() => {
+      btn.disabled = false
+      btn.removeAttribute('aria-busy')
+      btn.textContent = orig
+    })
+}
+
+function skeleton(ul, n = 4) {
+  ul.replaceChildren()
+  for (let i = 0; i < n; i++) {
+    const li = el('li', 'skeleton')
+    const bone = el('span', 'bone')
+    bone.style.width = `${35 + ((i * 17) % 45)}%`
+    li.append(bone)
+    ul.append(li)
+  }
 }
 
 async function api(path, init) {
@@ -194,37 +532,69 @@ async function api(path, init) {
 
 // ---- repositories --------------------------------------------------------
 
-$('server-form').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  state.serverUrl = $('server-url').value
-  try {
-    const repos = await api(`/api/repos?url=${encodeURIComponent(state.serverUrl)}`)
-    $('repo-list').innerHTML = ''
-    for (const repo of repos) {
-      const li = document.createElement('li')
-      const raw = repo.format === 'raw'
-      li.className = raw ? 'clickable' : 'disabled'
-      li.title = raw ? '' : `format ${repo.format}: only raw repositories are navigable`
-      li.innerHTML = `<span class="name">${esc(repo.name)}</span><span class="kind ${esc(repo.kind)}">${esc(repo.kind)}</span><span class="kind">${esc(repo.format)}</span><span class="url">${esc(repo.url)}</span>`
-      if (raw) {
-        li.addEventListener('click', () => pickRepo(repo, li))
-      }
-      $('repo-list').append(li)
-    }
-  } catch (err) {
-    $('repo-list').innerHTML = ''
-    logLine(`repos failed: ${err.message}`, 'bad')
+async function loadRepos() {
+  const url = $('server-url').value.trim()
+  if (url === '') {
+    setError($('repo-error'), 'Give a server URL first.')
+    return null
   }
-})
+  return busy($('repos-btn'), 'Listing…', async () => {
+    clearError($('repo-error'))
+    skeleton($('repo-list'))
+    try {
+      const repos = await api(`/api/repos?url=${encodeURIComponent(url)}`)
+      state.serverUrl = url
+      localStorage.setItem(LS.server, url)
+      renderRepos(repos)
+      return repos
+    } catch (err) {
+      $('repo-list').replaceChildren()
+      setError($('repo-error'), `Repos failed: ${err.message}`, loadRepos)
+      return null
+    }
+  })
+}
 
-async function pickRepo(repo, li) {
+function renderRepos(repos) {
+  const ul = $('repo-list')
+  ul.replaceChildren()
+  if (repos.length === 0) {
+    ul.append(el('li', 'empty', 'The server reports no repositories.'))
+    return
+  }
+  for (const repo of repos) {
+    const li = document.createElement('li')
+    const raw = repo.format === 'raw'
+    li.className = raw ? 'clickable' : 'disabled'
+    li.title = raw ? '' : `format ${repo.format}: only raw repositories are navigable`
+    li.innerHTML = `${ICON.repo}<span class="row-name"><span class="label">${esc(repo.name)}</span></span><span class="badges"><span class="kind ${esc(repo.kind)}">${esc(repo.kind)}</span><span class="kind">${esc(repo.format)}</span></span><span class="url">${esc(repo.url)}</span>`
+    if (raw) {
+      li.addEventListener('click', () => pickRepo(repo, li))
+    }
+    ul.append(li)
+  }
+  if (repos.every((r) => r.format !== 'raw')) {
+    ul.append(el('li', 'empty', 'No raw repositories on this server.'))
+  }
+}
+
+function selectRepo(repo, li) {
   state.repoUrl = repo.url.endsWith('/') ? repo.url : `${repo.url}/`
   state.repoName = repo.name
-  state.dirSegs = []
-  for (const el of document.querySelectorAll('#repo-list li')) el.classList.remove('selected')
-  li.classList.add('selected')
-  renderCrumbs()
-  loadEntries()
+  for (const n of document.querySelectorAll('#repo-list li')) {
+    n.classList.remove('selected')
+    n.removeAttribute('aria-current')
+  }
+  if (li) {
+    li.classList.add('selected')
+    li.setAttribute('aria-current', 'true')
+  }
+  updateActionEnabled()
+}
+
+function pickRepo(repo, li) {
+  selectRepo(repo, li)
+  navigate([])
 }
 
 // ---- tree browser --------------------------------------------------------
@@ -235,9 +605,22 @@ function dirUrl() {
   return `${state.repoUrl}${rest}${state.dirSegs.length === 0 ? '' : '/'}`
 }
 
+// The direct raw URL of one file in the current directory.
+function fileHref(name) {
+  return `${state.repoUrl}${[...state.dirSegs, name].map(encodeURIComponent).join('/')}`
+}
+
+// Every navigation goes through here, so the position is always saved.
+function navigate(segs) {
+  state.dirSegs = segs
+  renderCrumbs()
+  savePosition()
+  loadEntries()
+}
+
 function renderCrumbs() {
   const nav = $('crumbs')
-  nav.innerHTML = ''
+  nav.replaceChildren()
   const home = document.createElement('a')
   home.textContent = state.repoName
   home.addEventListener('click', () => ascend(-1))
@@ -246,6 +629,7 @@ function renderCrumbs() {
     nav.append(Object.assign(document.createElement('span'), { className: 'sep', textContent: '/' }))
     if (i === state.dirSegs.length - 1) {
       nav.append(Object.assign(document.createElement('span'), { className: 'here', textContent: seg }))
+      nav.lastChild.setAttribute('aria-current', 'page')
       return
     }
     const link = document.createElement('a')
@@ -253,122 +637,640 @@ function renderCrumbs() {
     link.addEventListener('click', () => ascend(i))
     nav.append(link)
   })
-  $('down-scope').textContent = `Scope: ${state.repoName}${state.dirSegs.length === 0 ? ' (whole repository)' : `/${state.dirSegs.join('/')}`}`
+  $('down-scope').textContent = state.repoUrl
+    ? `Scope: ${state.repoName}${state.dirSegs.length === 0 ? ' (whole repository)' : `/${state.dirSegs.join('/')}`}`
+    : 'Scope: nothing picked yet.'
 }
 
-// Descend into a folder: extend the path and list the children.
 function descend(name) {
-  state.dirSegs.push(name)
-  renderCrumbs()
-  loadEntries()
+  navigate([...state.dirSegs, name])
 }
 
-// Climb to the breadcrumb level `i` (-1 is the repository root).
 function ascend(i) {
-  state.dirSegs = state.dirSegs.slice(0, i + 1)
-  renderCrumbs()
-  loadEntries()
+  navigate(state.dirSegs.slice(0, i + 1))
 }
 
 async function loadEntries() {
   const url = dirUrl()
-  $('browser-hint').textContent = `Loading ${url}...`
-  $('entry-list').innerHTML = ''
+  const ul = $('entry-list')
+  clearError($('entry-error'))
+  ul.setAttribute('aria-busy', 'true')
+  ul.removeAttribute('aria-activedescendant')
+  skeleton(ul)
+  $('browser-hint').textContent = `Loading ${url}…`
   try {
     const entries = await api(`/api/entries?url=${encodeURIComponent(url)}`)
-    $('browser-hint').textContent = entries.length === 0 ? 'Empty directory.' : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}:`
-    for (const entry of entries) {
-      const li = document.createElement('li')
-      if (entry.kind === 'dir') {
-        li.className = 'clickable dir'
-        li.innerHTML = `<span class="name">${esc(entry.name)}/</span><span class="kind">dir</span>`
-        li.addEventListener('click', () => descend(entry.name))
-      } else {
-        li.innerHTML = `<span class="name">${esc(entry.name)}</span><span class="kind">file</span>`
-      }
-      $('entry-list').append(li)
-    }
+    ul.removeAttribute('aria-busy')
+    renderEntries(entries)
   } catch (err) {
-    $('browser-hint').textContent = err.message
+    ul.removeAttribute('aria-busy')
+    ul.replaceChildren()
+    $('browser-hint').textContent = ''
+    setError($('entry-error'), `Listing failed: ${err.message}`, loadEntries)
   }
 }
 
-// ---- download ------------------------------------------------------------
-
-$('down-form').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  if (!state.repoUrl) {
-    $('down-note').textContent = 'Pick a repository first.'
+function renderEntries(entries) {
+  const ul = $('entry-list')
+  ul.replaceChildren()
+  const sorted = [...entries].sort((a, b) => {
+    const ad = a.kind === 'dir'
+    const bd = b.kind === 'dir'
+    if (ad !== bd) return ad ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+  if (sorted.length === 0) {
+    $('browser-hint').textContent = 'Empty directory.'
+    state.activeIdx = -1
     return
   }
-  const body = { url: dirUrl(), path: state.dirSegs.join('/'), dir: $('down-dir').value }
-  $('down-note').textContent = `Subtree ${body.path === '' ? '(repository root)' : body.path}: the server walks it and names every file explicitly.`
-  try {
-    const { id } = await api('/api/down', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    follow(id)
-  } catch (err) {
-    logLine(`start failed: ${err.message}`, 'bad')
+  $('browser-hint').textContent = `${sorted.length} entr${sorted.length === 1 ? 'y' : 'ies'}:`
+  sorted.forEach((entry, i) => {
+    const li = document.createElement('li')
+    li.id = `entry-${i}`
+    li.setAttribute('role', 'option')
+    li.setAttribute('aria-selected', 'false')
+    li.dataset.kind = entry.kind
+    li.dataset.name = entry.name
+    if (entry.kind === 'dir') {
+      li.className = 'clickable dir'
+      li.innerHTML = `<span class="row-name">${ICON.dir}<span class="label">${esc(entry.name)}/</span></span><span class="badges"><span class="kind">dir</span></span>`
+      li.addEventListener('click', () => descend(entry.name))
+    } else {
+      li.className = 'clickable file'
+      const href = fileHref(entry.name)
+      li.innerHTML = `<a class="row-name" href="${esc(href)}" target="_blank" rel="noopener">${ICON.file}<span class="label">${esc(entry.name)}</span></a><span class="badges"><span class="kind">file</span></span>`
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('a') || e.target.closest('button')) return
+        window.open(href, '_blank', 'noopener')
+      })
+      const del = document.createElement('button')
+      del.type = 'button'
+      del.className = 'icon-btn danger'
+      del.title = `Delete ${entry.name}`
+      del.setAttribute('aria-label', `Delete ${entry.name}`)
+      del.innerHTML = ICON.trash
+      del.addEventListener('click', (e) => {
+        e.stopPropagation()
+        requestRm({ file: entry.name }, del)
+      })
+      li.append(del)
+    }
+    ul.append(li)
+  })
+  setActive(0, { scroll: false })
+}
+
+// ---- keyboard ------------------------------------------------------------
+
+function rows() {
+  return [...document.querySelectorAll('#entry-list li[role="option"]')]
+}
+
+function setActive(idx, { scroll = true } = {}) {
+  const rs = rows()
+  if (rs.length === 0) {
+    state.activeIdx = -1
+    $('entry-list').removeAttribute('aria-activedescendant')
+    return
+  }
+  state.activeIdx = ((idx % rs.length) + rs.length) % rs.length
+  rs.forEach((r, i) => {
+    const on = i === state.activeIdx
+    r.classList.toggle('active', on)
+    r.setAttribute('aria-selected', on ? 'true' : 'false')
+  })
+  const cur = rs[state.activeIdx]
+  $('entry-list').setAttribute('aria-activedescendant', cur.id)
+  if (scroll) cur.scrollIntoView({ block: 'nearest' })
+}
+
+function activateRow() {
+  const r = rows()[state.activeIdx]
+  if (!r) return
+  if (r.dataset.kind === 'dir') {
+    descend(r.dataset.name)
+    return
+  }
+  const a = r.querySelector('a.row-name')
+  if (a) window.open(a.href, '_blank', 'noopener')
+}
+
+document.addEventListener('keydown', (e) => {
+  if ($('rm-dialog').open) return
+  if (e.target.closest('input, textarea, select')) return
+  if (e.key === '/') {
+    e.preventDefault()
+    $('server-url').focus()
+    $('server-url').select()
+    return
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    setActive(state.activeIdx + 1)
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    setActive(state.activeIdx - 1)
+    return
+  }
+  if (e.key === 'Enter') {
+    if (e.target.closest('button, a')) return
+    e.preventDefault()
+    activateRow()
+    return
+  }
+  if (e.key === 'Backspace' || e.key === 'Escape') {
+    if (state.repoUrl && state.dirSegs.length > 0) {
+      e.preventDefault()
+      ascend(state.dirSegs.length - 2)
+    }
+    return
+  }
+  if (e.key === 'Home' && state.repoUrl) {
+    e.preventDefault()
+    navigate([])
   }
 })
 
-function follow(id) {
-  logLine(`job ${id}: stream open`, 'dim')
+// ---- jobs: SSE cards with bars -------------------------------------------
+
+// One <details> card per job. Frames replay on reconnect, so the `start`
+// frame resets the card state: the view converges no matter how many times
+// the stream redelivers the history.
+function jobCard(id, opLabel) {
+  const details = document.createElement('details')
+  details.className = 'job'
+  details.open = true
+  const summary = document.createElement('summary')
+  const chip = el('span', `op-chip ${opLabel === 'Delete' ? 'rm' : 'down'}`, opLabel.toUpperCase())
+  const title = el('span', 'job-title', `job ${id} (starting…)`)
+  const status = el('span', 'job-status dim', 'opening stream…')
+  summary.append(chip, title, status)
+  const activeBars = el('div', 'active-bars')
+  const tally = el('span', 'tally dim')
+  const jobLog = el('pre', 'job-log')
+  const body = el('div', 'job-body')
+  const bars = el('div', 'bars')
+  bars.append(activeBars, tally)
+  body.append(bars, jobLog)
+  details.append(summary, body)
+  $('jobs').prepend(details)
+
+  const active = new Map()
+  const counts = { done: 0, bytes: 0, skipped: 0, removed: 0, absent: 0 }
+
+  const renderBars = () => {
+    activeBars.replaceChildren()
+    for (const [name, b] of active) {
+      const row = el('div', 'bar-row')
+      const label = el('span', 'bar-name', name)
+      label.title = name
+      const bar = el('div', 'bar')
+      const fill = el('div', `fill ${b.state}`)
+      if (b.total > 0) fill.style.width = `${Math.min(100, (b.done / b.total) * 100)}%`
+      else fill.classList.add('indet')
+      bar.append(fill)
+      const num = el('span', 'bar-num', b.total > 0 ? `${fmtBytes(b.done)} / ${fmtBytes(b.total)}` : fmtBytes(b.done))
+      row.append(label, bar, num)
+      activeBars.append(row)
+    }
+    const parts = []
+    if (counts.done > 0) parts.push(`✓ ${counts.done} done`)
+    if (counts.bytes > 0) parts.push(fmtBytes(counts.bytes))
+    if (counts.skipped > 0) parts.push(`${counts.skipped} skipped`)
+    if (counts.removed > 0) parts.push(`✓ ${counts.removed} removed`)
+    if (counts.absent > 0) parts.push(`${counts.absent} already absent`)
+    tally.textContent = parts.join(' · ')
+  }
+
+  const reset = () => {
+    active.clear()
+    counts.done = 0
+    counts.bytes = 0
+    counts.skipped = 0
+    counts.removed = 0
+    counts.absent = 0
+    renderBars()
+    jobLog.replaceChildren()
+  }
+
+  return {
+    el: details,
+    header(text, cls) {
+      status.textContent = text
+      status.className = `job-status ${cls ?? 'dim'}`
+    },
+    setPath(path) {
+      title.textContent = `job ${id} ${path}`
+    },
+    log(text, cls) {
+      jobLog.append(el('div', cls, text))
+      jobLog.scrollTop = jobLog.scrollHeight
+    },
+    reset,
+    event(ev) {
+      if (ev.event === 'artifact') {
+        if (ev.state === 'done') {
+          active.delete(ev.name)
+          counts.done++
+          counts.bytes += ev.done ?? 0
+        } else if (ev.state === 'skipped') {
+          active.delete(ev.name)
+          counts.skipped++
+        } else {
+          active.set(ev.name, { state: ev.state, done: ev.done ?? 0, total: ev.total ?? null })
+        }
+        renderBars()
+        return
+      }
+      if (ev.event === 'plan') {
+        this.log(`plan download=${(ev.download ?? []).length} skip=${(ev.skip ?? []).length}`)
+        return
+      }
+      if (ev.event === 'retrying') {
+        this.log(`retrying ${ev.name} attempt=${ev.attempt} ${ev.reason ?? ''}`, 'warn')
+        return
+      }
+      if (ev.event === 'removing') {
+        this.log(`removing ${ev.name}`, 'dim')
+        return
+      }
+      if (ev.event === 'removed') {
+        counts.removed++
+        renderBars()
+        this.log(`removed ${ev.name}`, 'ok')
+        return
+      }
+      if (ev.event === 'missing') {
+        counts.absent++
+        renderBars()
+        this.log(`already absent: ${ev.name}`, 'dim')
+        return
+      }
+      this.log(JSON.stringify(ev))
+    },
+  }
+}
+
+// The stream never closes permanently on a transient error: the server
+// replays the frame log, EventSource reconnects by itself, and the `start`
+// frame rewinds the card. A real loss (server gone) reports `lost`.
+function follow(id, opLabel) {
+  const card = jobCard(id, opLabel)
   const es = new EventSource(`/api/progress/${encodeURIComponent(id)}`)
+  es.onopen = () => card.header('streaming…', 'dim')
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) {
+      card.header('lost', 'bad')
+      card.log('stream lost: the server does not remember this job any more', 'bad')
+      logLine(`job ${id.slice(0, 8)}…: stream lost`, 'bad')
+      es.close()
+    } else {
+      card.header('reconnecting…', 'warn')
+    }
+  }
   es.onmessage = (m) => {
     const frame = JSON.parse(m.data)
-    if (frame.type === 'start') logLine(`down ${frame.url} -> ${frame.dir} (${frame.names} file(s))`, 'dim')
-    if (frame.type === 'event') logEvent(frame.event)
+    if (frame.type === 'start') {
+      card.reset()
+      card.setPath(frame.dir)
+      card.header('streaming…', 'dim')
+      card.log(`${frame.op} ${frame.url} → ${frame.dir} (${frame.names} file(s))`, 'dim')
+      return
+    }
+    if (frame.type === 'event') {
+      card.event(frame.event)
+      return
+    }
     if (frame.type === 'end') {
       if (frame.ok) {
-        logLine(`summary uploaded=${frame.summary.uploaded} downloaded=${frame.summary.downloaded} skipped=${frame.summary.skipped} failed=${frame.summary.failed.length}`, 'ok')
+        card.header('ok', 'ok')
+        const s = frame.summary
+        card.log(`summary uploaded=${s.uploaded} downloaded=${s.downloaded} skipped=${s.skipped} removed=${s.removed} failed=${s.failed.length}`, 'ok')
       } else {
-        logLine(`failed: ${frame.error}`, 'bad')
+        card.header('err', 'bad')
+        card.el.open = true
+        card.log(`failed: ${frame.error}${frame.hint ? ` (${frame.hint})` : ''}`, 'bad')
       }
+      toast(`${opLabel} ${frame.ok ? 'finished' : 'failed'}: job ${id.slice(0, 8)}…`, frame.ok ? 'ok' : 'bad')
       es.close()
     }
   }
-  es.onerror = () => {
-    logLine('stream closed', 'dim')
-    es.close()
+}
+
+// ---- downloads -----------------------------------------------------------
+
+$('down-form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  if (!state.repoUrl) {
+    setError($('down-error'), 'Pick a raw repository first.')
+    return
+  }
+  clearError($('down-error'))
+  busy($('down-btn'), 'Starting…', async () => {
+    try {
+      const body = { url: dirUrl(), path: state.dirSegs.join('/'), dir: $('down-dir').value }
+      const { id } = await api('/api/down', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      localStorage.setItem(LS.dir, $('down-dir').value)
+      $('down-note').textContent = `Subtree ${body.path === '' ? '(repository root)' : body.path}: the server walks it and names every file explicitly.`
+      follow(id, 'Download')
+      logLine(`download job started: ${id}`, 'dim')
+      toast(`Download started: job ${id.slice(0, 8)}…`)
+    } catch (err) {
+      setError($('down-error'), `Start failed: ${err.message}`)
+    }
+  })
+})
+
+// ---- deletes: plan first, confirm, then the SSE job -----------------------
+
+const rmDialog = $('rm-dialog')
+let rmPending = null
+
+async function requestRm(scope, btn) {
+  if (!state.repoUrl) {
+    toast('Pick a raw repository first', 'bad')
+    return
+  }
+  const body = { url: dirUrl(), path: state.dirSegs.join('/'), dryRun: true }
+  if (scope.file) body.file = scope.file
+  await busy(btn, 'Planning…', async () => {
+    try {
+      const plan = await api('/api/rm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      showRmDialog(body, plan)
+    } catch (err) {
+      toast(`Delete plan failed: ${err.message}`, 'bad')
+    }
+  })
+}
+
+function showRmDialog(body, plan) {
+  rmPending = body
+  const actions = plan.actions ?? []
+  const ul = $('rm-plan')
+  ul.replaceChildren()
+  let bytes = 0
+  let missing = 0
+  for (const a of actions) {
+    const li = document.createElement('li')
+    if (a.action === 'missing') {
+      missing++
+      li.className = 'missing'
+      li.innerHTML = `<span class="mark">○</span><span>${esc(a.name)}</span><span class="size">already absent</span>`
+    } else {
+      bytes += a.size ?? 0
+      li.innerHTML = `<span class="mark">✕</span><span>${esc(a.name)}</span><span class="size">${fmtBytes(a.size)}</span>`
+    }
+    ul.append(li)
+  }
+  if (actions.length === 0) ul.append(el('li', null, 'Nothing to delete.'))
+  $('rm-dialog-scope').textContent = `Scope: ${body.file ?? (body.path === '' ? 'the whole repository' : `${body.path}/`)}`
+  const parts = [`${actions.length - missing} to delete (${fmtBytes(bytes)})`]
+  if (missing > 0) parts.push(`${missing} already absent`)
+  $('rm-dialog-tally').textContent = parts.join(' · ')
+  $('rm-confirm').disabled = actions.length === 0 || actions.every((a) => a.action === 'missing')
+  rmDialog.showModal()
+}
+
+$('rm-btn').addEventListener('click', (e) => requestRm({}, e.currentTarget))
+
+$('rm-cancel').addEventListener('click', () => {
+  rmPending = null
+  rmDialog.close()
+})
+
+$('rm-confirm').addEventListener('click', () => {
+  if (!rmPending) return
+  const body = { url: rmPending.url, path: rmPending.path }
+  if (rmPending.file) body.file = rmPending.file
+  rmPending = null
+  busy($('rm-confirm'), 'Deleting…', async () => {
+    try {
+      const { id } = await api('/api/rm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      rmDialog.close()
+      follow(id, 'Delete')
+      logLine(`delete job started: ${id}`, 'dim')
+      toast(`Delete started: job ${id.slice(0, 8)}…`)
+    } catch (err) {
+      toast(`Delete failed to start: ${err.message}`, 'bad')
+    }
+  })
+})
+
+// ---- uploads: one XHR per file, raw body, server-side sha marker ----------
+
+function uploadRow(file) {
+  const row = el('div', 'bar-row')
+  const label = el('span', 'bar-name', file.name)
+  label.title = file.name
+  const bar = el('div', 'bar')
+  const fill = el('div', 'fill uploading')
+  bar.append(fill)
+  const num = el('span', 'bar-num', fmtBytes(file.size))
+  row.append(label, bar, num)
+  $('uploads').prepend(row)
+  return {
+    progress(loaded, total) {
+      if (total > 0) {
+        fill.classList.remove('indet')
+        fill.style.width = `${Math.min(100, (loaded / total) * 100)}%`
+      } else {
+        fill.classList.add('indet')
+      }
+      num.textContent = `${fmtBytes(loaded)} / ${total > 0 ? fmtBytes(total) : '?'}`
+    },
+    finish(ok, message) {
+      fill.classList.remove('indet')
+      if (ok) {
+        row.remove()
+        return
+      }
+      fill.style.width = '100%'
+      fill.classList.add('failed')
+      num.textContent = message ?? 'failed'
+    },
   }
 }
 
-function logEvent(ev) {
-  if (ev.event === 'artifact') {
-    const bytes = ev.total ? ` ${ev.done}/${ev.total}` : ''
-    logLine(`artifact ${ev.state} ${ev.name}${bytes}`)
-    return
-  }
-  if (ev.event === 'plan') {
-    logLine(`plan download=${(ev.download ?? []).length} skip=${(ev.skip ?? []).length}`)
-    return
-  }
-  if (ev.event === 'retrying') {
-    logLine(`retrying ${ev.name} attempt=${ev.attempt} ${ev.reason ?? ''}`, 'bad')
-    return
-  }
-  logLine(JSON.stringify(ev))
+function uploadOne(file, row) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `/api/put?url=${encodeURIComponent(dirUrl() + encodeURIComponent(file.name))}&sha=1`)
+    xhr.upload.onprogress = (e) => row.progress(e.loaded, e.total)
+    xhr.onload = () => {
+      let body = {}
+      try {
+        body = JSON.parse(xhr.responseText)
+      } catch {
+        // A non-JSON answer: the status line carries the failure.
+      }
+      resolve(xhr.status >= 200 && xhr.status < 300 ? { ok: true } : { ok: false, error: body.error ?? `HTTP ${xhr.status}` })
+    }
+    xhr.onerror = () => resolve({ ok: false, error: 'network error' })
+    xhr.send(file)
+  })
 }
 
-// ---- startup -------------------------------------------------------------
+async function uploadFiles(files) {
+  if (!state.repoUrl) {
+    toast('Pick a raw repository first', 'bad')
+    return
+  }
+  const list = [...files]
+  if (list.length === 0) return
+  await busy($('upload-btn'), `Uploading ${list.length}…`, async () => {
+    let okCount = 0
+    let failCount = 0
+    let bytes = 0
+    const rowsByFile = new Map()
+    for (const f of list) rowsByFile.set(f, uploadRow(f))
+    for (const f of list) {
+      const row = rowsByFile.get(f)
+      const res = await uploadOne(f, row)
+      if (res.ok) {
+        okCount++
+        bytes += f.size
+        row.finish(true)
+      } else {
+        failCount++
+        row.finish(false, res.error)
+        toast(`Upload failed: ${f.name}: ${res.error}`, 'bad')
+      }
+    }
+    const parts = [`✓ ${okCount} uploaded · ${fmtBytes(bytes)}`]
+    if (failCount > 0) parts.push(`${failCount} failed`)
+    $('uploads-tally').textContent = parts.join(' · ')
+    if (okCount > 0) {
+      toast(`Uploaded ${okCount}/${list.length} file(s)`, okCount === list.length ? 'ok' : 'warn')
+      logLine(`uploaded ${okCount} file(s) into ${dirUrl()}`, 'dim')
+      loadEntries()
+    }
+  })
+}
 
-// Prefill the server the panel was started with, if any.
-// A classic script cannot use top-level await, so this runs detached.
-;(async () => {
+$('upload-form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  uploadFiles($('upload-input').files)
+  $('upload-input').value = ''
+})
+
+$('upload-input').addEventListener('change', () => {
+  uploadFiles($('upload-input').files)
+  $('upload-input').value = ''
+})
+
+// The drop zone sits over the tree: drag files in, drop, they upload.
+const browserPane = $('pane-browser')
+let dragDepth = 0
+
+function setDropVisible(on) {
+  const overlay = $('drop-overlay')
+  overlay.textContent = `Drop files to upload into ${state.dirSegs.length === 0 ? `${state.repoName}/` : `${state.dirSegs.join('/')}/`}`
+  overlay.hidden = !on
+}
+
+browserPane.addEventListener('dragenter', (e) => {
+  e.preventDefault()
+  if (!state.repoUrl) return
+  dragDepth++
+  setDropVisible(true)
+})
+
+browserPane.addEventListener('dragover', (e) => {
+  e.preventDefault()
+})
+
+browserPane.addEventListener('dragleave', () => {
+  if (dragDepth > 0) dragDepth--
+  if (dragDepth === 0) setDropVisible(false)
+})
+
+browserPane.addEventListener('drop', (e) => {
+  e.preventDefault()
+  dragDepth = 0
+  setDropVisible(false)
+  if (e.dataTransfer?.files?.length > 0) uploadFiles(e.dataTransfer.files)
+})
+
+// ---- scope-dependent controls --------------------------------------------
+
+function updateActionEnabled() {
+  const on = Boolean(state.repoUrl)
+  $('down-btn').disabled = !on
+  $('rm-btn').disabled = !on
+  $('upload-btn').disabled = !on
+  $('upload-input').disabled = !on
+}
+
+// ---- persistence ----------------------------------------------------------
+
+function savePosition() {
+  if (!state.repoUrl) {
+    localStorage.removeItem(LS.pos)
+    return
+  }
+  localStorage.setItem(LS.pos, JSON.stringify({ serverUrl: state.serverUrl, repoName: state.repoName, dirSegs: state.dirSegs }))
+}
+
+$('down-dir').addEventListener('change', () => {
+  if ($('down-dir').value !== '') localStorage.setItem(LS.dir, $('down-dir').value)
+})
+
+// ---- startup --------------------------------------------------------------
+
+// The last server URL wins over the configured one, the last tree position
+// is restored when the repository still exists.
+async function boot() {
+  logLine('Downloads, deletes and uploads will stream here.', 'dim')
+  const savedDir = localStorage.getItem(LS.dir)
+  if (savedDir) $('down-dir').value = savedDir
+  let server = localStorage.getItem(LS.server)
   try {
     const configured = await api('/api/servers')
-    if (configured.length > 0) {
-      $('server-url').value = configured[0]
-      $('server-form').requestSubmit()
-    }
+    if (!server && configured.length > 0) server = configured[0]
   } catch {
-    // No configured servers (lazy mode): the form keeps its default.
+    // Lazy mode without a reachable /api/servers: keep whatever is typed.
   }
-})()
+  if (server) $('server-url').value = server
+  updateActionEnabled()
+  if ($('server-url').value.trim() === '') return
+  const repos = await loadRepos()
+  if (!repos) return
+  let pos = null
+  try {
+    pos = JSON.parse(localStorage.getItem(LS.pos) || 'null')
+  } catch {
+    // A corrupted position is as good as none.
+  }
+  if (!pos || pos.serverUrl !== state.serverUrl || pos.repoName == null || !Array.isArray(pos.dirSegs)) return
+  if (!pos.dirSegs.every((s) => typeof s === 'string' && s !== '' && s !== '.' && s !== '..')) return
+  const repo = repos.find((r) => r.format === 'raw' && r.name === pos.repoName)
+  if (!repo) return
+  const li = [...document.querySelectorAll('#repo-list li')].find((n) => n.querySelector('.label')?.textContent === repo.name)
+  selectRepo(repo, li)
+  navigate(pos.dirSegs)
+}
+
+$('server-form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  loadRepos()
+})
+
+boot()
 </script>
 </body>
 </html>
