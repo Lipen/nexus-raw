@@ -32,14 +32,14 @@ use crate::primitive::{GetOutcome, ShaSource};
 use crate::service;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::sync::{
-    self, down,
+    self, delta, down,
     mirror::{self, MirrorAction},
     rm::RmAction,
-    up, Action, Mode,
+    up, Action, Delta, Mode,
 };
 use crate::transport::client::NexusClient;
 
-/// How `down` learns which names to fetch (spec §5.2.1).
+/// How a directory command (`down`, `diff`) learns which names the storage holds (spec §5.2.1).
 #[derive(Debug, Clone)]
 pub enum Enumeration {
     /// A parsed manifest (`--manifest`).
@@ -177,7 +177,7 @@ impl Nxr {
         sync::scan_dir(dir)
     }
 
-    /// The symmetric plan without transferring anything (`up --dry-run`).
+    /// The symmetric plan without transferring anything (`up --plan`).
     ///
     /// # Errors
     ///
@@ -199,6 +199,26 @@ impl Nxr {
             .await
             .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
             .map_err(Error::from)
+    }
+
+    /// The delta report of a local directory against a storage enumeration (`nxr diff`).
+    ///
+    /// The enumeration source is mandatory, like `down`.
+    /// The report is facts only: no refusal aborts it, and nothing is written on either side.
+    /// The name set is the union of the local scan and the enumeration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the local scan, [`Error::Enumerate`] when the enumeration is empty, and transport, auth or HTTP errors while probing the remote states.
+    pub async fn delta(&self, dir: &Path, enum_src: Enumeration) -> Result<Vec<Delta>, Error> {
+        let remote_names = self.resolve_names(enum_src).await?;
+        let local_names = sync::scan_dir(dir)?;
+        let locals = sync::local_statuses(dir, local_names).await;
+        let remotes = self.remote_states_for(&remote_names).await?;
+        let d = dir.to_owned();
+        tokio::task::spawn_blocking(move || delta::compare(&d, locals, remotes))
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))
     }
 
     /// Upload a local directory (§5.2).
