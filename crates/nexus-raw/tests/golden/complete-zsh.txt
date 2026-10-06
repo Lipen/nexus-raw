@@ -1,0 +1,947 @@
+#compdef nxr
+
+autoload -U is-at-least
+
+_nxr() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_nxr_commands" \
+"*::: :->nxr" \
+&& ret=0
+    case $state in
+    (nxr)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+'-o+[Output file (stdout when omitted)]:FILE:_files' \
+'--out=[Output file (stdout when omitted)]:FILE:_files' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--continue[Resume from an existing \`<out>\`.part through a Range request]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The object URL:_default' \
+&& ret=0
+;;
+(put)
+_arguments "${_arguments_options[@]}" : \
+'-f+[The file to send]:FILE:_files' \
+'--file=[The file to send]:FILE:_files' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--sha[Also PUT \`<url>\`.sha256 with the sha256sum-style marker]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The object URL:_default' \
+&& ret=0
+;;
+(head)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The object URL:_default' \
+&& ret=0
+;;
+(sha)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- A local path or an http(s) URL:_default' \
+&& ret=0
+;;
+(up)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Restrict the transfer to these names]:FILE|URL|-:_default' \
+'--claim-first=[Upload this file first, alone, before any other name (claim-first)]:NAME:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--no-sha[Skip marker generation and marker uploads]' \
+'--dry-run[Print the plan without transferring anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':src -- The source directory:_files' \
+':dst -- The remote directory URL:_default' \
+&& ret=0
+;;
+(down)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--ls[Best-effort enumeration through the server search API]' \
+'--fresh[Ignore existing part files\: every name downloads from zero]' \
+'--dry-run[Print the plan without transferring anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':src -- The remote directory URL:_default' \
+':dst -- The target directory:_files' \
+&& ret=0
+;;
+(rm)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--ls[Best-effort enumeration through the server search API]' \
+'--dry-run[Print the plan without deleting anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':src -- The remote directory URL:_default' \
+&& ret=0
+;;
+(point)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--clear[Delete the pointer file the URL names]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The pointer file URL:_default' \
+&& ret=0
+;;
+(mirror)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
+'--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--ls[Best-effort enumeration through the server search API]' \
+'--dry-run[Print the plan without transferring anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':src -- The source directory URL\: enumeration and bytes come from here:_default' \
+':dst -- The destination directory URL:_default' \
+&& ret=0
+;;
+(mv)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
+'--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--ls[Best-effort enumeration through the server search API]' \
+'--dry-run[Print both plans (the pour and the delete) without moving anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':src -- The source directory URL:_default' \
+':dst -- The destination directory URL:_default' \
+&& ret=0
+;;
+(ls)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--assets[List the object names under a directory URL]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A directory URL inside a raw repository, the repository root included:_default' \
+&& ret=0
+;;
+(channel)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_nxr__subcmd__channel_commands" \
+"*::: :->channel" \
+&& ret=0
+
+    case $state in
+    (channel)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-channel-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The channel file URL:_default' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--if-forward[Keep the current token when it already compares >= the new one]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The channel file URL:_default' \
+':token -- The new token:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_nxr__subcmd__channel__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-channel-help-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+'--manifest=[Check exactly these names]:FILE|-:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':dir -- The directory to check:_files' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::url -- A base URL to probe (checks without it stay local):_default' \
+&& ret=0
+;;
+(service)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_nxr__subcmd__service_commands" \
+"*::: :->service" \
+&& ret=0
+
+    case $state in
+    (service)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-service-command-$line[1]:"
+        case $line[1] in
+            (repos)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A server root URL or a URL anywhere inside the server:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_nxr__subcmd__service__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-service-help-command-$line[1]:"
+        case $line[1] in
+            (repos)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(complete)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':shell -- The shell to generate the script for:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_nxr__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-help-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(put)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(head)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sha)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(up)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(down)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rm)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(point)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(mirror)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(mv)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(ls)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(channel)
+_arguments "${_arguments_options[@]}" : \
+":: :_nxr__subcmd__help__subcmd__channel_commands" \
+"*::: :->channel" \
+&& ret=0
+
+    case $state in
+    (channel)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-help-channel-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(service)
+_arguments "${_arguments_options[@]}" : \
+":: :_nxr__subcmd__help__subcmd__service_commands" \
+"*::: :->service" \
+&& ret=0
+
+    case $state in
+    (service)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:nxr-help-service-command-$line[1]:"
+        case $line[1] in
+            (repos)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(complete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_nxr_commands] )) ||
+_nxr_commands() {
+    local commands; commands=(
+'get:GET a URL to a file or stdout' \
+'put:PUT a file, optionally with its sha-sibling marker' \
+'head:HEAD a URL\: status, size, content type' \
+'sha:The sha256 of a file or URL' \
+'up:Upload a local directory (§5.2)' \
+'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'rm:Delete the enumerated names from a remote directory (§5.4)' \
+'point:Delete a pointer file (§5.4)' \
+'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
+'mv:Move a version\: mirror it into the destination, then delete the same names at the source' \
+'ls:List the entries of a raw directory URL, at any tree depth (--assets\: flat artifact names)' \
+'channel:Read or write a channel ref\: a token file with any name' \
+'verify:Check local bytes, markers and digests (no network)' \
+'doctor:Diagnose credentials, TLS and reachability' \
+'service:Server metadata through the Sonatype service REST API (not part of the storage protocol)' \
+'complete:Print a shell completion script to stdout (bash, zsh, fish, powershell)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel_commands] )) ||
+_nxr__subcmd__channel_commands() {
+    local commands; commands=(
+'get:Print the current token. An unset channel prints \`unset\`' \
+'set:Write the token, optionally only forward in version order' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr channel commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__get_commands] )) ||
+_nxr__subcmd__channel__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr channel get commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__help_commands] )) ||
+_nxr__subcmd__channel__subcmd__help_commands() {
+    local commands; commands=(
+'get:Print the current token. An unset channel prints \`unset\`' \
+'set:Write the token, optionally only forward in version order' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr channel help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__help__subcmd__get_commands] )) ||
+_nxr__subcmd__channel__subcmd__help__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr channel help get commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__help__subcmd__help_commands] )) ||
+_nxr__subcmd__channel__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr channel help help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__help__subcmd__set_commands] )) ||
+_nxr__subcmd__channel__subcmd__help__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr channel help set commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__channel__subcmd__set_commands] )) ||
+_nxr__subcmd__channel__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr channel set commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__complete_commands] )) ||
+_nxr__subcmd__complete_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr complete commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__doctor_commands] )) ||
+_nxr__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr doctor commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__down_commands] )) ||
+_nxr__subcmd__down_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr down commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__get_commands] )) ||
+_nxr__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr get commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__head_commands] )) ||
+_nxr__subcmd__head_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr head commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help_commands] )) ||
+_nxr__subcmd__help_commands() {
+    local commands; commands=(
+'get:GET a URL to a file or stdout' \
+'put:PUT a file, optionally with its sha-sibling marker' \
+'head:HEAD a URL\: status, size, content type' \
+'sha:The sha256 of a file or URL' \
+'up:Upload a local directory (§5.2)' \
+'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'rm:Delete the enumerated names from a remote directory (§5.4)' \
+'point:Delete a pointer file (§5.4)' \
+'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
+'mv:Move a version\: mirror it into the destination, then delete the same names at the source' \
+'ls:List the entries of a raw directory URL, at any tree depth (--assets\: flat artifact names)' \
+'channel:Read or write a channel ref\: a token file with any name' \
+'verify:Check local bytes, markers and digests (no network)' \
+'doctor:Diagnose credentials, TLS and reachability' \
+'service:Server metadata through the Sonatype service REST API (not part of the storage protocol)' \
+'complete:Print a shell completion script to stdout (bash, zsh, fish, powershell)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__channel_commands] )) ||
+_nxr__subcmd__help__subcmd__channel_commands() {
+    local commands; commands=(
+'get:Print the current token. An unset channel prints \`unset\`' \
+'set:Write the token, optionally only forward in version order' \
+    )
+    _describe -t commands 'nxr help channel commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__channel__subcmd__get_commands] )) ||
+_nxr__subcmd__help__subcmd__channel__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help channel get commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__channel__subcmd__set_commands] )) ||
+_nxr__subcmd__help__subcmd__channel__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help channel set commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__complete_commands] )) ||
+_nxr__subcmd__help__subcmd__complete_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help complete commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__doctor_commands] )) ||
+_nxr__subcmd__help__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help doctor commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__down_commands] )) ||
+_nxr__subcmd__help__subcmd__down_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help down commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__get_commands] )) ||
+_nxr__subcmd__help__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help get commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__head_commands] )) ||
+_nxr__subcmd__help__subcmd__head_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help head commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__help_commands] )) ||
+_nxr__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__ls_commands] )) ||
+_nxr__subcmd__help__subcmd__ls_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help ls commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__mirror_commands] )) ||
+_nxr__subcmd__help__subcmd__mirror_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help mirror commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__mv_commands] )) ||
+_nxr__subcmd__help__subcmd__mv_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help mv commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__point_commands] )) ||
+_nxr__subcmd__help__subcmd__point_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help point commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__put_commands] )) ||
+_nxr__subcmd__help__subcmd__put_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help put commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__rm_commands] )) ||
+_nxr__subcmd__help__subcmd__rm_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help rm commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service_commands] )) ||
+_nxr__subcmd__help__subcmd__service_commands() {
+    local commands; commands=(
+'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+    )
+    _describe -t commands 'nxr help service commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__repos_commands] )) ||
+_nxr__subcmd__help__subcmd__service__subcmd__repos_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help service repos commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__sha_commands] )) ||
+_nxr__subcmd__help__subcmd__sha_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help sha commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__up_commands] )) ||
+_nxr__subcmd__help__subcmd__up_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help up commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__verify_commands] )) ||
+_nxr__subcmd__help__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help verify commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__ls_commands] )) ||
+_nxr__subcmd__ls_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr ls commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__mirror_commands] )) ||
+_nxr__subcmd__mirror_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr mirror commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__mv_commands] )) ||
+_nxr__subcmd__mv_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr mv commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__point_commands] )) ||
+_nxr__subcmd__point_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr point commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__put_commands] )) ||
+_nxr__subcmd__put_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr put commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__rm_commands] )) ||
+_nxr__subcmd__rm_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr rm commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service_commands] )) ||
+_nxr__subcmd__service_commands() {
+    local commands; commands=(
+'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr service commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__help_commands] )) ||
+_nxr__subcmd__service__subcmd__help_commands() {
+    local commands; commands=(
+'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'nxr service help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__help_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__repos_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__repos_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help repos commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__repos_commands] )) ||
+_nxr__subcmd__service__subcmd__repos_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service repos commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__sha_commands] )) ||
+_nxr__subcmd__sha_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr sha commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__up_commands] )) ||
+_nxr__subcmd__up_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr up commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__verify_commands] )) ||
+_nxr__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr verify commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_nxr" ]; then
+    _nxr "$@"
+else
+    compdef _nxr nxr
+fi

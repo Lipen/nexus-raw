@@ -258,6 +258,12 @@ pub(crate) enum Cmd {
         #[command(subcommand)]
         op: ServiceOp,
     },
+    /// Print a shell completion script to stdout (bash, zsh, fish, powershell).
+    Complete {
+        /// The shell to generate the script for.
+        #[arg(value_name = "SHELL")]
+        shell: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]

@@ -1,0 +1,539 @@
+
+using namespace System.Management.Automation
+using namespace System.Management.Automation.Language
+
+Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+
+    $commandElements = $commandAst.CommandElements
+    $command = @(
+        'nxr'
+        for ($i = 1; $i -lt $commandElements.Count; $i++) {
+            $element = $commandElements[$i]
+            if ($element -isnot [StringConstantExpressionAst] -or
+                $element.StringConstantType -ne [StringConstantType]::BareWord -or
+                $element.Value.StartsWith('-') -or
+                $element.Value -eq $wordToComplete) {
+                break
+        }
+        $element.Value
+    }) -join ';'
+
+    $completions = @(switch ($command) {
+        'nxr' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'GET a URL to a file or stdout')
+            [CompletionResult]::new('put', 'put', [CompletionResultType]::ParameterValue, 'PUT a file, optionally with its sha-sibling marker')
+            [CompletionResult]::new('head', 'head', [CompletionResultType]::ParameterValue, 'HEAD a URL: status, size, content type')
+            [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
+            [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
+            [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
+            [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
+            [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
+            [CompletionResult]::new('mv', 'mv', [CompletionResultType]::ParameterValue, 'Move a version: mirror it into the destination, then delete the same names at the source')
+            [CompletionResult]::new('ls', 'ls', [CompletionResultType]::ParameterValue, 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)')
+            [CompletionResult]::new('channel', 'channel', [CompletionResultType]::ParameterValue, 'Read or write a channel ref: a token file with any name')
+            [CompletionResult]::new('verify', 'verify', [CompletionResultType]::ParameterValue, 'Check local bytes, markers and digests (no network)')
+            [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Diagnose credentials, TLS and reachability')
+            [CompletionResult]::new('service', 'service', [CompletionResultType]::ParameterValue, 'Server metadata through the Sonatype service REST API (not part of the storage protocol)')
+            [CompletionResult]::new('complete', 'complete', [CompletionResultType]::ParameterValue, 'Print a shell completion script to stdout (bash, zsh, fish, powershell)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;get' {
+            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted)')
+            [CompletionResult]::new('--out', '--out', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--continue', '--continue', [CompletionResultType]::ParameterName, 'Resume from an existing `<out>`.part through a Range request')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;put' {
+            [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'The file to send')
+            [CompletionResult]::new('--file', '--file', [CompletionResultType]::ParameterName, 'The file to send')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--sha', '--sha', [CompletionResultType]::ParameterName, 'Also PUT `<url>`.sha256 with the sha256sum-style marker')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;head' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;sha' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;up' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Restrict the transfer to these names')
+            [CompletionResult]::new('--claim-first', '--claim-first', [CompletionResultType]::ParameterName, 'Upload this file first, alone, before any other name (claim-first)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--no-sha', '--no-sha', [CompletionResultType]::ParameterName, 'Skip marker generation and marker uploads')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;down' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
+            [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
+            [CompletionResult]::new('--fresh', '--fresh', [CompletionResultType]::ParameterName, 'Ignore existing part files: every name downloads from zero')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;rm' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
+            [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without deleting anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;point' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--clear', '--clear', [CompletionResultType]::ParameterName, 'Delete the pointer file the URL names')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;mirror' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
+            [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
+            [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;mv' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
+            [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
+            [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print both plans (the pour and the delete) without moving anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'nxr;ls' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--assets', '--assets', [CompletionResultType]::ParameterName, 'List the object names under a directory URL')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;channel' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'Print the current token. An unset channel prints `unset`')
+            [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Write the token, optionally only forward in version order')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;channel;get' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;channel;set' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--if-forward', '--if-forward', [CompletionResultType]::ParameterName, 'Keep the current token when it already compares >= the new one')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;channel;help' {
+            [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'Print the current token. An unset channel prints `unset`')
+            [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Write the token, optionally only forward in version order')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;channel;help;get' {
+            break
+        }
+        'nxr;channel;help;set' {
+            break
+        }
+        'nxr;channel;help;help' {
+            break
+        }
+        'nxr;verify' {
+            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Check exactly these names')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;doctor' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;service' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;service;repos' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;service;help' {
+            [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;service;help;repos' {
+            break
+        }
+        'nxr;service;help;help' {
+            break
+        }
+        'nxr;complete' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;help' {
+            [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'GET a URL to a file or stdout')
+            [CompletionResult]::new('put', 'put', [CompletionResultType]::ParameterValue, 'PUT a file, optionally with its sha-sibling marker')
+            [CompletionResult]::new('head', 'head', [CompletionResultType]::ParameterValue, 'HEAD a URL: status, size, content type')
+            [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
+            [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
+            [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
+            [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
+            [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
+            [CompletionResult]::new('mv', 'mv', [CompletionResultType]::ParameterValue, 'Move a version: mirror it into the destination, then delete the same names at the source')
+            [CompletionResult]::new('ls', 'ls', [CompletionResultType]::ParameterValue, 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)')
+            [CompletionResult]::new('channel', 'channel', [CompletionResultType]::ParameterValue, 'Read or write a channel ref: a token file with any name')
+            [CompletionResult]::new('verify', 'verify', [CompletionResultType]::ParameterValue, 'Check local bytes, markers and digests (no network)')
+            [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Diagnose credentials, TLS and reachability')
+            [CompletionResult]::new('service', 'service', [CompletionResultType]::ParameterValue, 'Server metadata through the Sonatype service REST API (not part of the storage protocol)')
+            [CompletionResult]::new('complete', 'complete', [CompletionResultType]::ParameterValue, 'Print a shell completion script to stdout (bash, zsh, fish, powershell)')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'nxr;help;get' {
+            break
+        }
+        'nxr;help;put' {
+            break
+        }
+        'nxr;help;head' {
+            break
+        }
+        'nxr;help;sha' {
+            break
+        }
+        'nxr;help;up' {
+            break
+        }
+        'nxr;help;down' {
+            break
+        }
+        'nxr;help;rm' {
+            break
+        }
+        'nxr;help;point' {
+            break
+        }
+        'nxr;help;mirror' {
+            break
+        }
+        'nxr;help;mv' {
+            break
+        }
+        'nxr;help;ls' {
+            break
+        }
+        'nxr;help;channel' {
+            [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'Print the current token. An unset channel prints `unset`')
+            [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Write the token, optionally only forward in version order')
+            break
+        }
+        'nxr;help;channel;get' {
+            break
+        }
+        'nxr;help;channel;set' {
+            break
+        }
+        'nxr;help;verify' {
+            break
+        }
+        'nxr;help;doctor' {
+            break
+        }
+        'nxr;help;service' {
+            [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            break
+        }
+        'nxr;help;service;repos' {
+            break
+        }
+        'nxr;help;complete' {
+            break
+        }
+        'nxr;help;help' {
+            break
+        }
+    })
+
+    $completions.Where{ $_.CompletionText -like "$wordToComplete*" } |
+        Sort-Object -Property ListItemText
+}

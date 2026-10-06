@@ -33,6 +33,17 @@ The classes and their hints are pinned in [errors and exit codes](../reference/e
 For scripting, `--json` turns every command into machine output: one JSON object for simple commands, one NDJSON event per line for transfers.
 The event shapes are fixed, and the [CI page](ci.md#ndjson-events) shows a `jq` gate built on the `summary` event.
 
+Shell completion comes from the binary itself: `nxr complete <shell>` prints the script, one line enables it per shell.
+
+```bash
+source <(nxr complete bash)                              # ~/.bashrc
+nxr complete zsh > "${fpath[1]}/_nxr"                    # then restart the shell
+nxr complete fish > ~/.config/fish/completions/nxr.fish
+nxr complete powershell | Out-String | Invoke-Expression # or the line in the profile
+```
+
+The generated script names the commands and flags of the build that printed it, so refresh a file-based install after a binary upgrade.
+
 ## As a Rust library
 
 `nexus-raw-core` is the same protocol without a UI.

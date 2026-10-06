@@ -1125,6 +1125,73 @@ fn golden_ndjson_doctor_holds() {
     );
 }
 
+// ---- golden completions -----------------------------------------------------
+
+/// The completion scripts are part of the contract, pinned byte-exact by fixtures in tests/golden/.
+/// A clap tree change (a command, a flag, a help text) deliberately breaks them;
+/// regenerate with `cargo run -p nexus-raw -- complete <shell> > <fixture>` and commit on purpose.
+/// The scripts are deterministic: no ports, no timestamps, no environment.
+#[test]
+fn golden_complete_bash_holds() {
+    let out = nxr(&["complete", "bash"]);
+    expect_exit(&out, 0, "golden complete bash");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/complete-bash.txt"),
+        "the bash completion changed: update tests/golden/complete-bash.txt deliberately"
+    );
+}
+
+#[test]
+fn golden_complete_zsh_holds() {
+    let out = nxr(&["complete", "zsh"]);
+    expect_exit(&out, 0, "golden complete zsh");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/complete-zsh.txt"),
+        "the zsh completion changed: update tests/golden/complete-zsh.txt deliberately"
+    );
+}
+
+#[test]
+fn golden_complete_fish_holds() {
+    let out = nxr(&["complete", "fish"]);
+    expect_exit(&out, 0, "golden complete fish");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/complete-fish.txt"),
+        "the fish completion changed: update tests/golden/complete-fish.txt deliberately"
+    );
+}
+
+#[test]
+fn golden_complete_powershell_holds() {
+    let out = nxr(&["complete", "powershell"]);
+    expect_exit(&out, 0, "golden complete powershell");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/complete-powershell.txt"),
+        "the powershell completion changed: update tests/golden/complete-powershell.txt deliberately"
+    );
+}
+
+/// An unknown shell is misuse: exit 2, the message names the supported four, the hint line follows.
+#[test]
+fn complete_unknown_shell_is_misuse_exit_2() {
+    let out = nxr(&["complete", "tcsh"]);
+    expect_exit(&out, 2, "complete of an unknown shell");
+    assert!(
+        stdout(&out).is_empty(),
+        "a refused completion prints nothing to stdout"
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains("misuse: unknown shell: tcsh (use bash, zsh, fish or powershell)"),
+        "the error names the shell and the supported four: {err}"
+    );
+    assert!(err.contains("hint:"), "the misuse hint is printed: {err}");
+}
+
 // ---- doctor ---------------------------------------------------------------
 
 /// A failing `up --json` still drains the event channel: stdout stays complete NDJSON (plan, artifact lines) and the last line is the Summary event naming both failures.

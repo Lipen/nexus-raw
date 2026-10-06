@@ -92,6 +92,7 @@ nxr verify vendor/prebuilt
 | `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 | `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
+| `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
 
 `down`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 Без любого из них команда отказывает.

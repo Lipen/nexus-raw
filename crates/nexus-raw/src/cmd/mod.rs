@@ -1,5 +1,6 @@
 //! Command handlers and the helpers they share.
 
+mod complete;
 mod doctor;
 mod layout;
 mod primitives;
@@ -141,6 +142,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             ServiceOp::Repos { url } => layout::service_repos(cli, url).await,
         },
         Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
+        Cmd::Complete { shell } => complete::complete(shell),
     }
 }
 

@@ -92,6 +92,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 | `nxr service repos <URL>` | list the repositories of a server (the service REST API, any URL of that server works) |
+| `nxr complete <shell>` | print a shell completion script to stdout (bash, zsh, fish, powershell) |
 
 `down`, `mirror` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
 With none of them they refuse.

@@ -1,0 +1,311 @@
+# Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
+function __fish_nxr_global_optspecs
+    string join \n u/user= workers= retry= connect-timeout-secs= stall-secs= tls-insecure json q/quiet v/verbose h/help V/version
+end
+
+function __fish_nxr_needs_command
+    # Figure out if the current invocation already has a command.
+    set -l cmd (commandline -opc)
+    set -e cmd[1]
+    argparse -s (__fish_nxr_global_optspecs) -- $cmd 2>/dev/null
+    or return
+    if set -q argv[1]
+        # Also print the command, so this can be used to figure out what it is.
+        echo $argv[1]
+        return 1
+    end
+    return 0
+end
+
+function __fish_nxr_using_subcommand
+    set -l cmd (__fish_nxr_needs_command)
+    test -z "$cmd"
+    and return 1
+    contains -- $cmd[1] $argv
+end
+
+complete -c nxr -n "__fish_nxr_needs_command" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_needs_command" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_needs_command" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_needs_command" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_needs_command" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_needs_command" -s V -l version -d 'Print version'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "get" -d 'GET a URL to a file or stdout'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "put" -d 'PUT a file, optionally with its sha-sibling marker'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "head" -d 'HEAD a URL: status, size, content type'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "sha" -d 'The sha256 of a file or URL'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "up" -d 'Upload a local directory (§5.2)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "point" -d 'Delete a pointer file (§5.4)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "ls" -d 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "channel" -d 'Read or write a channel ref: a token file with any name'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "verify" -d 'Check local bytes, markers and digests (no network)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "doctor" -d 'Diagnose credentials, TLS and reachability'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "service" -d 'Server metadata through the Sonatype service REST API (not part of the storage protocol)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "complete" -d 'Print a shell completion script to stdout (bash, zsh, fish, powershell)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted)' -r -F
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s f -l file -d 'The file to send' -r -F
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l sha -d 'Also PUT `<url>`.sha256 with the sha256sum-style marker'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l manifest -d 'Restrict the transfer to these names' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l no-sha -d 'Skip marker generation and marker uploads'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l dry-run -d 'Print the plan without transferring anything'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l ls -d 'Best-effort enumeration through the server search API'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l fresh -d 'Ignore existing part files: every name downloads from zero'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l dry-run -d 'Print the plan without transferring anything'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l ls -d 'Best-effort enumeration through the server search API'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l dry-run -d 'Print the plan without deleting anything'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l clear -d 'Delete the pointer file the URL names'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l ls -d 'Best-effort enumeration through the server search API'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dry-run -d 'Print the plan without transferring anything'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l ls -d 'Best-effort enumeration through the server search API'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dry-run -d 'Print both plans (the pour and the delete) without moving anything'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l assets -d 'List the object names under a directory URL'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "set" -d 'Write the token, optionally only forward in version order'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l if-forward -d 'Keep the current token when it already compares >= the new one'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "set" -d 'Write the token, optionally only forward in version order'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l manifest -d 'Check exactly these names' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "get" -d 'GET a URL to a file or stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "put" -d 'PUT a file, optionally with its sha-sibling marker'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "head" -d 'HEAD a URL: status, size, content type'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "sha" -d 'The sha256 of a file or URL'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "up" -d 'Upload a local directory (§5.2)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "point" -d 'Delete a pointer file (§5.4)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "ls" -d 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "channel" -d 'Read or write a channel ref: a token file with any name'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "verify" -d 'Check local bytes, markers and digests (no network)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "doctor" -d 'Diagnose credentials, TLS and reachability'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "service" -d 'Server metadata through the Sonatype service REST API (not part of the storage protocol)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "complete" -d 'Print a shell completion script to stdout (bash, zsh, fish, powershell)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down rm point mirror mv ls channel verify doctor service complete help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from channel" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from channel" -f -a "set" -d 'Write the token, optionally only forward in version order'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'

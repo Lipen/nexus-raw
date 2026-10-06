@@ -5,6 +5,7 @@ Single-object commands: `get`, `put`, `head`, `sha`.
 Directory transfers with sha-sibling verification: `up`, `down`, `mirror`, `mv`.
 Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
+Shell completions: `complete`.
 
 Every invocation is self-sufficient: the URL is a command-line argument and credentials come from `-u` or the environment.
 There is no config file, no profile and no state directory.
@@ -834,6 +835,39 @@ The report prints one line per check.
 | `0` | all checks passed, warnings included |
 | `2` | a local check failed: TLS verification off, settings out of range |
 | `3` | the probe failed: unreachable, a 5xx, or the server rejected the credentials (401/403) |
+
+## nxr complete
+
+```
+nxr complete <SHELL>
+```
+
+Print a shell completion script for `nxr` to stdout.
+The script is generated from the same command tree the binary runs on, so it lists exactly the commands and flags this build has.
+Nothing is read from the network, the filesystem or the environment: the command is a pure print.
+
+| Shell | Enable |
+|:------|:-------|
+| `bash` | `source <(nxr complete bash)` in `~/.bashrc` |
+| `zsh` | `nxr complete zsh > "${fpath[1]}/_nxr"`, then restart the shell (`compinit` picks the file up) |
+| `fish` | `nxr complete fish > ~/.config/fish/completions/nxr.fish` |
+| `powershell` | `nxr complete powershell \| Out-String \| Invoke-Expression`, or the same line in the profile for every session |
+
+```console
+$ nxr complete bash | head -3
+_nxr() {
+    local i cur prev opts cmd
+    COMPREPLY=()
+$ echo $?
+0
+```
+
+An unknown shell is misuse: exit 2, the message names the four supported shells, and the `hint:` line follows.
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the script printed |
+| `2` | misuse: an unknown shell |
 
 ## Output
 

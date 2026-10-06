@@ -5,7 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr complete <shell>`: prints a shell completion script (bash, zsh, fish, powershell) to stdout.
+The script is generated from the same clap tree the binary runs on and is pinned by golden tests.
 
 ## [0.5.0] - 2026-10-06
 
