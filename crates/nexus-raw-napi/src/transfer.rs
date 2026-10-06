@@ -19,7 +19,7 @@ use crate::result::{NxrPlan, NxrPlanAction, NxrRmPlan, NxrRmPlanAction, NxrSumma
 
 /// Upload a local directory.
 ///
-/// With `dryRun` the promise resolves to the plan instead of a summary and nothing transfers, like `up --dry-run`.
+/// With `dryRun` the promise resolves to the plan instead of a summary and nothing transfers, like `up --plan`.
 #[napi]
 pub async fn up(
     src_dir: String,

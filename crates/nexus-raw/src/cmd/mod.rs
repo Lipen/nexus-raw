@@ -14,7 +14,26 @@ use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Man
 use crate::render::{Mode, Session};
 use crate::{ChannelOp, Cli, Cmd, ServiceOp};
 
-pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
+/// Route one invocation to its handler.
+///
+/// The success value is the process exit code: `diff` compares and may exit 1
+/// after a fully successful run, every other command exits 0 on success.
+pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
+    if let Cmd::Diff {
+        local,
+        src,
+        manifest,
+        name,
+        ls,
+        prefix,
+    } = &cli.command
+    {
+        return transfer::diff(cli, local, src, manifest.as_deref(), name, *ls, prefix).await;
+    }
+    run(cli).await.map(|()| 0)
+}
+
+async fn run(cli: &Cli) -> Result<(), Error> {
     match &cli.command {
         Cmd::Get { url, out, cont } => primitives::get(cli, url, out.as_deref(), *cont).await,
         Cmd::Put { url, file, sha } => primitives::put(cli, url, file, *sha).await,
@@ -26,13 +45,13 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             manifest,
             claim_first,
             no_sha,
-            dry_run,
+            plan,
         } => {
             let claim = match claim_first {
                 Some(raw) => Some(ArtifactName::parse(raw)?),
                 None => None,
             };
-            transfer::up(cli, src, dst, manifest.as_deref(), claim, *no_sha, *dry_run).await
+            transfer::up(cli, src, dst, manifest.as_deref(), claim, *no_sha, *plan).await
         }
         Cmd::Down {
             src,
@@ -41,7 +60,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
             name,
             ls,
             fresh,
-            dry_run,
+            plan,
             prefix,
         } => {
             transfer::down(
@@ -52,7 +71,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
                 name,
                 *ls,
                 *fresh,
-                *dry_run,
+                *plan,
                 prefix,
             )
             .await
@@ -143,6 +162,8 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<(), Error> {
         },
         Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
         Cmd::Complete { shell } => complete::complete(shell),
+        // Routed in `dispatch`, where the verdict becomes the exit code.
+        Cmd::Diff { .. } => Ok(()),
     }
 }
 

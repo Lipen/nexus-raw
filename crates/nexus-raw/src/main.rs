@@ -102,8 +102,8 @@ pub(crate) enum Cmd {
         #[arg(long = "no-sha")]
         no_sha: bool,
         /// Print the plan without transferring anything.
-        #[arg(long)]
-        dry_run: bool,
+        #[arg(long, visible_alias = "dry-run")]
+        plan: bool,
     },
     /// Download a remote directory into a local one (§5.2, §5.2.1).
     Down {
@@ -126,8 +126,29 @@ pub(crate) enum Cmd {
         #[arg(long)]
         fresh: bool,
         /// Print the plan without transferring anything.
+        #[arg(long, visible_alias = "dry-run")]
+        plan: bool,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
+    },
+    /// Compare a local directory against a remote one: the delta report.
+    Diff {
+        /// The local directory.
+        #[arg(value_name = "LOCAL_DIR")]
+        local: PathBuf,
+        /// The remote directory URL.
+        #[arg(value_name = "SRC_URL")]
+        src: String,
+        /// Enumeration source: a manifest file, URL or `-` for stdin.
+        #[arg(long, value_name = "FILE|URL|-")]
+        manifest: Option<String>,
+        /// One explicit name (repeatable).
+        #[arg(long, value_name = "NAME")]
+        name: Vec<String>,
+        /// Best-effort enumeration through the server search API.
         #[arg(long)]
-        dry_run: bool,
+        ls: bool,
         /// Keep only names under this whole-segment prefix (repeatable).
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
@@ -306,7 +327,7 @@ fn main() -> std::process::ExitCode {
         .build()
         .expect("tokio runtime");
     match runtime.block_on(cmd::dispatch(&cli)) {
-        Ok(()) => std::process::ExitCode::SUCCESS,
+        Ok(code) => std::process::ExitCode::from(code),
         Err(e) => {
             if cli.json {
                 // The NDJSON channel must see the failure too: scripts parse this

@@ -239,23 +239,44 @@ fn second_up_is_a_pure_skip() {
     );
 }
 
-/// up --dry-run prints the plan and transfers nothing.
+/// `up --plan` prints the planned actions and transfers nothing.
 #[test]
-fn dry_run_prints_plan_without_uploading() {
+fn up_plan_prints_actions_without_uploading() {
     let srv = server(Scenario::Atomic);
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.zip", ALPHA);
 
-    let dry = nxr(&[
+    let plan = nxr(&["up", "--plan", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&plan, 0, "up --plan");
+    let out = stdout(&plan);
+    assert!(out.contains("upload a.zip"), "plan line missing: {out}");
+    assert!(put_requests(&srv).is_empty(), "a plan must not PUT");
+
+    // The old spelling keeps working as an alias.
+    let alias = nxr(&[
         "up",
         "--dry-run",
         src.path().to_str().unwrap(),
         &dir_url(&srv),
     ]);
-    expect_exit(&dry, 0, "up --dry-run");
-    let out = stdout(&dry);
-    assert!(out.contains("upload a.zip"), "plan line missing: {out}");
-    assert!(put_requests(&srv).is_empty(), "dry-run must not PUT");
+    expect_exit(&alias, 0, "up --dry-run alias");
+    assert!(stdout(&alias).contains("upload a.zip"));
+
+    // The JSON form is one object per plan line.
+    let json = nxr(&[
+        "--json",
+        "up",
+        "--plan",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+    ]);
+    expect_exit(&json, 0, "up --plan --json");
+    let lines = ndjson(&json);
+    assert_eq!(
+        lines[0],
+        serde_json::json!({"action": "upload", "name": "a.zip", "size": ALPHA.len()}),
+        "the plan json shape is fixed: {lines:?}"
+    );
 }
 
 // ---- enumeration ----------------------------------------------------------
@@ -1649,11 +1670,11 @@ fn point_clear_roundtrip_and_readonly() {
     assert!(ro.store_get("stable").is_some(), "the pointer must survive");
 }
 
-// ---- dry-run plans ---------------------------------------------------------
+// ---- plans -----------------------------------------------------------------
 
-/// `down --dry-run` prints the plan and writes nothing into the target directory.
+/// `down --plan` prints the plan and writes nothing into the target directory.
 #[test]
-fn down_dry_run_prints_plan_without_writing() {
+fn down_plan_prints_plan_without_writing() {
     let srv = server(Scenario::Atomic);
     srv.insert("1.14.0/a.zip", ALPHA);
     srv.insert(
@@ -1667,17 +1688,246 @@ fn down_dry_run_prints_plan_without_writing() {
         dst.path().to_str().unwrap(),
         "--name",
         "a.zip",
-        "--dry-run",
+        "--plan",
     ]);
-    expect_exit(&plan, 0, "down --dry-run");
+    expect_exit(&plan, 0, "down --plan");
     assert!(
         stdout(&plan).contains("download a.zip"),
         "got: {}",
         stdout(&plan)
     );
+    assert!(!dst.path().join("a.zip").exists(), "a plan writes nothing");
+}
+
+// ---- diff ------------------------------------------------------------------
+
+/// Seed the diff fixture: four names up'd with markers, then every delta shape
+/// manufactured: two equal, one missing-local, two missing-remote, two diverged.
+/// `g.zip` is put before the `up`, so the remote copy never grows a marker.
+/// The second directory stays outside the scan: it feeds the remote-only put
+/// and the explicit enumeration list.
+fn seed_diff_fixture() -> (MockNexus, TempDir, TempDir) {
+    let srv = server(Scenario::Atomic);
+    let local = TempDir::new().unwrap();
+    let scratch = TempDir::new().unwrap();
+    let base = dir_url(&srv);
+
+    // The remote-only markerless name: put before the up, so no sibling exists.
+    write_file(
+        scratch.path(),
+        "g-src",
+        b"gamma bytes served without a marker\n",
+    );
+    expect_exit(
+        &nxr(&[
+            "put",
+            &format!("{base}g.zip"),
+            "-f",
+            scratch.path().join("g-src").to_str().unwrap(),
+        ]),
+        0,
+        "seeding the remote-only g.zip",
+    );
+
+    write_file(local.path(), "a.zip", ALPHA);
+    write_file(local.path(), "b.zip", ALPHA);
+    write_file(local.path(), "d.zip", ALPHA);
+    write_file(
+        local.path(),
+        "manifest.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip","b.zip","d.zip","manifest.json"]}"#,
+    );
+    expect_exit(
+        &nxr(&["up", local.path().to_str().unwrap(), &base]),
+        0,
+        "seeding the diff fixture",
+    );
+
+    // b.zip disappears locally: missing-local.
+    std::fs::remove_file(local.path().join("b.zip")).unwrap();
+    std::fs::remove_file(local.path().join("b.zip.sha256")).unwrap();
+
+    // c.zip appears locally with a correct marker: missing-remote.
+    write_file(local.path(), "c.zip", BETA);
+    write_file(
+        local.path(),
+        "c.zip.sha256",
+        marker_line("c.zip", BETA).as_bytes(),
+    );
+
+    // d.zip is rewritten with the same length and a fresh marker: diverged by sha only.
+    let same_len = vec![b'x'; ALPHA.len()];
+    write_file(local.path(), "d.zip", &same_len);
+    write_file(
+        local.path(),
+        "d.zip.sha256",
+        marker_line("d.zip", &same_len).as_bytes(),
+    );
+
+    // g.zip appears locally, markerless, at a different size: diverged by size only.
+    write_file(local.path(), "g.zip", BETA);
+
+    // zzz.txt appears locally after the up and stays unenumerated: the union path.
+    write_file(local.path(), "zzz.txt", b"local only\n");
+    write_file(
+        local.path(),
+        "zzz.txt.sha256",
+        marker_line("zzz.txt", b"local only\n").as_bytes(),
+    );
+
+    // The explicit enumeration list, g.zip included, c.zip probed away.
+    write_file(
+        scratch.path(),
+        "list.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip","b.zip","c.zip","d.zip","g.zip","manifest.json"]}"#,
+    );
+    (srv, local, scratch)
+}
+
+/// A converged directory diffs to silence and exit 0, like diff(1).
+#[test]
+fn diff_equal_directory_exits_zero() {
+    let srv = server(Scenario::Atomic);
+    let local = TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+    write_file(
+        local.path(),
+        "manifest.json",
+        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip","manifest.json"]}"#,
+    );
+    let base = dir_url(&srv);
+    expect_exit(
+        &nxr(&["up", local.path().to_str().unwrap(), &base]),
+        0,
+        "seeding the equal directory",
+    );
+
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &base]);
+    expect_exit(&out, 0, "an equal directory is exit 0");
+    assert_eq!(
+        stdout(&out),
+        "same a.zip\nsame manifest.json\n",
+        "an equal directory reports every name as same"
+    );
+
+    // An explicit name enumerates the same convention.
+    let named = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "manifest.json",
+    ]);
+    expect_exit(&named, 0, "an equal named diff is exit 0");
+}
+
+/// `diff` prints one line per entry and changes nothing on either side.
+#[test]
+fn diff_reports_the_sections_and_writes_nothing() {
+    let (srv, local, scratch) = seed_diff_fixture();
+    let before = put_requests(&srv).len();
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--manifest",
+        scratch.path().join("list.json").to_str().unwrap(),
+    ]);
+    expect_exit(&out, 1, "a non-empty delta is exit 1");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 7, "one line per entry: {text}");
+    assert!(lines.contains(&"same a.zip"), "{text}");
+    assert!(lines.contains(&"same manifest.json"), "{text}");
+    assert!(lines.contains(&"missing-local b.zip"), "{text}");
+    assert!(lines.contains(&"missing-remote c.zip"), "{text}");
+    assert!(lines.contains(&"missing-remote zzz.txt"), "{text}");
+    assert!(lines.contains(&"diverged d.zip (sha)"), "{text}");
+    assert!(lines.contains(&"diverged g.zip (size)"), "{text}");
+    assert_eq!(put_requests(&srv).len(), before, "a diff must not PUT");
     assert!(
-        !dst.path().join("a.zip").exists(),
-        "a dry run writes nothing"
+        !srv.requests().iter().any(|r| r.method == "DELETE"),
+        "a diff must not DELETE"
+    );
+}
+
+/// `diff` without an enumeration source refuses like `down`, hint included.
+#[test]
+fn diff_without_enumeration_needs_a_source() {
+    let srv = server(Scenario::Atomic);
+    let local = TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&out, 1, "cannot enumerate is exit 1");
+    let err = stderr(&out);
+    assert!(err.contains("cannot enumerate"), "{err}");
+    assert!(err.contains("hint:"), "every error carries a hint: {err}");
+}
+
+/// `diff` misuse: a local path that is not a directory, an unsafe name on either input.
+#[test]
+fn diff_misuse_exits_two() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let file = TempDir::new().unwrap();
+    write_file(file.path(), "plain.txt", b"not a directory");
+    let out = nxr(&[
+        "diff",
+        file.path().join("plain.txt").to_str().unwrap(),
+        &base,
+    ]);
+    expect_exit(&out, 2, "a plain file is not a directory");
+    assert!(stderr(&out).contains("not a directory"));
+
+    let out = nxr(&[
+        "diff",
+        file.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "bad*name",
+    ]);
+    expect_exit(&out, 2, "an unsafe --name is misuse");
+    assert!(stderr(&out).contains("unsafe name"));
+
+    // A local file name the grammar refuses is misuse, never a silent skip.
+    let bad = TempDir::new().unwrap();
+    write_file(bad.path(), "weird name.txt", b"x");
+    let out = nxr(&[
+        "diff",
+        bad.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&out, 2, "an unscannable local name is misuse");
+    assert!(stderr(&out).contains("unsafe name"));
+}
+
+/// The `diff --json` surface is a contract, pinned byte-exact by fixtures in tests/golden/.
+#[test]
+fn golden_ndjson_diff_holds() {
+    let (srv, local, scratch) = seed_diff_fixture();
+    let before = put_requests(&srv).len();
+    let out = nxr(&[
+        "--json",
+        "diff",
+        local.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--manifest",
+        scratch.path().join("list.json").to_str().unwrap(),
+    ]);
+    expect_exit(&out, 1, "the golden diff finds differences");
+    assert_eq!(
+        stdout(&out),
+        include_str!("golden/diff.ndjson"),
+        "the diff ndjson changed: update tests/golden/diff.ndjson deliberately"
+    );
+    assert_eq!(put_requests(&srv).len(), before, "a diff must not PUT");
+    assert!(
+        !srv.requests().iter().any(|r| r.method == "DELETE"),
+        "a diff must not DELETE"
     );
 }
 

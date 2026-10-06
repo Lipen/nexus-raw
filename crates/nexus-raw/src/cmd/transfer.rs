@@ -25,11 +25,11 @@ pub(crate) async fn up(
     manifest: Option<&str>,
     claim: Option<ArtifactName>,
     no_sha: bool,
-    dry_run: bool,
+    plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, manifest, claim, no_sha, dry_run).await;
+    let result = run_up(&ctx, src, manifest, claim, no_sha, plan).await;
     finish(ctx).await;
     result
 }
@@ -40,13 +40,13 @@ async fn run_up(
     manifest: Option<&str>,
     claim: Option<ArtifactName>,
     no_sha: bool,
-    dry_run: bool,
+    plan: bool,
 ) -> Result<(), Error> {
     let names = match manifest {
         Some(spec) => Some(load_manifest(&ctx.nxr, spec).await?.names),
         None => None,
     };
-    if dry_run {
+    if plan {
         let names = match names {
             Some(n) => Some(n),
             None => Some(ctx.nxr.scan(src)?),
@@ -81,14 +81,14 @@ pub(crate) async fn down(
     names: &[String],
     ls: bool,
     fresh: bool,
-    dry_run: bool,
+    plan: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
     let enum_src = enumeration_source(&ctx, manifest, names, ls)
         .await?
         .with_prefixes(prefixes)?;
-    let result = run_down(&ctx, dst, enum_src, fresh, dry_run).await;
+    let result = run_down(&ctx, dst, enum_src, fresh, plan).await;
     finish(ctx).await;
     result
 }
@@ -98,9 +98,9 @@ async fn run_down(
     dst: &Path,
     enum_src: Enumeration,
     fresh: bool,
-    dry_run: bool,
+    plan: bool,
 ) -> Result<(), Error> {
-    if dry_run {
+    if plan {
         let names = ctx.nxr.enumerate(enum_src).await?;
         let actions = ctx
             .nxr
@@ -113,6 +113,114 @@ async fn run_down(
     }
     ctx.nxr.down(dst, enum_src, fresh).await?;
     Ok(())
+}
+
+/// The delta of a local directory against a remote one (`nxr diff`).
+///
+/// Read-only on both sides: the verdict travels as the exit code, not as an error.
+pub(crate) async fn diff(
+    cli: &Cli,
+    local: &Path,
+    src: &str,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    prefixes: &[String],
+) -> Result<u8, Error> {
+    if !local.is_dir() {
+        return Err(Error::Misuse(format!(
+            "not a directory: {}",
+            local.display()
+        )));
+    }
+    let ctx = make_ctx(cli, src)?;
+    let result = run_diff(&ctx, local, manifest, names, ls, prefixes).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_diff(
+    ctx: &Ctx,
+    local: &Path,
+    manifest: Option<&str>,
+    names: &[String],
+    ls: bool,
+    prefixes: &[String],
+) -> Result<u8, Error> {
+    let enum_src = enumeration_source(ctx, manifest, names, ls)
+        .await?
+        .with_prefixes(prefixes)?;
+    let entries = ctx.nxr.delta(local, enum_src).await?;
+    for e in &entries {
+        crate::cmd::print_line(ctx.json, &delta_line(e), &delta_json(e));
+    }
+    let differs = entries
+        .iter()
+        .any(|e| !matches!(e, nexus_raw_core::Delta::Same { .. }));
+    Ok(u8::from(differs))
+}
+
+/// The human line of one delta entry.
+fn delta_line(d: &nexus_raw_core::Delta) -> String {
+    match d {
+        nexus_raw_core::Delta::Same { name, .. } => format!("same {name}"),
+        nexus_raw_core::Delta::MissingLocal { name, .. } => format!("missing-local {name}"),
+        nexus_raw_core::Delta::MissingRemote { name, .. } => format!("missing-remote {name}"),
+        nexus_raw_core::Delta::Diverged {
+            name, size, sha, ..
+        } => {
+            let mut why = Vec::new();
+            if *size {
+                why.push("size");
+            }
+            if *sha {
+                why.push("sha");
+            }
+            let tag = if why.is_empty() {
+                "unverifiable".to_owned()
+            } else {
+                why.join("+")
+            };
+            format!("diverged {name} ({tag})")
+        }
+    }
+}
+
+/// The JSON shape of one side's facts: `null` when a fact is unknown.
+fn delta_side_json(s: &nexus_raw_core::Side) -> serde_json::Value {
+    serde_json::json!({
+        "digest": s.digest.as_ref().map(|d| d.as_str()),
+        "size": s.size,
+    })
+}
+
+/// The JSON shape of one delta entry, one object per line.
+fn delta_json(d: &nexus_raw_core::Delta) -> serde_json::Value {
+    match d {
+        nexus_raw_core::Delta::Same { name, digest } => {
+            serde_json::json!({"delta": "same", "name": name.to_string(), "digest": digest.as_str()})
+        }
+        nexus_raw_core::Delta::MissingLocal { name, remote } => {
+            serde_json::json!({"delta": "missing-local", "name": name.to_string(), "remote": delta_side_json(remote)})
+        }
+        nexus_raw_core::Delta::MissingRemote { name, local } => {
+            serde_json::json!({"delta": "missing-remote", "name": name.to_string(), "local": delta_side_json(local)})
+        }
+        nexus_raw_core::Delta::Diverged {
+            name,
+            local,
+            remote,
+            size,
+            sha,
+        } => serde_json::json!({
+            "delta": "diverged",
+            "name": name.to_string(),
+            "local": delta_side_json(local),
+            "remote": delta_side_json(remote),
+            "size": size,
+            "sha": sha,
+        }),
+    }
 }
 
 /// Delete the enumerated names from a remote directory: marker first, then bytes.

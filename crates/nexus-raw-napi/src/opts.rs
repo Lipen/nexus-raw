@@ -145,7 +145,7 @@ pub struct NxrUpOpts {
     pub claim_first: Option<String>,
     /// Skip marker generation and marker uploads.
     pub no_sha: Option<bool>,
-    /// Resolve to the plan without transferring anything (`up --dry-run`).
+    /// Resolve to the plan without transferring anything (`up --plan`).
     pub dry_run: Option<bool>,
 }
 

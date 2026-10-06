@@ -1,0 +1,7 @@
+{"delta":"same","digest":"aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70","name":"a.zip"}
+{"delta":"missing-local","name":"b.zip","remote":{"digest":"aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70","size":35}}
+{"delta":"missing-remote","local":{"digest":"df1afd2c2051cee61447aa89dfb769028030e5c667ae248e57fe6846d739a535","size":25},"name":"c.zip"}
+{"delta":"diverged","local":{"digest":"efa79bd8bf70266b39e0ccd08d615c56df473b6faa88769554d0e33f9cab8259","size":35},"name":"d.zip","remote":{"digest":"aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70","size":35},"sha":true,"size":false}
+{"delta":"diverged","local":{"digest":"df1afd2c2051cee61447aa89dfb769028030e5c667ae248e57fe6846d739a535","size":25},"name":"g.zip","remote":{"digest":null,"size":36},"sha":false,"size":true}
+{"delta":"same","digest":"837ba4679d732f46f7f5d9e7e8095a9a6f1af7ce58f4a54d8f741a30429462b9","name":"manifest.json"}
+{"delta":"missing-remote","local":{"digest":"f0cc7d0eba2697a0ae709dfd28cca640e2a2366edbb0f4eaa8d97f034366ca06","size":11},"name":"zzz.txt"}

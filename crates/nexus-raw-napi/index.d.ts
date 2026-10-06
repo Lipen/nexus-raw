@@ -139,7 +139,7 @@ export interface NxrUpOpts extends NxrCommonOpts {
   claimFirst?: string
   /** Skip marker generation and marker uploads. */
   noSha?: boolean
-  /** Resolve to the plan without transferring anything (`up --dry-run`). */
+  /** Resolve to the plan without transferring anything (`up --plan`). */
   dryRun?: boolean
 }
 
