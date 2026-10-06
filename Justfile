@@ -83,8 +83,10 @@ check:
 
 # ---- release ---------------------------------------------------------------
 
-# The workspace manifest is the source of truth; the npm package, its lock and
-# the internal dependency version follow it. `just check` runs version-check.
+# The workspace manifest is the source of truth; the npm package, the internal
+# dependency versions and the example pins follow it. The example locks cannot
+# follow before the registry has the release, so the recipe ends with the
+# post-publish reminder. `just check` runs version-check.
 [doc('Set the release version everywhere it is asserted: `just version 0.2.0`.')]
 [group('release')]
 version v:
@@ -106,6 +108,8 @@ version v:
     # not wait for `just check` to find a half-bumped tree.
     scripts/version-check.sh
     echo "version {{v}} set (was $old)"
+    echo "remind: the example locks resolve only after the registry has {{v}}:"
+    echo "  cd examples/node && pnpm up nexus-raw@^$(echo "{{v}}" | cut -d. -f1-2).0"
 
 # The manifest is the source of truth for the current number; this only does
 # the arithmetic and hands the result to `just version`.
