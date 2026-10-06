@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nxr sandbox</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.2rem; }
+  form { display: flex; gap: .5rem; margin: 1rem 0; }
+  input[type=url] { flex: 1; padding: .4rem .6rem; }
+  button { padding: .4rem .9rem; }
+  ul { padding-left: 0; list-style: none; }
+  li { padding: .15rem 0; border-bottom: 1px solid color-mix(in oklch, currentColor 15%, transparent); }
+  li::before { content: "📄 "; }
+  li.dir::before { content: "📁 "; }
+  #status { min-height: 1.5em; color: gray; font-style: italic; }
+  #error { white-space: pre-wrap; color: crimson; }
+</style>
+</head>
+<body>
+<h1>nxr wasm sandbox</h1>
+<p>
+  nexus-raw-core compiled to wasm32-unknown-unknown, listing a raw Nexus directory from your browser.
+  Requests go to this origin itself (<code>/repository/…</code>, <code>/service/rest/…</code>), where
+  <code>serve.mjs</code> either fakes a Nexus or proxies to a real one (<code>--upstream</code>).
+</p>
+<form id="ls">
+  <input id="dir" type="url" aria-label="directory URL">
+  <button type="submit">ls</button>
+</form>
+<p id="status">loading the module…</p>
+<ul id="entries"></ul>
+<pre id="error"></pre>
+<script type="module">
+  import init, { nxr_ls } from './pkg/nexus_raw_example_wasm_sandbox.js'
+
+  const status = document.getElementById('status')
+  const list = document.getElementById('entries')
+  const error = document.getElementById('error')
+
+  // Failures must land on the page, not in an invisible console.
+  window.addEventListener('error', (e) => {
+    error.textContent += `window error: ${e.message}\n`
+  })
+  window.addEventListener('unhandledrejection', (e) => {
+    error.textContent += `rejection: ${e.reason}\n`
+  })
+
+  async function run() {
+    error.textContent = ''
+    list.textContent = ''
+    status.textContent = `listing ${dir.value} …`
+    let rows = 0
+    let failed = ''
+    try {
+      const parsed = JSON.parse(await nxr_ls(dir.value, null))
+      rows = parsed.length
+      for (const row of parsed) {
+        const li = document.createElement('li')
+        li.textContent = row.name + (row.dir ? '/' : '')
+        if (row.dir) li.className = 'dir'
+        list.append(li)
+      }
+      status.textContent = `${rows} entr${rows === 1 ? 'y' : 'ies'}`
+    } catch (e) {
+      failed = String(e)
+      status.textContent = 'failed'
+      error.textContent = failed
+    } finally {
+      // The server logs this: the headless proof that the wasm ran end to end.
+      fetch(`/beacon?rows=${rows}&failed=${encodeURIComponent(failed)}`).catch(() => {})
+    }
+  }
+
+  // Core requires an absolute http(s) URL: build the same-origin default here.
+  dir.value = `${location.origin}/repository/demo/`
+
+  // The top-level await holds the load event until the first listing is rendered,
+  // which also makes headless screenshots deterministic.
+  try {
+    await init()
+  } catch (e) {
+    status.textContent = 'init failed'
+    error.textContent = String(e)
+    throw e
+  }
+  document.getElementById('ls').addEventListener('submit', (ev) => {
+    ev.preventDefault()
+    run()
+  })
+  await run()
+</script>
+</body>
+</html>
