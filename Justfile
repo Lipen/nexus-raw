@@ -136,7 +136,7 @@ bump part:
 # call for the same number is the recovery path: the version step is
 # idempotent, the changelog date refreshes to today, the guards in the
 # workflow skip whatever is already published.
-[doc('Release X.Y.Z: bump, changelog, push, dispatch, watch. Rehearses by default; pass --yes to publish: `just release 0.6.0 --yes`.')]
+[doc('Release X.Y.Z: a preview by default; --yes really bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.')]
 [group('release')]
 release v *mode:
     #!/bin/sh
@@ -145,15 +145,35 @@ release v *mode:
       [0-9]*.[0-9]*.[0-9]*) ;;
       *) echo "release: {{v}} is not X.Y.Z" >&2; exit 2 ;;
     esac
-    # The default act is a rehearsal: the gate and every build run, nothing
-    # is published and no tag is created. --yes is the real thing.
-    flags="-f dry-run=true"
+    yes=""
     for m in {{mode}}; do
       case "$m" in
-        --yes) flags="" ;;
+        --yes) yes=1 ;;
         *) echo "release: unknown mode '$m' (want --yes)" >&2; exit 2 ;;
       esac
     done
+    if [ -z "$yes" ]; then
+      old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+      echo "release {{v}}: dry run, nothing is pushed or published"
+      if [ "$old" = "{{v}}" ]; then
+        echo "  version: already {{v}}, the bump would be a no-op"
+      else
+        echo "  version: $old -> {{v}} in Cargo.toml, the napi package.json, two dependency pins, Cargo.lock"
+      fi
+      python3 scripts/changelog-finalize.py "{{v}}" --dry | sed 's/^/  /'
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "  warning: the tree is dirty, --yes would commit the tracked changes"
+      fi
+      if git ls-remote --exit-code origin "refs/tags/v{{v}}" > /dev/null 2>&1; then
+        echo "  warning: tag v{{v}} already exists, --yes would fail at the gate"
+      fi
+      if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"{{v}}\""; then
+        echo "  note: {{v}} is already on crates.io, the crates job would skip"
+      fi
+      echo "  pipeline: gate -> builds (linux-x64, darwin-x64, darwin-arm64, windows-x64) -> crates -> node addons -> npm -> tag v{{v}} + release"
+      echo "nothing was pushed or published: call 'just release {{v}} --yes' for the real act"
+      exit 0
+    fi
     just version "{{v}}"
     python3 scripts/changelog-finalize.py "{{v}}"
     git add -u
@@ -165,7 +185,7 @@ release v *mode:
     # The dispatch API takes a branch, not a raw SHA: master is the ref, and
     # the gate validates whatever HEAD it gets.
     echo "dispatching the release on $sha"
-    gh workflow run release.yml --ref master $flags
+    gh workflow run release.yml --ref master
     run=""
     for i in 1 2 3 4 5 6; do
       sleep 5
@@ -174,11 +194,7 @@ release v *mode:
     done
     [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
     gh run watch "$run" --interval 30 --exit-status
-    if [ -n "$flags" ]; then
-      echo "rehearsal green: $sha"
-    else
-      echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v{{v}}"
-    fi
+    echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v{{v}}"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('release')]

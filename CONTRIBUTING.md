@@ -55,13 +55,14 @@ The recorded session in `docs/assets/cast/` is the exception — it names the bi
 ## Release
 
 ```bash
-just release X.Y.Z          # rehearsal: bump, changelog, push, gate and builds
-just release X.Y.Z --yes    # the real thing: everything above, published and tagged
+just release X.Y.Z          # preview: a summary of the expected act, nothing is pushed
+just release X.Y.Z --yes    # the real thing: bump, changelog, push, publish, tag
 ```
 
-`just release X.Y.Z` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then dispatches `.github/workflows/release.yml` on master and watches the run.
-By default the dispatch is a rehearsal: the gate and every build run, nothing is published, no tag is created.
-`--yes` is the real thing.
+`just release X.Y.Z` prints what the release would do: the version move, the changelog section it would finalize, warnings about a dirty tree, an existing tag or a version already on crates.io, and the pipeline order.
+It pushes nothing and dispatches nothing.
+
+`just release X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then dispatches `.github/workflows/release.yml` on master and watches the run.
 
 The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and only then the finalize job creates the tag and the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
