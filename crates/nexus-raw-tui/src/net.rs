@@ -187,7 +187,7 @@ pub fn fetch_one(
     out: PathBuf,
     dst: PathBuf,
     auth: Option<String>,
-) {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let _ = tx.send(Msg::Dl(DlEv::Start {
             local: dst,
@@ -201,7 +201,7 @@ pub fn fetch_one(
             failed: Vec::new(),
             removed: 0,
         }))));
-    });
+    })
 }
 
 async fn fetch_one_inner(url: String, out: PathBuf, auth: Option<String>) -> Result<u64, Error> {
@@ -351,7 +351,7 @@ pub fn start_download(
     names: Vec<ArtifactName>,
     dst: PathBuf,
     auth: Option<String>,
-) {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let _ = tx.send(Msg::Dl(DlEv::Start {
             local: dst.clone(),
@@ -375,7 +375,7 @@ pub fn start_download(
         let _ = tx.send(Msg::Dl(DlEv::Done(res)));
         // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
         let _ = forwarder.await;
-    });
+    })
 }
 
 /// Uploads the local directory `src` into the remote directory `base`,
@@ -385,7 +385,7 @@ pub fn start_upload(
     base: String,
     src: PathBuf,
     auth: Option<String>,
-) {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let _ = tx.send(Msg::Dl(DlEv::Start {
             local: src.clone(),
@@ -409,7 +409,7 @@ pub fn start_upload(
         let _ = tx.send(Msg::Dl(DlEv::Done(res)));
         // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
         let _ = forwarder.await;
-    });
+    })
 }
 
 /// Folds a core event into a transfer progress message of the given direction.

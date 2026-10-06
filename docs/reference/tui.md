@@ -45,6 +45,8 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `d` | download the selected entry into the destination folder |
 | `D` | download with a dialog: folder and name, prefilled from the selection |
 | `p` | upload a local folder into the current tree position (source picker) |
+| `c` | copy the URL of the selection: the repository, the file or the folder |
+| `x` | cancel the running transfer |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
@@ -88,6 +90,13 @@ While the upload runs, the panel shows the remote base, the source folder, the p
 Navigation, filters, cards and tab switches keep working: the position the put goes into is fixed at the start, browsing never retargets it.
 A finished put quietly refreshes the tree position it went into, so the new names appear without a manual `r`.
 An empty source opens the error modal without a retry, every other refusal offers `r` to rerun the same put into the same base.
+
+## Cancel
+
+`x` aborts the running transfer, whichever direction.
+The panel ends with `cancelled` and the status line says so; the stragglers of the aborted task are ignored, no modal opens.
+There is no retry behind a cancel: starting again is a normal `d` or `p`.
+An upload cancelled in the middle leaves markerless objects behind, exactly like any interrupted `nxr up`: the next put completes them.
 
 ## Errors
 
@@ -157,6 +166,7 @@ Everything else keeps working: browsing, filters, refreshes, cards, tab switches
 A running transfer is never interrupted by the UI.
 Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
 A panel titled `download` or `upload` shows the plan, the files in flight with byte progress and the final summary, and stays until the next transfer replaces it.
+`x` cancels the running transfer, and the panel keeps the outcome until the next one starts.
 Failures open the error modal and never close the TUI.
 
 ## Headless smoke mode

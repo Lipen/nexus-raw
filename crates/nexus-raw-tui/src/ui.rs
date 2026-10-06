@@ -256,6 +256,10 @@ fn outcome_line(dl: &Transfer) -> Line<'static> {
             ),
             Style::default().add_modifier(Modifier::BOLD),
         )),
+        Some(DlOutcome::Cancelled) => Line::from(Span::styled(
+            "cancelled",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
         Some(DlOutcome::Failed(msg, hint)) => {
             let mut text = format!("failed: {msg}");
             if let Some(hint) = hint {
@@ -426,6 +430,8 @@ fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
         "  esc, enter, q     close".to_owned(),
         String::new(),
         "actions".to_owned(),
+        "  c                 copy the url of the selection".to_owned(),
+        "  x                 cancel the running transfer".to_owned(),
         "  e                 toggle enter/expand navigation (saved to the config)".to_owned(),
         "  r                 refresh, keeps the filter and the cursor".to_owned(),
         "  s                 servers: switch or add, the add saves a preset".to_owned(),

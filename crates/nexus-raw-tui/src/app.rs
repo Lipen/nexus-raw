@@ -259,13 +259,15 @@ impl Tab {
     }
 }
 
-/// Terminal outcome of one download.
+/// Terminal outcome of one transfer.
 #[derive(Debug)]
 pub enum DlOutcome {
     /// The summary of a finished transfer.
     Done(Summary),
     /// The message and hint of a refusal.
     Failed(String, Option<String>),
+    /// The user aborted the run with `x`.
+    Cancelled,
 }
 
 /// A repository flattened to plain fields, so cards and dialogs can hold,
@@ -543,6 +545,10 @@ pub struct Transfer {
     /// True when the collected names are stripped to the scope, so they land
     /// straight under `{dst}` (the dialog's `{dir}/{name}` target).
     pub scope_relative: bool,
+    /// The task of the running transfer: `x` aborts through it.
+    pub handle: Option<tokio::task::JoinHandle<()>>,
+    /// Set by `x`: the stragglers of the aborted task are ignored.
+    pub cancelled: bool,
     /// What `r` in a failure modal runs again.
     pub retry: Option<Retry>,
 }
@@ -566,6 +572,8 @@ impl Default for Transfer {
             outcome: None,
             scope: String::new(),
             scope_relative: false,
+            handle: None,
+            cancelled: false,
             retry: None,
         }
     }
@@ -997,6 +1005,8 @@ impl App {
             KeyCode::Char(_) if pressed(&key, 'o') => self.open_dest_picker(None, None),
             KeyCode::Char(_) if pressed(&key, 'd') => self.quick_download(),
             KeyCode::Char(_) if pressed(&key, 'p') => self.open_source_picker(),
+            KeyCode::Char(_) if pressed(&key, 'x') => self.cancel_transfer(),
+            KeyCode::Char(_) if pressed(&key, 'c') => self.copy_selected_url(),
             KeyCode::Char(_) if pressed(&key, 'D') => self.open_save_as(),
             KeyCode::Char(_) if pressed(&key, 'r') => self.refresh(),
             KeyCode::Char(_) if pressed(&key, 'e') => self.toggle_nav(),
@@ -1411,6 +1421,45 @@ impl App {
     /// one waits for the panel to resolve. Browsing never waits on it.
     fn transfer_busy(&self) -> bool {
         self.transfer.as_ref().is_some_and(Transfer::is_running)
+    }
+
+    /// The `x` verb: abort the running transfer. There is no cancel modal:
+    /// restarting is a normal `d` or `p`.
+    fn cancel_transfer(&mut self) {
+        let Some(dl) = self.transfer.as_mut() else {
+            self.status = "nothing is running".into();
+            return;
+        };
+        if !dl.is_running() {
+            self.status = "nothing is running".into();
+            return;
+        }
+        if let Some(handle) = dl.handle.take() {
+            handle.abort();
+        }
+        dl.cancelled = true;
+        dl.active.clear();
+        dl.outcome = Some(DlOutcome::Cancelled);
+        self.status = "cancelled".into();
+    }
+
+    /// The `c` verb: copy the URL of the selection. The repository on the
+    /// repositories screen, the file or folder on the tree.
+    fn copy_selected_url(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let url = match t.screen {
+            Screen::Repos => t.repos.get(t.repos_cursor).map(|r| r.url.clone()),
+            Screen::Tree => t
+                .selected_row()
+                .map(|row| format!("{}{}", t.here_url(), row.rel)),
+        };
+        let Some(url) = url else {
+            return;
+        };
+        clipboard::copy(&url, self.config.tui.osc52);
+        self.toast("copied");
     }
 
     fn request_quit(&mut self) {
@@ -2072,7 +2121,10 @@ impl App {
             ..Transfer::default()
         });
         self.status = format!("put {} -> {}", src.display(), pos);
-        net::start_upload(self.tx.clone(), base, src, self.auth.clone());
+        let handle = net::start_upload(self.tx.clone(), base, src, self.auth.clone());
+        if let Some(dl) = self.transfer.as_mut() {
+            dl.handle = Some(handle);
+        }
     }
 
     // ---- downloads -------------------------------------------------------
@@ -2248,13 +2300,16 @@ impl App {
             ..Transfer::default()
         });
         self.status = format!("downloading {}", row.name);
-        net::fetch_one(
+        let handle = net::fetch_one(
             self.tx.clone(),
             url,
             out,
             self.destination.clone(),
             self.auth.clone(),
         );
+        if let Some(dl) = self.transfer.as_mut() {
+            dl.handle = Some(handle);
+        }
     }
 
     /// The path from the repository root: the descended folders plus the row.
@@ -2567,7 +2622,11 @@ impl App {
                     });
                 }
                 self.status = format!("plan: {count} {unit} -> {}", dst.display());
-                net::start_download(self.tx.clone(), base, names, dst, self.auth.clone());
+                let handle =
+                    net::start_download(self.tx.clone(), base, names, dst, self.auth.clone());
+                if let Some(dl) = self.transfer.as_mut() {
+                    dl.handle = Some(handle);
+                }
             }
             Err(e) => {
                 let ctx = ErrCtx::of(self, tab);
@@ -2628,6 +2687,10 @@ impl App {
         let Some(dl) = self.transfer.as_mut() else {
             return;
         };
+        if dl.cancelled {
+            // The abort landed: the stragglers of the aborted task change nothing.
+            return;
+        }
         match ev {
             DlEv::Start { local, files } => {
                 match dl.dir {
@@ -2747,7 +2810,10 @@ impl App {
                     ..Transfer::default()
                 });
                 self.status = format!("downloading {}", url.rsplit('/').next().unwrap_or(&url));
-                net::fetch_one(self.tx.clone(), url, out, dst, self.auth.clone());
+                let handle = net::fetch_one(self.tx.clone(), url, out, dst, self.auth.clone());
+                if let Some(dl) = self.transfer.as_mut() {
+                    dl.handle = Some(handle);
+                }
             }
             Retry::Transfer {
                 repo_url,
@@ -2760,7 +2826,11 @@ impl App {
                 }
                 let count = names.len();
                 self.status = format!("plan: {count} files -> {}", dst.display());
-                net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
+                let handle =
+                    net::start_download(self.tx.clone(), repo_url, names, dst, self.auth.clone());
+                if let Some(dl) = self.transfer.as_mut() {
+                    dl.handle = Some(handle);
+                }
             }
             Retry::Put { src, base } => self.start_put(base, src),
         }
@@ -3851,6 +3921,77 @@ mod tests {
         assert!(modal.cause.contains("malformed"), "{:?}", modal.cause);
         assert!(modal.retry.is_none(), "a misuse cannot be retried");
         assert!(!app.transfer_busy());
+    }
+
+    #[tokio::test]
+    async fn x_cancels_the_run_and_ignores_the_stragglers() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        // A live handle rides along, so the abort lands on a real task.
+        app.transfer.as_mut().unwrap().handle = Some(tokio::spawn(async {
+            loop {
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        }));
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "cancelled");
+        let dl = app.transfer.as_ref().unwrap();
+        assert!(dl.cancelled);
+        assert!(matches!(dl.outcome, Some(DlOutcome::Cancelled)));
+        assert!(dl.handle.is_none(), "the aborted handle is dropped");
+        assert!(!app.transfer_busy(), "the slot is free again");
+        assert!(matches!(app.mode, Mode::Normal), "no modal on a cancel");
+        // The stragglers of the aborted task change nothing.
+        app.handle(Msg::Dl(DlEv::Bytes {
+            name: "a.rs".into(),
+            done: 10,
+            total: None,
+        }));
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            uploaded: 9,
+            downloaded: 0,
+            skipped: 0,
+            removed: 0,
+            failed: Vec::new(),
+        }))));
+        let dl = app.transfer.as_ref().unwrap();
+        assert!(matches!(dl.outcome, Some(DlOutcome::Cancelled)));
+        assert!(dl.active.is_empty(), "the straggler bytes were ignored");
+        assert_eq!(app.status, "cancelled", "no fake summary rewrites the end");
+        // x over a settled panel only reports.
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "nothing is running");
+    }
+
+    #[tokio::test]
+    async fn x_with_nothing_running_reports() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "nothing is running");
+        assert!(app.transfer.is_none());
+        // A finished transfer is not a running one.
+        upload_in_flight(&mut app);
+        app.transfer.as_mut().unwrap().outcome = Some(DlOutcome::Cancelled);
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "nothing is running");
+    }
+
+    #[tokio::test]
+    async fn c_copies_the_url_of_the_selection() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Char('c'))));
+        assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
+        // On the tree the URL composes from the current position.
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('c'))));
+        assert_eq!(app.toasts.back().map(|t| t.text.as_str()), Some("copied"));
+        // An empty screen has nothing to copy and stays quiet.
+        let (mut app, _rx) = app_with(vec![tab_with(vec![])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('c'))));
+        assert!(app.toasts.is_empty());
     }
 
     #[tokio::test]
