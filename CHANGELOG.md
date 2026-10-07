@@ -19,6 +19,10 @@ The server refuses cross-origin POSTs and upload targets outside `/repository/<n
 Exit 0 when equal, 1 when different, 2 and 3 for misuse and transport.
 `--json` prints one object per entry and is pinned by a golden test.
 
+- The `nxr-tui` browser uploads: `p` puts a local directory into the current tree position with marker-complete `up` semantics, one transfer panel shows the plan, the byte progress and the outcome, `x` cancels, and dialogs survive background failures.
+- Dual-pane: `v` opens the local folder beside the remote tree, `h` and `l` switch the focus, `d` anchors at the local pane, `p` pre-fills the source.
+- `space` marks rows and `d` transfers the marks as a queue.
+- The pickers remember the confirmed values, `up` and `down` page through them.
 ### Changed
 
 - `up --plan` and `down --plan` print the planned actions without transferring anything.
