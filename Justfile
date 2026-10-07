@@ -100,13 +100,17 @@ version v:
     [ -n "$old" ] || { echo "no workspace version in Cargo.toml" >&2; exit 1; }
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{v}}\"/" Cargo.toml
     perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
-    perl -pi -e "s/version = \"\Q$old\E\"/version = \"{{v}}\"/" crates/nexus-raw/Cargo.toml
-    perl -pi -e "s/(nexus-raw-core = \{ path = \".\/nexus-raw-core\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
+    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw/Cargo.toml
+    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
+    # A silent perl miss is the 0.6.0 release killer: assert every pin.
+    grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
+    grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
+    grep -q "\"version\": \"{{v}}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
+    # Assert before resolving: version-check names the drifted pin, while
+    # cargo metadata would only die with a cryptic resolver error.
+    scripts/version-check.sh
     # Resolve once so Cargo.lock carries the new workspace version.
     cargo metadata --format-version 1 >/dev/null
-    # The recipe owns every asserted copy: a failed edit must fail the recipe,
-    # not wait for `just check` to find a half-bumped tree.
-    scripts/version-check.sh
     echo "version {{v}} set (was $old)"
     echo "remind: the example locks resolve only after the registry has {{v}}:"
     echo "  cd examples/node && pnpm up nexus-raw@^$(echo "{{v}}" | cut -d. -f1-2).0"
