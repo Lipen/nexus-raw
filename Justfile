@@ -258,6 +258,15 @@ panel *args:
     pnpm install
     node server.mjs --url http://127.0.0.1:8099/ {{args}}
 
+# The wasm sandbox: the read surface of the core compiled for the browser.
+# The first build needs the wasm32 target and wasm-bindgen-cli.
+[doc('Build and serve the wasm sandbox: `just wasm` serves the fake, `just wasm --upstream http://127.0.0.1:8081` serves a real Nexus.')]
+[group('examples')]
+wasm *args:
+    cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
+    cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
+    cd examples/wasm-sandbox && node serve.mjs {{args}}
+
 [doc('Run the Rust example: standalone crate on a path dependency.')]
 [group('examples')]
 example-rust:

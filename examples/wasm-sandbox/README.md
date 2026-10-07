@@ -4,20 +4,24 @@ The GO/NO-GO spike for running `nexus-raw-core` in the browser.
 `src/lib.rs` exports one call, `nxr_ls(dir_url, auth)`, on top of the wasm-compatible slice of core: transport, `ls`, manifests, channels, pointers.
 Everything that touches the local filesystem is native-only and gated out by `cfg(target_arch = "wasm32")` in the core crate.
 
-## Build
+## Build and run
+
+From the repository root, one recipe does both:
+
+```console
+just wasm                 # builds and serves the built-in fake Nexus
+just wasm --upstream http://127.0.0.1:8081   # a real Nexus behind the same-origin proxy
+```
+
+The first build needs the wasm32 target (`rustup target add wasm32-unknown-unknown`) and `wasm-bindgen-cli`.
+The manual equivalent, for when you want the steps separately:
 
 ```console
 cd examples/wasm-sandbox
-cargo build --target wasm32-unknown-unknown --release
+cargo build --target wasm32-unknown-unknown --release --locked
 wasm-bindgen --target web --out-dir pkg \
     target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
-```
-
-## Run
-
-```console
-node serve.mjs                 # built-in fake Nexus at the server root
-node serve.mjs --upstream http://127.0.0.1:8081   # a real Nexus behind the same-origin proxy
+node serve.mjs
 ```
 
 Open `http://localhost:8134/`: the page lists `/repository/demo/` on load.
