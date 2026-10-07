@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nxr sandbox</title>
+<script>window.NXR_SANDBOX_SERVE = "static"</script>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
@@ -79,18 +80,47 @@
       error.textContent = failed
     } finally {
       // The server logs this: the headless proof that the wasm ran end to end.
-      fetch(`/beacon?rows=${rows}&failed=${encodeURIComponent(failed)}`).catch(() => {})
+      // The await keeps the beacon ordered after the render, and the smoke
+      // waits for the beacon itself: the load event races the module.
+      try {
+        await fetch(`/beacon?rows=${rows}&failed=${encodeURIComponent(failed)}`)
+      } catch {
+        // A static host has no beacon sink: the ping is best effort there.
+      }
     }
   }
 
-  // Core requires an absolute http(s) URL: build the same-origin default here.
   // The repository name comes from ?repo= so an upstream can be anything;
   // `demo` is the fake's repository and the default when no param is given.
+  // Core requires an absolute http(s) URL rooted at the origin: the grammar is
+  // origin-absolute, so the page only works when served at the origin root.
   const repo = new URLSearchParams(location.search).get('repo') ?? 'demo'
   dir.value = `${location.origin}/repository/${repo}/`
 
-  // The top-level await holds the load event until the first listing is rendered,
-  // which also makes headless screenshots deterministic.
+  // Static hosting has no backend at all: the ServiceWorker fake answers the
+  // nexus endpoints from the same demo data `serve.mjs` would.
+  // serve.mjs rewrites the marker above, so the worker registers only where
+  // neither a server-side fake nor an upstream proxy exists.
+  async function ensureFakeWorker() {
+    if (window.NXR_SANDBOX_SERVE !== 'static' || !('serviceWorker' in navigator)) return
+    await navigator.serviceWorker.register('/sw.mjs', { type: 'module' })
+    await navigator.serviceWorker.ready
+    if (navigator.serviceWorker.controller) return
+    // A fresh registration only controls this page once activate has claimed it.
+    await new Promise((resolve) => {
+      navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })
+    })
+  }
+
+
+  // The worker comes first: its activation must precede the listing's fetches.
+  // A headless harness must not rely on the load event (it races the module):
+  // the beacon is the completion signal, and the smoke waits for it.
+  try {
+    await ensureFakeWorker()
+  } catch (e) {
+    error.textContent += `service worker: ${e}\n`
+  }
   try {
     await init()
   } catch (e) {
