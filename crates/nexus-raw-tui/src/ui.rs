@@ -73,14 +73,19 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_body(f: &mut Frame, app: &mut App, area: Rect) {
     // The panel stays after the transfer ends: the outcome stays readable
-    // until the next download replaces it.
+    // until the next transfer replaces it.
     if app.transfer.is_none() {
         draw_list(f, app, area);
         return;
     }
-    // Content: dst, plan, up to four transfers, one status line, plus borders.
+    // Content: the anchor line plus `from` on an upload, the plan, the diff,
+    // up to four transfers, one status line, plus borders.
     let active = app.transfer.as_ref().map_or(0, |dl| dl.active.len().min(4)) as u16;
-    let panel_h = (3 + active + 2).min(area.height);
+    let head = match app.transfer.as_ref().map(|dl| dl.dir) {
+        Some(Dir::Up) => 2,
+        _ => 1,
+    };
+    let panel_h = (head + 2 + active + 1 + 2).min(area.height);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(panel_h)])

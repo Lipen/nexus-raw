@@ -100,6 +100,9 @@ pub struct Tab {
     pub gen: u64,
     /// True while a listing of the current position is in flight.
     pub loading: bool,
+    /// True when the in-flight listing is the quiet refresh of a finished
+    /// put: its landing keeps the status line alone.
+    pub refresh_quiet: bool,
 }
 
 /// One row of the expandable tree: an entry of the current listing, or of an
@@ -141,6 +144,7 @@ impl Tab {
             keep_cursor_name: None,
             gen: 0,
             loading: false,
+            refresh_quiet: false,
         }
     }
 
@@ -1832,6 +1836,7 @@ impl App {
             return;
         };
         t.keep_cursor_name = keep;
+        t.refresh_quiet = quiet;
         t.gen += 1;
         // A refresh redraws the current listing: the inline expansion folds too.
         t.clear_expansion();
@@ -2435,10 +2440,12 @@ impl App {
                 let count = repos.len();
                 t.repos = repos;
                 t.loading = false;
+                let quiet = std::mem::take(&mut t.refresh_quiet);
                 t.repos_cursor = keep
                     .and_then(|name| t.repos.iter().position(|r| r.name == name))
                     .unwrap_or(0);
-                if self.tab == slot {
+                // The quiet refresh of a finished put leaves the summary up.
+                if self.tab == slot && !quiet {
                     self.status = format!("{count} repositories on {}", t.server.name);
                 }
             }
@@ -2477,6 +2484,7 @@ impl App {
                 // A refresh of an existing tab must not leave the loading marker on.
                 if slot < self.tabs.len() {
                     self.tabs[slot].loading = false;
+                    self.tabs[slot].refresh_quiet = false;
                 }
                 let retry = (e.exit_code() != 2).then(|| {
                     if connect {
@@ -2512,6 +2520,7 @@ impl App {
             return;
         };
         t.loading = false;
+        let quiet = std::mem::take(&mut t.refresh_quiet);
         if gen != t.gen {
             return;
         }
@@ -2539,7 +2548,8 @@ impl App {
                         t.filter_edit = false;
                     }
                 }
-                if self.tab == tab {
+                // The quiet refresh of a finished put leaves the summary up.
+                if self.tab == tab && !quiet {
                     self.status = if empty {
                         "the folder is empty, esc goes back up".into()
                     } else {
@@ -2728,7 +2738,13 @@ impl App {
                     dl.files = files;
                 }
             }
-            DlEv::Plan { transfer, skip } => dl.planned = Some((transfer, skip)),
+            DlEv::Plan { transfer, skip } => {
+                dl.planned = Some((transfer, skip));
+                // A download learns the count at Start; an upload learns it here.
+                if dl.files.is_none() {
+                    dl.files = Some(transfer);
+                }
+            }
             DlEv::Bytes { name, done, total } => {
                 dl.active.insert(name, (done, total));
             }
@@ -3844,6 +3860,7 @@ mod tests {
         {
             let dl = app.transfer.as_ref().unwrap();
             assert_eq!(dl.planned, Some((3, 1)));
+            assert_eq!(dl.files, Some(3), "the plan event carries the count");
             assert_eq!(dl.active.get("a.rs"), Some(&(40, Some(100))));
         }
         app.handle(Msg::Dl(DlEv::Retry {
