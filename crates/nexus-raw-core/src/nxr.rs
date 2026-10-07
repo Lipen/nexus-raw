@@ -210,6 +210,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the local scan, [`Error::Enumerate`] when the enumeration is empty, and transport, auth or HTTP errors while probing the remote states.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn delta(&self, dir: &Path, enum_src: Enumeration) -> Result<Vec<Delta>, Error> {
         let remote_names = self.resolve_names(enum_src).await?;
         let local_names = sync::scan_dir(dir)?;
