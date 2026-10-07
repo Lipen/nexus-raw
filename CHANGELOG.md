@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `ls` diagnoses a 400 from a repository-scoped search: the new `SearchRepoMissing` error carries the hint `the repository is missing on the server or is not a raw repository`, while every other endpoint keeps the generic status hint.
 - The `search-400` scenario in `mock-nexus`: the search API answers 400 when the `repository` parameter names an unknown repository, like a real Nexus refusing a repository-scoped search, pinned by core, CLI and mock tests.
+- `diff(local_dir, remote_url, opts)` in the npm bindings: the four-way delta report (`same` / `missing-local` / `missing-remote` / `diverged`) with per-side digest and size facts, shaped like the CLI's `diff --json`.
+- The wasm sandbox: the fake Nexus moved into a ServiceWorker, so the page runs on static hosting with no backend at an origin root over https or localhost; the upstream proxy gains an upstream allowlist, rate limiting and response size caps; CI gates the wasm read surface.
 
 ## [0.6.0] - 2026-10-07
 
@@ -17,7 +19,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `nxr complete <shell>`: prints a shell completion script (bash, zsh, fish, powershell) to stdout.
 The script is generated from the same clap tree the binary runs on and is pinned by golden tests.
 
-<<<<<<< HEAD
 - The web panel example (`examples/panel`) grows into a full demo stand: progress bars over SSE, toasts and inline errors, keyboard navigation, direct file links, single-file uploads (`POST /api/put`), two-step deletes (`POST /api/rm` with a dry-run plan), and the `just panel` recipe that serves the mock, seeds a tree and starts the panel.
 The page caps its own job cards and log lines, and refuses server URLs with embedded credentials.
 The server refuses cross-origin POSTs and upload targets outside `/repository/<name>/`.
