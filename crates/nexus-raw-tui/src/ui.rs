@@ -367,16 +367,25 @@ fn outcome_line(dl: &Transfer) -> Line<'static> {
 }
 
 /// The last line: the transient status with the position on the right, plus
-/// the constant destination indicator. Errors live in their own modal, never
-/// here.
+/// the constant anchor of the transfers. Errors live in their own modal,
+/// never here.
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let left = vec![Span::raw(format!(" {} ", app.status))];
     let right = self_status(app);
-    // `·` is two UTF-8 bytes but one column: width math goes by chars.
-    // Two spare columns keep a mid-word crop from touching the label.
-    let left_w = area.width.saturating_sub(right.chars().count() as u16 + 2);
-    // The label is right-aligned in the full width; the left part is clipped
-    // to the remaining width, so the two can never overwrite each other.
+    let right_w = right.chars().count() as u16;
+    let left_len = app.status.chars().count() as u16 + 2;
+    // The corner yields when the status does not fit beside it: a narrow
+    // terminal still reads the message, the corner clips from the front.
+    let left_w = area
+        .width
+        .saturating_sub(right_w + 2)
+        .max(left_len.min(area.width));
+    let right_max = area.width.saturating_sub(left_w).saturating_sub(1) as usize;
+    let right: String = {
+        let chars: Vec<char> = right.chars().collect();
+        let skip = chars.len().saturating_sub(right_max);
+        chars.into_iter().skip(skip).collect()
+    };
     f.render_widget(Line::from(Span::styled(right, dim())).right_aligned(), area);
     f.render_widget(
         Line::from(left),
