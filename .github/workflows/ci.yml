@@ -106,6 +106,60 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  # The wasm sandbox pins the read surface: the browser slice of the core must
+  # keep compiling for wasm32, the glue must keep generating, and the page must
+  # keep listing the demo repository. The smoke runs the built wasm end to end
+  # under plain node (listing, pagination, one retried failure); it adds the
+  # headless browser pass itself when the machine carries a chromium binary,
+  # so the job stays dependency-light.
+  wasm:
+    name: Wasm sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: examples/wasm-sandbox
+          cache-on-failure: true
+
+      - name: Build the sandbox for wasm32
+        working-directory: examples/wasm-sandbox
+        run: cargo build --target wasm32-unknown-unknown --release --locked
+
+      # wasm-bindgen refuses to generate glue across versions, so the CLI comes
+      # from the release of exactly the version the lockfile resolved.
+      - name: Install wasm-bindgen-cli
+        working-directory: examples/wasm-sandbox
+        run: |
+          version="$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')"
+          dir="$RUNNER_TEMP/wasm-bindgen-$version"
+          mkdir -p "$dir"
+          curl -sSfL "https://github.com/rustwasm/wasm-bindgen/releases/download/$version/wasm-bindgen-$version-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz --strip-components=1 -C "$dir" "wasm-bindgen-$version-x86_64-unknown-linux-musl/wasm-bindgen"
+          echo "$dir" >> "$GITHUB_PATH"
+
+      - name: Generate the glue
+        working-directory: examples/wasm-sandbox
+        run: wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Smoke the built sandbox
+        working-directory: examples/wasm-sandbox
+        run: node smoke.mjs
+
   # The Node addon: a cargo build wrapped by the napi CLI. `npm run
   # build:debug` compiles the crate and leaves the platform addon, the
   # generated loader (binding.cjs) and the generated declarations

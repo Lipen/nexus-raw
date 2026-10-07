@@ -269,6 +269,17 @@ wasm *args:
     cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
     cd examples/wasm-sandbox && node serve.mjs {{args}}
 
+# Build the sandbox and run its smoke: the fake module, the wasm listing under
+# node and the ServiceWorker page in a headless browser when one is around.
+# This is what CI's wasm job runs; the browser layer is skipped where no
+# chromium binary lives (set NXR_WASM_DRIVER or NXR_WASM_BROWSER to steer it).
+[doc('Build and smoke the wasm sandbox: the fake module, the wasm listing and the page in a headless browser when available.')]
+[group('examples')]
+wasm-smoke:
+    cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
+    cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
+    cd examples/wasm-sandbox && node smoke.mjs
+
 # Every lockfile in the repo, one deliberate command: the workspace, the napi
 # tooling, the panel, the two standalone example crates and the node example.
 # The node example resolves against the registry, so it only refreshes once
