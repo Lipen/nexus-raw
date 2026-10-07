@@ -68,6 +68,14 @@
     } catch (e) {
       failed = String(e)
       status.textContent = 'failed'
+      // A 400 or 404 on a listing usually means the upstream has no such
+      // repository (or, on the mock, no seeded search page): say so where
+      // the error is, not just in the log at the bottom.
+      if (/\b(400|404)\b/.test(failed) && dir.value.includes('/repository/')) {
+        failed += `\nthe upstream has no searchable repository named "${repo}", ` +
+          `or it is not raw.\nopen the page as /?repo=<name> with a raw repository of this upstream, ` +
+          `or seed the mock's search page first (see the panel recipe)`
+      }
       error.textContent = failed
     } finally {
       // The server logs this: the headless proof that the wasm ran end to end.
@@ -76,7 +84,10 @@
   }
 
   // Core requires an absolute http(s) URL: build the same-origin default here.
-  dir.value = `${location.origin}/repository/demo/`
+  // The repository name comes from ?repo= so an upstream can be anything;
+  // `demo` is the fake's repository and the default when no param is given.
+  const repo = new URLSearchParams(location.search).get('repo') ?? 'demo'
+  dir.value = `${location.origin}/repository/${repo}/`
 
   // The top-level await holds the load event until the first listing is rendered,
   // which also makes headless screenshots deterministic.
