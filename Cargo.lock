@@ -1178,11 +1178,13 @@ dependencies = [
 name = "nexus-raw-napi"
 version = "0.6.0"
 dependencies = [
+ "mock-nexus",
  "napi",
  "napi-build",
  "napi-derive",
  "nexus-raw-core",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
 ]

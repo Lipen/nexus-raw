@@ -17,24 +17,42 @@ pub(crate) type Pump = tokio::task::JoinHandle<Result<()>>;
 /// Every event is awaited through `call_async_catch`: a throw inside the callback ends the pump with that error instead of becoming a global uncaught exception.
 /// The pump ends when the facade drops and the channel closes, so the promise settles only after every event has been handed to JS.
 pub(crate) fn spawn_pump(
-    mut rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
+    rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
     on_event: Option<EventCallback>,
 ) -> Option<Pump> {
-    on_event.map(|tsfn| {
-        // tokio::spawn, not the napi re-export: the re-export disappears under the noop feature that unit tests need for linking.
-        // Inside a napi async fn the current runtime is napi's own tokio RT, so both calls land on the same workers (napi-3.13 tokio_runtime.rs: `spawn` is `RT.spawn`).
-        tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                if let Err(callback) = tsfn.call_async_catch(mapping::event_to_json(&event)).await {
-                    return Err(Error::new(
-                        Status::GenericFailure,
-                        format!("the onEvent callback failed: {callback}"),
-                    ));
-                }
-            }
-            Ok(())
-        })
-    })
+    // tokio::spawn, not the napi re-export: the re-export disappears under the noop feature that unit tests need for linking.
+    // Inside a napi async fn the current runtime is napi's own tokio RT, so both calls land on the same workers (napi-3.13 tokio_runtime.rs: `spawn` is `RT.spawn`).
+    on_event.map(|tsfn| tokio::spawn(pump(rx, tsfn)))
+}
+
+/// The pump body of a production build: every event crosses the JS boundary through `call_async_catch`.
+#[cfg(not(test))]
+async fn pump(
+    mut rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
+    tsfn: EventCallback,
+) -> Result<()> {
+    while let Some(event) = rx.recv().await {
+        if let Err(callback) = tsfn.call_async_catch(mapping::event_to_json(&event)).await {
+            return Err(Error::new(
+                Status::GenericFailure,
+                format!("the onEvent callback failed: {callback}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The pump body of the unit-test build: it links without Node, so the threadsafe-function symbols do not exist there.
+/// The unit tests never carry a callback: the events drain silently and the JS boundary stays uncrossed.
+#[cfg(test)]
+async fn pump(
+    mut rx: mpsc::UnboundedReceiver<nexus_raw_core::Event>,
+    tsfn: EventCallback,
+) -> Result<()> {
+    // Forgotten, not dropped: even the drop glue references symbols Node alone provides.
+    std::mem::forget(tsfn);
+    while rx.recv().await.is_some() {}
+    Ok(())
 }
 
 /// Wait for the pump to drain before the promise settles.

@@ -25,3 +25,16 @@ pub use opts::*;
 pub use primitives::*;
 pub use result::*;
 pub use transfer::*;
+
+/// The unit-test build links without a Node process (the noop feature makes the napi runtime a no-op), but the noop feature does not cover the threadsafe-function sys calls.
+/// The tests never carry an event callback and the test pump forgets it, so these stubs only satisfy the linker; nothing reaches them.
+#[cfg(test)]
+mod node_stubs {
+    #[no_mangle]
+    extern "C" fn napi_release_threadsafe_function(
+        _func: *mut std::ffi::c_void,
+        _mode: std::ffi::c_int,
+    ) -> std::ffi::c_int {
+        0
+    }
+}

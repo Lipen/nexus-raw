@@ -3,7 +3,11 @@
 // run through `verify` and the local `sha`, which need no network.
 // The new commands are covered at the export level plus one parse-only `rm`
 // rejection, and the onEvent throw contract runs through `verify`.
+// `diff` is the one call that must touch a remote: it drives a throwaway
+// loopback HTTP server answering 404, so the local-only name reports
+// `missing-remote` without any external network.
 import { createHash } from 'node:crypto'
+import http from 'node:http'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,7 +66,7 @@ try {
   assert.equal(await nxr.sha(join(dir, 'a.txt')), hex)
 
   // The new exports exist and are callable: the surface is at parity with the CLI.
-  for (const name of ['rm', 'mirror', 'pointClear', 'lsAssets', 'lsVersions']) {
+  for (const name of ['rm', 'mirror', 'diff', 'pointClear', 'lsAssets', 'lsVersions']) {
     assert.equal(typeof nxr[name], 'function', `${name} is exported`)
   }
 
@@ -71,6 +75,30 @@ try {
     nxr.rm('http://127.0.0.1:9/raw/', { names: ['../escape'] }),
     (err) => err.exitCode === 2 && err.hint.includes('names must be relative paths'),
   )
+
+  // diff resolves the report read-only: against a loopback server that answers
+  // 404 to everything, the locally complete name is missing-remote.
+  // Explicit names keep the enumeration offline; the probes are the only traffic.
+  const absent = http.createServer((req, res) => {
+    res.statusCode = 404
+    res.end()
+  })
+  await new Promise((resolve) => absent.listen(0, '127.0.0.1', resolve))
+  try {
+    const report = await nxr.diff(dir, `http://127.0.0.1:${absent.address().port}/raw/`, {
+      names: ['a.txt'],
+    })
+    // The name set is the union: the enumeration names a.txt, the scan also finds the orphan b.txt.
+    assert.equal(report.count, 2)
+    const byPath = new Map(report.entries.map((entry) => [entry.path, entry]))
+    assert.equal(byPath.get('a.txt').state, 'missing-remote')
+    assert.equal(byPath.get('b.txt').state, 'missing-remote')
+    assert.equal(byPath.get('a.txt').local.digest, hex)
+    assert.equal(byPath.get('a.txt').local.size, 6)
+  } finally {
+    absent.close()
+    absent.closeAllConnections()
+  }
 
   // A throw inside onEvent rejects the command promise instead of crashing the process.
   // The command itself succeeds here, so the rejection carries the callback failure only.

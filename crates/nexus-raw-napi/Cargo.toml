@@ -30,4 +30,6 @@ napi-build = { workspace = true }
 
 # Unit tests link without a Node process: napi symbols become no-ops.
 [dev-dependencies]
+mock-nexus = { path = "../mock-nexus" }
 napi = { workspace = true, features = ["noop"] }
+sha2 = { workspace = true }

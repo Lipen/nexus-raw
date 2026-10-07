@@ -154,6 +154,17 @@ export interface NxrDownOpts extends NxrCommonOpts {
   fresh?: boolean
 }
 
+export interface NxrDiffOpts extends NxrCommonOpts {
+  /** Enumeration source: a manifest file, URL or `-` for stdin. */
+  manifest?: string
+  /** Explicit names to compare. */
+  names?: string[]
+  /** Best-effort enumeration through the server search API (`--ls`). */
+  ls?: boolean
+  /** Keep only names under these whole-segment prefixes. */
+  prefixes?: string[]
+}
+
 export interface NxrRmOpts extends NxrCommonOpts {
   /** Enumeration source: a manifest file, URL or `-` for stdin. */
   manifest?: string
@@ -177,6 +188,41 @@ export interface NxrRmPlanAction {
 /** The plan an `rm` dry run resolves to. */
 export interface NxrRmPlan {
   actions: NxrRmPlanAction[]
+}
+
+/** The content facts one side holds for a name; `null` means the fact is unknown, never that it differs. */
+export interface NxrDeltaSide {
+  /** The sha256 digest, when the side carries one. */
+  digest: string | null
+  /** Byte size, when the side reports one. */
+  size: number | null
+}
+
+/** One delta entry, shaped like the CLI `diff --json` lines. */
+export interface NxrDeltaEntry {
+  /** `same`, `missing-local`, `missing-remote` or `diverged`. */
+  state: 'same' | 'missing-local' | 'missing-remote' | 'diverged'
+  path: string
+  /** The shared digest when the state is `same`. */
+  digest?: string
+  /** The local-side facts when the state is `missing-remote` or `diverged`. */
+  local?: NxrDeltaSide
+  /** The storage-side facts when the state is `missing-local` or `diverged`. */
+  remote?: NxrDeltaSide
+  /** The sizes are known on both sides and differ, `diverged` only. */
+  size?: boolean
+  /** The digests are known on both sides and differ, `diverged` only. */
+  sha?: boolean
+}
+
+/**
+ * The delta report a `diff` resolves to: one entry per name in the union of
+ * the local scan and the enumeration, in name order.
+ */
+export interface NxrDeltaReport {
+  entries: NxrDeltaEntry[]
+  /** How many names the report holds. */
+  count: number
 }
 
 export interface NxrMirrorOpts extends NxrCommonOpts {
@@ -240,6 +286,20 @@ export function up(srcDir: string, dstUrl: string, opts?: NxrUpOpts): Promise<Nx
  * or the conventional `manifest.json` at the directory URL.
  */
 export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promise<NxrSummary>
+
+/**
+ * Compare a local directory against a remote one: the delta report (`nxr diff`).
+ * Read-only on both sides: the promise resolves to the report whatever the delta is.
+ * Every scanned or enumerated name lands in exactly one entry: `same`,
+ * `missing-local`, `missing-remote` or `diverged`.
+ * The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
+ * or the conventional `manifest.json` at the directory URL.
+ */
+export function diff(
+  localDir: string,
+  remoteUrl: string,
+  opts?: NxrDiffOpts,
+): Promise<NxrDeltaReport>
 
 /**
  * Delete the enumerated names from the remote directory (`rm`).
