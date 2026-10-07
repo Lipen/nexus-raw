@@ -4,6 +4,9 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+# Standalone on purpose: excluded from the repo workspace, like the other examples.
+[workspace]
+
 [dependencies]
 nexus-raw-core = { path = "../../crates/nexus-raw-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }

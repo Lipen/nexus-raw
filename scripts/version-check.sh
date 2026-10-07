@@ -48,6 +48,19 @@ elif [ "$node_pin" != "^$minor.0" ]; then
   failed=1
 fi
 
+# The standalone example locks must record nexus-raw-core at the workspace version: a lock left behind pins a number nobody released, and nothing rebuilds the lock until `just lock`.
+# examples/node is exempt: its pnpm lock resolves only once the registry has the release.
+for lock in examples/rust/Cargo.lock examples/wasm-sandbox/Cargo.lock; do
+  lock_ver="$(sed -n '/^name = "nexus-raw-core"$/ { n; s/^version = "\(.*\)"$/\1/p }' "$lock")"
+  if [ -z "$lock_ver" ]; then
+    echo "version-check: no nexus-raw-core entry in $lock" >&2
+    failed=1
+  elif [ "$lock_ver" != "$ws" ]; then
+    echo "version-check: $lock pins nexus-raw-core $lock_ver, the workspace is $ws" >&2
+    failed=1
+  fi
+done
+
 # Pages may name the command, never the current number: a pinned version is a
 # lie on the next release. The recorded session under docs/assets is exempt —
 # it names the binary that made the recording, and `just demo-cast` refreshes it.

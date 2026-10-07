@@ -83,10 +83,10 @@ check:
 
 # ---- release ---------------------------------------------------------------
 
-# The workspace manifest is the source of truth; the npm package, the internal
-# dependency versions and the example pins follow it. The example locks cannot
-# follow before the registry has the release, so the recipe ends with the
-# post-publish reminder. `just check` runs version-check.
+# The workspace manifest is the source of truth.
+# The npm package, the internal dependency pins and the two standalone example locks follow it, their resolutions included.
+# examples/node cannot follow before the registry has the release, so the recipe ends with the `just lock` reminder.
+# `just check` runs version-check.
 [doc('Set the release version everywhere it is asserted: `just version 0.2.0`.')]
 [group('release')]
 version v:
@@ -106,14 +106,16 @@ version v:
     grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{v}}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
-    # Assert before resolving: version-check names the drifted pin, while
-    # cargo metadata would only die with a cryptic resolver error.
-    scripts/version-check.sh
-    # Resolve once so Cargo.lock carries the new workspace version.
+    # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.
+    # examples/node waits for the registry: `just lock` refreshes it after the release.
     cargo metadata --format-version 1 >/dev/null
+    cargo metadata --manifest-path examples/rust/Cargo.toml --format-version 1 >/dev/null
+    cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 >/dev/null
+    # Assert after resolving: the example locks agree only once their own resolution has run.
+    # The workspace pins are already asserted above, so a drifted pin still fails before any resolver does.
+    scripts/version-check.sh
     echo "version {{v}} set (was $old)"
-    echo "remind: the example locks resolve only after the registry has {{v}}:"
-    echo "  cd examples/node && pnpm up nexus-raw@^$(echo "{{v}}" | cut -d. -f1-2).0"
+    echo "remind: run just lock after the release: it refreshes every lockfile, examples/node against the registry"
 
 # The manifest is the source of truth for the current number; this only does
 # the arithmetic and hands the result to `just version`.
