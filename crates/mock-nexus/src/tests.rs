@@ -222,6 +222,49 @@ fn readonly_refuses_every_delete() {
     assert_eq!(body, b"PAYLOAD");
 }
 
+/// search-400: a repository-scoped search for an unknown repository is refused with 400, a served repository keeps the store answer.
+#[test]
+fn search_unknown_repo_answers_400_known_repos_pass_through() {
+    let server = MockNexus::start(Scenario::Search400).unwrap();
+    server.insert(
+        "service/rest/v1/search/assets",
+        br#"{"continuationToken":null,"items":[{"path":"a.txt"}]}"#,
+    );
+
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/search/assets?repository=raw-ghost",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 400);
+    assert!(find(&body, b"unknown repository").is_some(), "{body:?}");
+
+    // A served repository keeps the store answer, and a search without a repository parameter is left alone.
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/search/assets?repository=raw-main",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    assert!(find(&body, b"a.txt").is_some(), "{body:?}");
+
+    let (status, _, _) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/search/assets",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+}
+
 #[test]
 fn drop_connection_resets_first_request_per_path() {
     let server = MockNexus::start(Scenario::DropConnection).unwrap();

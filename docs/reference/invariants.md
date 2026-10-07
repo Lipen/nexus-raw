@@ -169,3 +169,12 @@ The service REST endpoint (`/service/rest/v1/repositories`) answers `404` like a
 Storage behavior is `atomic`; only `service repos` notices.
 
 **Pinned invariant:** The service REST endpoint is optional: the client refuses with a hint that names the server root, and every storage command is unaffected.
+
+## `search-400`
+
+Search refuses an unknown repository.
+
+The search API (`/service/rest/v1/search/assets`) answers `400 Bad Request` when the `repository` query parameter names a repository the instance does not serve: a real Nexus refuses a repository-scoped search for an unknown repository with 400, before any storage is touched.
+Searches for the served repositories (`raw-main`, `raw-all`) and every other request behave like `atomic`.
+
+**Pinned invariant:** A 400 from a repository-scoped search is diagnosed, never guessed at: the listing refuses with exit 3 and the hint that the repository is missing on the server or is not a raw repository, while a search 404 keeps the generic enumeration hint.

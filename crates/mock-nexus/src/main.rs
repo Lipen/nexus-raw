@@ -129,6 +129,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         }),
         "readonly" => Some(Scenario::ReadOnly),
         "no-service" => Some(Scenario::NoService),
+        "search-400" => Some(Scenario::Search400),
         _ => None,
     }
 }

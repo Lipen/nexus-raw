@@ -243,10 +243,7 @@ async fn paginate(
         let bytes = match client.get_small(&page_url).await {
             Ok(bytes) => bytes,
             // A repository-scoped search for a repository the server does not serve is refused with 400: the repository is missing or is not raw.
-            Err(Error::Http {
-                status: 400,
-                url,
-            }) => return Err(Error::SearchRepoMissing { url }),
+            Err(Error::Http { status: 400, url }) => return Err(Error::SearchRepoMissing { url }),
             Err(e) => return Err(e),
         };
         let Some(bytes) = bytes else {

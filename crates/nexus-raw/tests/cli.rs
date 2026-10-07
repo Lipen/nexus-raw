@@ -2328,3 +2328,18 @@ fn ls_prints_the_raw_tree_entries() {
     assert_eq!(lines[0], r#"{"entry":"app","kind":"dir"}"#);
     assert_eq!(lines[1], r#"{"entry":"root.txt","kind":"file"}"#);
 }
+
+/// A 400 from a repository-scoped search for an unknown repository prints the repository hint and exits 3.
+#[test]
+fn ls_unknown_repository_prints_the_repository_hint() {
+    let srv = server(Scenario::Search400);
+    let out = nxr(&["ls", &format!("{}repository/raw-ghost/", srv.base_url())]);
+    expect_exit(&out, 3, "a refused repository search is transport-class");
+    // The hint line is public surface: pin it verbatim.
+    let hint_line = "hint: the repository is missing on the server or is not a raw repository";
+    assert!(
+        stderr(&out).lines().any(|l| l == hint_line),
+        "{}",
+        stderr(&out)
+    );
+}

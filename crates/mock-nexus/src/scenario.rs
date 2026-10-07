@@ -30,6 +30,7 @@ pub const SCENARIOS: &[&str] = &[
     "redirect",
     "readonly",
     "no-service",
+    "search-400",
 ];
 
 /// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
@@ -103,6 +104,10 @@ pub enum Scenario {
     /// an installation without the management API (an old Nexus, or a non-Sonatype server).
     /// Storage behavior is [`Scenario::Atomic`]; only `service repos` notices.
     NoService,
+    /// The search API (`/service/rest/v1/search/assets`) answers `400 Bad Request` when the `repository` query parameter names a repository the instance does not serve:
+    /// a real Nexus refuses a repository-scoped search for an unknown repository with 400, before any storage is touched.
+    /// Searches for the served repositories (`raw-main`, `raw-all`, the names of the seeded service document) and every other request behave like [`Scenario::Atomic`].
+    Search400,
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
@@ -275,6 +280,23 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
             resp.extra_headers.push(("Location", location_path.clone()));
             let _ = server::write_response(stream, &resp);
             return;
+        }
+    }
+
+    // search-400: a repository-scoped search for an unknown repository is refused with 400, like a real Nexus.
+    // The served names are the ones the seeded service document lists; a search without a repository parameter is left alone.
+    if let Scenario::Search400 = shared.scenario {
+        if matches!(req.method.as_str(), "GET" | "HEAD") && path == "service/rest/v1/search/assets"
+        {
+            if let Some(repo) = query_param(&req.target, "repository") {
+                if !matches!(repo, "raw-main" | "raw-all") {
+                    log_request(shared, &req.method, path, Outcome::Status(400));
+                    let body = format!("unknown repository: {repo}\n");
+                    let resp = plain(400, body.as_bytes(), None);
+                    let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
+                    return;
+                }
+            }
         }
     }
 
@@ -501,6 +523,16 @@ fn bump(counters: &mut HashMap<String, u32>, path: &str) -> u32 {
 fn normalize_path(target: &str) -> String {
     let no_query = target.split('?').next().unwrap_or(target);
     no_query.strip_prefix('/').unwrap_or(no_query).to_owned()
+}
+
+/// First `name` value of the request target's query string, raw (percent-encoding preserved).
+/// Absent parameter or bare key yields `None`.
+fn query_param<'a>(target: &'a str, name: &str) -> Option<&'a str> {
+    let query = target.split_once('?')?.1;
+    query.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        (key == name).then_some(value)
+    })
 }
 
 /// Parse a `Range` header for resumable GETs.

@@ -2225,3 +2225,44 @@ async fn ls_entries_walks_the_raw_tree() {
     assert_eq!(entries[0].kind, EntryKind::Dir);
     assert_eq!(entries[1].kind, EntryKind::File);
 }
+
+/// A search 400 for an unknown repository carries the repository hint; a search 404 keeps the generic enumeration hint.
+#[tokio::test]
+async fn ls_unknown_repository_hinted_on_400_not_on_404() {
+    // The search-400 scenario refuses a repository the instance does not serve, like a real Nexus.
+    let mock = MockNexus::start(Scenario::Search400).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let ghost = format!("{}repository/raw-ghost/", mock.base_url());
+    let nxr = Nxr::new(config_at(ghost, None), tx).unwrap();
+
+    let err = nxr.ls_entries().await.unwrap_err();
+    assert_eq!(err.exit_code(), 3);
+    assert_eq!(
+        err.hint().as_deref(),
+        Some("the repository is missing on the server or is not a raw repository"),
+        "the hint text is public surface: exact pin"
+    );
+
+    // A served repository still lists through the store under the same scenario.
+    mock.insert(
+        "service/rest/v1/search/assets",
+        br#"{"continuationToken":null,"items":[{"path":"a.txt"}]}"#,
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let main = format!("{}repository/raw-main/", mock.base_url());
+    let nxr = Nxr::new(config_at(main, None), tx).unwrap();
+    let entries = nxr.ls_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+
+    // A search 404 (the endpoint is absent) is the generic enumeration refusal, never the repository hint.
+    let atomic = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let bare = format!("{}repository/raw/", atomic.base_url());
+    let nxr = Nxr::new(config_at(bare, None), tx).unwrap();
+
+    let err = nxr.ls_entries().await.unwrap_err();
+    assert_eq!(err.exit_code(), 1);
+    let hint = err.hint().unwrap();
+    assert!(hint.contains("--manifest"), "{hint}");
+    assert!(!hint.contains("not a raw repository"), "{hint}");
+}

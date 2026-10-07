@@ -193,6 +193,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         ],
         invariant: "The service REST endpoint is optional: the client refuses with a hint that names the server root, and every storage command is unaffected.",
     },
+    ScenarioDoc {
+        id: "search-400",
+        name: "Search refuses an unknown repository.",
+        behavior: &[
+            "The search API (`/service/rest/v1/search/assets`) answers `400 Bad Request` when the `repository` query parameter names a repository the instance does not serve: a real Nexus refuses a repository-scoped search for an unknown repository with 400, before any storage is touched.",
+            "Searches for the served repositories (`raw-main`, `raw-all`) and every other request behave like `atomic`.",
+        ],
+        invariant: "A 400 from a repository-scoped search is diagnosed, never guessed at: the listing refuses with exit 3 and the hint that the repository is missing on the server or is not a raw repository, while a search 404 keeps the generic enumeration hint.",
+    },
 ];
 
 /// Render `docs/reference/invariants.md` from [`SCENARIO_DOCS`].
