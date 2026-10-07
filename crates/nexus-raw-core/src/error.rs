@@ -40,6 +40,10 @@ pub enum Error {
     /// Storage invariants are unaffected; only `service repos` needs this surface.
     #[error("http 404: {url}: the service API is absent")]
     ServiceMissing { url: String, root: String },
+    /// The search API answered 400 to a repository-scoped listing: the repository is missing on the server or is not a raw repository.
+    /// A real Nexus refuses an unknown repository with 400 before any storage is touched.
+    #[error("http 400: {url}: the search refused the repository")]
+    SearchRepoMissing { url: String },
     /// The repository refuses the deletion: a read-only deployment answers 403/405 to DELETE (§5.4).
     #[error("read-only: {url}: HTTP {status}")]
     ReadOnly { url: String, status: u16 },
@@ -64,7 +68,7 @@ impl Error {
             | Error::ReadOnly { .. } => 1,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
             Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. } => 3,
-            Error::ServiceMissing { .. } => 3,
+            Error::ServiceMissing { .. } | Error::SearchRepoMissing { .. } => 3,
             Error::Io { .. } => 1,
         }
     }
@@ -99,6 +103,9 @@ impl Error {
             Error::ServiceMissing { root, .. } => Some(
                 format!("the service API lives at the server root: try {root}/service/rest/v1/repositories"),
             ),
+            Error::SearchRepoMissing { .. } => {
+                Some("the repository is missing on the server or is not a raw repository".into())
+            }
             Error::Http { status, .. } => Some(
                 format!("the server answered {status}; check the URL path and the server health"),
             ),
@@ -213,6 +220,13 @@ mod tests {
                 status: 503,
                 url: "http://x/".into(),
             },
+            Error::ServiceMissing {
+                url: "http://x/".into(),
+                root: "http://x".into(),
+            },
+            Error::SearchRepoMissing {
+                url: "http://x/".into(),
+            },
             Error::Io {
                 path: "a.zip".into(),
                 detail: "disk".into(),
@@ -223,5 +237,17 @@ mod tests {
             let hint = e.hint().unwrap_or_else(|| panic!("no hint for {e}"));
             assert!(!hint.trim().is_empty(), "empty hint for {e}");
         }
+    }
+
+    /// The hint text is public surface, quoted verbatim in the errors reference: pin the exact string.
+    #[test]
+    fn search_repo_missing_hint_is_pinned_verbatim() {
+        let e = Error::SearchRepoMissing {
+            url: "http://x/service/rest/v1/search/assets?repository=raw-ghost".into(),
+        };
+        assert_eq!(
+            e.hint().as_deref(),
+            Some("the repository is missing on the server or is not a raw repository")
+        );
     }
 }

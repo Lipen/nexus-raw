@@ -252,7 +252,7 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `ServiceMissing`, `Misuse`, `Io`.
+`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `ServiceMissing`, `SearchRepoMissing`, `Misuse`, `Io`.
 `Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint.
 Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.

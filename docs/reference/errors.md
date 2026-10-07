@@ -24,6 +24,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
 | `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route; a 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
 | `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
+| `SearchRepoMissing { url }` | the search API answered 400: the repository is missing on the server or is not a raw repository | 3 | `the repository is missing on the server or is not a raw repository` | `ls` against a repository URL the server does not serve, or a name that exists only in another format |
 | `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken transport.

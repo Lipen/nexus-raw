@@ -2,7 +2,7 @@
 //!
 //! The endpoint is `/service/rest/v1/search/assets`.
 //! It exists on common Nexus 3 releases but is not guaranteed.
-//! Every refusal is an [`Error::Enumerate`] with a hint, never a silent empty list.
+//! Every refusal is an error with a hint, never a silent empty list: a missing endpoint is an [`Error::Enumerate`], a refused repository is an [`Error::SearchRepoMissing`].
 
 use crate::error::Error;
 use crate::model::name::percent_decode;
@@ -240,7 +240,15 @@ async fn paginate(
                 .append_pair("continuationToken", token);
         }
         let page_url = page.to_string();
-        let bytes = client.get_small(&page_url).await?;
+        let bytes = match client.get_small(&page_url).await {
+            Ok(bytes) => bytes,
+            // A repository-scoped search for a repository the server does not serve is refused with 400: the repository is missing or is not raw.
+            Err(Error::Http {
+                status: 400,
+                url,
+            }) => return Err(Error::SearchRepoMissing { url }),
+            Err(e) => return Err(e),
+        };
         let Some(bytes) = bytes else {
             return Err(Error::Enumerate {
                 url: page_url,
