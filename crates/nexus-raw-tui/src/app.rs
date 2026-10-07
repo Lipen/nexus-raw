@@ -56,6 +56,9 @@ const TOAST_STACK: usize = 3;
 /// The narrowest terminal dual-pane opens on: two panes of forty columns.
 const MIN_DUAL_COLS: u16 = 80;
 
+/// How many confirmed values one picker history keeps.
+const PICKER_HISTORY: usize = 16;
+
 /// The two screens of one tab: the server repositories, then the tree of the
 /// selected repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -399,6 +402,10 @@ pub struct DestPicker {
     pub back_to_card: Option<Card>,
     /// The repository download deferred until the destination is confirmed.
     pub pending_repo: Option<RepoRow>,
+    /// The typed draft, kept while the history is on screen.
+    pub draft: String,
+    /// The position in the session history. `None` is the draft.
+    pub hist: Option<usize>,
 }
 
 /// The source picker of a put: a local folder to upload from.
@@ -406,6 +413,10 @@ pub struct DestPicker {
 pub struct PickSource {
     /// The path typed so far, prefilled with the last upload source.
     pub buffer: String,
+    /// The typed draft, kept while the history is on screen.
+    pub draft: String,
+    /// The position in the session history. `None` is the draft.
+    pub hist: Option<usize>,
 }
 
 /// One row of the local pane: a filesystem child with its size.
@@ -822,6 +833,10 @@ pub struct App {
     last_click: Option<(Instant, usize)>,
     /// Transfers waiting for the slot: the queue a marked `d` builds.
     queue: VecDeque<Retry>,
+    /// The confirmed values of the destination picker, freshest last.
+    pub dest_history: Vec<String>,
+    /// The confirmed values of the source picker, freshest last.
+    pub source_history: Vec<String>,
     /// Sender back into the message pump.
     pub tx: mpsc::UnboundedSender<Msg>,
 }
@@ -873,6 +888,8 @@ impl App {
             local_area: Rect::default(),
             term: Rect::default(),
             queue: VecDeque::new(),
+            dest_history: Vec::new(),
+            source_history: Vec::new(),
             last_click: None,
             download_dir,
             tx,
@@ -1253,12 +1270,38 @@ impl App {
         match key.code {
             KeyCode::Esc => self.close_dest_picker(picker),
             KeyCode::Enter => self.confirm_destination(picker),
+            KeyCode::Up => {
+                let history = self.dest_history.clone();
+                cycle_history(
+                    &mut picker.buffer,
+                    &mut picker.draft,
+                    &mut picker.hist,
+                    &history,
+                    true,
+                );
+                self.mode = Mode::Dest(picker);
+            }
+            KeyCode::Down => {
+                let history = self.dest_history.clone();
+                cycle_history(
+                    &mut picker.buffer,
+                    &mut picker.draft,
+                    &mut picker.hist,
+                    &history,
+                    false,
+                );
+                self.mode = Mode::Dest(picker);
+            }
             KeyCode::Backspace => {
                 picker.buffer.pop();
+                picker.draft = picker.buffer.clone();
+                picker.hist = None;
                 self.mode = Mode::Dest(picker);
             }
             KeyCode::Char(c) if text_char(&key) == Some(c) => {
                 picker.buffer.push(c);
+                picker.draft = picker.buffer.clone();
+                picker.hist = None;
                 self.mode = Mode::Dest(picker);
             }
             _ => {}
@@ -1270,12 +1313,38 @@ impl App {
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Enter => self.confirm_source(picker),
+            KeyCode::Up => {
+                let history = self.source_history.clone();
+                cycle_history(
+                    &mut picker.buffer,
+                    &mut picker.draft,
+                    &mut picker.hist,
+                    &history,
+                    true,
+                );
+                self.mode = Mode::PickSource(picker);
+            }
+            KeyCode::Down => {
+                let history = self.source_history.clone();
+                cycle_history(
+                    &mut picker.buffer,
+                    &mut picker.draft,
+                    &mut picker.hist,
+                    &history,
+                    false,
+                );
+                self.mode = Mode::PickSource(picker);
+            }
             KeyCode::Backspace => {
                 picker.buffer.pop();
+                picker.draft = picker.buffer.clone();
+                picker.hist = None;
                 self.mode = Mode::PickSource(picker);
             }
             KeyCode::Char(c) if text_char(&key) == Some(c) => {
                 picker.buffer.push(c);
+                picker.draft = picker.buffer.clone();
+                picker.hist = None;
                 self.mode = Mode::PickSource(picker);
             }
             _ => {}
@@ -2139,6 +2208,8 @@ impl App {
             buffer: self.destination.display().to_string(),
             back_to_card,
             pending_repo,
+            draft: String::new(),
+            hist: None,
         };
         self.mode = Mode::Dest(picker);
     }
@@ -2161,6 +2232,8 @@ impl App {
         }
         self.destination = self.resolve_path(Path::new(&raw));
         self.dest_confirmed = true;
+        let resolved = self.destination.display().to_string();
+        remember_history(&mut self.dest_history, &resolved);
         if let Some(repo) = picker.pending_repo {
             self.mode = Mode::Normal;
             self.status = format!("destination: {}", self.destination.display());
@@ -2211,6 +2284,8 @@ impl App {
         };
         self.mode = Mode::PickSource(PickSource {
             buffer: seed.display().to_string(),
+            draft: String::new(),
+            hist: None,
         });
     }
 
@@ -2228,6 +2303,8 @@ impl App {
             return;
         }
         self.upload_source = Some(src.clone());
+        let resolved = src.display().to_string();
+        remember_history(&mut self.source_history, &resolved);
         self.mode = Mode::Normal;
         let base = self
             .tabs
@@ -3441,6 +3518,51 @@ pub fn cause_of(e: &Error) -> String {
     }
 }
 
+/// Records a confirmed picker value: freshest last, duplicates move, the cap holds.
+fn remember_history(history: &mut Vec<String>, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+    history.retain(|v| v != value);
+    history.push(value.to_owned());
+    while history.len() > PICKER_HISTORY {
+        history.remove(0);
+    }
+}
+
+/// Walks a picker history: up goes to the older values, down returns to the
+/// draft once the freshest value is behind.
+fn cycle_history(
+    buffer: &mut String,
+    draft: &mut String,
+    hist: &mut Option<usize>,
+    history: &[String],
+    up: bool,
+) {
+    if history.is_empty() {
+        return;
+    }
+    match (*hist, up) {
+        (None, true) => {
+            *draft = std::mem::take(buffer);
+            *hist = Some(history.len() - 1);
+        }
+        (Some(i), true) => *hist = Some(i.saturating_sub(1)),
+        (Some(i), false) => {
+            if i + 1 < history.len() {
+                *hist = Some(i + 1);
+            } else {
+                *hist = None;
+                *buffer = draft.clone();
+            }
+        }
+        (None, false) => {}
+    }
+    if let Some(i) = *hist {
+        *buffer = history[i].clone();
+    }
+}
+
 /// The idle status hint of a screen.
 #[must_use]
 pub fn hint_of(screen: Screen) -> String {
@@ -4132,6 +4254,8 @@ mod tests {
                 buffer: "dl".into(),
                 back_to_card: None,
                 pending_repo: None,
+                draft: String::new(),
+                hist: None,
             })
         );
         for c in "/tmp/outs".chars() {
@@ -4619,6 +4743,141 @@ mod tests {
         app.handle(Msg::Key(key(KeyCode::Enter)));
         assert!(app.tabs[0].marks.is_empty(), "opening a repo clears");
         let _ = rx;
+    }
+
+    #[tokio::test]
+    async fn the_picker_histories_cycle_and_stay_separate() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let dir = tempfile::tempdir().unwrap();
+        // Two destinations and one source join the histories.
+        for path in ["/tmp/one", "/tmp/two"] {
+            app.handle(Msg::Key(key(KeyCode::Char('o'))));
+            let Mode::Dest(picker) = app.mode.clone() else {
+                panic!();
+            };
+            for _ in 0..picker.buffer.chars().count() {
+                app.handle(Msg::Key(key(KeyCode::Backspace)));
+            }
+            for c in path.chars() {
+                app.handle(Msg::Key(key(KeyCode::Char(c))));
+            }
+            app.handle(Msg::Key(key(KeyCode::Enter)));
+        }
+        std::fs::write(dir.path().join("f.txt"), b"x").unwrap();
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        let Mode::PickSource(seed) = app.mode.clone() else {
+            panic!("p opens the picker");
+        };
+        for _ in 0..seed.buffer.chars().count() {
+            app.handle(Msg::Key(key(KeyCode::Backspace)));
+        }
+        for c in dir.path().display().to_string().chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(
+            app.dest_history,
+            vec!["/tmp/one".to_owned(), "/tmp/two".to_owned()]
+        );
+        assert_eq!(
+            app.source_history,
+            vec![dir.path().display().to_string()],
+            "the histories stay apart"
+        );
+        // The confirmed put runs against the dead port: free the slot.
+        app.transfer = None;
+        // Up walks the history from the freshest, clamped at the oldest.
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!("o opens the picker");
+        };
+        assert_eq!(picker.buffer, "/tmp/two");
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!();
+        };
+        assert_eq!(picker.buffer, "/tmp/one", "the older value shows");
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!();
+        };
+        assert_eq!(picker.buffer, "/tmp/one", "the oldest clamps");
+        // Enter confirms the history value, which moves freshest.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(app.destination, PathBuf::from("/tmp/one"));
+        assert_eq!(
+            app.dest_history.last().map(String::as_str),
+            Some("/tmp/one")
+        );
+        // Down past the freshest returns to the typed draft.
+        app.handle(Msg::Key(key(KeyCode::Char('o'))));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!();
+        };
+        for _ in 0..picker.buffer.chars().count() {
+            app.handle(Msg::Key(key(KeyCode::Backspace)));
+        }
+        for c in "/tmp/draft".chars() {
+            app.handle(Msg::Key(key(KeyCode::Char(c))));
+        }
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!();
+        };
+        assert_eq!(picker.buffer, "/tmp/one", "the history took over");
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        let Mode::Dest(picker) = app.mode.clone() else {
+            panic!();
+        };
+        assert_eq!(picker.buffer, "/tmp/draft", "the draft comes back");
+        // An empty history never moves the buffer.
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.mode, Mode::Normal, "esc closed the picker");
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        if !matches!(app.mode, Mode::PickSource(_)) {
+            panic!("p opens the picker, got {:?} ({})", app.mode, app.status);
+        }
+        app.handle(Msg::Key(key(KeyCode::Up)));
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("the picker stays open");
+        };
+        assert_eq!(
+            picker.buffer,
+            dir.path().display().to_string(),
+            "the freshest source shows"
+        );
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+    }
+
+    #[tokio::test]
+    async fn the_picker_history_holds_sixteen_values() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        for i in 0..20 {
+            app.handle(Msg::Key(key(KeyCode::Char('o'))));
+            let Mode::Dest(picker) = app.mode.clone() else {
+                panic!();
+            };
+            for _ in 0..picker.buffer.chars().count() {
+                app.handle(Msg::Key(key(KeyCode::Backspace)));
+            }
+            let path = format!("/tmp/hist-{i:02}");
+            for c in path.chars() {
+                app.handle(Msg::Key(key(KeyCode::Char(c))));
+            }
+            app.handle(Msg::Key(key(KeyCode::Enter)));
+        }
+        assert_eq!(app.dest_history.len(), PICKER_HISTORY);
+        assert_eq!(
+            app.dest_history.first().map(String::as_str),
+            Some("/tmp/hist-04"),
+            "the oldest values fell off the front"
+        );
+        assert_eq!(
+            app.dest_history.last().map(String::as_str),
+            Some("/tmp/hist-19")
+        );
     }
 
     #[tokio::test]

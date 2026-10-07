@@ -49,6 +49,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `x` | cancel the running transfer |
 | `v` | toggle the local pane; `h`/`l` move the focus to it and back |
 | `space` | mark the selection; `d` transfers the marks as a queue |
+| `up`/`down` | in the pickers: walk the confirmed values of the session |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
@@ -81,6 +82,7 @@ On the repositories screen `p` only reports: `the put works in the tree`.
 
 The picker is prefilled with the last confirmed source of the session, with the working directory of `nxr-tui` on the first put.
 It shows the resolved path live, paste works, and nothing leaves the machine before enter.
+Both pickers keep the values confirmed this session (sixteen at most, separately per picker): `up` and `down` walk them, `enter` confirms the one on screen, and typing returns to the draft.
 Enter resolves the buffer against the working directory and checks it locally: a path that is not a folder answers `not a directory: {path}` and keeps the picker open, an empty buffer answers `the source is empty` the same way.
 A confirmed folder starts the upload immediately: `put {folder} -> {position}`.
 With the local pane open, `p` prefills the picker with the folder of the pane.
