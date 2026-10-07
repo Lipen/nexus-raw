@@ -43,6 +43,7 @@ nav:
   - Get started: get-started.md
   - How-to:
       - Run the demo: how-to/demo.md
+      - Run the browser sandbox: how-to/wasm.md
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
       - Integrate it: how-to/integrate.md
