@@ -66,8 +66,8 @@ pub mod ui;
 
 // The flat public surface: binaries and wrappers import from the crate root.
 pub use crate::app::{
-    cause_of, App, Card, DlEv, DlOutcome, ErrorModal, Mode, Msg, RepoRow, Retry, SaveAsDialog,
-    Screen, ShaState, SizeState, Tab, Toast, Transfer,
+    cause_of, App, Card, DestPicker, DlEv, DlOutcome, ErrorModal, LocalEntry, LocalPane, Mode, Msg,
+    PickSource, RepoRow, Retry, SaveAsDialog, Screen, ShaState, SizeState, Tab, Toast, Transfer,
 };
 pub use crate::args::Args;
 pub use crate::config::{ConfigFile, Nav, ServerCfg};

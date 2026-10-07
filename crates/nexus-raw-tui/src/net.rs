@@ -2,7 +2,7 @@
 //! The bootstrap runs before the TUI opens, the rest reports back through the app channel.
 
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use nexus_raw_core::creds;
@@ -14,7 +14,7 @@ use nexus_raw_core::{
 };
 use tokio::sync::mpsc;
 
-use crate::app::{DlEv, Msg};
+use crate::app::{DlEv, LocalEntry, Msg};
 use crate::config::ServerCfg;
 
 /// Resolves the `Authorization` header value from `-u user:pass` and the environment.
@@ -343,6 +343,78 @@ fn walk_dir<'a>(
     })
 }
 
+/// Lists one folder of the local filesystem for the dual-pane, in the
+/// background: `read_dir` plus `symlink_metadata` per child.
+pub fn local_entries(tx: mpsc::UnboundedSender<Msg>, cwd: PathBuf) {
+    tokio::task::spawn_blocking(move || {
+        let res = list_local(&cwd);
+        let _ = tx.send(Msg::LocalEntries { cwd, res });
+    });
+}
+
+/// The children of one folder: kinds and file sizes, unsorted.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when the folder cannot be read or a child cannot be stat-ed.
+pub fn list_local(cwd: &Path) -> Result<Vec<LocalEntry>, Error> {
+    let mut out = Vec::new();
+    let read = std::fs::read_dir(cwd).map_err(|e| Error::io(cwd, e))?;
+    for entry in read {
+        let entry = entry.map_err(|e| Error::io(cwd, e))?;
+        let path = entry.path();
+        let meta = path.symlink_metadata().map_err(|e| Error::io(&path, e))?;
+        let kind = if meta.is_dir() {
+            EntryKind::Dir
+        } else {
+            EntryKind::File
+        };
+        let size = if kind == EntryKind::File {
+            Some(meta.len())
+        } else {
+            None
+        };
+        out.push(LocalEntry {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            kind,
+            size,
+        });
+    }
+    Ok(out)
+}
+
+/// Runs one core transfer task: announces it, folds its events of the given
+/// direction into the app channel and reports the result.
+fn spawn_transfer(
+    tx: mpsc::UnboundedSender<Msg>,
+    start: DlEv,
+    dir: Dir,
+    task: impl FnOnce(
+            mpsc::UnboundedSender<Event>,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<Summary, Error>> + Send>,
+        > + Send
+        + 'static,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let _ = tx.send(Msg::Dl(start));
+        let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
+        let forward_tx = tx.clone();
+        let forwarder = tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                let Some(msg) = fold_event(event, dir) else {
+                    continue;
+                };
+                let _ = forward_tx.send(msg);
+            }
+        });
+        let res = task(events).await;
+        let _ = tx.send(Msg::Dl(DlEv::Done(res)));
+        // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
+        let _ = forwarder.await;
+    })
+}
+
 /// Downloads the collected names from the repository root into `dst`,
 /// streaming progress into the app channel.
 pub fn start_download(
@@ -352,29 +424,15 @@ pub fn start_download(
     dst: PathBuf,
     auth: Option<String>,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let _ = tx.send(Msg::Dl(DlEv::Start {
-            local: dst.clone(),
-            files: Some(names.len()),
-        }));
-        let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
-        let forward_tx = tx.clone();
-        let forwarder = tokio::spawn(async move {
-            while let Some(event) = event_rx.recv().await {
-                let Some(msg) = fold_event(event, Dir::Down) else {
-                    continue;
-                };
-                let _ = forward_tx.send(msg);
-            }
-        });
-        let res = async {
+    let start = DlEv::Start {
+        local: dst.clone(),
+        files: Some(names.len()),
+    };
+    spawn_transfer(tx, start, Dir::Down, |events| {
+        Box::pin(async move {
             let nxr = Nxr::new(config(repo_url.clone(), auth.clone()), events)?;
             nxr.down(&dst, Enumeration::Names(names), false).await
-        }
-        .await;
-        let _ = tx.send(Msg::Dl(DlEv::Done(res)));
-        // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
-        let _ = forwarder.await;
+        })
     })
 }
 
@@ -386,29 +444,15 @@ pub fn start_upload(
     src: PathBuf,
     auth: Option<String>,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let _ = tx.send(Msg::Dl(DlEv::Start {
-            local: src.clone(),
-            files: None,
-        }));
-        let (events, mut event_rx) = mpsc::unbounded_channel::<Event>();
-        let forward_tx = tx.clone();
-        let forwarder = tokio::spawn(async move {
-            while let Some(event) = event_rx.recv().await {
-                let Some(msg) = fold_event(event, Dir::Up) else {
-                    continue;
-                };
-                let _ = forward_tx.send(msg);
-            }
-        });
-        let res = async {
+    let start = DlEv::Start {
+        local: src.clone(),
+        files: None,
+    };
+    spawn_transfer(tx, start, Dir::Up, |events| {
+        Box::pin(async move {
             let nxr = Nxr::new(config(base.clone(), auth.clone()), events)?;
             nxr.up(&src, None, true, None).await
-        }
-        .await;
-        let _ = tx.send(Msg::Dl(DlEv::Done(res)));
-        // The Nxr is gone, so the event channel is closing: the forwarder drains and exits.
-        let _ = forwarder.await;
+        })
     })
 }
 
@@ -651,6 +695,74 @@ mod tests {
             }
             other => panic!("unexpected message: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn start_upload_puts_bytes_and_the_marker() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let body = b"payload of the upload\n";
+        std::fs::write(dir.path().join("one.txt"), body).unwrap();
+        let base = format!("{}repository/raw-main/", mock.base_url());
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        start_upload(tx, base, dir.path().to_path_buf(), None);
+        let mut summary = None;
+        while let Some(msg) = rx.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                summary = Some(res.unwrap());
+                break;
+            }
+        }
+        let summary = summary.expect("the upload finished");
+        assert_eq!(summary.uploaded, 1);
+        assert_eq!(summary.skipped, 0);
+        // The object sits in the store byte-for-byte, the marker pins the digest.
+        assert_eq!(
+            mock.store_get("repository/raw-main/one.txt").as_deref(),
+            Some(body.as_slice())
+        );
+        let marker = mock
+            .store_get("repository/raw-main/one.txt.sha256")
+            .unwrap();
+        let digest = Digest::of_bytes(body);
+        assert!(marker
+            .windows(digest.as_str().len())
+            .any(|w| w == digest.as_str().as_bytes()));
+        // A rerun skips the complete object.
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        start_upload(
+            tx,
+            format!("{}repository/raw-main/", mock.base_url()),
+            dir.path().to_path_buf(),
+            None,
+        );
+        let mut summary = None;
+        while let Some(msg) = rx.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                summary = Some(res.unwrap());
+                break;
+            }
+        }
+        assert_eq!(summary.unwrap().skipped, 1, "the rerun skips what landed");
+    }
+
+    #[test]
+    fn list_local_reports_kinds_and_sizes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("one.bin"), [0u8; 300]).unwrap();
+        let mut entries = list_local(dir.path()).unwrap();
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "one.bin");
+        assert_eq!(entries[0].kind, EntryKind::File);
+        assert_eq!(entries[0].size, Some(300));
+        assert_eq!(entries[1].name, "sub");
+        assert_eq!(entries[1].kind, EntryKind::Dir);
+        assert_eq!(entries[1].size, None);
+        // An unreadable folder is an io error.
+        let err = list_local(&dir.path().join("absent")).unwrap_err();
+        assert_eq!(err.exit_code(), 1);
     }
 
     #[test]

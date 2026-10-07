@@ -47,6 +47,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `p` | upload a local folder into the current tree position (source picker) |
 | `c` | copy the URL of the selection: the repository, the file or the folder |
 | `x` | cancel the running transfer |
+| `v` | toggle the local pane; `h`/`l` move the focus to it and back |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
@@ -79,8 +80,9 @@ On the repositories screen `p` only reports: `the put works in the tree`.
 
 The picker is prefilled with the last confirmed source of the session, with the working directory of `nxr-tui` on the first put.
 It shows the resolved path live, paste works, and nothing leaves the machine before enter.
-Enter resolves the buffer against the working directory and checks it locally: a path that is not a folder answers `not a directory: {path}` and keeps the picker open.
+Enter resolves the buffer against the working directory and checks it locally: a path that is not a folder answers `not a directory: {path}` and keeps the picker open, an empty buffer answers `the source is empty` the same way.
 A confirmed folder starts the upload immediately: `put {folder} -> {position}`.
+With the local pane open, `p` prefills the picker with the folder of the pane.
 
 The upload drives the same core pipeline as `nxr up`: a local scan (hidden files, `.sha256` markers and `.part` files stay out, one unsafe name refuses the whole run before the first byte), marker generation for markerless files, the symmetric diff against the remote, then the transfer.
 Markers are always generated: the TUI has no `--no-sha`.
@@ -89,7 +91,24 @@ Same-digest objects are skipped, a divergence refuses the whole run, and an uplo
 While the upload runs, the panel shows the remote base, the source folder, the plan, the files in flight with byte progress and the summary.
 Navigation, filters, cards and tab switches keep working: the position the put goes into is fixed at the start, browsing never retargets it.
 A finished put quietly refreshes the tree position it went into, so the new names appear without a manual `r`.
-An empty source opens the error modal without a retry, every other refusal offers `r` to rerun the same put into the same base.
+An empty source opens the error modal without a retry; `r` offers a rerun of the same put into the same base for every refusal the core allows to retry, which excludes grammar refusals of unsafe names.
+
+## Dual-pane
+
+`v` splits the body: the left half shows a folder of the local filesystem, the right half keeps the repositories or the tree unchanged.
+The gate is a terminal of eighty columns; a narrower one answers `the terminal is too narrow for dual-pane` and nothing opens.
+A second `v` closes the pane, and the anchors return to the session destination.
+
+`h` moves the keyboard focus into the pane, `l` back to the remote side.
+Inside the pane the usual keys move the cursor: `enter` descends into a folder, `esc`/`backspace` climb one folder up (at the filesystem root it says so), `enter` on a file answers `enter opens folders here` because a local card does not exist in this wave.
+The remote verbs refuse in the pane: `d` and `p` answer `switch to the remote pane (l)`, and the filter answers `the filter works in the tree`.
+The pane is a session surface: tab switches never close or reset it.
+
+While the pane is open it anchors the transfers: the status bar shows its folder instead of the destination, a file lands as `{pane}/{name}`, a subtree as `{pane}/{rel}/...`, a whole repository as `{pane}/{repo}/...`.
+The session destination itself is never rewritten by a pane-anchored transfer.
+`p` prefills the source picker with the pane folder.
+A download that landed in the pane folder makes it reread itself, so the new files show up on their own.
+A click selects in the pane whose half it hit and moves the focus there.
 
 ## Cancel
 
@@ -105,6 +124,7 @@ It shows a plain-language cause, the facts (server, repository, names, destinati
 `y` copies the full text to the clipboard (OSC52 with a fallback to the system clipboard, `tui.osc52` disables OSC52), `r` retries where a retry makes sense, `esc`/`enter` closes.
 The modal never destroys what is under it: a destination picker, the source picker, a dialog, the servers overlay, an add form or a card comes back exactly as it was when the modal closes, typed text included.
 A retry hands the layer straight back too: the rerun proceeds behind the dialog.
+An error over an error passes the covered layer on, so a second refusal never buries the first dialog.
 
 ## Tree modes
 

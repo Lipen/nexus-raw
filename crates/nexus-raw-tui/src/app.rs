@@ -53,6 +53,9 @@ const TOAST_TTL: Duration = Duration::from_millis(2000);
 /// How many toasts stack at once.
 const TOAST_STACK: usize = 3;
 
+/// The narrowest terminal dual-pane opens on: two panes of forty columns.
+const MIN_DUAL_COLS: u16 = 80;
+
 /// The two screens of one tab: the server repositories, then the tree of the
 /// selected repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -401,6 +404,31 @@ pub struct PickSource {
     pub buffer: String,
 }
 
+/// One row of the local pane: a filesystem child with its size.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalEntry {
+    /// The file or folder name.
+    pub name: String,
+    /// Folder or file.
+    pub kind: EntryKind,
+    /// The byte size of a file.
+    /// Folders carry none.
+    pub size: Option<u64>,
+}
+
+/// The local pane of dual-pane browsing: one folder of the filesystem.
+#[derive(Debug)]
+pub struct LocalPane {
+    /// The folder this pane shows.
+    pub cwd: PathBuf,
+    /// The children of the folder, folders first, names sorted.
+    pub entries: Vec<LocalEntry>,
+    /// The cursor over the children.
+    pub cursor: usize,
+    /// True while a listing of the folder is in flight.
+    pub loading: bool,
+}
+
 /// Which field of the download-as dialog the keystrokes edit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SaveAsField {
@@ -528,7 +556,8 @@ pub struct Transfer {
     pub repo_name: Option<String>,
     /// Transfer: the local target directory. Empty for an upload.
     pub dst: PathBuf,
-    /// Upload: the local source directory. None for a download.
+    /// Upload: the local source directory.
+    /// None for a download.
     pub src: Option<PathBuf>,
     /// The plan count of the walk, shown before the transfer starts.
     pub files: Option<usize>,
@@ -708,6 +737,12 @@ pub enum Msg {
     Tick,
     /// A download progress event.
     Dl(DlEv),
+    /// The listing of one local folder behind the dual-pane. `cwd` is the
+    /// row token: a stale answer of another folder is dropped.
+    LocalEntries {
+        cwd: PathBuf,
+        res: Result<Vec<LocalEntry>, Error>,
+    },
 }
 
 /// The whole application state.
@@ -751,7 +786,8 @@ pub struct App {
     /// The current or last transfer, either direction, if any.
     pub transfer: Option<Transfer>,
     /// The local folder the last confirmed put uploaded from: the seed of
-    /// the source picker. A session value, never written to the config.
+    /// the source picker.
+    /// A session value, never written to the config.
     pub upload_source: Option<PathBuf>,
     /// The plain status line.
     pub status: String,
@@ -766,6 +802,18 @@ pub struct App {
     pub list_state: ListState,
     /// The inner area of the list block, set by every frame of [`crate::ui::draw`].
     pub list_area: Rect,
+    /// The local pane of dual-pane browsing, when open.
+    pub local: Option<LocalPane>,
+    /// True when the keyboard sits in the local pane.
+    pub local_focus: bool,
+    /// The render state of the local pane: kept across frames so the scroll
+    /// offset survives and mouse clicks can hit-test.
+    pub local_state: ListState,
+    /// The inner area of the local pane block, set by every frame.
+    pub local_area: Rect,
+    /// The terminal area, set by every frame of [`crate::ui::draw`]: the
+    /// dual-pane gate measures it.
+    pub term: Rect,
     /// The previous left click: `(when, row index)` for the double click.
     last_click: Option<(Instant, usize)>,
     /// Sender back into the message pump.
@@ -813,6 +861,11 @@ impl App {
             quit_armed: false,
             list_state: ListState::default(),
             list_area: Rect::default(),
+            local: None,
+            local_focus: false,
+            local_state: ListState::default(),
+            local_area: Rect::default(),
+            term: Rect::default(),
             last_click: None,
             download_dir,
             tx,
@@ -918,6 +971,10 @@ impl App {
             | Mode::AddServer(_)
             | Mode::Servers
             | Mode::Card(_) => Some(Box::new(self.mode.clone())),
+            // An error over an error hands the covered layer on.
+            Mode::Error {
+                back: Some(back), ..
+            } => Some(back),
             _ => None,
         };
         self.mode = Mode::Error {
@@ -976,6 +1033,7 @@ impl App {
             }
             Msg::Tick => self.tick(),
             Msg::Dl(ev) => self.on_dl(ev),
+            Msg::LocalEntries { cwd, res } => self.on_local_entries(cwd, res),
         }
     }
 
@@ -1010,6 +1068,16 @@ impl App {
             self.on_key_filter(key);
             return;
         }
+        // The toggle works from both panes.
+        if pressed(&key, 'v') {
+            self.toggle_local_pane();
+            return;
+        }
+        // The local pane eats the keys while it holds the focus.
+        if self.local_focus && self.local.is_some() {
+            self.on_key_local(key);
+            return;
+        }
         match key.code {
             KeyCode::Char(_) if pressed(&key, 'q') => self.request_quit(),
             KeyCode::Up => self.move_cursor(-1),
@@ -1031,6 +1099,7 @@ impl App {
             KeyCode::Char(_) if pressed(&key, 'p') => self.open_source_picker(),
             KeyCode::Char(_) if pressed(&key, 'x') => self.cancel_transfer(),
             KeyCode::Char(_) if pressed(&key, 'c') => self.copy_selected_url(),
+            KeyCode::Char(_) if pressed(&key, 'h') => self.focus_local_pane(),
             KeyCode::Char(_) if pressed(&key, 'D') => self.open_save_as(),
             KeyCode::Char(_) if pressed(&key, 'r') => self.refresh(),
             KeyCode::Char(_) if pressed(&key, 'e') => self.toggle_nav(),
@@ -1262,7 +1331,8 @@ impl App {
     }
 
     /// The error modal: esc leaves to the covered layer, `y` copies the full
-    /// text, `r` reruns. A remembered dialog gets its layer back on close.
+    /// text, `r` reruns.
+    /// A remembered dialog gets its layer back on close.
     fn on_key_error(&mut self, key: KeyEvent, modal: ErrorModal, back: Option<Box<Mode>>) {
         let restore = || match back {
             Some(layer) => *layer,
@@ -1328,17 +1398,44 @@ impl App {
         match mouse.kind {
             MouseEventKind::ScrollUp => self.move_cursor(-1),
             MouseEventKind::ScrollDown => self.move_cursor(1),
-            MouseEventKind::Down(MouseButton::Left) => self.on_click(mouse.row),
+            MouseEventKind::Down(MouseButton::Left) => self.on_click(mouse.column, mouse.row),
             _ => {}
         }
     }
 
     /// A left click selects the row under the pointer; a second click on the
     /// same row within [`DOUBLE_CLICK`] activates it.
-    fn on_click(&mut self, row: u16) {
-        if self.mode != Mode::Normal || self.list_area.width == 0 {
+    /// With the local pane open, the left half selects in the pane and the
+    /// right half in the list.
+    fn on_click(&mut self, col: u16, row: u16) {
+        if self.mode != Mode::Normal {
             return;
         }
+        if let Some(pane) = self.local.as_ref() {
+            let area = self.local_area;
+            if area.width > 0
+                && col >= area.x
+                && col < area.x + area.width
+                && row >= area.y
+                && row < area.y + area.height
+            {
+                let idx = self.local_state.offset() + (row - area.y) as usize;
+                if idx < pane.entries.len() {
+                    let pane = self.local.as_mut().expect("pane checked above");
+                    pane.cursor = idx;
+                    self.local_focus = true;
+                }
+                return;
+            }
+        }
+        if self.list_area.width == 0 {
+            return;
+        }
+        if col < self.list_area.x {
+            return;
+        }
+        // The focus follows the click: the right half is the remote pane.
+        self.local_focus = false;
         let top = self.list_area.y;
         if row < top || row >= top.saturating_add(self.list_area.height) {
             return;
@@ -2091,10 +2188,14 @@ impl App {
             self.status = "transfer in flight: one at a time".into();
             return;
         }
-        let seed = self
-            .upload_source
-            .clone()
-            .unwrap_or_else(|| self.base_dir.clone());
+        let seed = match self.local.as_ref() {
+            // The pane anchors the put too: its folder prefills the picker.
+            Some(pane) => pane.cwd.clone(),
+            None => self
+                .upload_source
+                .clone()
+                .unwrap_or_else(|| self.base_dir.clone()),
+        };
         self.mode = Mode::PickSource(PickSource {
             buffer: seed.display().to_string(),
         });
@@ -2157,6 +2258,180 @@ impl App {
         }
     }
 
+    // ---- local pane ------------------------------------------------------
+
+    /// The `v` toggle: the local pane joins the screen, or leaves it. The
+    /// anchors `d` and `p` follow the pane while it is open.
+    fn toggle_local_pane(&mut self) {
+        if self.local.is_some() {
+            self.local = None;
+            self.local_focus = false;
+            self.status = "dual-pane off".into();
+            return;
+        }
+        if self.term.width < MIN_DUAL_COLS {
+            self.status = "the terminal is too narrow for dual-pane".into();
+            return;
+        }
+        let cwd = self
+            .upload_source
+            .clone()
+            .unwrap_or_else(|| self.base_dir.clone());
+        self.local = Some(LocalPane {
+            cwd,
+            entries: Vec::new(),
+            cursor: 0,
+            loading: true,
+        });
+        self.local_focus = true;
+        self.status = "dual-pane on".into();
+        self.list_local();
+    }
+
+    /// The `h` key: the focus moves to the local pane, when one is open.
+    fn focus_local_pane(&mut self) {
+        if self.local.is_some() {
+            self.local_focus = true;
+        }
+    }
+
+    /// Lists the pane folder in the background.
+    fn list_local(&mut self) {
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        pane.loading = true;
+        let cwd = pane.cwd.clone();
+        net::local_entries(self.tx.clone(), cwd);
+    }
+
+    /// The keys of the focused local pane: navigation, enter, back, and the
+    /// refusals of the verbs that work on the remote side only.
+    fn on_key_local(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char(_) if pressed(&key, 'q') => self.request_quit(),
+            KeyCode::Char(_) if pressed(&key, 'l') => {
+                self.local_focus = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.local_move(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.local_move(1),
+            KeyCode::PageUp => self.local_move(-self.local_page()),
+            KeyCode::PageDown => self.local_move(self.local_page()),
+            KeyCode::Home | KeyCode::Char('g') => self.local_edge(0),
+            KeyCode::End | KeyCode::Char('G') => self.local_edge(1),
+            KeyCode::Enter => self.local_descend(),
+            KeyCode::Esc | KeyCode::Backspace => self.local_up(),
+            KeyCode::Char(_) if pressed(&key, 'd') || pressed(&key, 'p') => {
+                self.status = "switch to the remote pane (l)".into();
+            }
+            KeyCode::Char('/') => self.status = "the filter works in the tree".into(),
+            _ => {}
+        }
+    }
+
+    /// One page of the local pane, in rows.
+    fn local_page(&self) -> i32 {
+        self.local_area.height.max(1).saturating_sub(1) as i32
+    }
+
+    fn local_move(&mut self, delta: i32) {
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        let len = pane.entries.len();
+        if len == 0 {
+            return;
+        }
+        pane.cursor = ((pane.cursor as i64) + delta as i64).clamp(0, len as i64 - 1) as usize;
+    }
+
+    fn local_edge(&mut self, edge: u8) {
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        let len = pane.entries.len();
+        if len == 0 {
+            return;
+        }
+        pane.cursor = if edge == 0 { 0 } else { len - 1 };
+    }
+
+    /// Enter on a folder descends, on a file it reports: the local card does
+    /// not exist in this wave.
+    fn local_descend(&mut self) {
+        let entry = self
+            .local
+            .as_ref()
+            .and_then(|pane| pane.entries.get(pane.cursor))
+            .cloned();
+        let Some(entry) = entry else {
+            return;
+        };
+        if entry.kind != EntryKind::Dir {
+            self.status = "enter opens folders here".into();
+            return;
+        }
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        pane.cwd = pane.cwd.join(&entry.name);
+        pane.entries.clear();
+        pane.cursor = 0;
+        self.list_local();
+    }
+
+    /// Backspace or esc: one folder up, the filesystem root reports.
+    fn local_up(&mut self) {
+        let parent = self
+            .local
+            .as_ref()
+            .and_then(|pane| pane.cwd.parent())
+            .map(Path::to_path_buf);
+        let Some(parent) = parent else {
+            self.status = "at the root of the filesystem".into();
+            return;
+        };
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        pane.cwd = parent;
+        pane.entries.clear();
+        pane.cursor = 0;
+        self.list_local();
+    }
+
+    /// The listing of one pane folder lands: stale answers of other folders drop.
+    fn on_local_entries(&mut self, cwd: PathBuf, res: Result<Vec<LocalEntry>, Error>) {
+        let Some(pane) = self.local.as_mut() else {
+            return;
+        };
+        if pane.cwd != cwd {
+            return;
+        }
+        pane.loading = false;
+        match res {
+            Ok(mut entries) => {
+                entries.sort_by_key(|e| (e.kind != EntryKind::Dir, e.name.clone()));
+                let len = entries.len();
+                pane.entries = entries;
+                pane.cursor = pane.cursor.min(len.saturating_sub(1));
+            }
+            Err(e) => {
+                self.raise_error(ErrKind::Listing, &e, ErrCtx::default(), None);
+            }
+        }
+    }
+
+    /// The folder transfers anchor to while the pane is open: its folder.
+    /// The session destination itself is never written by a pane-anchored
+    /// transfer.
+    fn anchor_base(&self) -> PathBuf {
+        match self.local.as_ref() {
+            Some(pane) => pane.cwd.clone(),
+            None => self.destination.clone(),
+        }
+    }
+
     // ---- downloads -------------------------------------------------------
 
     /// The `d` verb: on Repos the whole repository of the row, on Tree the
@@ -2186,14 +2461,17 @@ impl App {
                 };
                 let path = t.path.clone();
                 match row.kind {
-                    EntryKind::File => self.download_file(path, &row),
+                    EntryKind::File => {
+                        self.download_file(path, &row, self.anchor_base(), self.local.is_some());
+                    }
                     EntryKind::Dir => {
                         let rel = self.full_rel(&path, &row.rel);
                         let Some(repo) = t.repo.clone() else {
                             return;
                         };
                         // From-root names mirror the repository: {dst}/{rel}/...
-                        self.begin_walk(RepoRow::from(&repo), rel, self.destination.clone(), false);
+                        let dst = self.anchor_base();
+                        self.begin_walk(RepoRow::from(&repo), rel, dst, false);
                     }
                 }
             }
@@ -2289,18 +2567,20 @@ impl App {
             loading: false,
         };
         self.mode = Mode::Card(Card::File(card));
-        self.download_file(path, &row);
+        self.download_file(path, &row, self.destination.clone(), false);
     }
 
-    /// The whole repository of one row into `{destination}/{repo.name}`.
+    /// The whole repository of one row into `{anchor}/{repo.name}`.
     fn download_repo(&mut self, repo: &RepoRow) {
-        let dst = self.destination.join(&repo.name);
+        let dst = self.anchor_base().join(&repo.name);
         self.begin_walk(repo.clone(), String::new(), dst, false);
     }
 
-    /// One file with the direct get primitive into `{destination}/{rel}`,
-    /// digest-checked against the `.sha256` sibling when present.
-    fn download_file(&mut self, path: Vec<String>, row: &Row) {
+    /// One file with the direct get primitive, digest-checked against the
+    /// `.sha256` sibling when present. `flat` lands the file straight under
+    /// `base` as `{base}/{name}` (the local pane anchor); otherwise the path
+    /// from the repository root mirrors below `base`.
+    fn download_file(&mut self, path: Vec<String>, row: &Row, base: PathBuf, flat: bool) {
         let Some(t) = self.tabs.get(self.tab) else {
             return;
         };
@@ -2313,30 +2593,28 @@ impl App {
         };
         let rel = self.full_rel(&path, &row.rel);
         let url = format!("{}{}", t.here_url(), row.rel);
-        let out = self.destination.join(&rel);
+        let out = if flat {
+            base.join(&row.name)
+        } else {
+            base.join(&rel)
+        };
         let repo_row = RepoRow::from(&repo);
         self.transfer = Some(Transfer {
             repo_url: repo_row.dir_url(),
             server: Some(host_of(&repo_row.url)),
             repo_name: Some(repo_row.name.clone()),
-            dst: self.destination.clone(),
+            dst: base.clone(),
             files: Some(1),
             retry: Some(Retry::Get {
                 url: url.clone(),
                 out: out.clone(),
-                dst: self.destination.clone(),
+                dst: base.clone(),
                 repo: repo_row,
             }),
             ..Transfer::default()
         });
         self.status = format!("downloading {}", row.name);
-        let handle = net::fetch_one(
-            self.tx.clone(),
-            url,
-            out,
-            self.destination.clone(),
-            self.auth.clone(),
-        );
+        let handle = net::fetch_one(self.tx.clone(), url, out, base, self.auth.clone());
         if let Some(dl) = self.transfer.as_mut() {
             dl.handle = Some(handle);
         }
@@ -2595,13 +2873,32 @@ impl App {
 
     fn on_walk(&mut self, tab: usize, gen: u64, res: Result<Vec<ArtifactName>, Error>) {
         let fresh = self.tabs.get(tab).is_some_and(|t| gen == t.gen);
+        // The walk belongs to the panel only while the panel waits for it:
+        // a cancelled run, a settled one or an upload never listen to it.
+        let ours = match self.transfer.as_ref() {
+            Some(dl) => {
+                dl.dir == Dir::Down && dl.files.is_none() && dl.is_running() && !dl.cancelled
+            }
+            None => false,
+        };
         if !fresh {
-            // The tab navigated away while the walk ran: the request is void,
-            // and the download it prepared must not stay "running" forever.
-            self.transfer = None;
+            if ours {
+                // The tab navigated away while the walk ran: the request is
+                // void, and the panel it prepared must not stay running.
+                self.transfer = None;
+            }
             return;
         }
         match res {
+            Ok(names) if names.is_empty() => {
+                if !ours {
+                    return;
+                }
+                if let Some(dl) = self.transfer.as_mut() {
+                    dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
+                }
+                self.status = "the subtree holds no files".into();
+            }
             Ok(names) if names.is_empty() => {
                 if let Some(dl) = self.transfer.as_mut() {
                     dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
@@ -2609,6 +2906,9 @@ impl App {
                 self.status = "the subtree holds no files".into();
             }
             Ok(mut names) => {
+                if !ours {
+                    return;
+                }
                 let Some(dl) = self.transfer.as_ref() else {
                     return;
                 };
@@ -2664,6 +2964,9 @@ impl App {
                 }
             }
             Err(e) => {
+                if !ours {
+                    return;
+                }
                 let ctx = ErrCtx::of(self, tab);
                 let retry = self
                     .transfer
@@ -2789,6 +3092,15 @@ impl App {
                             summary.failed.len(),
                             dl.dst.display()
                         );
+                        // The pane re-reads the folder the download landed in.
+                        let landed = dl.dst.clone();
+                        if let Some(pane) = self.local.as_mut() {
+                            if pane.cwd == landed {
+                                pane.loading = true;
+                                let cwd = pane.cwd.clone();
+                                net::local_entries(self.tx.clone(), cwd);
+                            }
+                        }
                     }
                 }
             }
@@ -4003,6 +4315,119 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn x_during_a_walk_never_starts_its_download() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert!(app.transfer_busy(), "the walk holds the slot");
+        // x cancels while the walk still flies: the slot frees at once.
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "cancelled");
+        assert!(!app.transfer_busy());
+        // The walk lands late: nobody waits for it, no download may start.
+        app.handle(Msg::Walk {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
+        });
+        assert!(
+            rx.try_recv().is_err(),
+            "the cancelled walk never starts a download"
+        );
+        let dl = app.transfer.as_ref().unwrap();
+        assert!(matches!(dl.outcome, Some(DlOutcome::Cancelled)));
+        assert!(!app.transfer_busy(), "the slot stays clean");
+        // A navigation away during the walk voids it without a zombie panel.
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert!(app.transfer_busy());
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        let gen = app.tabs[0].gen - 1;
+        app.handle(Msg::Walk {
+            tab: 0,
+            gen,
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
+        });
+        assert!(rx.try_recv().is_err(), "no download for a stale walk");
+        assert!(app.transfer.is_none(), "the stale walk released the slot");
+    }
+
+    #[tokio::test]
+    async fn x_cancels_a_running_download_too() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.transfer = Some(Transfer {
+            dir: Dir::Down,
+            repo_url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            dst: PathBuf::from("dl"),
+            handle: Some(tokio::spawn(async {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(3600)).await;
+                }
+            })),
+            ..Transfer::default()
+        });
+        app.handle(Msg::Key(key(KeyCode::Char('x'))));
+        assert_eq!(app.status, "cancelled");
+        let dl = app.transfer.as_ref().unwrap();
+        assert!(dl.cancelled);
+        assert!(matches!(dl.outcome, Some(DlOutcome::Cancelled)));
+        // The stragglers of the aborted download change nothing.
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            downloaded: 5,
+            ..Summary::default()
+        }))));
+        assert!(matches!(
+            app.transfer.as_ref().unwrap().outcome,
+            Some(DlOutcome::Cancelled)
+        ));
+        assert_eq!(app.status, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn paste_fills_the_source_picker() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        assert!(matches!(app.mode, Mode::PickSource(_)));
+        app.handle(Msg::Paste("/tmp/put-src".into()));
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("the picker stays open");
+        };
+        assert!(
+            picker.buffer.ends_with("/tmp/put-src"),
+            "the paste lands in the buffer: {:?}",
+            picker.buffer
+        );
+        assert!(rx.try_recv().is_err(), "paste never starts a transfer");
+    }
+
+    #[tokio::test]
+    async fn the_quiet_refresh_skips_a_moved_away_position() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        // The user descended elsewhere while the put ran: the position moved.
+        app.tabs[0].path = vec!["other".into()];
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            uploaded: 1,
+            ..Summary::default()
+        }))));
+        assert_eq!(app.status, "uploaded 1, skipped 0 -> raw-main / other");
+        assert!(!app.tabs[0].loading);
+        assert!(
+            rx.try_recv().is_err(),
+            "a moved-away position never refreshes"
+        );
+        // A listing in flight at the moment of success is respected too.
+        app.tabs[0].path.clear();
+        app.tabs[0].loading = true;
+        let gen = app.tabs[0].gen;
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            uploaded: 1,
+            ..Summary::default()
+        }))));
+        assert_eq!(app.tabs[0].gen, gen, "no refresh under a flying listing");
+        assert!(app.tabs[0].loading, "the flying listing stays in charge");
+        let _ = rx;
+    }
+
+    #[tokio::test]
     async fn x_with_nothing_running_reports() {
         let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
         app.handle(Msg::Key(key(KeyCode::Char('x'))));
@@ -4139,6 +4564,308 @@ mod tests {
         };
         assert_eq!(dialog.name, "kept");
         assert_eq!(dialog.field, SaveAsField::Name);
+    }
+
+    /// Opens the pane over a real folder: one folder, two files. Returns the
+    /// tempdir (the listing token) and the answers to feed.
+    fn open_pane(app: &mut App) -> (tempfile::TempDir, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("sub")).unwrap();
+        std::fs::write(root.path().join("a.txt"), b"aaa").unwrap();
+        std::fs::write(root.path().join("b.bin"), b"bb").unwrap();
+        let cwd = root.path().to_path_buf();
+        app.base_dir = cwd.clone();
+        app.term = Rect {
+            width: 120,
+            height: 40,
+            x: 0,
+            y: 0,
+        };
+        app.handle(Msg::Key(key(KeyCode::Char('v'))));
+        (root, cwd)
+    }
+
+    fn pane_entries_answer(cwd: &Path) -> Msg {
+        Msg::LocalEntries {
+            cwd: cwd.to_path_buf(),
+            res: Ok(vec![
+                LocalEntry {
+                    name: "b.bin".into(),
+                    kind: EntryKind::File,
+                    size: Some(2),
+                },
+                LocalEntry {
+                    name: "a.txt".into(),
+                    kind: EntryKind::File,
+                    size: Some(3),
+                },
+                LocalEntry {
+                    name: "sub".into(),
+                    kind: EntryKind::Dir,
+                    size: None,
+                },
+            ]),
+        }
+    }
+
+    #[tokio::test]
+    async fn v_opens_the_pane_and_sorts_the_listing() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let (root, cwd) = open_pane(&mut app);
+        assert_eq!(app.status, "dual-pane on");
+        assert!(app.local_focus, "the pane takes the focus");
+        let pane = app.local.as_ref().unwrap();
+        assert!(pane.loading, "the listing is in flight");
+        match rx.recv().await.unwrap() {
+            Msg::LocalEntries { cwd: token, .. } => assert_eq!(token, cwd),
+            other => panic!("unexpected message: {other:?}"),
+        }
+        app.handle(pane_entries_answer(&cwd));
+        let pane = app.local.as_ref().unwrap();
+        assert!(!pane.loading);
+        // Folders first, names sorted below them.
+        let names: Vec<&str> = pane.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["sub", "a.txt", "b.bin"]);
+        assert_eq!(pane.cursor, 0);
+        // tab switching never drops the pane: it is a session surface.
+        app.handle(Msg::Key(key(KeyCode::Tab)));
+        assert!(app.local.is_some());
+        let _ = root;
+    }
+
+    #[tokio::test]
+    async fn the_pane_navigates_and_refuses_the_remote_verbs() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let (root, cwd) = open_pane(&mut app);
+        app.handle(pane_entries_answer(&cwd));
+        // The remote verbs refuse with the pointer to l.
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert_eq!(app.status, "switch to the remote pane (l)");
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        assert_eq!(app.status, "switch to the remote pane (l)");
+        app.handle(Msg::Key(key(KeyCode::Char('/'))));
+        assert_eq!(app.status, "the filter works in the tree");
+        // Enter on a file reports, the local card does not exist.
+        app.handle(Msg::Key(key(KeyCode::Char('j'))));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert_eq!(app.status, "enter opens folders here");
+        // Enter on a folder descends, esc climbs back up.
+        app.handle(Msg::Key(key(KeyCode::Char('g'))));
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        {
+            let pane = app.local.as_ref().unwrap();
+            assert_eq!(pane.cwd, cwd.join("sub"));
+            assert!(pane.loading);
+            assert!(pane.entries.is_empty());
+        }
+        app.handle(Msg::LocalEntries {
+            cwd: cwd.join("sub"),
+            res: Ok(vec![LocalEntry {
+                name: "deep.txt".into(),
+                kind: EntryKind::File,
+                size: Some(1),
+            }]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        {
+            let pane = app.local.as_ref().unwrap();
+            assert_eq!(pane.cwd, cwd, "esc is one folder up");
+            assert!(pane.loading);
+        }
+        // A stale answer of the abandoned folder is dropped.
+        app.handle(Msg::LocalEntries {
+            cwd: cwd.join("sub"),
+            res: Ok(vec![]),
+        });
+        assert!(app.local.as_ref().unwrap().loading);
+        // The filesystem root reports instead of failing.
+        app.local.as_mut().unwrap().cwd = PathBuf::from("/");
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert_eq!(app.status, "at the root of the filesystem");
+        // l hands the focus to the remote side, h takes it back.
+        app.handle(Msg::Key(key(KeyCode::Char('l'))));
+        assert!(!app.local_focus);
+        app.handle(Msg::Key(key(KeyCode::Char('h'))));
+        assert!(app.local_focus);
+        let _ = root;
+    }
+
+    #[tokio::test]
+    async fn the_pane_gate_needs_eighty_columns() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.term = Rect {
+            width: 79,
+            height: 40,
+            x: 0,
+            y: 0,
+        };
+        app.handle(Msg::Key(key(KeyCode::Char('v'))));
+        assert_eq!(app.status, "the terminal is too narrow for dual-pane");
+        assert!(app.local.is_none(), "the pane never opens narrow");
+        app.term = Rect {
+            width: 80,
+            height: 40,
+            x: 0,
+            y: 0,
+        };
+        app.handle(Msg::Key(key(KeyCode::Char('v'))));
+        assert!(app.local.is_some());
+        // v closes the pane and the anchors return to the destination.
+        app.handle(Msg::Key(key(KeyCode::Char('v'))));
+        assert_eq!(app.status, "dual-pane off");
+        assert!(app.local.is_none());
+        assert!(!app.local_focus);
+    }
+
+    #[tokio::test]
+    async fn the_pane_anchors_downloads_and_the_put_picker() {
+        let (mut app, rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        let (root, cwd) = open_pane(&mut app);
+        app.handle(pane_entries_answer(&cwd));
+        app.handle(Msg::Key(key(KeyCode::Char('l'))));
+        app.dest_confirmed = true;
+        // A file lands flat: {cwd}/{name}.
+        app.handle(Msg::Key(key(KeyCode::End)));
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        {
+            let dl = app.transfer.as_ref().unwrap();
+            let Retry::Get { out, dst, .. } = dl.retry.as_ref().unwrap() else {
+                panic!("the file download retries as a get");
+            };
+            assert_eq!(out, &cwd.join("README.txt"), "flat into the pane folder");
+            assert_eq!(dst, &cwd);
+        }
+        assert_eq!(
+            app.destination,
+            PathBuf::from("dl"),
+            "the session destination stays"
+        );
+        app.transfer = None;
+        // A folder mirrors below the pane folder: {cwd}/{rel}/...
+        app.handle(Msg::Key(key(KeyCode::Char('g'))));
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let dl = app.transfer.as_ref().unwrap();
+        assert_eq!(dl.dst, cwd, "from-root names carry the rel themselves");
+        app.transfer = None;
+        // The put picker prefills with the pane folder.
+        app.handle(Msg::Key(key(KeyCode::Char('p'))));
+        let Mode::PickSource(picker) = app.mode.clone() else {
+            panic!("p opens the picker");
+        };
+        assert_eq!(picker.buffer, cwd.display().to_string());
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        // On the repositories screen the repository mirrors: {cwd}/{repo}.
+        app.tabs[0].screen = Screen::Repos;
+        app.tabs[0].repo = None;
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let dl = app.transfer.as_ref().unwrap();
+        assert_eq!(dl.dst, cwd.join("raw-main"));
+        // v closes: the next download anchors to the session destination again.
+        app.transfer = None;
+        app.handle(Msg::Key(key(KeyCode::Char('v'))));
+        app.tabs[0].screen = Screen::Tree;
+        app.tabs[0].repo = app.tabs[0].repos.first().cloned();
+        app.handle(Msg::Key(key(KeyCode::End)));
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        let dl = app.transfer.as_ref().unwrap();
+        assert_eq!(
+            dl.dst,
+            PathBuf::from("dl"),
+            "the anchor returns to the destination"
+        );
+        let Retry::Get { out, .. } = dl.retry.as_ref().unwrap() else {
+            panic!("the file download retries as a get");
+        };
+        assert_eq!(out, &PathBuf::from("dl/README.txt"));
+        let _ = root;
+        let _ = rx;
+    }
+
+    #[tokio::test]
+    async fn a_download_into_the_pane_folder_rereads_it() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        let (root, cwd) = open_pane(&mut app);
+        app.handle(pane_entries_answer(&cwd));
+        app.handle(Msg::Key(key(KeyCode::Char('l'))));
+        let dir = root.path().to_path_buf();
+        app.transfer = Some(Transfer {
+            dir: Dir::Down,
+            repo_url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            dst: dir.clone(),
+            ..Transfer::default()
+        });
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            uploaded: 0,
+            downloaded: 2,
+            skipped: 0,
+            removed: 0,
+            failed: Vec::new(),
+        }))));
+        assert!(app.local.as_ref().unwrap().loading, "the pane rereads");
+        match rx.recv().await.unwrap() {
+            Msg::LocalEntries { cwd: token, res } => {
+                assert_eq!(token, dir);
+                assert!(res.is_ok(), "the real listing of the tempdir answers");
+                app.handle(Msg::LocalEntries { cwd: token, res });
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
+        assert!(!app.local.as_ref().unwrap().loading);
+        // A download elsewhere never triggers the reread.
+        app.transfer.as_mut().unwrap().dst = PathBuf::from("/somewhere/else");
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary::default()))));
+        assert!(!app.local.as_ref().unwrap().loading);
+    }
+
+    #[tokio::test]
+    async fn a_click_selects_in_the_pane_or_the_list() {
+        let (mut app, _rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("docs", EntryKind::Dir),
+            ])],
+            false,
+        );
+        let (root, cwd) = open_pane(&mut app);
+        app.handle(pane_entries_answer(&cwd));
+        app.local_area = Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 10,
+        };
+        app.list_area = Rect {
+            x: 40,
+            y: 0,
+            width: 30,
+            height: 10,
+        };
+        let click = |col: u16, row: u16| {
+            Msg::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: col,
+                row,
+                modifiers: KeyModifiers::empty(),
+            })
+        };
+        // The left half selects in the pane and takes the focus.
+        app.handle(click(5, 2));
+        assert_eq!(app.local.as_ref().unwrap().cursor, 2);
+        assert!(app.local_focus);
+        // The right half selects in the list and hands the focus back.
+        app.handle(click(45, 1));
+        assert_eq!(app.tabs[0].tree_cursor, 1);
+        assert!(!app.local_focus);
+        // A click above the rows stays quiet.
+        app.handle(click(45, 20));
+        assert_eq!(app.tabs[0].tree_cursor, 1);
+        let _ = root;
     }
 
     #[tokio::test]

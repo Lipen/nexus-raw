@@ -14,8 +14,8 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::{
-    fmt_bytes, App, Card, DestPicker, DlOutcome, ErrorModal, Mode, PickSource, SaveAsDialog,
-    SaveAsField, Screen, ShaState, SizeState, Toast, Transfer,
+    fmt_bytes, App, Card, DestPicker, DlOutcome, ErrorModal, LocalEntry, Mode, PickSource,
+    SaveAsDialog, SaveAsField, Screen, ShaState, SizeState, Toast, Transfer,
 };
 use nexus_raw_core::{Dir, EntryKind};
 
@@ -32,6 +32,7 @@ fn selected() -> Style {
 /// Draws one frame: header, body, download panel, status, toasts, overlay.
 /// The mutable borrow carries the list geometry back into the app.
 pub fn draw(f: &mut Frame, app: &mut App) {
+    app.term = f.area();
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -72,6 +73,21 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_body(f: &mut Frame, app: &mut App, area: Rect) {
+    // The local pane takes the left half, the remote body keeps the right.
+    if app.local.is_some() {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area);
+        draw_local(f, app, cols[0]);
+        draw_remote(f, app, cols[1]);
+        return;
+    }
+    draw_remote(f, app, area);
+}
+
+/// The remote side: the repositories or the tree, plus the transfer panel.
+fn draw_remote(f: &mut Frame, app: &mut App, area: Rect) {
     // The panel stays after the transfer ends: the outcome stays readable
     // until the next transfer replaces it.
     if app.transfer.is_none() {
@@ -92,6 +108,54 @@ fn draw_body(f: &mut Frame, app: &mut App, area: Rect) {
         .split(area);
     draw_list(f, app, chunks[0]);
     draw_transfer(f, app, chunks[1]);
+}
+
+/// The local pane: one folder of the filesystem, folders first.
+fn draw_local(f: &mut Frame, app: &mut App, area: Rect) {
+    let Some(pane) = app.local.as_ref() else {
+        return;
+    };
+    let loading = if pane.loading { " · loading…" } else { "" };
+    let mut title = Span::raw(format!(" {}{loading}", pane.cwd.display()));
+    if app.local_focus {
+        title = Span::styled(
+            format!(" local{loading} · {} ", pane.cwd.display()),
+            Style::default().add_modifier(Modifier::BOLD),
+        );
+    }
+    let block = Block::default().borders(Borders::ALL).title(title);
+    let inner = block.inner(area);
+    app.local_area = inner;
+    if pane.entries.is_empty() {
+        let note = if pane.loading { "loading…" } else { "(none)" };
+        f.render_widget(Paragraph::new(note).block(block), area);
+        return;
+    }
+    let cursor = pane.cursor;
+    let items: Vec<ListItem> = pane
+        .entries
+        .iter()
+        .map(local_line)
+        .map(ListItem::new)
+        .collect();
+    app.local_state.select(Some(cursor));
+    let list = List::new(items)
+        .block(block)
+        .highlight_style(selected())
+        .highlight_symbol("> ");
+    f.render_stateful_widget(list, area, &mut app.local_state);
+}
+
+/// One row of the local pane: the folder marker or the size.
+fn local_line(entry: &LocalEntry) -> String {
+    match entry.kind {
+        EntryKind::Dir => format!("  {}/", entry.name),
+        EntryKind::File => format!(
+            "  {}  {}",
+            entry.name,
+            entry.size.map_or(String::new(), fmt_bytes)
+        ),
+    }
 }
 
 /// The repository list or the tree, with the geometry written back for hit-testing.
@@ -327,10 +391,13 @@ fn self_status(app: &App) -> String {
         }
         None => String::new(),
     };
-    format!(
-        "{base} · → {}",
-        short_dst(&app.destination.display().to_string())
-    )
+    // The pane anchors transfers while it is open: its folder shows instead
+    // of the session destination.
+    let anchor = match app.local.as_ref() {
+        Some(pane) => pane.cwd.display().to_string(),
+        None => app.destination.display().to_string(),
+    };
+    format!("{base} · → {}", short_dst(&anchor))
 }
 
 /// The destination shortened for the corner: a leading ellipsis keeps the tail,
@@ -435,6 +502,7 @@ fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
         "  esc, enter, q     close".to_owned(),
         String::new(),
         "actions".to_owned(),
+        "  v                 toggle the local pane, h/l move the focus".to_owned(),
         "  c                 copy the url of the selection".to_owned(),
         "  x                 cancel the running transfer".to_owned(),
         "  e                 toggle enter/expand navigation (saved to the config)".to_owned(),
