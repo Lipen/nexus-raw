@@ -569,7 +569,8 @@ pub struct Transfer {
     pub server: Option<String>,
     /// The repository name, for error facts.
     pub repo_name: Option<String>,
-    /// Transfer: the local target directory. Empty for an upload.
+    /// Transfer: the local target directory.
+    /// Empty for an upload.
     pub dst: PathBuf,
     /// Upload: the local source directory.
     /// None for a download.
@@ -641,7 +642,8 @@ pub enum DlEv {
     /// The transfer is set up: the local side (destination or source) and the
     /// plan count when the walk already knows it.
     Start {
-        /// Transfer: the destination folder. Upload: the source folder.
+        /// Transfer: the destination folder.
+        /// Upload: the source folder.
         local: PathBuf,
         /// The plan count, when it is known before the plan event.
         files: Option<usize>,
@@ -1626,8 +1628,8 @@ impl App {
         self.transfer.as_ref().is_some_and(Transfer::is_running)
     }
 
-    /// The `x` verb: abort the running transfer. There is no cancel modal:
-    /// restarting is a normal `d` or `p`.
+    /// The `x` verb: abort the running transfer.
+    /// There is no cancel modal: restarting is a normal `d` or `p`.
     fn cancel_transfer(&mut self) {
         let Some(dl) = self.transfer.as_mut() else {
             self.status = "nothing is running".into();
@@ -1647,8 +1649,8 @@ impl App {
         self.status = "cancelled".into();
     }
 
-    /// The `c` verb: copy the URL of the selection. The repository on the
-    /// repositories screen, the file or folder on the tree.
+    /// The `c` verb: copy the URL of the selection.
+    /// The repository on the repositories screen, the file or folder on the tree.
     fn copy_selected_url(&mut self) {
         let Some(t) = self.tabs.get(self.tab) else {
             return;
@@ -3102,12 +3104,6 @@ impl App {
                 if !ours {
                     return;
                 }
-                if let Some(dl) = self.transfer.as_mut() {
-                    dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
-                }
-                self.status = "the subtree holds no files".into();
-            }
-            Ok(names) if names.is_empty() => {
                 if let Some(dl) = self.transfer.as_mut() {
                     dl.outcome = Some(DlOutcome::Failed("the subtree holds no files".into(), None));
                 }
@@ -4607,6 +4603,59 @@ mod tests {
         });
         assert!(rx.try_recv().is_err(), "no download for a stale walk");
         assert!(app.transfer.is_none(), "the stale walk released the slot");
+    }
+
+    #[tokio::test]
+    async fn a_stale_walk_never_touches_a_live_upload() {
+        let (mut app, mut rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        upload_in_flight(&mut app);
+        assert!(app.transfer_busy(), "the upload holds the slot");
+        // The download-side walk lands while the upload flies: nobody's panel moves.
+        app.handle(Msg::Walk {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
+        });
+        assert!(
+            rx.try_recv().is_err(),
+            "the stale walk never starts a download"
+        );
+        let dl = app.transfer.as_ref().unwrap();
+        assert_eq!(dl.dir, Dir::Up, "the live upload keeps its panel");
+        assert!(dl.outcome.is_none(), "the outcome was not touched");
+        assert!(app.transfer_busy(), "the slot stays with the upload");
+    }
+
+    #[tokio::test]
+    async fn a_background_refusal_keeps_the_open_destination_dialog() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char('D'))));
+        let Mode::SaveAs(dialog) = app.mode.clone() else {
+            panic!("D opens the dialog");
+        };
+        upload_in_flight(&mut app);
+        let transport = || Error::Transport {
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            detail: "connection refused".into(),
+        };
+        // The transfer fails under the dialog: the layer survives with its text.
+        app.handle(Msg::Dl(DlEv::Done(Err(transport()))));
+        let Mode::Error { modal, .. } = app.mode.clone() else {
+            panic!("the failure opens the error modal");
+        };
+        assert!(modal.full.contains("connection refused"));
+        // A second refusal over the modal keeps the same escape hatch.
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Err(transport()),
+        });
+        assert!(matches!(app.mode, Mode::Error { .. }));
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        let Mode::SaveAs(again) = app.mode.clone() else {
+            panic!("esc returns the dialog layer");
+        };
+        assert_eq!(again.dir, dialog.dir, "the typed text was kept");
     }
 
     #[tokio::test]

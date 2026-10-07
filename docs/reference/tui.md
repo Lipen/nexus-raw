@@ -94,7 +94,8 @@ Same-digest objects are skipped, a divergence refuses the whole run, and an uplo
 While the upload runs, the panel shows the remote base, the source folder, the plan, the files in flight with byte progress and the summary.
 Navigation, filters, cards and tab switches keep working: the position the put goes into is fixed at the start, browsing never retargets it.
 A finished put quietly refreshes the tree position it went into, so the new names appear without a manual `r`.
-An empty source opens the error modal without a retry; `r` offers a rerun of the same put into the same base for every refusal the core allows to retry, which excludes grammar refusals of unsafe names.
+An empty source opens the error modal without a retry.
+`r` offers a rerun of the same put into the same base for every refusal the core allows to retry, which excludes grammar refusals of unsafe names.
 
 ## Dual-pane
 
