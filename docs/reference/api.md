@@ -259,7 +259,7 @@ Both are covered variant by variant in [errors and exit codes](errors.md).
 
 ## Node bindings
 
-The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
+The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
 Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
 Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.
