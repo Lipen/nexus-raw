@@ -13,7 +13,9 @@ use std::time::Duration;
 use mock_nexus::{MockNexus, Scenario};
 use nexus_raw_core::{ArtifactName, Config, Enumeration, Event, Nxr};
 
-#[tokio::main]
+// The current-thread flavor keeps the example buildable without the `rt-multi-thread` feature
+// (the workspace tokio does not enable it; the CLI and the TUI add it for their own binaries).
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The mock: a tiny std-only Nexus with a failure-scenario table.
     let mock = Arc::new(MockNexus::start(Scenario::Atomic)?);
