@@ -38,7 +38,12 @@ const demoTree = new Map([
 // Search pages of three items each, so the wasm pagination loop really turns.
 const PAGE_SIZE = 3
 
-// `GET /nexus/service/rest/v1/search/assets?repository=<name>`: every path of that repository, paged.
+// Fault injection for the retry path: the first `failFirst` search requests answer 500.
+// `serve.mjs --fail-first 2` makes the page burn two retryable failures before it sees data.
+let failFirst = 0
+let searchHits = 0
+
+// `GET /service/rest/v1/search/assets?repository=<name>`: every path of that repository, paged.
 function searchAssets(query) {
   const repo = query.get('repository') ?? ''
   const prefix = `repository/${repo}/`
@@ -56,8 +61,15 @@ function searchAssets(query) {
 }
 
 // The fake Nexus answers GETs for objects and the search endpoint, 404 otherwise.
+// A `--fail-first N` run answers 500 (retryable) for the first N search requests.
 function fakeNexus(path, query) {
   if (path === '/service/rest/v1/search/assets') {
+    searchHits++
+    if (searchHits <= failFirst) {
+      console.log(`search hit ${searchHits}: 500 (injected)`)
+      return { status: 500, body: 'injected failure for the retry check\n' }
+    }
+    console.log(`search hit ${searchHits}: 200`)
     return { status: 200, body: JSON.stringify(searchAssets(query)) }
   }
   if (demoTree.has(path.slice(1))) {
@@ -67,9 +79,17 @@ function fakeNexus(path, query) {
 }
 
 // The real-Nexus hop: forward method, query and Authorization, stream the answer back.
-// Only GET and HEAD are sandbox-relevant; anything else answers 405.
+// The sandbox is read-only browsing: non-GET/HEAD answers 405 rather than forwarding.
 function proxyNexus(upstream, req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('the sandbox proxy forwards GET and HEAD only\n')
+    return
+  }
   const target = new URL(upstream)
+  // An absent Authorization must stay absent: some upstreams treat an empty header as broken auth.
+  const headers = {}
+  if (req.headers.authorization) headers.authorization = req.headers.authorization
   const out = httpRequest(
     {
       protocol: target.protocol,
@@ -77,7 +97,7 @@ function proxyNexus(upstream, req, res) {
       port: target.port,
       method: req.method,
       path: req.url,
-      headers: { authorization: req.headers.authorization ?? '' },
+      headers,
     },
     (answer) => {
       res.writeHead(answer.statusCode ?? 502, { 'content-type': answer.headers['content-type'] ?? 'application/octet-stream' })
@@ -92,15 +112,18 @@ function proxyNexus(upstream, req, res) {
 }
 
 function parseArgs(argv) {
-  const args = { port: 8134, upstream: null }
+  const args = { port: 8134, upstream: null, failFirst: 0 }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--port') args.port = Number(argv[++i])
     else if (argv[i] === '--upstream') args.upstream = argv[++i]
+    else if (argv[i] === '--fail-first') args.failFirst = Number(argv[++i])
   }
   return args
 }
 
-const { port, upstream } = parseArgs(process.argv.slice(2))
+const parsed = parseArgs(process.argv.slice(2))
+failFirst = parsed.failFirst
+const { port, upstream } = parsed
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')

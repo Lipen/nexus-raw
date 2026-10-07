@@ -24,9 +24,17 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 # The fs-bound half of the crate (part files, scan, sync) is native-only:
-# `fs` and `io-std` have no wasm32 implementation (see the gate comment on the workspace tokio).
+# `fs` has no wasm32 implementation (see the gate comment on the workspace tokio).
+# `io-std` stays native too: the stdout arm of `get` streams through `tokio::io::stdout`
+# (stdin is never read through tokio).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["fs", "io-std"] }
+
+# The retry backoff has no tokio timer to sleep on in a browser: gloo-timers bridges to the JS event loop,
+# and the jitter seed takes the place of the missing clock with the JS PRNG.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", default-features = false, features = ["futures"] }
+js-sys = "0.3"
 
 # Part files and local markers are opened without following symlinks.
 [target.'cfg(unix)'.dependencies]

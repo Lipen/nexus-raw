@@ -15,8 +15,9 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 /// A page is a politer client than a batch job: fewer workers and attempts than the CLI defaults.
+/// Three attempts keep the retry path honest: two backoff sleeps survive any single flake.
 const WORKERS: usize = 4;
-const RETRY_ATTEMPTS: u32 = 2;
+const RETRY_ATTEMPTS: u32 = 3;
 
 /// One listed child, as the page renders it.
 #[derive(Serialize)]

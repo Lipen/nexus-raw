@@ -221,7 +221,12 @@ impl NexusClient {
                         attempt: n + 1,
                         reason,
                     });
+                    // tokio's timer needs a runtime, and wasm has none to enter:
+                    // the backoff sleeps on the JS event loop instead.
+                    #[cfg(not(target_arch = "wasm32"))]
                     tokio::time::sleep(pause).await;
+                    #[cfg(target_arch = "wasm32")]
+                    gloo_timers::future::sleep(pause).await;
                 }
                 Err(fail) => return Err(fail.error),
             }

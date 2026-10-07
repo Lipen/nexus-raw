@@ -1,6 +1,11 @@
 //! Retries: policy, backoff with jitter, error classification (protocol §7).
 
 use std::hash::{Hash, Hasher};
+// The jitter seed below needs a clock: wasm has none in std, so its branch seeds
+// from the JS PRNG instead.
+#[cfg(target_arch = "wasm32")]
+use std::time::Duration;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Up to 4 attempts per request.
@@ -25,7 +30,7 @@ impl Default for RetryPolicy {
 
 impl RetryPolicy {
     /// Pause before attempt `attempt` (1-based): base × 2^(attempt−1) + jitter.
-    /// Hash-based jitter, no external rand.
+    /// Hash-based jitter: native seeds the hash from pid and the clock, wasm from the JS PRNG.
     #[must_use]
     pub fn delay(&self, attempt: u32) -> Duration {
         let factor = 2u32.saturating_pow(attempt.saturating_sub(1)).min(64);
@@ -33,15 +38,18 @@ impl RetryPolicy {
             .base
             .saturating_mul(factor)
             .min(Duration::from_secs(60));
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        (
+        #[cfg(not(target_arch = "wasm32"))]
+        let seed = (
             attempt,
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_or(0, |d| d.subsec_nanos()),
-        )
-            .hash(&mut h);
+        );
+        #[cfg(target_arch = "wasm32")]
+        let seed = (attempt, js_sys::Math::random().to_bits());
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        seed.hash(&mut h);
         let jitter = h.finish() % (self.jitter.as_millis().max(1) as u64 + 1);
         exp + Duration::from_millis(jitter)
     }
