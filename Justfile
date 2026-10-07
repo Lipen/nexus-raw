@@ -102,10 +102,15 @@ version v:
     perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw/Cargo.toml
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
+    # The node example's manifest pin is a string, safe to move before the
+    # release; its lockfile resolves only after the registry has the version
+    # and stays on the post-release `just lock` path.
+    perl -pi -e "s/(\"nexus-raw\": \")\\^[^\"]*(\")/\${1}\\^{{v}}\${2}/" examples/node/package.json
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{v}}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
+    grep -q "\"nexus-raw\": \"^{{v}}\"" examples/node/package.json || { echo "version: the node example pin did not move" >&2; exit 1; }
     # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.
     # examples/node waits for the registry: `just lock` refreshes it after the release.
     cargo metadata --format-version 1 >/dev/null
