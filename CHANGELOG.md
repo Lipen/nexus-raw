@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `nxr complete <shell>`: prints a shell completion script (bash, zsh, fish, powershell) to stdout.
 The script is generated from the same clap tree the binary runs on and is pinned by golden tests.
 
+- The web panel example (`examples/panel`) grows into a full demo stand: progress bars over SSE, toasts and inline errors, keyboard navigation, direct file links, single-file uploads (`POST /api/put`), two-step deletes (`POST /api/rm` with a dry-run plan), and the `just panel` recipe that serves the mock, seeds a tree and starts the panel.
+The page caps its own job cards and log lines, and refuses server URLs with embedded credentials.
+The server refuses cross-origin POSTs and upload targets outside `/repository/<name>/`.
+
 ## [0.5.0] - 2026-10-06
 
 ### Added

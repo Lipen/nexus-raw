@@ -315,6 +315,27 @@ function serveProgress(req, res, id) {
   })
 }
 
+// Browsers attach an Origin header to every cross-site POST, including
+// `no-cors` ones that skip preflight. A foreign origin means some other page
+// is driving the panel, so the mutating routes refuse it: the bindings would
+// otherwise attach the process credentials to whatever host that page chose.
+// No Origin at all (curl, same-origin fetch) passes.
+function refuseForeignOrigin(req) {
+  const origin = req.headers.origin
+  if (origin === undefined) {
+    return
+  }
+  let originHost
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    throw badRequest('the Origin header must be a URL')
+  }
+  if (originHost !== (req.headers.host ?? '')) {
+    throw new HttpError(403, { error: `cross-origin POST refused: origin ${origin} is not this panel` })
+  }
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`)
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
@@ -334,6 +355,9 @@ async function route(req, res) {
     sendJson(res, 200, await nxr.lsEntries(queryUrl(url)))
     return
   }
+  if (req.method === 'POST') {
+    refuseForeignOrigin(req)
+  }
   if (req.method === 'POST' && url.pathname === '/api/down') {
     sendJson(res, 200, await startDownload(await readJson(req)))
     return
@@ -344,8 +368,13 @@ async function route(req, res) {
   }
   // A single-file upload: the raw body IS the file, `nxr.put` stages it and
   // writes the `.sha256` marker itself. The cap bounds one file in memory.
+  // The target must be a repository path: the panel is not a relay to
+  // arbitrary hosts.
   if (req.method === 'POST' && url.pathname === '/api/put') {
     const target = queryUrl(url)
+    if (splitRepoUrl(target) === null) {
+      throw badRequest('url must point inside /repository/<name>/')
+    }
     const withSha = url.searchParams.get('sha') !== '0'
     const body = await readRawBody(req, PUT_BODY_CAP)
     const result = await nxr.put(target, body, { sha: withSha })

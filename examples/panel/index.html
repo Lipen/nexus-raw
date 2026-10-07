@@ -424,6 +424,11 @@ const state = { serverUrl: null, repoUrl: null, repoName: null, dirSegs: [], act
 
 const LS = { server: 'panel.serverUrl', dir: 'panel.downDir', pos: 'panel.position' }
 
+// The page keeps its own history small: the server caps jobs at 50, the
+// cards and the flow log cap themselves here.
+const JOB_CARDS_MAX = 20
+const LOG_LINES_MAX = 200
+
 const $ = (id) => document.getElementById(id)
 
 const esc = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
@@ -468,8 +473,10 @@ function toast(message, kind = 'info', ms = 5000) {
 
 function logLine(text, cls) {
   const line = el('div', cls, `[${new Date().toLocaleTimeString()}] ${text}`)
-  $('log').append(line)
-  $('log').scrollTop = $('log').scrollHeight
+  const log = $('log')
+  log.append(line)
+  while (log.childElementCount > LOG_LINES_MAX) log.firstElementChild.remove()
+  log.scrollTop = log.scrollHeight
 }
 
 // An inline error under the form it belongs to, with an optional Retry.
@@ -532,10 +539,25 @@ async function api(path, init) {
 
 // ---- repositories --------------------------------------------------------
 
+// A URL with embedded credentials would land in localStorage and come back
+// in error messages: the panel refuses the form outright.
+function hasUserinfo(value) {
+  try {
+    const parsed = new URL(value)
+    return parsed.username !== '' || parsed.password !== ''
+  } catch {
+    return false
+  }
+}
+
 async function loadRepos() {
   const url = $('server-url').value.trim()
   if (url === '') {
     setError($('repo-error'), 'Give a server URL first.')
+    return null
+  }
+  if (hasUserinfo(url)) {
+    setError($('repo-error'), 'URLs with user:password are refused: credentials must never reach localStorage or error messages.')
     return null
   }
   return busy($('repos-btn'), 'Listing…', async () => {
@@ -776,7 +798,7 @@ document.addEventListener('keydown', (e) => {
     return
   }
   if (e.key === 'Enter') {
-    if (e.target.closest('button, a')) return
+    if (e.target.closest('button, a, summary')) return
     e.preventDefault()
     activateRow()
     return
@@ -817,6 +839,7 @@ function jobCard(id, opLabel) {
   body.append(bars, jobLog)
   details.append(summary, body)
   $('jobs').prepend(details)
+  while ($('jobs').childElementCount > JOB_CARDS_MAX) $('jobs').lastElementChild.remove()
 
   const active = new Map()
   const counts = { done: 0, bytes: 0, skipped: 0, removed: 0, absent: 0 }
@@ -867,6 +890,7 @@ function jobCard(id, opLabel) {
     },
     log(text, cls) {
       jobLog.append(el('div', cls, text))
+      while (jobLog.childElementCount > LOG_LINES_MAX) jobLog.firstElementChild.remove()
       jobLog.scrollTop = jobLog.scrollHeight
     },
     reset,
@@ -907,6 +931,10 @@ function jobCard(id, opLabel) {
         counts.absent++
         renderBars()
         this.log(`already absent: ${ev.name}`, 'dim')
+        return
+      }
+      if (ev.event === 'summary') {
+        // The `end` frame carries the same summary: logging it twice adds noise.
         return
       }
       this.log(JSON.stringify(ev))

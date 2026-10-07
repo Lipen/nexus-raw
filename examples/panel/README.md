@@ -45,6 +45,7 @@ Flags:
   `POST /api/down` with `{"url": <dir>, "path": <subtree>, "dir": <target>}` starts a download job and answers `{"id": ...}`.
   `POST /api/rm` with `{"url": <dir>, "path": <subtree>, "file": <name?>, "dryRun": true}` answers the delete plan without deleting; the same body without `dryRun` starts a delete job.
   `POST /api/put?url=<file-url>&sha=1` takes the raw request body as the file bytes, uploads them through `nxr.put` and writes the `.sha256` marker; `sha=0` opts out of the marker.
+  The target must point inside `/repository/<name>/`, like every other route: the panel is not a relay to arbitrary hosts, and it refuses any POST that carries a foreign `Origin` header.
   The put body is capped at 100 MiB per file.
   `GET /api/progress/<id>` is the SSE stream of a job.
 - `index.html`: repositories on the left, the tree browser on the right, a transfer section and a progress section below.
@@ -169,6 +170,8 @@ The replay also rewinds the job card: the `start` frame resets it, so a reconnec
 ## Limitations
 
 - Demo-grade: no authentication UI, no HTTPS, the server binds `127.0.0.1`.
+- Mutating POSTs carry a same-origin check and repository-only targets, but the panel still trusts its operator: there is no user auth and no CSRF token beyond the origin check.
+- Server URLs with embedded `user:password` are refused at the form: credentials must never reach `localStorage` or error messages.
 - The download target directory is whatever the browser sends: the panel trusts its operator.
 - Uploads are loose single files only: there is no directory upload through staging.
 - File sizes come from listings and events only, never from HEAD requests.
