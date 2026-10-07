@@ -106,6 +106,9 @@ pub struct Tab {
     /// True when the in-flight listing is the quiet refresh of a finished
     /// put: its landing keeps the status line alone.
     pub refresh_quiet: bool,
+    /// The rows marked with space: paths below the position on the tree,
+    /// repository names on the repositories screen.
+    pub marks: BTreeSet<String>,
 }
 
 /// One row of the expandable tree: an entry of the current listing, or of an
@@ -148,6 +151,7 @@ impl Tab {
             gen: 0,
             loading: false,
             refresh_quiet: false,
+            marks: BTreeSet::new(),
         }
     }
 
@@ -816,6 +820,8 @@ pub struct App {
     pub term: Rect,
     /// The previous left click: `(when, row index)` for the double click.
     last_click: Option<(Instant, usize)>,
+    /// Transfers waiting for the slot: the queue a marked `d` builds.
+    queue: VecDeque<Retry>,
     /// Sender back into the message pump.
     pub tx: mpsc::UnboundedSender<Msg>,
 }
@@ -866,6 +872,7 @@ impl App {
             local_state: ListState::default(),
             local_area: Rect::default(),
             term: Rect::default(),
+            queue: VecDeque::new(),
             last_click: None,
             download_dir,
             tx,
@@ -1100,6 +1107,7 @@ impl App {
             KeyCode::Char(_) if pressed(&key, 'x') => self.cancel_transfer(),
             KeyCode::Char(_) if pressed(&key, 'c') => self.copy_selected_url(),
             KeyCode::Char(_) if pressed(&key, 'h') => self.focus_local_pane(),
+            KeyCode::Char(' ') => self.toggle_mark(),
             KeyCode::Char(_) if pressed(&key, 'D') => self.open_save_as(),
             KeyCode::Char(_) if pressed(&key, 'r') => self.refresh(),
             KeyCode::Char(_) if pressed(&key, 'e') => self.toggle_nav(),
@@ -1563,6 +1571,7 @@ impl App {
         if let Some(handle) = dl.handle.take() {
             handle.abort();
         }
+        self.queue.clear();
         dl.cancelled = true;
         dl.active.clear();
         dl.outcome = Some(DlOutcome::Cancelled);
@@ -1644,6 +1653,7 @@ impl App {
         t.filter_edit = false;
         t.keep_cursor_name = None;
         t.tree_cursor = 0;
+        t.marks.clear();
         t.gen += 1;
         t.loading = true;
         self.pending += 1;
@@ -1669,6 +1679,7 @@ impl App {
         t.filter_edit = false;
         t.keep_cursor_name = None;
         t.tree_cursor = 0;
+        t.marks.clear();
         t.gen += 1;
         t.loading = true;
         self.pending += 1;
@@ -1695,6 +1706,7 @@ impl App {
                 t.filter_edit = false;
                 t.keep_cursor_name = None;
                 t.tree_cursor = 0;
+                t.marks.clear();
                 t.loading = false;
                 self.status = hint_repos();
             }
@@ -1706,6 +1718,7 @@ impl App {
                 t.filter_edit = false;
                 t.keep_cursor_name = None;
                 t.tree_cursor = 0;
+                t.marks.clear();
                 t.loading = true;
                 self.pending += 1;
                 self.status = format!("listing {}/", t.breadcrumb());
@@ -2422,6 +2435,116 @@ impl App {
         }
     }
 
+    /// The space key: the selection joins or leaves the marks.
+    fn toggle_mark(&mut self) {
+        let Some(t) = self.tabs.get_mut(self.tab) else {
+            return;
+        };
+        let name = match t.screen {
+            Screen::Repos => t.repos.get(t.repos_cursor).map(|r| r.name.clone()),
+            Screen::Tree => t.selected_row().map(|row| row.rel.clone()),
+        };
+        let Some(name) = name else {
+            return;
+        };
+        if t.marks.remove(&name) {
+            self.status = format!("unmarked {}", name.escape_debug());
+        } else {
+            t.marks.insert(name.clone());
+            self.status = format!("marked {}", name.escape_debug());
+        }
+    }
+
+    /// `d` over marks: every marked repository lines up for the slot, the
+    /// session destination keeps its place.
+    fn queue_repo_marks(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let rows: Vec<RepoRow> = t.repos.iter().map(RepoRow::from).collect();
+        let marks: Vec<String> = t.marks.iter().cloned().collect();
+        let base = self.anchor_base();
+        let items = marks
+            .iter()
+            .filter_map(|name| {
+                rows.iter()
+                    .find(|r| &r.name == name)
+                    .map(|repo| Retry::Walk {
+                        repo: repo.clone(),
+                        rel: String::new(),
+                        dst: base.join(name),
+                        scope_relative: false,
+                    })
+            })
+            .collect();
+        self.start_queue(items);
+    }
+
+    /// `d` over marks on the tree: files land flat by name, folders mirror
+    /// from the repository root under the anchor.
+    fn queue_tree_marks(&mut self) {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return;
+        };
+        let rows = t.rows();
+        let marks: Vec<String> = t.marks.iter().cloned().collect();
+        let Some(repo) = t.repo.clone() else {
+            return;
+        };
+        let base = self.anchor_base();
+        let repo_row = RepoRow::from(&repo);
+        let root = repo_row.dir_url();
+        let mut items = Vec::new();
+        for rel in marks {
+            let Some(row) = rows.iter().find(|r| r.rel == rel) else {
+                continue;
+            };
+            match row.kind {
+                EntryKind::Dir => items.push(Retry::Walk {
+                    repo: repo_row.clone(),
+                    rel,
+                    dst: base.clone(),
+                    scope_relative: false,
+                }),
+                EntryKind::File => {
+                    let url = format!("{root}{rel}");
+                    let name = rel.rsplit('/').next().unwrap_or(&rel).to_owned();
+                    items.push(Retry::Get {
+                        url,
+                        out: base.join(name),
+                        dst: base.clone(),
+                        repo: repo_row.clone(),
+                    });
+                }
+            }
+        }
+        self.start_queue(items);
+    }
+
+    /// Takes the queue over: the slot is free, the first item starts, the
+    /// rest drain as the runs settle.
+    fn start_queue(&mut self, items: Vec<Retry>) {
+        if items.is_empty() {
+            return;
+        }
+        if self.transfer_busy() {
+            self.status = "transfer in flight: one at a time".into();
+            return;
+        }
+        self.queue = items.into_iter().collect();
+        self.drain_queue();
+    }
+
+    /// Starts the next queued transfer, when the slot is free.
+    fn drain_queue(&mut self) {
+        if self.transfer_busy() {
+            return;
+        }
+        if let Some(item) = self.queue.pop_front() {
+            self.run_retry(item);
+        }
+    }
+
     /// The folder transfers anchor to while the pane is open: its folder.
     /// The session destination itself is never written by a pane-anchored
     /// transfer.
@@ -2442,6 +2565,10 @@ impl App {
         };
         match t.screen {
             Screen::Repos => {
+                if !t.marks.is_empty() {
+                    self.queue_repo_marks();
+                    return;
+                }
                 let Some(repo) = t.repos.get(t.repos_cursor).map(RepoRow::from) else {
                     return;
                 };
@@ -2452,6 +2579,10 @@ impl App {
                 self.download_repo(&repo);
             }
             Screen::Tree => {
+                if !t.marks.is_empty() {
+                    self.queue_tree_marks();
+                    return;
+                }
                 if self.transfer_busy() {
                     self.status = "transfer in flight: one at a time".into();
                     return;
@@ -3103,8 +3234,12 @@ impl App {
                         }
                     }
                 }
+                // The queue hands the slot to the next marked transfer.
+                self.drain_queue();
             }
             DlEv::Done(Err(e)) => {
+                // A refusal ends the whole queue: the modal speaks first.
+                self.queue.clear();
                 let hint = e.hint();
                 dl.outcome = Some(DlOutcome::Failed(e.to_string(), hint.clone()));
                 let retry = dl.retry.clone().filter(|_| e.exit_code() != 2);
@@ -4379,6 +4514,111 @@ mod tests {
             Some(DlOutcome::Cancelled)
         ));
         assert_eq!(app.status, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn space_marks_and_d_queues_the_marks() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![
+                entry("app", EntryKind::Dir),
+                entry("docs", EntryKind::Dir),
+                entry("README.txt", EntryKind::File),
+            ])],
+            false,
+        );
+        // Two rows join the marks, the third leaves.
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        assert_eq!(app.status, "marked app");
+        app.handle(Msg::Key(key(KeyCode::Down)));
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        assert_eq!(
+            app.tabs[0].marks,
+            BTreeSet::from(["app".into(), "docs".into()])
+        );
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        assert_eq!(app.status, "unmarked docs");
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        // d over the marks queues the folders: the first starts, one waits.
+        app.handle(Msg::Key(key(KeyCode::Char('d'))));
+        assert_eq!(app.status, "walking app/", "the first mark starts at once");
+        assert_eq!(app.transfer.as_ref().unwrap().dst, PathBuf::from("dl"));
+        assert_eq!(app.queue.len(), 1, "the second mark waits in the queue");
+        // The walk lands, the download runs, the queue waits behind it.
+        let Msg::Walk { tab, gen, .. } = rx.recv().await.unwrap() else {
+            panic!("expected the walk of app");
+        };
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Ok(vec![ArtifactName::parse("app/lib.rs").unwrap()]),
+        });
+        match rx.recv().await.unwrap() {
+            Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, Some(1)),
+            other => panic!("unexpected message: {other:?}"),
+        }
+        assert!(app.transfer_busy());
+        // The settled download hands the slot to the queued folder.
+        app.handle(Msg::Dl(DlEv::Done(Ok(Summary {
+            downloaded: 1,
+            ..Summary::default()
+        }))));
+        assert_eq!(app.status, "walking docs/");
+        assert!(app.queue.is_empty());
+        // A refusal ends the queue, nothing else starts behind it.
+        let mut walk = rx.recv().await.unwrap();
+        while !matches!(walk, Msg::Walk { .. }) {
+            walk = rx.recv().await.unwrap();
+        }
+        let Msg::Walk { tab, gen, .. } = walk else {
+            panic!("expected the walk of docs");
+        };
+        app.handle(Msg::Walk {
+            tab,
+            gen,
+            res: Err(Error::Transport {
+                url: "http://127.0.0.1:1/".into(),
+                detail: "connection refused".into(),
+            }),
+        });
+        assert!(matches!(app.mode, Mode::Error { .. }));
+        assert!(app.queue.is_empty(), "the refusal killed the queue");
+        assert!(!app.transfer_busy());
+    }
+
+    #[tokio::test]
+    async fn marks_survive_a_refresh_and_die_on_navigation() {
+        let (mut app, rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        assert_eq!(app.tabs[0].marks, BTreeSet::from(["app".into()]));
+        // A refresh keeps the marks: they are names, not row indices.
+        app.handle(Msg::Key(key(KeyCode::Char('r'))));
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![entry("app", EntryKind::Dir)]),
+        });
+        assert_eq!(app.tabs[0].marks, BTreeSet::from(["app".into()]));
+        // A descent clears them: the rows below belong to another listing.
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.tabs[0].marks.is_empty());
+        // Climbing back up stays clear, and so does opening a repository.
+        app.handle(Msg::Entries {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            res: Ok(vec![entry("inner", EntryKind::Dir)]),
+        });
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        assert!(app.tabs[0].marks.is_empty());
+        app.handle(Msg::Key(key(KeyCode::Esc)));
+        app.handle(Msg::Key(key(KeyCode::Char(' '))));
+        assert_eq!(
+            app.tabs[0].marks,
+            BTreeSet::from(["raw-main".into()]),
+            "the repositories screen marks names"
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        assert!(app.tabs[0].marks.is_empty(), "opening a repo clears");
+        let _ = rx;
     }
 
     #[tokio::test]

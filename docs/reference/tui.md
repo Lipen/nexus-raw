@@ -48,6 +48,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `c` | copy the URL of the selection: the repository, the file or the folder |
 | `x` | cancel the running transfer |
 | `v` | toggle the local pane; `h`/`l` move the focus to it and back |
+| `space` | mark the selection; `d` transfers the marks as a queue |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
@@ -109,6 +110,16 @@ The session destination itself is never rewritten by a pane-anchored transfer.
 `p` prefills the source picker with the pane folder.
 A download that landed in the pane folder makes it reread itself, so the new files show up on their own.
 A click selects in the pane whose half it hit and moves the focus there.
+
+## Marks
+
+`space` marks the selected row: a repository on the repositories screen, an entry on the tree.
+Marked rows render a `*` before the name, and the status line confirms every toggle.
+`d` over marks does not take the cursor row: the marked transfers line up for the single slot and run one by one, the panel always shows the one in flight.
+A file lands flat by its name under the anchor, a folder mirrors from the repository root, a repository mirrors under its own name.
+The first refusal ends the queue, and so does `x`.
+The marks are names, not row indices: a refresh keeps them, while any navigation away from the listing (deeper, up, opening a repository) clears them.
+`p` never reads the marks.
 
 ## Cancel
 

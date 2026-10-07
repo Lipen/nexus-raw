@@ -179,7 +179,14 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
             let items = tab
                 .repos
                 .iter()
-                .map(|repo| ListItem::new(repo_line(tab.enterable(repo, app.all_formats), repo)))
+                .map(|repo| {
+                    let marked = tab.marks.contains(&repo.name);
+                    ListItem::new(repo_line(
+                        tab.enterable(repo, app.all_formats),
+                        repo,
+                        marked,
+                    ))
+                })
                 .collect();
             (title, tab.repos_cursor, items)
         }
@@ -203,7 +210,10 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
             let items = idx
                 .into_iter()
                 .filter_map(|i| rows.get(i))
-                .map(|row| ListItem::new(tree_line(row)))
+                .map(|row| {
+                    let marked = tab.marks.contains(&row.rel);
+                    ListItem::new(tree_line(row, marked))
+                })
                 .collect();
             (title, tab.tree_cursor, items)
         }
@@ -224,12 +234,14 @@ fn draw_list(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_stateful_widget(list, area, &mut app.list_state);
 }
 
-/// One tree row: indentation, the expand marker for folders, then the name.
-fn tree_line(row: &crate::app::Row) -> String {
+/// One tree row: the mark column, indentation, the expand marker for
+/// folders, then the name.
+fn tree_line(row: &crate::app::Row, marked: bool) -> String {
+    let mark = if marked { "* " } else { "  " };
     let indent = "  ".repeat(row.depth);
     match row.kind {
         EntryKind::Dir => format!(
-            "{indent}{} {}/",
+            "{mark}{indent}{} {}/",
             if row.loading {
                 "…"
             } else if row.expanded {
@@ -239,14 +251,19 @@ fn tree_line(row: &crate::app::Row) -> String {
             },
             row.name
         ),
-        EntryKind::File => format!("{indent}  {}", row.name),
+        EntryKind::File => format!("{mark}{indent}  {}", row.name),
     }
 }
 
 /// One repository row: name, then the format and kind.
 /// Non-enterable rows are dim, with the format as a badge.
-fn repo_line(enterable: bool, repo: &nexus_raw_core::service::RepoInfo) -> Line<'static> {
-    let base = format!("{:<14} ", repo.name);
+fn repo_line(
+    enterable: bool,
+    repo: &nexus_raw_core::service::RepoInfo,
+    marked: bool,
+) -> Line<'static> {
+    let mark = if marked { "* " } else { "  " };
+    let base = format!("{mark}{:<14} ", repo.name);
     if enterable {
         return Line::from(format!("{base}{:<8} {}", repo.format, repo.kind));
     }
@@ -503,6 +520,7 @@ fn help_overlay(f: &mut Frame, app: &App, area: Rect) {
         String::new(),
         "actions".to_owned(),
         "  v                 toggle the local pane, h/l move the focus".to_owned(),
+        "  space             mark the selection, d transfers the marks in a queue".to_owned(),
         "  c                 copy the url of the selection".to_owned(),
         "  x                 cancel the running transfer".to_owned(),
         "  e                 toggle enter/expand navigation (saved to the config)".to_owned(),
