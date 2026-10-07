@@ -267,6 +267,36 @@ wasm *args:
     cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
     cd examples/wasm-sandbox && node serve.mjs {{args}}
 
+# Every lockfile in the repo, one deliberate command: the workspace, the napi
+# tooling, the panel, the two standalone example crates and the node example.
+# The node example resolves against the registry, so it only refreshes once
+# the released version is actually published; before a release that lock is
+# expected to stay stale. Run after every release, commit the result.
+[doc('Refresh every lockfile: workspace, napi, panel, node (post-release), rust and sandbox examples.')]
+[group('examples')]
+lock:
+    #!/bin/sh
+    set -eu
+    cargo metadata --format-version 1 > /dev/null
+    echo "workspace Cargo.lock: refreshed"
+    (cd crates/nexus-raw-napi && pnpm install --reporter=silent)
+    echo "napi pnpm-lock: refreshed"
+    (cd examples/panel && pnpm install --reporter=silent)
+    echo "panel pnpm-lock: refreshed"
+    cargo metadata --manifest-path examples/rust/Cargo.toml --format-version 1 > /dev/null
+    echo "examples/rust Cargo.lock: refreshed"
+    cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 > /dev/null
+    echo "examples/wasm-sandbox Cargo.lock: refreshed"
+    v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+    if curl -sf https://registry.npmjs.org/nexus-raw | grep -q "\"latest\":\"$v\""; then
+      (cd examples/node && pnpm install --reporter=silent)
+      echo "examples/node pnpm-lock: refreshed against $v"
+    else
+      echo "examples/node pnpm-lock: skipped, the registry does not have $v yet (normal before a release)"
+    fi
+    echo "---"
+    git status --short | grep -E "Cargo.lock|pnpm-lock.yaml" || echo "everything was already fresh"
+
 [doc('Run the Rust example: standalone crate on a path dependency.')]
 [group('examples')]
 example-rust:
