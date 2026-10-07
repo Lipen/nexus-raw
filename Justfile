@@ -307,7 +307,7 @@ lock:
     echo "examples/wasm-sandbox Cargo.lock: refreshed"
     v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
     if curl -sf https://registry.npmjs.org/nexus-raw | grep -q "\"latest\":\"$v\""; then
-      (cd examples/node && pnpm install --reporter=silent)
+      (cd examples/node && pnpm up "nexus-raw@^$v" --reporter=silent)
       echo "examples/node pnpm-lock: refreshed against $v"
     else
       echo "examples/node pnpm-lock: skipped, the registry does not have $v yet (normal before a release)"
