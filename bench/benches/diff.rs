@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use nexus_raw_bench::{runtime, write_tree, Mock, TreeSpec};
 use nexus_raw_core::{ArtifactName, Enumeration};
 
@@ -27,9 +27,12 @@ fn bench_diff(c: &mut Criterion) {
     let mut group = c.benchmark_group("diff");
     group.throughput(Throughput::Elements(u64::from(spec.files)));
     group.bench_function("standard", |b| {
-        b.iter(|| {
-            let mut report =
-                match rt.block_on(mock.nxr.delta(&dir, Enumeration::Names(enum_names.clone()))) {
+        // The enumeration is the input, built outside the timing: the measured
+        // work is the report, not a clone of a hundred names.
+        b.iter_batched(
+            || Enumeration::Names(enum_names.clone()),
+            |enum_src| {
+                let mut report = match rt.block_on(mock.nxr.delta(&dir, enum_src)) {
                     Ok(r) => r,
                     Err(first) => {
                         // See the up bench: loopback storms are transient, retry on a fresh pool.
@@ -58,13 +61,15 @@ fn bench_diff(c: &mut Criterion) {
                         }
                     }
                 };
-            assert_eq!(
-                report.len(),
-                spec.files as usize,
-                "the delta union lost names"
-            );
-            black_box(std::mem::take(&mut report))
-        })
+                assert_eq!(
+                    report.len(),
+                    spec.files as usize,
+                    "the delta union lost names"
+                );
+                black_box(std::mem::take(&mut report))
+            },
+            BatchSize::SmallInput,
+        )
     });
     group.finish();
 }

@@ -85,19 +85,24 @@ check:
 
 # Opt-in and manual: bench/ is a standalone workspace the gate never compiles.
 # A bare name selects one scenario: `just bench scan`. Everything else passes
-# through to cargo, so `just bench -- --save-baseline before` also works.
-# Shebang recipes see no positional parameters on some just versions, so the
-# arguments arrive as interpolated text and are split here.
+# through to cargo, so `just bench scan -- --save-baseline before` reaches
+# criterion. A typo must fail loudly, never run nothing: cargo treats an
+# unknown bare word as a TESTNAME filter and exits 0 having run nothing, so
+# only the four known names select a target and any other bare word is
+# refused. --locked keeps a comparison free of a silent re-lock between its
+# before and after sides.
 [doc('Run the criterion benches: `just bench` (all, default tree), `just bench scan` (one).')]
 [group('bench')]
 bench *args:
     #!/bin/sh
     set -eu
     set -- {{ args }}
-    if [ "$#" -eq 1 ] && printf '%s' "$1" | grep -Eq '^[a-z][a-z-]*$'; then
-        set -- --bench "$1"
-    fi
-    exec cargo bench --manifest-path bench/Cargo.toml --quiet "$@"
+    case "${1:-}" in
+        scan|diff|up|down) set -- --bench "$@" ;;
+        -*) ;;
+        *) echo "bench: unknown scenario '${1}' (want scan, diff, up or down)" >&2; exit 2 ;;
+    esac
+    exec cargo bench --locked --manifest-path bench/Cargo.toml --quiet "$@"
 
 # ---- release ---------------------------------------------------------------
 

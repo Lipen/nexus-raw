@@ -55,8 +55,8 @@ fn bench_up(c: &mut Criterion) {
                 };
                 assert!(
                     summary.failed.is_empty()
-                        && summary.uploaded + summary.skipped >= spec.files as usize,
-                    "the upload skipped work: {summary:?}"
+                        && summary.uploaded + summary.skipped == spec.files as usize,
+                    "the upload lost or doubled names: {summary:?}"
                 );
             },
             BatchSize::PerIteration,

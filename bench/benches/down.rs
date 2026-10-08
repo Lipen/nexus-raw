@@ -69,8 +69,8 @@ fn bench_down(c: &mut Criterion) {
                 };
                 assert!(
                     summary.failed.is_empty()
-                        && summary.downloaded + summary.skipped >= spec.files as usize,
-                    "the download skipped work: {summary:?}"
+                        && summary.downloaded + summary.skipped == spec.files as usize,
+                    "the download lost or doubled names: {summary:?}"
                 );
             },
             BatchSize::PerIteration,
