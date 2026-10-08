@@ -118,6 +118,17 @@ impl MockNexus {
     }
 }
 
+/// One accept-error kind is reusable: aborted or interrupted waits, plus the
+/// Windows surface of the same race (`WSAECONNRESET` for a dropped pending peer).
+fn is_transient_accept(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::Interrupted
+    )
+}
+
 /// Accept connections until `stop` is set.
 /// One thread per connection.
 fn spawn_acceptor(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
@@ -131,16 +142,15 @@ fn spawn_acceptor(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBo
                 std::thread::spawn(move || scenario::serve(&conn_shared, conn));
             }
             // A burst of short-lived connections lets some abort between the
-            // handshake and this accept: the name is reusable, take the next one.
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
-                ) =>
-            {
-                continue
+            // handshake and this accept (ConnectionReset covers the Windows
+            // surface of the same race): the name is reusable, take the next one.
+            Err(e) if is_transient_accept(&e) => {
+                eprintln!("mock: accept rode out a transient error: {e}");
             }
-            Err(_) => break,
+            Err(e) => {
+                eprintln!("mock: acceptor stopping on a fatal accept error: {e}");
+                break;
+            }
         }
     });
 }
@@ -150,5 +160,20 @@ impl Drop for MockNexus {
         self.stop.store(true, Ordering::Relaxed);
         // Unblock the blocking accept() so the listener thread exits and the port is released.
         let _ = TcpStream::connect(self.addr);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transient_accept_classification() {
+        let transient = |kind| is_transient_accept(&io::Error::new(kind, "probe"));
+        assert!(transient(io::ErrorKind::ConnectionAborted));
+        assert!(transient(io::ErrorKind::ConnectionReset));
+        assert!(transient(io::ErrorKind::Interrupted));
+        assert!(!transient(io::ErrorKind::PermissionDenied));
+        assert!(!transient(io::ErrorKind::AddrInUse));
     }
 }
