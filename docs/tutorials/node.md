@@ -3,8 +3,7 @@
 From an empty directory to a verified transfer in Node, in a few minutes.
 The npm package `nexus-raw` exposes the `nxr` command surface as promises: one function per command, the URL as an argument, no config file.
 
-Prebuilt native addons ship for Linux x64, macOS x64 and macOS arm64.
-Linux arm64 is not in the release matrix yet, so that platform needs a local build.
+Prebuilt native addons ship for Linux x64, Linux arm64, macOS x64 and macOS arm64.
 
 The same operations from Rust: [the Rust quickstart](rust.md).
 From a shell instead of a library: [the terminal quickstart](ops.md).

@@ -8,7 +8,7 @@ From Node: [the Node quickstart](node.md).
 
 ## Install
 
-Prebuilt archives ship on every [GitHub release](https://github.com/Lipen/nexus-raw/releases), one per platform: `nxr-linux-x64`, `nxr-darwin-x64`, `nxr-darwin-arm64`, `nxr-windows-x64`.
+Prebuilt archives ship on every [GitHub release](https://github.com/Lipen/nexus-raw/releases), one per platform: `nxr-linux-x64`, `nxr-linux-aarch64`, `nxr-darwin-x64`, `nxr-darwin-arm64`, `nxr-windows-x64`.
 The linux build is a musl static binary, so it runs on any glibc too.
 Every archive unpacks `nxr` at its root, with README.md and LICENSE next to it, and each archive carries a `.sha256` sidecar:
 
