@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.8.0] - 2026-10-08
+
 ### Added
 
 - Linux aarch64 joins the release: a native `ubuntu-24.04-arm` leg builds the static CLI archive `nxr-linux-aarch64.tar.gz` and the `nexus-raw-linux-arm64-gnu` npm addon, and every platform list in the docs and the READMEs follows.
@@ -164,7 +168,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Lipen/nexus-raw/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Lipen/nexus-raw/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Lipen/nexus-raw/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Lipen/nexus-raw/compare/v0.4.0...v0.5.0
