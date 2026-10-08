@@ -18,7 +18,7 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 
 __all__ = [
     "AuthError",
@@ -153,8 +153,10 @@ class Nxr:
     """The client: six verbs over bare HTTP.
 
     One HTTP connection per attempt, because the server may close after every response.
-    Every attempt is appended to `.requests` as a `(method, path)` pair, oldest first:
-    the same record the Rust conformance suite reads from the mock's request log.
+    Every attempt is appended to `.requests` as a `(method, path)` pair, oldest first.
+    The log counts attempts the client made, including ones that never reached the server:
+    a connection that fails to connect, or a body that stalls mid-send, is recorded too,
+    so it is a superset of the mock's received-request log.
     """
 
     def __init__(
@@ -213,10 +215,11 @@ class Nxr:
 
         The marker strictly follows the bytes of the same name:
         a crash between the two leaves a markerless object, which every reader refuses.
+        The marker's name field is the percent-decoded final path segment of the URL.
         With `sha=False` the marker is skipped (`--no-sha`).
         Returns the digest hex, or `None` when the marker was skipped.
         """
-        name = url.rstrip("/").rsplit("/", 1)[-1]
+        name = _marker_name(url)
         _check_name(name)
         self._send("PUT", url, data)
         if not sha:
@@ -248,18 +251,17 @@ class Nxr:
         """GET the object and hash it, without verification (the `nxr sha` primitive)."""
         return hashlib.sha256(self._send("GET", url)[2]).hexdigest()
 
-    def ls(self, base_url: str, repository: str, group: str | None = None) -> list[str]:
+    def ls(self, base_url: str, repository: str) -> list[str]:
         """List a repository through the search API, following continuation tokens.
 
         Returns the raw asset paths, relative to the repository root.
         The walk is best-effort: the search API exists on common Nexus 3 releases but is not guaranteed.
+        The server-side `group` parameter is deliberately not sent: on a real Nexus it matches Maven
+        coordinates rather than raw paths, which makes nested listings lie (a filter, if ever needed, belongs client-side).
         """
         parts = urlsplit(base_url)
         endpoint = f"{parts.scheme}://{parts.netloc}/service/rest/v1/search/assets"
-        query: dict[str, str] = {"repository": repository}
-        if group is not None:
-            query["group"] = group
-        first_page = f"{endpoint}?{urlencode(query)}"
+        first_page = f"{endpoint}?{urlencode({'repository': repository})}"
         paths: list[str] = []
         token: str | None = None
         for _page in range(MAX_SEARCH_PAGES):
@@ -373,7 +375,9 @@ class Nxr:
                         status=status,
                         hint="the server kept failing: retry the operation later",
                     )
-                time.sleep(self._pause(headers.get("Retry-After"), attempt))
+                # The Retry-After pause belongs to the rate limit alone: a 5xx always backs off.
+                retry_after = headers.get("Retry-After") if status == 429 else None
+                time.sleep(self._pause(retry_after, attempt))
                 continue
             if 200 <= status < 300:
                 return status, headers, payload
@@ -429,26 +433,41 @@ class Nxr:
         """The pause before the next attempt: the `Retry-After` seconds when present, the backoff otherwise.
 
         Only the seconds form is honored, clamped to 1..=60 like the Rust transport.
-        The HTTP-date form and unparseable values fall back to the regular backoff.
+        A negative or unparseable value, or the HTTP-date form, falls back to the regular backoff.
         """
         if retry_after is not None:
             try:
-                return float(min(max(int(retry_after.strip()), 1), 60))
+                secs = int(retry_after.strip())
             except ValueError:
                 pass
+            else:
+                if secs >= 0:
+                    return float(min(max(secs, 1), 60))
         return self._backoff(attempt)
+
+
+def _marker_name(url: str) -> str:
+    """The marker's name field: the percent-decoded final path segment of the URL.
+
+    A trailing slash leaves an empty segment, which `_check_name` refuses.
+    Valid `%XX` escapes decode, invalid ones stay literal, and the result is lossy UTF-8, like the Rust core.
+    """
+    path = urlsplit(url).path
+    return unquote(path.rsplit("/", 1)[-1])
 
 
 def _check_name(name: str) -> None:
     """Refuse a final URL segment that cannot carry a marker.
 
-    A segment matches `[A-Za-z0-9._-]{1,255}`.
+    A segment matches `[A-Za-z0-9._-]{1,255}` and is never `.` or `..`.
     The `.sha256` suffix is reserved: markers are written by `put`, never uploaded as artifacts.
     """
     if not _SEGMENT.match(name):
         raise UnsafeName(
             f"unsafe name: {name!r}", hint="a name segment matches [A-Za-z0-9._-]{1,255}"
         )
+    if name in (".", ".."):
+        raise UnsafeName(f"unsafe name: {name!r}", hint="a name segment is never . or ..")
     if name.endswith(".sha256"):
         raise UnsafeName(
             f"unsafe name: {name!r}: reserved suffix .sha256",

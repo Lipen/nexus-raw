@@ -12,6 +12,7 @@ The interesting rules are all client-side and all present:
 
 - `put` writes the bytes, then the `.sha256` marker of the same name, strictly in that order.
   A crash between the two leaves a markerless object, which every reader refuses.
+  The marker's name field is the percent-decoded final path segment, refused when it is empty, `.`/`..`, out of grammar, or `.sha256`-suffixed.
 - `get` downloads the bytes and the sibling and refuses unless the digest matches.
   Completion is bytes plus the sibling: anything less is an exception, never a silent return.
 - A 2xx without `Content-Length` is present-but-unverifiable, never absent (`head` reports `length=None`).
@@ -20,6 +21,7 @@ The interesting rules are all client-side and all present:
 - The per-operation socket timeout is the stall watchdog: a frozen server aborts the attempt, a slow-but-moving transfer never trips it.
 - `ls` walks `/service/rest/v1/search/assets` with continuation tokens, capped at 100 pages, and diagnoses a repository-scoped 400 as "missing or not raw".
 - Markers parse strictly (`sha256sum -c` shape: LF only, exactly two spaces, 64 lowercase hex, trailing newline), because a loose parse would bless foreign markers.
+  The reference decodes marker bytes as ASCII, one notch stricter than the Rust core's lossy UTF-8: harmless today, since both sides compare digests only, but a porter may loosen it the same way.
 
 Every error is an exception carrying `.status` (the HTTP status, `None` for pure transport failures) and `.hint` (the action line a CLI would print).
 Every attempt lands in `.requests` as a `(method, path)` pair, the record the conformance suite asserts on.
