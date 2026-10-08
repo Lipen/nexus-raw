@@ -3,7 +3,7 @@
 The scenario list is the conformance contract.
 It is fetched live from `mock-nexus --print-scenarios`, never copied.
 Every scenario needs a test method named `test_<scenario with dashes as underscores>` or a row in `SKIP`.
-The drift test `test_unit_every_scenario_is_classified` fails the suite until a new mock scenario is classified.
+The drift test `Reference.test_every_scenario_is_classified` fails the suite until a new mock scenario is classified.
 
 The suite mirrors `crates/nexus-raw-core/tests/conformance.rs`:
 one server per test, assertions on the store and on the request log, the same scenario coverage.
@@ -106,7 +106,16 @@ def mock_server(scenario: str, *flags: str):
         cwd=REPO_ROOT,
     )
     try:
-        line = proc.stdout.readline()
+        # A binary that binds but stalls before printing would block readline forever:
+        # the watchdog closes the pipe, so the failure surfaces as a loud assertion.
+        watchdog = threading.Timer(15.0, proc.stdout.close)
+        watchdog.start()
+        try:
+            line = proc.stdout.readline()
+        except ValueError:
+            line = ""
+        finally:
+            watchdog.cancel()
         found = re.match(r"listening (http://\S+)", line)
         if not found:
             proc.terminate()
@@ -182,10 +191,21 @@ def wire_path(url: str) -> str:
     return parts.path or "/"
 
 
+def scenario_slug(scenario: str) -> str:
+    """The test-method name that covers `scenario`: dashes become underscores."""
+    return "test_" + scenario.replace("-", "_")
+
+
+def owns(slug: str, method: str) -> bool:
+    """True when `method` can be a test of the scenario behind `slug`."""
+    return method == slug or method.startswith(slug + "_")
+
+
 class Conformance(unittest.TestCase):
     """One cluster of tests per scenario, named `test_<scenario with dashes as underscores>`.
 
     The naming convention is the coverage registry the drift test reads.
+    Ownership is longest-match, so a method named after one scenario never silently covers a prefix of it.
     """
 
     maxDiff = None
@@ -475,28 +495,54 @@ class Conformance(unittest.TestCase):
             self.assertEqual(raised.exception.status, 400)
             self.assertIn("raw-ghost", str(raised.exception))
 
+    # ------------------------------------------------------------ wire fidelity pins
+
+    def test_atomic_marker_names_the_decoded_segment(self):
+        """The marker names the percent-decoded final segment, like the Rust last_segment."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            path = mock.url("r%2Ezip")
+            digest = nx.put(path, CONTENT)
+            self.assertEqual(
+                raw_get(f"{path}.sha256"),
+                nxr.format_marker("r.zip", digest).encode(),
+                "the marker must name the decoded segment r.zip",
+            )
+            self.assertEqual(nx.get(path), CONTENT)
+
+
+class Reference(unittest.TestCase):
+    """The drift guard and the pure pieces: no server, outside the scenario registry.
+
+    The drift test reads only `Conformance` method names, so a test that drives no server
+    can never collide with a scenario name.
+    """
+
+    maxDiff = None
+
     # ------------------------------------------------------------ the drift guard
 
-    @staticmethod
-    def scenario_slug(scenario: str) -> str:
-        """The test-method prefix that covers `scenario`: dashes become underscores."""
-        return "test_" + scenario.replace("-", "_")
-
-    def test_unit_every_scenario_is_classified(self):
+    def test_every_scenario_is_classified(self):
         """The conformance stand: a new mock scenario fails the suite until it gets a test or a SKIP row.
 
-        Both directions hold: an unclassified scenario is named in the failure, and a stale SKIP row
-        or a stray scenario-named test method is named too.
+        Ownership is longest-match: a test method belongs to the longest scenario slug it extends.
+        A new scenario whose slug is a boundary prefix of an existing one (`rate` arriving while
+        `rate-limit` tests exist) owns nothing, and is named in the failure until it gets its own method or a SKIP row.
+        Both directions hold: an unclassified scenario, a stale SKIP row and a stray scenario-named method all fail.
         """
         listed = set(listed_scenarios())
+        slugs = sorted((scenario_slug(s) for s in listed), key=len, reverse=True)
         methods = {name for name in dir(Conformance) if name.startswith("test_")}
-        scenario_tests = {m for m in methods if not m.startswith("test_unit_")}
+
+        def owner(method: str) -> str | None:
+            return next((slug for slug in slugs if owns(slug, method)), None)
+
         for scenario, reason in SKIP.items():
             self.assertTrue(reason.strip(), f"the SKIP row for {scenario} must carry a reason")
         unclassified = {
             s
             for s in listed
-            if not any(m.startswith(self.scenario_slug(s)) for m in scenario_tests)
+            if not any(owner(m) == scenario_slug(s) for m in methods)
             and s not in SKIP
         }
         self.assertEqual(
@@ -505,14 +551,17 @@ class Conformance(unittest.TestCase):
             "new mock scenario(s) with no test and no SKIP row; the python suite refuses to drift",
         )
         stale_rows = set(SKIP) - listed
-        self.assertEqual(stale_rows, set(), f"SKIP rows for scenarios the mock no longer lists: {sorted(stale_rows)}")
-        slugs = [self.scenario_slug(s) for s in listed]
-        stray = {m for m in scenario_tests if not any(m.startswith(slug) for slug in slugs)}
+        self.assertEqual(
+            stale_rows,
+            set(),
+            f"SKIP rows for scenarios the mock no longer lists: {sorted(stale_rows)}",
+        )
+        stray = {m for m in methods if owner(m) is None}
         self.assertEqual(stray, set(), f"test methods naming no listed scenario: {sorted(stray)}")
 
     # ------------------------------------------------------------ pure pieces, no server
 
-    def test_unit_marker_parses_strictly(self):
+    def test_marker_parses_strictly(self):
         """The marker parse rejects every foreign format the protocol lists."""
         digest = hashlib.sha256(CONTENT).hexdigest()
         ok = nxr.format_marker("a.zip", digest).encode()
@@ -531,7 +580,7 @@ class Conformance(unittest.TestCase):
             with self.assertRaises(ValueError, msg=reason):
                 nxr.parse_marker(payload)
 
-    def test_unit_backoff_grows_and_caps(self):
+    def test_backoff_grows_and_caps(self):
         """The backoff doubles per attempt, caps at 60s, and the jitter stays within 250ms."""
         for attempt, floor in [(1, 0.5), (2, 1.0), (3, 2.0), (8, 60.0)]:
             client = nxr.Nxr()
@@ -539,25 +588,38 @@ class Conformance(unittest.TestCase):
             self.assertGreaterEqual(pause, floor, f"attempt {attempt}")
             self.assertLessEqual(pause, floor + nxr.MAX_JITTER + 1e-9, f"attempt {attempt}")
 
-    def test_unit_retry_after_is_clamped(self):
-        """The Retry-After seconds form is honored, clamped to 1..=60, and garbage falls back to the backoff."""
+    def test_retry_after_rules(self):
+        """The Retry-After seconds form is honored, clamped to 1..=60, and anything else falls back to the backoff."""
         client = nxr.Nxr()
         self.assertEqual(client._pause("3", 1), 3.0)
         self.assertEqual(client._pause("0", 1), 1.0)
         self.assertEqual(client._pause("120", 1), 60.0)
-        self.assertLessEqual(client._pause("soon", 1), nxr.BASE_BACKOFF + nxr.MAX_JITTER + 1e-9)
-        self.assertLessEqual(client._pause(None, 1), nxr.BASE_BACKOFF + nxr.MAX_JITTER + 1e-9)
+        ceiling = nxr.BASE_BACKOFF + nxr.MAX_JITTER + 1e-9
+        for garbage in ["soon", "-3", "", "3.5"]:
+            self.assertLessEqual(client._pause(garbage, 1), ceiling, msg=repr(garbage))
+        self.assertLessEqual(client._pause(None, 1), ceiling)
 
-    def test_unit_put_refuses_the_reserved_suffix(self):
-        """A URL whose final segment cannot carry a marker is refused before any byte moves."""
+    def test_put_refuses_unsafe_names(self):
+        """A URL whose final segment cannot carry a marker is refused before any byte moves.
+
+        The rules the Rust grammar pins: the `.` and `..` segments, an empty segment
+        (a trailing slash), the reserved `.sha256` suffix, and any character outside `[A-Za-z0-9._-]`,
+        checked on the percent-decoded segment.
+        """
         nx = nxr.Nxr()
-        with self.assertRaises(nxr.UnsafeName):
-            nx.put("http://127.0.0.1:1/x.sha256", CONTENT)
-        with self.assertRaises(nxr.UnsafeName):
-            nx.put("http://127.0.0.1:1/not a name", CONTENT)
+        for url in [
+            "http://127.0.0.1:1/x.sha256",
+            "http://127.0.0.1:1/not a name",
+            "http://127.0.0.1:1/.",
+            "http://127.0.0.1:1/..",
+            "http://127.0.0.1:1/dir/",
+            "http://127.0.0.1:1/my%20app.zip",
+        ]:
+            with self.assertRaises(nxr.UnsafeName, msg=url):
+                nx.put(url, CONTENT)
         self.assertEqual(nx.requests, [], "the refusal must precede the wire")
 
-    def test_unit_channel_set_refuses_multiline_tokens(self):
+    def test_channel_set_refuses_multiline_tokens(self):
         """A channel token is one non-empty line with no CR."""
         nx = nxr.Nxr()
         for token in ["", "two\nlines", "cr\r"]:
