@@ -436,7 +436,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns transport, auth or HTTP errors from the DELETE.
-/// A 403/405 surfaces as [`Error::ReadOnly`].
+    /// A 403/405 surfaces as [`Error::ReadOnly`].
     pub async fn point_clear(&self, url: &str) -> Result<layout::ClearOutcome, Error> {
         layout::pointer_clear(&self.client, url).await
     }
@@ -479,7 +479,7 @@ impl Nxr {
     /// Pour enumerated names from this repository into `dst` (mirror).
     ///
     /// The enumeration lives at the source.
-/// The destination diff rules are up's:
+    /// The destination diff rules are up's:
     /// same digest skips, a different digest refuses, an unfinished copy is completed.
     /// Each copied name is staged through the down machinery (Range-aware GET, digest
     /// check) and pushed through the up machinery (PUT bytes, then PUT marker).
@@ -544,7 +544,7 @@ impl Nxr {
         )
         .await;
         // A clean run consumes its staging dir.
-// A failed one keeps the parts as the rerun's resume fuel.
+        // A failed one keeps the parts as the rerun's resume fuel.
         if result.is_ok() {
             if let Err(e) = tokio::fs::remove_dir_all(&staging).await {
                 log::warn!("staging dir cleanup failed: {}", Error::io(&staging, e));

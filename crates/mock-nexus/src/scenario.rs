@@ -103,7 +103,7 @@ pub enum Scenario {
     /// The service REST endpoint (`/service/rest/v1/repositories`) answers `404` like a store miss:
     /// an installation without the management API (an old Nexus, or a non-Sonatype server).
     /// Storage behavior is [`Scenario::Atomic`].
-/// Only `service repos` notices.
+    /// Only `service repos` notices.
     NoService,
     /// The search API (`/service/rest/v1/search/assets`) answers `400 Bad Request` when the `repository` query parameter names a repository the instance does not serve:
     /// a real Nexus refuses a repository-scoped search for an unknown repository with 400, before any storage is touched.
@@ -233,7 +233,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         .is_some_and(|expected| !auth_decision(req.header("Authorization"), expected));
     if unauthenticated {
         // auth-401 challenges with 401, auth-403 refuses with 403.
-// Neither body rides a HEAD.
+        // Neither body rides a HEAD.
         let forbidden403 = matches!(shared.scenario, Scenario::Auth403 { .. });
         let resp = if forbidden403 {
             forbidden()
@@ -287,7 +287,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
 
     // search-400: a repository-scoped search for an unknown repository is refused with 400, like a real Nexus.
     // The served names are the ones the seeded service document lists.
-// A search without a repository parameter is left alone.
+    // A search without a repository parameter is left alone.
     if let Scenario::Search400 = shared.scenario {
         if matches!(req.method.as_str(), "GET" | "HEAD") && path == "service/rest/v1/search/assets"
         {
