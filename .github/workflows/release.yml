@@ -86,6 +86,9 @@ jobs:
           - name: linux-x64
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
           - name: darwin-x64
             os: macos-latest
             target: x86_64-apple-darwin
@@ -110,10 +113,12 @@ jobs:
           cache-on-failure: true
           key: ${{ matrix.target }}
 
-      # The musl target links C code from ring statically; that needs the
-      # musl cross toolchain, not just the Rust target.
+      # The musl targets link C code from ring statically; that needs the
+      # musl toolchain, not just the Rust target.
+      # The arm64 leg builds natively on the arm runner, so the distro
+      # package covers it without any cross toolchain.
       - name: Install the musl toolchain
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build nxr
@@ -254,6 +259,11 @@ jobs:
             target: x86_64-unknown-linux-gnu
             platform-os: linux
             platform-cpu: x64
+          - name: linux-arm64-gnu
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            platform-os: linux
+            platform-cpu: arm64
           - name: darwin-x64
             os: macos-latest
             target: x86_64-apple-darwin
@@ -389,8 +399,8 @@ jobs:
           const fs = require("fs");
           const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
           const dirs = fs.readdirSync("npm").filter((d) => d.startsWith("npm-"));
-          if (dirs.length !== 3) {
-            throw new Error(`expected 3 staged packages, found ${dirs.length}`);
+          if (dirs.length !== 4) {
+            throw new Error(`expected 4 staged packages, found ${dirs.length}`);
           }
           for (const dir of dirs) {
             const pkg = JSON.parse(fs.readFileSync(`npm/${dir}/package.json`, "utf8"));
@@ -439,6 +449,7 @@ jobs:
             ...main,
             optionalDependencies: {
               "nexus-raw-linux-x64-gnu": version,
+              "nexus-raw-linux-arm64-gnu": version,
               "nexus-raw-darwin-x64": version,
               "nexus-raw-darwin-arm64": version,
             },
@@ -458,7 +469,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for name in nexus-raw-linux-x64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
+          for name in nexus-raw-linux-x64-gnu nexus-raw-linux-arm64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
             # The registry serves fresh publishes with a lag: a check that runs
             # right after the platform publish can miss a package that landed.
             # Retry before refusing, so a green release never dies to propagation.
@@ -539,7 +550,7 @@ jobs:
             sleep 30
           done
           [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
-          for name in nexus-raw nexus-raw-linux-x64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
+          for name in nexus-raw nexus-raw-linux-x64-gnu nexus-raw-linux-arm64-gnu nexus-raw-darwin-x64 nexus-raw-darwin-arm64; do
             ok=0
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
               if npm view "$name@$version" version > /dev/null 2>&1; then

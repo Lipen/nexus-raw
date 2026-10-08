@@ -7,7 +7,7 @@ Install from npm:
 npm install nexus-raw
 ```
 
-Prebuilt addons ship for `linux-x64-gnu`, `darwin-x64` and `darwin-arm64`.
+Prebuilt addons ship for `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64` and `darwin-arm64`.
 There is no win32 prebuilt package: the addon builds from a repository checkout (below), like any other platform.
 The from-source development loop lives in [examples/node](../../examples/node).
 

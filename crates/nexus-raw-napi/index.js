@@ -5,7 +5,7 @@
 // build first, then the per-platform prebuilt package.
 //
 // Prebuilt targets:
-// - linux-x64-gnu, darwin-x64 and darwin-arm64 ship as prebuilt packages.
+// - linux-x64-gnu, linux-arm64-gnu, darwin-x64 and darwin-arm64 ship as prebuilt packages.
 // - win32-x64-msvc waits on the npm spam-filter ticket: the loader falls back
 //   to a local crate build there.
 

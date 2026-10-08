@@ -181,7 +181,7 @@ release v *mode:
       if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"{{v}}\""; then
         echo "  note: {{v}} is already on crates.io, the crates job would skip"
       fi
-      echo "  pipeline: gate -> builds (linux-x64, darwin-x64, darwin-arm64, windows-x64) -> crates -> node addons -> npm -> tag v{{v}} + release"
+      echo "  pipeline: gate -> builds (linux-x64, linux-aarch64, darwin-x64, darwin-arm64, windows-x64) -> crates -> node addons -> npm -> tag v{{v}} + release"
       echo "nothing was pushed or published: call 'just release {{v}} --yes' for the real act"
       exit 0
     fi
