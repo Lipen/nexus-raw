@@ -129,10 +129,15 @@ version v:
     # release; its lockfile resolves only after the registry has the version
     # and stays on the post-release `just lock` path.
     perl -pi -e "s/(\"nexus-raw\": \")\\^[^\"]*(\")/\${1}\\^{{v}}\${2}/" examples/node/package.json
+    # The node example's lockfile specifier moves with the manifest, so the
+    # CI `pnpm ci` (frozen) stays green between the bump and the post-release
+    # `just lock` that re-resolves the lock against the published registry.
+    perl -pi -e "s/^(        specifier: )\\^[^\\n]*/\${1}\\^{{v}}/" examples/node/pnpm-lock.yaml
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{v}}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
+    grep -q "specifier: ^{{v}}" examples/node/pnpm-lock.yaml || { echo "version: the node lock specifier did not move" >&2; exit 1; }
     grep -q "\"nexus-raw\": \"^{{v}}\"" examples/node/package.json || { echo "version: the node example pin did not move" >&2; exit 1; }
     # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.
     # examples/node waits for the registry: `just lock` refreshes it after the release.
