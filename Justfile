@@ -297,9 +297,9 @@ lock:
     set -eu
     cargo metadata --format-version 1 > /dev/null
     echo "workspace Cargo.lock: refreshed"
-    (cd crates/nexus-raw-napi && pnpm install --reporter=silent)
+    (cd crates/nexus-raw-napi && pnpm install --no-frozen-lockfile --reporter=silent)
     echo "napi pnpm-lock: refreshed"
-    (cd examples/panel && pnpm install --reporter=silent)
+    (cd examples/panel && pnpm install --no-frozen-lockfile --reporter=silent)
     echo "panel pnpm-lock: refreshed"
     cargo metadata --manifest-path examples/rust/Cargo.toml --format-version 1 > /dev/null
     echo "examples/rust Cargo.lock: refreshed"

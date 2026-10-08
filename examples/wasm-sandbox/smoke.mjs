@@ -156,6 +156,7 @@ async function runBrowser(url, waitForBeacon) {
     '--no-sandbox',
     '--disable-gpu',
     '--disable-dev-shm-usage',
+    '--disable-background-networking',
     `--user-data-dir=${profile}`,
     '--timeout=20000',
     '--dump-dom',
