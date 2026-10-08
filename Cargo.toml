@@ -7,7 +7,7 @@ members = [
     "crates/nexus-raw-napi",
     "crates/nexus-raw-tui",
 ]
-exclude = ["examples"]
+exclude = ["examples", "bench"]
 
 [workspace.package]
 version = "0.7.0"

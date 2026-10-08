@@ -81,6 +81,24 @@ check:
     just version-check
     just test
 
+# ---- bench -----------------------------------------------------------------
+
+# Opt-in and manual: bench/ is a standalone workspace the gate never compiles.
+# A bare name selects one scenario: `just bench scan`. Everything else passes
+# through to cargo, so `just bench -- --save-baseline before` also works.
+# Shebang recipes see no positional parameters on some just versions, so the
+# arguments arrive as interpolated text and are split here.
+[doc('Run the criterion benches: `just bench` (all, default tree), `just bench scan` (one).')]
+[group('bench')]
+bench *args:
+    #!/bin/sh
+    set -eu
+    set -- {{ args }}
+    if [ "$#" -eq 1 ] && printf '%s' "$1" | grep -Eq '^[a-z][a-z-]*$'; then
+        set -- --bench "$1"
+    fi
+    exec cargo bench --manifest-path bench/Cargo.toml --quiet "$@"
+
 # ---- release ---------------------------------------------------------------
 
 # The workspace manifest is the source of truth.

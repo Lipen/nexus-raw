@@ -1,0 +1,41 @@
+[package]
+name = "nexus-raw-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone on purpose: excluded from the repo workspace, like the examples.
+# Nothing here compiles under `cargo test --workspace`, clippy or the gate.
+[workspace]
+
+[dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+mock-nexus = { path = "../crates/mock-nexus" }
+nexus-raw-core = { path = "../crates/nexus-raw-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+# Nothing in the package itself is a bench target: only the four criterion
+# harnesses below run, so `cargo bench` stays free of stray test-harness output.
+[lib]
+bench = false
+
+[[bin]]
+name = "gen-tree"
+bench = false
+path = "src/bin/gen-tree.rs"
+
+[[bench]]
+name = "scan"
+harness = false
+
+[[bench]]
+name = "diff"
+harness = false
+
+[[bench]]
+name = "up"
+harness = false
+
+[[bench]]
+name = "down"
+harness = false
