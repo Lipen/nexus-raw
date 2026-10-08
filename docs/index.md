@@ -83,6 +83,9 @@ The full tour: [run the demo](how-to/demo.md).
 
 <div class="nxr-go" markdown>
 
+- [:material-language-rust: **First transfer in Rust** · *about 5 minutes*: `cargo add nexus-raw-core`, the `Nxr` facade, one `up` and one `down` against the local mock.](tutorials/rust/)
+- [:material-language-typescript: **First transfer in Node** · *about 5 minutes*: `pnpm add nexus-raw`, promises over the command surface, a `diff` before any write.](tutorials/node/)
+- [:material-console: **First transfer in a terminal** · *about 5 minutes*: the `nxr` binary from the releases, credentials from the environment, the one-liners.](tutorials/ops/)
 - [:material-upload: **Publish a version** · *about 2 minutes*: a build directory goes up claim-first, `--claim-first manifest.json` landing the enumeration before the bytes and their `.sha256` markers.](how-to/publish/)
 - [:material-download: **Fetch artifacts** · *about 2 minutes*: named files come down verified, and an interrupted pull resumes where it stopped.](how-to/consume/)
 - [:material-play-circle: **See it run** · *half a minute*: the full session against the mock server, then the same session on your machine.](how-to/demo/)
