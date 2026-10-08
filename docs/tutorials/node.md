@@ -1,6 +1,6 @@
 # Node quickstart
 
-From an empty directory to a verified transfer in Node, in a few minutes.
+From an empty directory to a verified transfer in Node, in about five minutes.
 The npm package `nexus-raw` exposes the `nxr` command surface as promises: one function per command, the URL as an argument, no config file.
 
 Prebuilt native addons ship for Linux x64, Linux arm64, macOS x64 and macOS arm64.
@@ -12,7 +12,7 @@ From a shell instead of a library: [the terminal quickstart](ops.md).
 
 - Node 18+.
 - `pnpm`, or npm, which works the same.
-- A running mock server, the next step.
+- A Rust toolchain, for the mock server of the next step.
 
 ## Start the mock
 
@@ -29,8 +29,8 @@ Everything below talks to `http://127.0.0.1:8080`.
 ## Create the project
 
 ```bash
-mkdir first-transfer
-cd first-transfer
+mkdir first-transfer-js
+cd first-transfer-js
 pnpm init
 pnpm add nexus-raw
 ```

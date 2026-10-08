@@ -37,8 +37,8 @@ Everything below talks to that process.
 ## Create the project
 
 ```bash
-cargo new first-transfer
-cd first-transfer
+cargo new first-transfer-rs
+cd first-transfer-rs
 cargo add nexus-raw-core
 cargo add tokio --features rt-multi-thread,macros,sync
 ```
