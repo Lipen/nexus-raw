@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Role quickstarts under Tutorials: a Rust page on the `Nxr` facade, a Node page on the npm bindings and a terminal page of curl-style one-liners, every command verified against a running mock.
 - The bench ecosystem in `bench/`: a standalone workspace with criterion benches for scan, diff, up and down against `mock-nexus`, a deterministic tree generator and `just bench` for manual runs, with the baseline-and-report workflow in `bench/README.md`.
   Fully opt-in: nothing bench-shaped runs in CI or the gate.
+- The Python reference client in `clients/python`: the protocol on the standard library alone (get/put/head/sha with digest verification, ls over the paginated search, channels, retries honoring `Retry-After` on 429), with a conformance suite that reads the mock scenario list as the contract: every scenario is tested or explicitly skip-listed, and an unclassified scenario fails the suite.
 
 ### Fixed
 

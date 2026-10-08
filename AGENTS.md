@@ -50,6 +50,10 @@ The canonical protocol text is kept outside this repository.
 | the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
 | the recorded session and the landing animation | `examples/demo/README.md` |
 | the version agreement check | `scripts/version-check.sh` |
+| a quickstart's commands and outputs | `docs/tutorials/` (rust, node, ops) |
+| the release pipeline and the platform matrix | `.github/workflows/release.yml`, [CONTRIBUTING.md](CONTRIBUTING.md) |
+| the benches and the baseline workflow | `bench/README.md`, the harness in `bench/src/lib.rs` |
+| the Python reference client and its conformance suite | `clients/python/nxr.py`, `clients/python/test_conformance.py` (the skip table and the drift rule) |
 
 ## Verify before reporting done
 
@@ -82,6 +86,8 @@ New fields are additive.
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `nexus-raw`): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 | `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just example-rust` |
+| `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches for scan/diff/up/down against `mock-nexus`, the deterministic tree generator, `just bench`; the manual baseline workflow lives in `bench/README.md` |
+| `clients/python/` | the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite |
 
 ## Commits
 
