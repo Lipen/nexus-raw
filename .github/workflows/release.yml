@@ -113,8 +113,8 @@ jobs:
           cache-on-failure: true
           key: ${{ matrix.target }}
 
-      # The musl targets link C code from ring statically; that needs the
-      # musl toolchain, not just the Rust target.
+      # The musl targets link C code from ring statically.
+      # That needs the musl toolchain, not just the Rust target.
       # The arm64 leg builds natively on the arm runner, so the distro
       # package covers it without any cross toolchain.
       - name: Install the musl toolchain
@@ -259,11 +259,13 @@ jobs:
             target: x86_64-unknown-linux-gnu
             platform-os: linux
             platform-cpu: x64
+            platform-libc: glibc
           - name: linux-arm64-gnu
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             platform-os: linux
             platform-cpu: arm64
+            platform-libc: glibc
           - name: darwin-x64
             os: macos-latest
             target: x86_64-apple-darwin
@@ -325,11 +327,15 @@ jobs:
               repository: main.repository,
               os: [process.argv[2]],
               cpu: [process.argv[3]],
+              // npm on a musl system must skip the gnu addon instead of
+              // installing it and failing at require.
+              // The darwin legs carry no libc, so the field stays absent there.
+              libc: process.argv[4] ? [process.argv[4]] : undefined,
               main: "index.node",
               files: ["index.node"],
             };
             fs.writeFileSync("npm/nexus-raw-" + process.argv[1] + "/package.json", JSON.stringify(pkg, null, 2) + "\n");
-          ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}"
+          ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}" "${{ matrix.platform-libc }}"
 
       - name: Upload the staged package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
