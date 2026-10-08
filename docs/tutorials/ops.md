@@ -1,6 +1,6 @@
 # Terminal quickstart
 
-Install the `nxr` binary and drive a Nexus raw repository from the shell.
+Install the `nxr` binary and drive a Nexus raw repository from the shell, in about five minutes.
 `nxr` is curl for a raw repository: URL in argv, credentials from `-u` or the environment, no config file, nothing to install on the server.
 
 The same operations as a Rust library: [the Rust quickstart](rust.md).
@@ -10,13 +10,13 @@ From Node: [the Node quickstart](node.md).
 
 Prebuilt archives ship on every [GitHub release](https://github.com/Lipen/nexus-raw/releases), one per platform: `nxr-linux-x64`, `nxr-linux-aarch64`, `nxr-darwin-x64`, `nxr-darwin-arm64`, `nxr-windows-x64`.
 The linux build is a musl static binary, so it runs on any glibc too.
-Every archive unpacks `nxr` at its root, with README.md and LICENSE next to it, and each archive carries a `.sha256` sidecar:
+Every archive unpacks `nxr` at its root, with README.md and LICENSE next to it, and the release carries one `SHA256SUMS` for all of them:
 
 ```bash
-curl -fsSLO https://github.com/Lipen/nexus-raw/releases/download/v0.7.0/nxr-linux-x64.tar.gz
-curl -fsSLO https://github.com/Lipen/nexus-raw/releases/download/v0.7.0/nxr-linux-x64.tar.gz.sha256
-sha256sum -c nxr-linux-x64.tar.gz.sha256
-sudo tar -xzf nxr-linux-x64.tar.gz -C /usr/local/bin nxr
+curl -fsSLO https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-linux-x64.tar.gz
+curl -fsSLO https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS
+grep ' nxr-linux-x64.tar.gz$' SHA256SUMS | sha256sum -c -
+sudo tar -xzf nxr-linux-x64.tar.gz -C /usr/local/bin ./nxr
 nxr --version
 ```
 
@@ -93,20 +93,20 @@ printf '{"artifacts":["app.zip","bom/sbom.json","manifest.json"]}\n' > "dist/$V/
 Compare before writing, then publish, then pull it back on another machine:
 
 ```bash
-nxr diff "dist/$V/" "$BASE/$V/"          # both sides, nothing moves
-nxr up "dist/$V/" "$BASE/$V/" --plan     # the upload plan only
-nxr up "dist/$V/" "$BASE/$V/"            # the transfer
-nxr down "$BASE/$V/" "vendor/$V/"        # the same names, verified, resumable
-nxr verify "vendor/$V/"                  # digests again, offline
+nxr diff "dist/$V/" "$BASE/$V/" --manifest "dist/$V/manifest.json"   # both sides, nothing moves
+nxr up "dist/$V/" "$BASE/$V/" --plan                                 # the upload plan only
+nxr up "dist/$V/" "$BASE/$V/"                                        # the transfer
+nxr down "$BASE/$V/" "vendor/$V/"                                    # the same names, verified, resumable
+nxr verify "vendor/$V/"                                              # digests again, offline
 ```
 
 ```console
-$ nxr diff "dist/$V/" "$BASE/$V/"
-same app.zip
-same bom/sbom.json
-same manifest.json
+$ nxr diff "dist/$V/" "$BASE/$V/" --manifest "dist/$V/manifest.json"
+missing-remote app.zip
+missing-remote bom/sbom.json
+missing-remote manifest.json
 $ echo $?
-0
+1
 $ nxr up "dist/$V/" "$BASE/$V/" --plan
 upload app.zip
 upload bom/sbom.json
@@ -114,19 +114,22 @@ upload manifest.json
 $ nxr up "dist/$V/" "$BASE/$V/"
 plan: 3 to upload, 0 to download, 0 up to date
 ↑ app.zip ok
-↑ bom/sbom.json ok
 ↑ manifest.json ok
+↑ bom/sbom.json ok
 uploaded 3, downloaded 0, skipped 0
 $ nxr down "$BASE/$V/" "vendor/$V/"
 plan: 0 to upload, 3 to download, 0 up to date
-↓ bom/sbom.json ok
-↓ app.zip ok
 ↓ manifest.json ok
+↓ app.zip ok
+↓ bom/sbom.json ok
 uploaded 0, downloaded 3, skipped 0
 $ nxr verify "vendor/$V/"
 verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
 ```
+
+The diff verdict rides the exit code: `0` when every name is `same`, `1` when the report holds a difference.
+On an empty server the report is `missing-remote` across the board, and the `up` after it converges the two sides.
 
 An interrupted `up` or `down` finishes by repeating the same command: finished names are skipped, part files resume through `Range` requests.
 
@@ -138,7 +141,7 @@ nxr channel get "$BASE/latest"
 ```
 
 ```console
-$ nxr -u deployer:s3cret channel set "$BASE/latest" "$V" --if-forward
+$ nxr channel set "$BASE/latest" "$V" --if-forward
 channel: set https://nexus.example.com/repository/raw-main/latest → 1.4.0
 $ nxr channel get "$BASE/latest"
 1.4.0
@@ -151,7 +154,7 @@ $ nxr channel get "$BASE/latest"
 The machine-readable stream and the exit codes are the API:
 
 ```bash
-nxr up "dist/$VERSION/" "$BASE/$VERSION/" --json \
+nxr up "dist/$V/" "$BASE/$V/" --json \
   | jq -e 'select(.event=="summary") | .failed == []'
 ```
 
