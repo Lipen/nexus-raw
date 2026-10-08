@@ -150,7 +150,8 @@ pub struct NxrLsEntry {
 }
 
 /// The immediate children of a raw directory URL, at any tree depth: folders first, then files.
-/// A raw repository is an arbitrary tree; leaf `.sha256` siblings are hidden as derived data.
+/// A raw repository is an arbitrary tree.
+/// Leaf `.sha256` siblings are hidden as derived data.
 #[napi]
 pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<NxrLsEntry>> {
     let o = opts.unwrap_or_default();

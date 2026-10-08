@@ -160,7 +160,7 @@ nxr up "dist/$V/" "$BASE/$V/" --json \
   | jq -e 'select(.event=="summary") | .failed == []'
 ```
 
-Exit `0` continues, `1` is a data problem (a retry fails identically), `2` is a broken job definition, `3` is transport trouble (the same command is expected to succeed on a later run).
+The exit code is the verdict: `0` continue, `1` data, `2` misuse, `3` transport.
 The full table: [errors and exit codes](../reference/errors.md).
 
 ## Where to go next

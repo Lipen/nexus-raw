@@ -34,6 +34,12 @@ Prebuilt binaries ride on [GitHub Releases](https://github.com/Lipen/nexus-raw/r
 cargo binstall nexus-raw
 ```
 
+From npm, with the native addon fetched as a prebuilt package:
+
+```bash
+npm install nexus-raw
+```
+
 From crates.io:
 
 ```bash

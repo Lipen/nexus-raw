@@ -1,6 +1,6 @@
 # Contributing
 
-The repository is a Rust workspace (`crates/`), a docs site (`docs/`) and three examples (`examples/`).
+The repository is a Rust workspace (`crates/`), a docs site (`docs/`) and five examples (`examples/`).
 `AGENTS.md` holds the rules that matter when you change behaviour. This file holds how to build, test and release.
 
 ## Build and test

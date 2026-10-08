@@ -37,7 +37,8 @@ pub enum Error {
     #[error("http {status}: {url}")]
     Http { status: u16, url: String },
     /// The server's service REST API answered 404: not a Nexus, or a version without the endpoint.
-    /// Storage invariants are unaffected; only `service repos` needs this surface.
+    /// Storage invariants are unaffected.
+/// Only `service repos` needs this surface.
     #[error("http 404: {url}: the service API is absent")]
     ServiceMissing { url: String, root: String },
     /// The search API answered 400 to a repository-scoped listing: the repository is missing on the server or is not a raw repository.

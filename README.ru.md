@@ -34,6 +34,12 @@
 cargo binstall nexus-raw
 ```
 
+Из npm, нативный аддон ставится готовым пакетом:
+
+```bash
+npm install nexus-raw
+```
+
 Из crates.io:
 
 ```bash
@@ -96,7 +102,7 @@ nxr verify vendor/prebuilt
 | `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
 | `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
 
-- `down`, `diff`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
+`down`, `diff`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
 Без любого из них команда отказывает.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.

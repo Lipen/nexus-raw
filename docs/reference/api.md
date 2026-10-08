@@ -40,7 +40,7 @@ flowchart BT
 
 ```toml
 [dependencies]
-nexus-raw-core = "0.4"
+nexus-raw-core = "0.8"
 ```
 
 ## The facade

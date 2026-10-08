@@ -274,7 +274,8 @@ impl NamePrefix {
         &self.0
     }
 
-    /// Whether a name lives under this prefix; the empty prefix matches everything.
+    /// Whether a name lives under this prefix.
+/// The empty prefix matches everything.
     #[must_use]
     pub fn matches(&self, name: &ArtifactName) -> bool {
         name.as_str().starts_with(&self.0)

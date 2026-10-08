@@ -424,7 +424,8 @@ impl NexusClient {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Auth`] on a 401/403 and transport or HTTP errors after the retry loop is exhausted; an unparseable sibling is the [`RemoteStatus::Broken`] result, not an error.
+    /// Returns [`Error::Auth`] on a 401/403 and transport or HTTP errors after the retry loop is exhausted.
+    /// An unparseable sibling is the [`RemoteStatus::Broken`] result, not an error.
     pub async fn probe(&self, dir: &str, name: &ArtifactName) -> Result<RemoteStatus, Error> {
         let bytes_url = self.object_url(dir, name);
         let info = self
@@ -498,7 +499,8 @@ impl NexusClient {
     ///
     /// # Errors
     ///
-    /// Returns transport, auth or HTTP errors for the request; body breaks after the headers surface when the caller reads the stream.
+    /// Returns transport, auth or HTTP errors for the request.
+/// Body breaks after the headers surface when the caller reads the stream.
     pub async fn get_stream(&self, url: &str) -> Result<reqwest::Response, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {

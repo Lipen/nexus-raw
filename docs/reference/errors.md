@@ -2,7 +2,7 @@
 
 Every failure names its kind, the object and both sides of a disagreement.
 Every error also prints one `hint:` line on stderr telling you what to check next.
-The taxonomy has twelve variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+The taxonomy has thirteen variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 
 ## The taxonomy
 

@@ -24,6 +24,11 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `channel get`, `channel set` | name versions through token files, with the forward-only guard |
 | `ls` | the raw-tree listing of a directory URL, any depth (`--assets`: flat artifact names); search-API based, best-effort |
 | `verify` | offline check of bytes, markers and digests |
+| `diff` | the local-against-storage delta report, nothing written |
+| `rm` | delete an enumerated version, marker first, 404 is success |
+| `mv` | `mirror` plus the delete: nothing is removed until the pour converges |
+| `point --clear` | delete one pointer file, idempotently |
+| `service repos` | list the server's repositories with format and writability |
 | `doctor` | credentials, TLS and reachability, without printing secrets |
 
 Scripts gate on the exit codes, not on output text: `0` continues, `1` is a data problem, `2` is a broken invocation, `3` is transport trouble.
@@ -52,7 +57,7 @@ Take it as a version dependency:
 
 ```toml
 [dependencies]
-nexus-raw-core = "0.4"
+nexus-raw-core = "0.8"
 ```
 
 A git pin or a vendored copy still works for special cases.
