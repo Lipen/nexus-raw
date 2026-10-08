@@ -5,7 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Linux aarch64 joins the release: a native `ubuntu-24.04-arm` leg builds the static CLI archive `nxr-linux-aarch64.tar.gz` and the `nexus-raw-linux-arm64-gnu` npm addon, and every platform list in the docs and the READMEs follows.
+- The npm staging marks the gnu linux addons with `libc: [glibc]`, so npm on Alpine (musl) skips them instead of installing and failing at `require`.
+- Role quickstarts under Tutorials: a Rust page on the `Nxr` facade, a Node page on the npm bindings and a terminal page of curl-style one-liners, every command verified against a running mock.
+- The bench ecosystem in `bench/`: a standalone workspace with criterion benches for scan, diff, up and down against `mock-nexus`, a deterministic tree generator and `just bench` for manual runs, with the baseline-and-report workflow in `bench/README.md`.
+  Fully opt-in: nothing bench-shaped runs in CI or the gate.
+
+### Fixed
+
+- The mock server rides out transient `accept()` errors (connection aborted, reset, interrupted) instead of dying mid-run; fatal errors are logged before the acceptor stops, and a unit test pins the classification.
 
 ## [0.7.0] - 2026-10-08
 
