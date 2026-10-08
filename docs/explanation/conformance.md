@@ -81,6 +81,25 @@ CLI suite, by intent:
 - **exit codes and doctor**: `auth401_exit_codes` (3), `auth403_exit_3` (3), `redirect_exit_3` (3), `unsafe_name_is_misuse_exit_2` (2), `dead_base_exit_3` (3), `rm_exit_matrix_rows` (2 and 3), `diff_misuse_exits_two` (2), `doctor_exit_codes` (0 and 2), `doctor_json_lines`
 - **scenario coverage**: `sizeless_up_refuses_instead_of_overwriting`, `markerless_down_writes_computed_marker`, `foreign_marker_down_refuses`
 
+## The second client
+
+`clients/python` is the proof that the protocol stands on its own: a reference client on the Python standard library alone (`http.client`, `hashlib`, nothing to install), implementing `get`, `put`, `head`, `sha`, `ls` and the channel verbs from the protocol text.
+Its conformance suite drives the `mock-nexus` binary over real HTTP, one process per test on a free port, the same matrix the Rust suites drive through the facade:
+
+```bash
+cargo build -q -p mock-nexus
+python3 -m unittest discover clients/python
+```
+
+Because the binary has no in-process handle, the suite reads the store through plain retry-free requests and reads the request log from the client itself, which records every attempt as a `(method, path)` pair: the marker-ordering assertion is the same, one layer closer.
+The retry policy is the Rust transport's, shrunk to one file: 4 attempts, 0.5s x 2^n backoff with jitter, a 429's `Retry-After` honored in place of the backoff, 401/403 failing fast, the per-operation socket timeout as the stall watchdog.
+Scenarios outside the client's surface are skip-listed in the suite with the reason (`doc-drift` is a library-only knob, `no-service` and `readonly` guard surfaces the client does not have).
+
+The drift rule lives in `test_unit_every_scenario_is_classified`:
+the suite fetches the scenario list live from `mock-nexus --print-scenarios` and requires every listed scenario to have a test method named after it or a row in the skip table, in both directions.
+A scenario added to `crates/mock-nexus/src/scenario.rs` fails the Python suite until it is classified, so a second implementation cannot fall behind the table.
+That is what makes the list the conformance contract rather than a convention: a third client can lift the same mechanism, point it at the same `--print-scenarios`, and inherit the same stand.
+
 ## The composition
 
 The core suite pins transfer semantics through the facade, the CLI suite pins the user-visible surface through the real binary, the mock carries its own suite pinning the behavior table itself (every scenario plus the group forwarding), and the golden fixtures pin the `--json` contract byte-exact.
