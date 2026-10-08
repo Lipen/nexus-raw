@@ -32,10 +32,10 @@ Dependencies point one way, from UX down to transport, and no layer ever imports
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "fontFamily": "inherit"}}}%%
 flowchart TB
-    L3["<b>L3 — UX (the CLI)</b><br/>doctor · hints · NDJSON · exit codes<br/><i>may not speak HTTP</i>"]
-    L2["<b>L2 — layout helpers</b><br/>channels · manifests · search listings<br/><i>may not know the CLI exists</i>"]
-    L1["<b>L1 — transfer</b><br/>sync up/down · symmetric diff · markers · Range-resume · workers<br/><i>may not know versions or channels exist</i>"]
-    L0["<b>L0 — transport + primitives</b><br/>retries · stall · TLS · auth · get/put/head/sha<br/><i>may not know directories or markers exist</i>"]
+    L3["<b>L3: UX (the CLI)</b><br/>doctor · hints · NDJSON · exit codes<br/><i>may not speak HTTP</i>"]
+    L2["<b>L2: layout helpers</b><br/>channels · manifests · search listings<br/><i>may not know the CLI exists</i>"]
+    L1["<b>L1: transfer</b><br/>sync up/down · symmetric diff · markers · Range-resume · workers<br/><i>may not know versions or channels exist</i>"]
+    L0["<b>L0: transport + primitives</b><br/>retries · stall · TLS · auth · get/put/head/sha<br/><i>may not know directories or markers exist</i>"]
     L3 --> L2
     L2 --> L1
     L1 --> L0
@@ -133,7 +133,7 @@ sequenceDiagram
     alt the part holds the whole object
         nxr->>srv: GET …, Range: bytes=N-
         srv-->>nxr: 416 Range Not Satisfiable
-        note over nxr: finalize — no bytes re-fetched
+        note over nxr: finalize, no bytes re-fetched
     else a partial prefix
         nxr->>srv: GET …, Range: bytes=N-
         srv-->>nxr: 206 Partial Content

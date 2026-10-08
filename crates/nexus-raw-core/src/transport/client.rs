@@ -48,10 +48,10 @@ type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + '
 /// Upper bound for "small" GETs: siblings, manifests, channel tokens, search pages.
 const SMALL_CAP: u64 = 16 * 1024 * 1024;
 
-/// Open options for files nxr writes under a server-name-derived path (`.part` files, local `.sha256` markers): create/truncate as asked, but never follow a symlink — a predictable name must not become a write into a different file.
+/// Open options for files nxr writes under a server-name-derived path (`.part` files, local `.sha256` markers): create/truncate as asked, but never follow a symlink: a predictable name must not become a write into a different file.
 ///
 /// The append arm deliberately lacks `create`: it may only open a part whose prefix was just read.
-/// A part that vanished in between must fail loudly — a silently recreated file would yield a truncated "complete" artifact whose digest still matches (the hash covers the prefix that was read, not the bytes on disk).
+/// A part that vanished in between must fail loudly. A silently recreated file would yield a truncated "complete" artifact whose digest still matches (the hash covers the prefix that was read, not the bytes on disk).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     let mut options = tokio::fs::OpenOptions::new();
@@ -419,7 +419,7 @@ impl NexusClient {
     ///
     /// A sibling without bytes is ignored: the object is not complete.
     /// Classification of the HEAD: 404 is [`RemoteStatus::Absent`], 401/403 surface as [`Error::Auth`].
-    /// A 2xx without `Content-Length` (and any other answered-but-unverifiable status) is [`RemoteStatus::Broken`] — never [`RemoteStatus::Absent`], or a proxy could skip the digest comparison and the never-overwrite rule.
+    /// A 2xx without `Content-Length` (and any other answered-but-unverifiable status) is [`RemoteStatus::Broken`], never [`RemoteStatus::Absent`]: a proxy could skip the digest comparison and the never-overwrite rule.
     /// Transient statuses (5xx, connection breaks) ride the shared retry loop like any other request.
     ///
     /// # Errors

@@ -50,7 +50,7 @@ just version-check      # asserts they agree, and that no page pins a number
 ```
 
 Pages must never state the current version: a pinned number is a lie on the next release.
-The recorded session in `docs/assets/cast/` is the exception — it names the binary that made it, and `just demo-cast` refreshes it.
+The recorded session in `docs/assets/cast/` is the exception: it names the binary that made it, and `just demo-cast` refreshes it.
 
 ## Release
 

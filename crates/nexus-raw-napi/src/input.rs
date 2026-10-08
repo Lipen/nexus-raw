@@ -34,7 +34,7 @@ pub(crate) async fn resolve_enumeration(
     }
 }
 
-/// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file — the CLI rules.
+/// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file: the CLI rules.
 pub(crate) async fn load_manifest(
     nxr: &Nxr,
     spec: &str,

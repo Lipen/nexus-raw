@@ -3,12 +3,12 @@
 
 One file, two consumers with the same look: the landing page shows it until the
 player takes over (and forever, for anyone without JavaScript), and the readmes
-embed it directly — GitHub serves SVG as an image, so it animates there with no
+embed it directly: GitHub serves SVG as an image, so it animates there with no
 script and no GIF, and stays sharp at any zoom.
 
 Every line lands at `at[i]` and wears the color of `kinds[i]`, both written by
 `stage.py`: this script decides layout, not timing or semantics. Lines appear
-the way a terminal prints them — instantly, at their beat, no fade — and the
+the way a terminal prints them: instantly, at their beat, no fade. And the
 whole run loops: it holds finished for the tail `stage.py` budgets, clears,
 and starts over.
 

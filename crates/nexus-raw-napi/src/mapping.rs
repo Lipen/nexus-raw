@@ -94,7 +94,7 @@ pub fn event_to_json(event: &Event) -> serde_json::Value {
     event.to_json()
 }
 
-/// Classify a `manifest` spec: `-` for stdin, http(s) through the server, everything else a local file — the CLI `load_manifest` rules.
+/// Classify a `manifest` spec: `-` for stdin, http(s) through the server, everything else a local file: the CLI `load_manifest` rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestSpec {
     Stdin,

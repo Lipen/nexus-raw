@@ -2,7 +2,7 @@
  * Replays a recorded nexus-raw session in the landing hero.
  *
  * The recording is made by `just demo-cast`: the real `nxr` binary against the
- * repo's mock server. This player decides nothing about the session — the cast
+ * repo's mock server. This player decides nothing about the session: the cast
  * carries the lines, their colors (`kinds`) and their pace (`at`), all written
  * by `examples/demo/stage.py`. The SVG in the markup is drawn from the same
  * three fields, so the still, the animation and the player are one story, and

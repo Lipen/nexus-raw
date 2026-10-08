@@ -125,7 +125,7 @@ pub async fn down(
     // Pure parsing first: no events can precede the pump.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
-    // Every early return from here drops the facade before draining the pump — the pump ends only when the facade's sender is gone.
+    // Every early return from here drops the facade before draining the pump: the pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
     let enum_src = match resolve_enumeration(
         &nxr,

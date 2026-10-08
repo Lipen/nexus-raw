@@ -5,7 +5,7 @@ and the landing SVG.
 `demo.sh` writes a recording: every line with the time it arrived. A local
 transfer prints a dozen lines in under a second, so replayed as recorded it is
 a blur, and both renderers would have to invent their own pace and their own
-line colors — two chances to drift apart. This writes the display data into the
+line colors: two chances to drift apart. This writes the display data into the
 cast instead:
 
   title   the window title both renderers show
@@ -21,7 +21,7 @@ The model behind `at` is small on purpose:
 
 The recorded timestamps stay in `lines` untouched: what happened is history,
 when it is shown is a display decision. A real pause longer than a reader needs
-is not reproduced — the hero has no dead air.
+is not reproduced: the hero has no dead air.
 
 Run by `just demo-cast`.
 """
