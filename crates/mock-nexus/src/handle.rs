@@ -122,14 +122,26 @@ impl MockNexus {
 /// One thread per connection.
 fn spawn_acceptor(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || loop {
-        let Ok((conn, _)) = listener.accept() else {
-            break;
-        };
-        if stop.load(Ordering::Relaxed) {
-            break;
+        match listener.accept() {
+            Ok((conn, _)) => {
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let conn_shared = Arc::clone(&shared);
+                std::thread::spawn(move || scenario::serve(&conn_shared, conn));
+            }
+            // A burst of short-lived connections lets some abort between the
+            // handshake and this accept: the name is reusable, take the next one.
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
+                ) =>
+            {
+                continue
+            }
+            Err(_) => break,
         }
-        let conn_shared = Arc::clone(&shared);
-        std::thread::spawn(move || scenario::serve(&conn_shared, conn));
     });
 }
 
