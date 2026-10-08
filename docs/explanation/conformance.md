@@ -56,30 +56,11 @@ cargo test -p nexus-raw --test cli                # the binary against the mock
 
 The core suite drives the facade directly and pins transfer semantics.
 The CLI suite runs the real `nxr` binary over HTTP against the same mock and pins the user-visible surface on top: exit codes (0/1/2/3), the `hint:` line on stderr, `down` refusing without an enumeration source, `--plan` writing nothing, NDJSON event shapes, `doctor` verdicts.
-Every scenario in the table is driven by the CLI suite at least once.
+Every scenario in the table is driven by the CLI suite at least once, and the table's *Pinned by* column names the test for every fixture.
 
-Core suite, by intent:
-
-- **up**: `two_phase_up_recovers_after_partial_put`, `up_generates_markers_by_default`, `up_no_sha_skips_markers`, `markerless_remote_is_re_uploaded`, `second_up_is_all_skip`, `broken_local_marker_refuses_up`, `up_manifest_missing_local_name_is_data_error`, `up_claim_first_puts_the_claim_before_any_payload`, `up_claim_first_refuses_a_name_outside_the_scan`, `empty_dir_refuses_up`, `single_call_recovers_through_flaky`, `rate_limited_up_recovers_in_one_invocation`, `retry_events_name_the_object_they_retry`
-- **down**: `down_fetches_and_writes_local_marker`, `down_resumes_from_part_with_range`, `down_resume_of_complete_part_finalizes_without_refetch`, `down_auto_enumerates_through_manifest_convention`, `down_digest_mismatch_refuses_and_drops_part`, `down_missing_name_is_data_error`, `down_markerless_remote_writes_computed_marker`, `down_stale_part_self_heals_without_a_flag`, `cut_body_down_completes_through_the_part`, `fake_length_down_recovers_through_a_short_read`
-- **mirror**: `mirror_pours_byte_equal_trees_through_a_manifest`, `second_mirror_skips_with_zero_content_gets`, `mirror_refuses_diverged_destination_untouched`, `mirror_recovers_through_flaky`, `mirror_resumes_staged_part_with_range`, `mirror_completes_a_markerless_source`, `mirror_skips_when_a_markerless_source_matches_a_complete_destination`, `mirror_missing_name_is_data_error`, `mirror_uses_the_destination_client_for_its_writes`
-- **rm and point**: `rm_removes_a_whole_version`, `second_rm_is_all_404_and_exits_clean`, `readonly_refuses_rm_and_changes_nothing`, `rm_dry_run_plans_and_touches_nothing`, `rm_without_names_refuses_with_enumeration_error`, `point_clear_is_idempotent`, `point_clear_on_readonly_refuses`
-- **group**: `down_through_group_serves_the_first_member_holding_the_object`, `down_through_group_skips_a_failing_member_without_a_client_retry`, `up_against_a_group_refuses_with_405`, `rm_against_a_group_refuses_as_read_only`
-- **auth, stall, transport and wave 2**: `auth_gates_every_request`, `auth_403_surfaces_as_the_auth_error`, `redirect_refuses_reads_with_http_301`, `stalled_download_retries_then_refuses`, `stalled_upload_fails_within_the_stall_window`, `drop_connection_is_retried_through_the_client`, `sizeless_head_refuses_instead_of_overwriting`, `divergent_complete_refusal_is_wire_covered`
-- **verify, diff, channel, primitive, safety**: `verify_reports_local_state_without_network`, `diff_plan_is_deterministic_and_events_carry_lists`, `channel_set_get_and_forward_guard`, `channel_set_repairs_a_garbage_file`, `get_primitive_resumes_with_range`, `oversized_small_get_refuses_with_the_cap`, `put_sha_refuses_a_url_whose_marker_cannot_parse`, `symlinked_part_is_never_followed_on_resume`, `symlinked_marker_is_never_followed_on_write`, `symlinked_local_marker_is_never_followed_on_up`
-
-CLI suite, by intent:
-
-- **transfer through argv**: `up_down_roundtrip_atomic`, `up_generates_markers_by_default`, `up_no_sha_skips_markers`, `second_up_is_a_pure_skip`, `put_get_roundtrip_with_sha_sibling`, `head_reports_status`, `get_resumes_from_part_with_range`, `drop_connection_up_recovers`, `partial_put_up_recovers`, `cut_body_down_completes_through_the_part`, `slow_down_succeeds`, `flaky_up_recovers_in_one_invocation`, `doc_drift_down_takes_the_drifted_document`
-- **enumeration**: `down_without_enumeration_needs_a_source`, `down_explicit_name`, `down_manifest_from_local_file`, `rm_without_a_source_refuses`
-- **mirror**: `mirror_pours_the_version_and_reruns_are_pure_skips`, `mirror_refuses_a_diverged_destination`
-- **rm and point**: `rm_removes_whole_version_and_reruns_clean`, `rm_readonly_refuses_and_keeps_bytes`, `rm_dry_run_touches_no_bytes`, `rm_json_events_parse_and_summarize`, `point_clear_roundtrip_and_readonly`
-- **planning and observability**: `up_plan_prints_actions_without_uploading`, `down_plan_prints_plan_without_writing`, `ndjson_events_parse_and_summarize`, `rate_limit_up_retries_and_succeeds`, `failing_up_still_flushes_ndjson_events`
-- **diff**: `diff_equal_directory_exits_zero`, `diff_reports_the_sections_and_writes_nothing`, `diff_without_enumeration_needs_a_source`, `diff_misuse_exits_two`
-- **golden ndjson**: `golden_ndjson_up_down_hold`, `golden_ndjson_diff_holds`, `golden_ndjson_mirror_holds`, `golden_ndjson_retrying_holds`, `golden_ndjson_doctor_holds`
-- **verification and pointers**: `verify_accepts_then_rejects_tampering`, `channel_set_get_and_if_forward`
-- **exit codes and doctor**: `auth401_exit_codes` (3), `auth403_exit_3` (3), `redirect_exit_3` (3), `unsafe_name_is_misuse_exit_2` (2), `dead_base_exit_3` (3), `rm_exit_matrix_rows` (2 and 3), `diff_misuse_exits_two` (2), `doctor_exit_codes` (0 and 2), `doctor_json_lines`
-- **scenario coverage**: `sizeless_up_refuses_instead_of_overwriting`, `markerless_down_writes_computed_marker`, `foreign_marker_down_refuses`
+The rest of each suite pins semantics that do not belong to one scenario: misuse refusals (an empty scan, a name outside it, a missing enumeration source), replay purity, marker and part hygiene on the local disk, and the golden `--json` shapes.
+The full inventory lives where it stays true: `crates/nexus-raw-core/tests/conformance.rs` and `crates/nexus-raw/tests/cli.rs`.
+Names there are written to be read next to their assertions, not out of context.
 
 ## The second client
 
