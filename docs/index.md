@@ -44,11 +44,11 @@ One binary, no config file, nothing to install on the server.
     <text x="633" y="74" text-anchor="middle">consumer</text>
   </g>
   <g fill="currentColor" fill-opacity="0.55" font-size="11.5" font-family="var(--md-code-font-family, ui-monospace, monospace)">
-    <text x="87" y="96" text-anchor="middle">dist/1.4.0/</text>
-    <text x="360" y="78" text-anchor="middle">1.4.0/</text>
-    <text x="360" y="98" text-anchor="middle" font-size="10.5">manifest.json · bytes · .sha256</text>
-    <text x="633" y="96" text-anchor="middle">vendor/1.4.0/</text>
-    <text x="633" y="142" text-anchor="middle">nxr verify · offline</text>
+    <text x="87" y="96" text-anchor="middle" textLength="86" lengthAdjust="spacingAndGlyphs">dist/1.4.0/</text>
+    <text x="360" y="78" text-anchor="middle" textLength="60" lengthAdjust="spacingAndGlyphs">1.4.0/</text>
+    <text x="360" y="98" text-anchor="middle" font-size="10.5" textLength="170" lengthAdjust="spacingAndGlyphs">manifest.json · bytes · .sha256</text>
+    <text x="633" y="96" text-anchor="middle" textLength="86" lengthAdjust="spacingAndGlyphs">vendor/1.4.0/</text>
+    <text x="633" y="142" text-anchor="middle" textLength="118" lengthAdjust="spacingAndGlyphs">nxr verify · offline</text>
   </g>
   <g fill="var(--nxr-hero-teal)" font-size="12.5" font-family="var(--md-code-font-family, ui-monospace, monospace)">
     <text x="216" y="66" text-anchor="middle">nxr up</text>
@@ -56,7 +56,7 @@ One binary, no config file, nothing to install on the server.
   </g>
   <g>
     <rect x="286" y="152" width="148" height="30" rx="15" fill="none" stroke="var(--nxr-hero-amber)"/>
-    <text x="360" y="171" text-anchor="middle" fill="var(--nxr-hero-amber)" font-size="12.5" font-family="var(--md-code-font-family, ui-monospace, monospace)">latest → 1.4.0</text>
+    <text x="360" y="171" text-anchor="middle" fill="var(--nxr-hero-amber)" font-size="12.5" font-family="var(--md-code-font-family, ui-monospace, monospace)" textLength="96" lengthAdjust="spacingAndGlyphs">latest → 1.4.0</text>
     <text x="444" y="171" fill="currentColor" fill-opacity="0.55" font-size="10.5" font-family="var(--md-code-font-family, ui-monospace, monospace)">--if-forward</text>
   </g>
 </svg>
