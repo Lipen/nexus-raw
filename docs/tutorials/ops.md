@@ -22,8 +22,10 @@ nxr --version
 
 ```console
 nxr-linux-x64.tar.gz: OK
-nxr 0.7.0
+nxr <version>
 ```
+
+The transcript hides the version the same way it hides the host: your binary prints its own.
 
 On macOS the archive is `nxr-darwin-x64.tar.gz`, on Apple Silicon `nxr-darwin-arm64.tar.gz`, on Windows `nxr-windows-x64.tar.gz` with `nxr.exe` inside.
 If you already have a Rust toolchain, `cargo install nexus-raw` builds the same binary, and `cargo binstall nexus-raw` fetches the release archive through cargo.
