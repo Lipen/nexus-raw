@@ -277,10 +277,44 @@
   vertical-align: -0.25em;
 }
 
-/* the time-to-value hint is a quiet tag, not a second title */
-.md-typeset .nxr-go a em {
+/* the time-to-value hint is a quiet tag pinned to the card's top-right corner */
+.md-typeset .nxr-go > ul > li a {
+  position: relative;
+}
+
+.md-typeset .nxr-go > ul > li a em {
   color: var(--md-default-fg-color--light);
   font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.md-typeset .nxr-go > ul > li a em::before {
+  content: "\00b7\00a0";
+}
+
+/* the title is the loudest text, the line murmurs under it */
+.md-typeset .nxr-go > ul > li a strong {
+  color: var(--md-default-fg-color);
+  font-size: 15px;
+}
+
+.md-typeset .nxr-go > ul > li a {
+  color: var(--md-default-fg-color--light);
+}
+
+/* the command chip is the card's one accent: this is what the reader runs */
+.md-typeset .nxr-go > ul > li a code {
+  display: block;
+  width: fit-content;
+  margin: 0.45rem 0 0;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid color-mix(in oklch, var(--nxr-teal) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--nxr-teal) 12%, transparent);
+  color: var(--nxr-hero-teal);
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
 /* the arrow is the affordance: it is not there until the reader aims at it */

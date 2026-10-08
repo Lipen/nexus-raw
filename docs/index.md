@@ -12,18 +12,6 @@ One binary, no config file, nothing to install on the server.
 
 </div>
 
-<div class="nxr-cards" markdown>
-
-- :material-console: **Primitives**: `get`, `put`, `head`, `sha` with the URL in argv and credentials from `-u` or the environment.
-- :material-upload: **Publish**: `up` scans a directory, diffs it against the server, then PUTs bytes and markers with parallel workers.
-- :material-download: **Consume**: `down` fetches exactly the enumerated names and resumes part files through `Range: bytes=N-`.
-- :material-brain: **Exit codes**: 0 ok, 1 data, 2 misuse, 3 transport.
-  Every error prints a `hint:` line, and pipelines read NDJSON events with `--json`.
-- :material-swap-horizontal: **Re-runs**: an interrupted transfer finishes by repeating the same command.
-- :material-language-rust: **Rust API**: `nexus-raw-core` exposes the same operations as a library, one module per concern.
-
-</div>
-
 ## The 30-second version
 
 <svg role="img" viewBox="0 0 720 196" width="100%" style="max-width:720px" xmlns="http://www.w3.org/2000/svg">
@@ -83,15 +71,15 @@ The full tour: [run the demo](how-to/demo.md).
 
 <div class="nxr-go" markdown>
 
-- [:material-language-rust: **First transfer in Rust** · *about 5 minutes*: `cargo add nexus-raw-core`, the `Nxr` facade, one `up` and one `down` against the local mock.](tutorials/rust/)
-- [:material-language-typescript: **First transfer in Node** · *about 5 minutes*: `pnpm add nexus-raw`, promises over the command surface, a `diff` before any write.](tutorials/node/)
-- [:material-console: **First transfer in a terminal** · *about 5 minutes*: the `nxr` binary from the releases, credentials from the environment, the one-liners.](tutorials/ops/)
-- [:material-upload: **Publish a version** · *about 2 minutes*: a build directory goes up claim-first, `--claim-first manifest.json` landing the enumeration before the bytes and their `.sha256` markers.](how-to/publish/)
-- [:material-download: **Fetch artifacts** · *about 2 minutes*: named files come down verified, and an interrupted pull resumes where it stopped.](how-to/consume/)
-- [:material-play-circle: **See it run** · *half a minute*: the full session against the mock server, then the same session on your machine.](how-to/demo/)
-- [:material-robot: **Use it in CI** · *about 5 minutes*: exit codes a pipeline can read, NDJSON events, credentials from the environment.](how-to/ci/)
-- [:material-wrench: **When it breaks**: decode the error, recover, and know what is safe to run again.](how-to/troubleshoot/)
+- [:material-language-rust: **First transfer in Rust** *about 5 minutes* — The facade, one transfer, the local mock. `cargo add nexus-raw-core`](tutorials/rust/)
+- [:material-language-typescript: **First transfer in Node** *about 5 minutes* — Promises over the same surface, a diff before any write. `pnpm add nexus-raw`](tutorials/node/)
+- [:material-console: **First transfer in a terminal** *about 5 minutes* — The release binary and the one-liners. `nxr up`](tutorials/ops/)
+- [:material-upload: **Publish a version** *about 2 minutes* — The manifest lands first, bytes and markers follow. `nxr up --claim-first`](how-to/publish/)
+- [:material-download: **Fetch artifacts** *about 2 minutes* — Named files come down verified; an interrupted pull resumes. `nxr down`](how-to/consume/)
+- [:material-play-circle: **See it run** *half a minute* — The full session against the mock, then on your machine. `just demo`](how-to/demo/)
+- [:material-robot: **Use it in CI** *about 5 minutes* — Exit codes, NDJSON events, credentials from the environment. `nxr --json`](how-to/ci/)
+- [:material-wrench: **When it breaks** — Decode the error, recover, rerun safely. `nxr doctor`](how-to/troubleshoot/)
 
 </div>
 
-<p class="nxr-go__under" markdown>Under the hood: [every flag of every command](reference/cli.md) · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>
+<p class="nxr-go__under" markdown>Under the hood: [every flag of every command](reference/cli.md), the four primitives included · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>
