@@ -227,6 +227,22 @@ target/debug/mock-nexus slow --chunk-delay-ms 2000 --port 8080
 
 The full scenario table: [conformance](../explanation/conformance.md).
 
+## Server quirks that are not bugs
+
+Verified against Nexus Community Edition 3.79.1-04: the same shapes ride the mock scenarios, so the client behavior is pinned by the conformance suite.
+
+- A write answers `403` with the End User License Agreement body: the CE 3.79+ onboarding gate.
+  Accept it once as an admin: `nxr service eula <server-root> --accept`.
+  The error hint names the command when the server body names the gate.
+- A listing right after `up` or `put` comes back empty, then fills in a few seconds.
+  The search index lags the storage: the write landed, the read just cannot see it yet.
+- `GET /service/rest/v1/status` answers `200` with an empty body.
+  That is the 3.79 shape: `nxr service status` reads it as alive, and the version line appears only when the server tells one.
+- The repositories document carries `size` and empty `attributes` for every entry, even for an admin.
+  The full settings live in the admin-only single-repository endpoint: `nxr service repo --detail`.
+- Anonymous and authenticated users see different repository lists.
+  A 403 from a service endpoint usually means the account lacks nx-admin, not that the server is broken.
+
 ## Next steps
 
 - The producer's view of the same refusals: [publish a version](publish.md).

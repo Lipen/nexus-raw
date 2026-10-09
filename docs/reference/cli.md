@@ -843,6 +843,105 @@ Credentials work like everywhere else (`-u`, `NXR_AUTH`, `NXR_USERNAME` + `NXR_P
 | `2` | misuse: the URL is not a URL |
 | `3` | transport or auth failure; a 404 means the service API is absent (not a Nexus, or a version without it) |
 
+## nxr service status
+
+Server liveness and writability: `GET <server-root>/service/rest/v1/status`, then `/status/writable`.
+
+```console
+$ nxr service status https://nexus.example.com/repository/raw-main/1.14.0/
+https://nexus.example.com: alive, writable
+```
+
+The URL roots to the server, like everywhere else.
+An empty 200 body is the norm on Nexus 3.79 and is not an error: the verdict stays `alive`.
+A JSON body carrying `version` surfaces it: `alive, writable, version 3.84.0-01`.
+A server without these endpoints reads `no status endpoint (or the server is down)`: the verdict is about the endpoint, and `doctor` owns the reachability question.
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the probes answered, whatever the verdict |
+| `2` | misuse: the URL is not a URL |
+| `3` | transport or auth failure after retries |
+
+## nxr service repo
+
+What repository a URL belongs to: the visible collection entry, resolved by longest prefix.
+
+```console
+$ nxr service repo https://nexus.example.com/repository/raw-main/1.14.0/
+raw-main raw hosted https://nexus.example.com/repository/raw-main
+```
+
+The collection is the one your credentials see: a repository hidden from your account resolves as a data error, never guessed.
+The collection itself is trimmed on 3.79 (`size`, empty `attributes` even for an admin): that is everything the endpoint gives without admin rights.
+
+`--detail` additionally fetches the full settings through the admin-only single-repository endpoint:
+
+```console
+$ nxr service repo --detail https://nexus.example.com/repository/raw-main/
+raw-main raw hosted https://nexus.example.com/repository/raw-main (full settings follow)
+{ ...the complete settings document... }
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the entry resolved |
+| `1` | no collection entry matches the URL, or the detail was refused (the hint carries the server body) |
+| `2` | misuse: the URL is not a URL |
+| `3` | transport, auth, or the service API is absent |
+
+## nxr service assets
+
+Every asset of a repository, in any format, through the search API: the full picture without knowing the layout.
+
+```console
+$ nxr service assets https://nexus.example.com/repository/koala-npm/
+5123  2cc4b7d7  2026-08-11T02:28:44.355+00:00  @panda/sdk-darwin/-/sdk-darwin-1.5.0-dev.84915.tgz
+...
+```
+
+Human output is `size sha8 last-modified path`, the path last for copy-paste.
+`--json` prints one NDJSON line per asset (`event: asset`), then a summary (`event: summary`) with the totals.
+
+| Flag | Meaning |
+|:--|:--|
+| `--q <QUERY>` | the server-side search query, passed through |
+| `--prefix <PREFIX>` | keep only assets under this whole-segment path prefix, repeatable, client-side |
+
+The argument is a repository URL (the repository root or anything inside it): a server root is misuse, because the search needs a repository to scope to.
+The listing paginates through `continuationToken` automatically, up to 1000 pages.
+Two honest quirks: the result order is the server's, and an empty result right after a write may mean the search index lags for a few seconds.
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the listing collected |
+| `1` | the search endpoint answered 404: the server has no search API |
+| `2` | misuse: the URL is not a repository URL |
+| `3` | transport, auth, or pagination past 1000 pages |
+
+## nxr service eula
+
+The EULA gate of CE 3.79+: a fresh server refuses every write with `403` until the license is accepted.
+
+```console
+$ nxr service eula https://nexus.example.com/
+accepted: false, disclaimer: Use of Sonatype Nexus Repository - Community Edition is governed by...
+$ nxr service eula --accept https://nexus.example.com/
+EULA accepted (accepted)
+```
+
+The accept POST echoes the presented disclaimer verbatim: the server refuses a rewritten one with 500.
+A server without the gate (pre-3.79 CE, PRO) answers 404: the command reports `no EULA gate on this server` and exits 0, so a script can run it unconditionally before the first write.
+The acceptance needs nx-admin: a non-admin gets the auth error, and the gate read answers `no EULA gate` for them the same way.
+
+When a write fails with the EULA body, the error hint prescribes the command: `run nxr service eula <server-root> --accept`.
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the gate read, or the ensure pass finished (accepted or absent) |
+| `2` | misuse: the URL is not a URL |
+| `3` | transport, auth, or a refused acceptance (401/403: the acceptance needs nx-admin) |
+
 ## nxr doctor
 
 ```
