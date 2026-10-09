@@ -18,8 +18,12 @@ until curl -sf "$BASE/service/rest/v1/status/writable" > /dev/null 2>&1; do
         compose logs --tail 100 >&2 || :
         exit 1
     fi
+    if [ $((i % 10)) -eq 1 ]; then
+        echo "waiting for nexus to become writable (poll $i/150, ~3s each)..." >&2
+    fi
     sleep 3
 done
+echo "nexus is writable" >&2
 
 # The first boot generates the admin password inside the data directory.
 PASS=$(compose exec -T nexus cat /nexus-data/admin.password)
