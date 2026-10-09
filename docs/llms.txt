@@ -16,7 +16,7 @@ The agent minimum:
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
   There is no config file by design.
 - Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
-- Commands `service status|repo|assets|eula` ship since 0.9: `eula --accept` needs nx-admin.
+- Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
 
 Intent to command:
 
