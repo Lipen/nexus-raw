@@ -134,6 +134,11 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 `nxr doctor [URL]` называет сработавший источник, не печатая значений.
 
+## Для агентов
+
+Кулинарная книга на одной странице: намерение -> команда -> ожидаемый результат, в [docs/how-to/agents.md](docs/how-to/agents.md).
+Машиночитаемый индекс документации: [llms.txt](llms.txt).
+
 ## Документация
 
 Гайды и справочник: <https://lipen.github.io/nexus-raw/>.

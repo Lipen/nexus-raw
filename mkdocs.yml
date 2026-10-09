@@ -53,6 +53,7 @@ nav:
       - Integrate it: how-to/integrate.md
       - Use in CI: how-to/ci.md
       - When it breaks: how-to/troubleshoot.md
+      - Drive it with an agent: how-to/agents.md
   - Reference:
       - reference/cli.md
       - reference/tui.md

@@ -134,6 +134,11 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 `nxr doctor [URL]` names the source that resolved, without printing values.
 
+## For agents
+
+The one-page cookbook: intent -> command -> expected result, in [docs/how-to/agents.md](docs/how-to/agents.md).
+The machine-readable doc index is [llms.txt](llms.txt).
+
 ## Docs
 
 Guides and reference: <https://lipen.github.io/nexus-raw/>.

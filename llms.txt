@@ -1,0 +1,55 @@
+# nxr
+
+> curl for a Sonatype Nexus raw repository: URL in argv, credentials from `-u` or env, no config file.
+> Resumable verified directory transfers, digests, channels, plus server metadata over the service REST API.
+
+## Agent minimum
+
+- Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
+- Every error prints one `hint:` line on stderr telling the next thing to check.
+- `--json` prints one NDJSON event per line; the last event is always a summary.
+- Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
+- Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
+- Commands `service status|repo|assets|eula` and `server says:` hints ship in 0.9.
+
+### Intent to command
+
+| Intent | Command |
+|:--|:--|
+| server alive? | `nxr service status <url>` |
+| what repo is this URL? | `nxr service repo <url>` |
+| what is inside (any format)? | `nxr service assets <repo-url>` |
+| server refuses writes | `nxr service eula <url> --accept` |
+| raw dir listing | `nxr ls <dir-url>` (`--json` for NDJSON) |
+| fetch one file | `nxr get <url> -o <file>` |
+| fetch a directory | `nxr down <dir-url> --dest <dir>` |
+| push a directory | `nxr up <dir> <dir-url>` |
+| compare local vs remote | `nxr diff <dir> <dir-url>` |
+| move a version | `nxr mv <src-url> <dst-url>` |
+| copy a version | `nxr mirror <src-url> <dst-url>` |
+| delete a version | `nxr rm --version <ver-url>` |
+| local sanity check | `nxr verify <dir>` |
+| access diagnostics | `nxr doctor <url>` |
+
+### Quirks that are not bugs
+
+- `GET /service/rest/v1/status` returns 200 with an empty body on Nexus 3.79.
+- `/v1/repositories` is a trimmed collection (`size`, empty `attributes`) even for admins.
+  Full settings live in the admin-only `GET /v1/repositories/{format}/{type}/{name}`.
+- Anonymous and authenticated users see different repository lists.
+- CE 3.79+: every PUT answers 403 until the EULA is accepted.
+- Right after `up`/`put` the search index lags for a few seconds; an empty listing is not a lost write.
+- `/-/` in paths is the npm-protocol segment, not part of the nxr protocol.
+- A raw repository holds arbitrary foreign names (spaces, parens, unicode); `ls`/`down`/`diff` tolerate them.
+  The `[A-Za-z0-9._-]` alphabet constrains only what nxr itself writes.
+- npm repositories: inspect via `nxr service assets`; fetch packages with an npm client.
+
+## Docs
+
+- Agent cookbook: https://lipen.github.io/nexus-raw/how-to/agents/
+- CLI reference: https://lipen.github.io/nexus-raw/reference/cli/
+- Errors and exit codes: https://lipen.github.io/nexus-raw/reference/errors/
+- The protocol: https://lipen.github.io/nexus-raw/reference/protocol/
+- Integration: https://lipen.github.io/nexus-raw/how-to/integrate/
+- Troubleshooting: https://lipen.github.io/nexus-raw/how-to/troubleshoot/
+- Repository (source): https://github.com/Lipen/nexus-raw
