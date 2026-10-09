@@ -5,7 +5,7 @@
 # `just stand` builds nxr, boots the container and calls this script.
 set -u
 DIR=$(cd "$(dirname "$0")" && pwd)
-BASE="${NEXUS_BASE:-http://localhost:8081}"
+BASE="${NEXUS_BASE:-http://localhost:${NEXUS_PORT:-18081}}"
 URL="$BASE/repository/stand"
 VER="$URL/1.4.0/"
 

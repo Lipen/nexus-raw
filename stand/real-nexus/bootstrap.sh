@@ -4,7 +4,7 @@
 # Every wait polls; the only sleep is inside the poll loop.
 set -eu
 DIR=$(cd "$(dirname "$0")" && pwd)
-BASE="${NEXUS_BASE:-http://localhost:8081}"
+BASE="${NEXUS_BASE:-http://localhost:${NEXUS_PORT:-18081}}"
 
 compose() { docker compose -f "$DIR/compose.yaml" "$@"; }
 

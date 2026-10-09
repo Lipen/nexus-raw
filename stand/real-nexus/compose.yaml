@@ -1,10 +1,12 @@
 # A real Nexus3 for the stand: bootstrap.sh waits for it and creates the raw
 # repository, battery.sh drives nxr against it. The image tag is pinned so a
 # nightly cannot be red by an upstream release; bump it deliberately.
+# The host port yields to NEXUS_PORT (default 18081): Nexus's own default 8081
+# is exactly the port a local Nexus is most likely to occupy.
 services:
   nexus:
     image: sonatype/nexus3:3.96.3
     ports:
-      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:${NEXUS_PORT:-18081}:8081"
     environment:
       INSTALL4J_ADD_VM_PARAMS: "-Xms512m -Xmx2g"
