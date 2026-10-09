@@ -12,6 +12,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+// Server error bodies are short by nature: read at most this much into `Error.detail`.
+const BODY_DETAIL_CHARS: usize = 120;
+
 use futures_util::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use sha2::{Digest as _, Sha256};
@@ -243,16 +246,18 @@ impl NexusClient {
 
     /// A non-success status: 5xx and 429 are retryable, a 429 carries its
     /// `Retry-After` pause, and a 401/403 is the auth verdict.
-    fn status_failure(&self, url: &str, resp: &reqwest::Response) -> AttemptFailure {
+    async fn status_failure(&self, url: &str, resp: reqwest::Response) -> AttemptFailure {
         let status = resp.status();
         let rate_limited = status.as_u16() == 429;
         let retryable = (500..600).contains(&status.as_u16()) || rate_limited;
+        let retry_after = rate_limited.then(|| Self::retry_after(&resp)).flatten();
         let error = match status.as_u16() {
             401 | 403 => Error::Auth {
                 url: url.to_owned(),
                 reason: format!(
                     "HTTP {status}; pass -u user:pass or export NXR_AUTH (base64 user:pass)"
                 ),
+                detail: Self::body_detail(resp).await,
             },
             s if retryable => Error::transport(url, format!("HTTP {s}")),
             s => Error::Http {
@@ -262,7 +267,7 @@ impl NexusClient {
         };
         AttemptFailure {
             retryable,
-            retry_after: rate_limited.then(|| Self::retry_after(resp)).flatten(),
+            retry_after,
             error,
         }
     }
@@ -277,6 +282,17 @@ impl NexusClient {
             .ok()?;
         let secs: u64 = raw.trim().parse().ok()?;
         Some(std::time::Duration::from_secs(secs.clamp(1, 60)))
+    }
+
+    /// The server's error body as one short line for `Error::detail` (spec §5).
+    /// An empty or unreadable body carries no detail.
+    async fn body_detail(resp: reqwest::Response) -> Option<String> {
+        let text = resp.text().await.ok()?;
+        let line = text.lines().next()?.trim();
+        if line.is_empty() {
+            return None;
+        }
+        Some(line.chars().take(BODY_DETAIL_CHARS).collect())
     }
 
     /// The object a URL addresses, for callers that transfer by URL rather than by [`ArtifactName`]: markers, channel tokens, manifests, search pages.
@@ -359,7 +375,7 @@ impl NexusClient {
                         Ok(Some(buf))
                     }
                     _s if _s.as_u16() == 404 => Ok(None),
-                    _ => Err(this.status_failure(url, &resp)),
+                    _ => Err(this.status_failure(url, resp).await),
                 }
             })
         })
@@ -380,7 +396,7 @@ impl NexusClient {
                 let status = resp.status();
                 match status {
                     s if s.is_success() => Ok(()),
-                    _ => Err(this.status_failure(url, &resp)),
+                    _ => Err(this.status_failure(url, resp).await),
                 }
             })
         })
@@ -404,11 +420,15 @@ impl NexusClient {
                 match status.as_u16() {
                     s if (200..300).contains(&s) => Ok(DeleteOutcome::Deleted),
                     404 => Ok(DeleteOutcome::Missing),
-                    s @ (403 | 405) => Err(AttemptFailure::stop(Error::ReadOnly {
-                        url: url.to_owned(),
-                        status: s,
-                    })),
-                    _ => Err(this.status_failure(url, &resp)),
+                    s @ (403 | 405) => {
+                        let detail = Self::body_detail(resp).await;
+                        Err(AttemptFailure::stop(Error::ReadOnly {
+                            url: url.to_owned(),
+                            status: s,
+                            detail,
+                        }))
+                    }
+                    _ => Err(this.status_failure(url, resp).await),
                 }
             })
         })
@@ -461,7 +481,7 @@ impl NexusClient {
                             s if (200..300).contains(&s) => Ok(Some(info)),
                             404 => Ok(None),
                             // Everything else routes through the shared verdict: auth, rate limits, 5xx.
-                            _ => Err(this.status_failure(url, &resp)),
+                            _ => Err(this.status_failure(url, resp).await),
                         }
                     })
                 },
@@ -509,7 +529,7 @@ impl NexusClient {
                 let status = resp.status();
                 match status {
                     s if s.is_success() => Ok(resp),
-                    _ => Err(this.status_failure(url, &resp)),
+                    _ => Err(this.status_failure(url, resp).await),
                 }
             })
         })
@@ -589,7 +609,7 @@ impl NexusClient {
                     return Ok((prefix, digest));
                 }
                 if !(200..300).contains(&status) {
-                    return Err(this.status_failure(url, &resp));
+                    return Err(this.status_failure(url, resp).await);
                 }
                 // 206 = the range was honored, append from `prefix`.
                 // 200 = full body, restart from zero.
@@ -761,7 +781,7 @@ impl NexusClient {
                             &hasher.finalize(),
                         )))
                     }
-                    _ => Err(this.status_failure(url, &resp)),
+                    _ => Err(this.status_failure(url, resp).await),
                 }
             })
         })

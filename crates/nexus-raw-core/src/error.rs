@@ -28,8 +28,13 @@ pub enum Error {
     #[error("cannot enumerate: {url}: {reason}")]
     Enumerate { url: String, reason: String },
     /// 401/403 or missing credentials when required.
+    /// `detail` is the first line of the server's error body, when the response carried one (spec §5).
     #[error("auth: {url}: {reason}")]
-    Auth { url: String, reason: String },
+    Auth {
+        url: String,
+        reason: String,
+        detail: Option<String>,
+    },
     /// Network, TLS, 5xx, timeout after retries.
     #[error("transport: {url}: {detail}")]
     Transport { url: String, detail: String },
@@ -46,8 +51,13 @@ pub enum Error {
     #[error("http 400: {url}: the search refused the repository")]
     SearchRepoMissing { url: String },
     /// The repository refuses the deletion: a read-only deployment answers 403/405 to DELETE (§5.4).
+    /// `detail` is the first line of the server's error body, when the response carried one (spec §5).
     #[error("read-only: {url}: HTTP {status}")]
-    ReadOnly { url: String, status: u16 },
+    ReadOnly {
+        url: String,
+        status: u16,
+        detail: Option<String>,
+    },
     /// Bad flags, missing file or directory.
     #[error("misuse: {0}")]
     Misuse(String),
@@ -76,9 +86,10 @@ impl Error {
 
     /// The human hint for this error class: what to check next.
     /// Rendered to stderr and into the JSON `hint` field (§5.4).
+    /// When the error carries the server's body, the hint ends with `server says: <first body line>` (spec §5).
     #[must_use]
     pub fn hint(&self) -> Option<String> {
-        match self {
+        let hint = match self {
             Error::Mismatch { .. } => Some(
                 "the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object"
                     .into(),
@@ -114,6 +125,19 @@ impl Error {
             Error::Io { .. } => {
                 Some("check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe".into())
             }
+        };
+        hint.map(|hint| match self.server_body() {
+            Some(detail) => format!("{hint}; server says: {detail}"),
+            None => hint,
+        })
+    }
+
+    /// The server's own words, when the response that produced the error carried a short 4xx/5xx body (spec §5).
+    /// A transport or io detail is the local reason, never the server's body, so it does not participate.
+    fn server_body(&self) -> Option<&str> {
+        match self {
+            Error::Auth { detail, .. } | Error::ReadOnly { detail, .. } => detail.as_deref(),
+            _ => None,
         }
     }
 
@@ -204,10 +228,12 @@ mod tests {
             Error::Auth {
                 url: "http://x/".into(),
                 reason: "401".into(),
+                detail: None,
             },
             Error::ReadOnly {
                 url: "http://x/".into(),
                 status: 403,
+                detail: None,
             },
             Error::Transport {
                 url: "http://x/".into(),
@@ -249,6 +275,23 @@ mod tests {
         assert_eq!(
             e.hint().as_deref(),
             Some("the repository is missing on the server or is not a raw repository")
+        );
+    }
+
+    /// The server's body rides the hint verbatim after `server says: ` (spec §5): the EULA gate names itself this way.
+    #[test]
+    fn server_body_is_appended_to_the_hint() {
+        let e = Error::Auth {
+            url: "http://x/".into(),
+            reason: "HTTP 403 Forbidden; pass -u user:pass or export NXR_AUTH (base64 user:pass)"
+                .into(),
+            detail: Some("You must accept the End User License Agreement".into()),
+        };
+        assert_eq!(
+            e.hint().as_deref(),
+            Some(
+                "pass -u user:pass or export NXR_AUTH (base64 user:pass); server says: You must accept the End User License Agreement"
+            )
         );
     }
 }
