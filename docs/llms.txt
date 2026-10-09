@@ -3,6 +3,9 @@
 > curl for a Sonatype Nexus raw repository: URL in argv, credentials from `-u` or env, no config file.
 > Resumable verified directory transfers, digests, channels, plus server metadata over the service REST API.
 
+Install: `cargo install nexus-raw`, or `npm install nexus-raw` under node.
+Prebuilt binaries on the releases page: https://github.com/Lipen/nexus-raw/releases
+
 ## Agent minimum
 
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
@@ -50,10 +53,10 @@
 
 ## Docs
 
-- Agent cookbook: https://lipen.github.io/nexus-raw/how-to/agents/
-- CLI reference: https://lipen.github.io/nexus-raw/reference/cli/
-- Errors and exit codes: https://lipen.github.io/nexus-raw/reference/errors/
-- The protocol: https://lipen.github.io/nexus-raw/reference/protocol/
-- Integration: https://lipen.github.io/nexus-raw/how-to/integrate/
-- Troubleshooting: https://lipen.github.io/nexus-raw/how-to/troubleshoot/
-- Repository (source): https://github.com/Lipen/nexus-raw
+- [Agent cookbook](https://lipen.github.io/nexus-raw/how-to/agents/): intent to command to expected result, the one-page anchor
+- [CLI reference](https://lipen.github.io/nexus-raw/reference/cli/): every command, flag and output shape
+- [Errors and exit codes](https://lipen.github.io/nexus-raw/reference/errors/): the error taxonomy and every hint
+- [The protocol](https://lipen.github.io/nexus-raw/reference/protocol/): store shape, markers and forbiddances
+- [Integration](https://lipen.github.io/nexus-raw/how-to/integrate/): scripting over NDJSON and exit codes
+- [Troubleshooting](https://lipen.github.io/nexus-raw/how-to/troubleshoot/): symptom to cause to fix
+- [Repository](https://github.com/Lipen/nexus-raw): source, issues and releases
