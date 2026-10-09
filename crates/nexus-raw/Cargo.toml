@@ -50,7 +50,7 @@ clap = { workspace = true }
 clap_complete = { workspace = true }
 log = { workspace = true }
 # The version is what crates.io resolves; the path is what this workspace builds.
-nexus-raw-core = { path = "../nexus-raw-core", version = "0.8.0" }
+nexus-raw-core = { path = "../nexus-raw-core", version = "0.9.0" }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 

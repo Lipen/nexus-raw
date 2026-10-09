@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 Nothing yet.
 
+## [0.9.0] - 2026-10-10
+
+### Added
+
+- The service overview over the REST API: `nxr service status` for liveness and writability, `nxr service repo` for the repository behind a URL (longest-prefix match, admin detail), `nxr service assets` for content listing over the paginated search (sha256, continuation tokens beyond 1000 entries, `--prefix` and `--q` filters), and `nxr service eula` to read and accept the CE 3.79+ EULA gate (`--accept` is idempotent).
+- Errors carry `server says:` in the hint: the short response body of a 4xx/5xx, so an agent sees the server's own words (the EULA 403 hint names the accepting command).
+- The mock server grows 13 service scenarios: status empty or versioned or down, trimmed and scoped repository collections, the admin-only repository detail, prefix matching, asset pagination and filters, the EULA gate and its absence, the detail-in-hint behavior.
+  The conformance table is the contract: core and CLI suites drive every scenario.
+- The agent-facing docs surface: the one-page cookbook (intent to command to expected result, 17 verbs) under how-to/agents, the machine-readable `llms.txt` index shipped with the docs site in the llmstxt structure, and a `scripts/llms-check.sh` gate wired into `just check-docs` and the docs workflow.
+- The Python client honors `Retry-After` on 429 with a dedicated scenario.
+
+### Changed
+
+- The real-Nexus stand moves to `NEXUS_PORT` (default 18081), so it never fights a locally running Nexus, and a `run.sh` orchestrator owns the lifecycle: boot, bootstrap with narrated waiting, the battery, cleanup on any exit, group-interrupt verified.
+
 ## [0.8.0] - 2026-10-08
 
 ### Added
@@ -168,7 +183,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Lipen/nexus-raw/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Lipen/nexus-raw/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Lipen/nexus-raw/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Lipen/nexus-raw/compare/v0.5.0...v0.6.0
