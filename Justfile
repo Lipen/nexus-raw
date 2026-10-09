@@ -42,12 +42,7 @@ mock scenario='atomic' *args:
 [doc('Run the real-Nexus stand: docker nexus3, bootstrap, the battery.')]
 [group('stand')]
 stand *args:
-    cargo build -q --locked -p nexus-raw && \
-        docker compose -f stand/real-nexus/compose.yaml up -d && \
-        stand/real-nexus/bootstrap.sh && \
-        stand/real-nexus/battery.sh {{args}}; status=$?; \
-    if [ "$status" -ne 0 ]; then docker compose -f stand/real-nexus/compose.yaml logs --tail 200 >&2 || :; fi; \
-    docker compose -f stand/real-nexus/compose.yaml down -v; exit $status
+    stand/real-nexus/run.sh {{args}}
 
 [doc('Format all crates.')]
 [group('check')]
