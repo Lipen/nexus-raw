@@ -8,7 +8,7 @@
 # to humans.
 set -eu
 
-f=docs/llms.txt
+f="${1:-docs/llms.txt}"
 failed=0
 
 head -n 1 "$f" | grep -q '^# ' || { echo "llms-check: the first line is not an H1" >&2; failed=1; }
@@ -39,7 +39,22 @@ fi
 # machine surface, and a repeated entry there means two names for one page.
 # The extraction anchors on the link itself, so a URL quoted in a note or
 # wrapped in parens does not collide with its own entry.
-if dup="$(sed -n '/^## /,$p' "$f" | grep -E '^[[:space:]]*- \[' | grep -oE '\]\(https://[^)]+\)' | sort | uniq -d)" && [ -n "$dup" ]; then
+# The extraction balances parens: a URL may carry (grouped) segments, and the
+# link ends at the paren that closes the markdown syntax, not the first one.
+if dup="$(sed -n '/^## /,$p' "$f" | grep -E '^[[:space:]]*- \[' | awk '{
+    if (match($0, /\]\(/)) {
+        rest = substr($0, RSTART + RLENGTH)
+        depth = 0
+        url = ""
+        for (i = 1; i <= length(rest); i++) {
+            c = substr(rest, i, 1)
+            if (c == "(") depth++
+            else if (c == ")") { if (depth == 0) break; depth-- }
+            url = url c
+        }
+        print url
+    }
+}' | grep '^https:' | sort | uniq -d)" && [ -n "$dup" ]; then
   echo "llms-check: a link entry repeats a URL:" >&2
   echo "$dup" >&2
   failed=1
