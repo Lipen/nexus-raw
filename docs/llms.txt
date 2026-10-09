@@ -10,7 +10,7 @@ The agent minimum:
 
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
 - Every error prints one `hint:` line on stderr telling the next thing to check.
-  Since 0.9 the hint carries `server says:` with the short 4xx/5xx body.
+  The hint carries `server says:` with the short 4xx/5xx body.
 - `--json` prints one NDJSON event per line.
   The last event is always a summary.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
