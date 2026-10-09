@@ -2,11 +2,10 @@
 # The whole real-Nexus stand in one entry point: build, boot the container,
 # bootstrap, run the battery, and clean up no matter how the run ends.
 # The cleanup trap is the reason this is a script and not a justfile recipe:
-# a trap runs on Ctrl-C, a recipe line simply dies and orphans the container.
-# Known hole when run through `just`: just does not forward SIGINT to the
-# recipe's children, so Ctrl-C kills just and orphans this script and the
-# container; run this script directly for a graceful Ctrl-C, or clean up with
-# `docker compose -f stand/real-nexus/compose.yaml down -v`.
+# a recipe line that dies leaves the rest of the recipe (the cleanup) unrun,
+# while this trap fires on exit, interrupt and termination alike. Verified:
+# a group-wide SIGINT (the terminal Ctrl-C) through `just stand` tears the
+# container down and leaves no orphans.
 # Port and URL knobs: NEXUS_PORT (default 18081) for the host port,
 # NEXUS_BASE for a full URL override (CI batteries elsewhere).
 set -eu
