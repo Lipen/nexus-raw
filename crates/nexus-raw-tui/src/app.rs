@@ -3500,7 +3500,7 @@ pub fn cause_of(e: &Error) -> String {
             "the server at '{}' has no Nexus service API",
             url.escape_debug()
         ),
-        Error::ReadOnly { url, status } => format!(
+        Error::ReadOnly { url, status, .. } => format!(
             "the repository '{}' answered HTTP {status} to a deletion, it is read-only",
             url.escape_debug()
         ),
