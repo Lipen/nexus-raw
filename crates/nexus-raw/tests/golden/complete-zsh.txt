@@ -498,6 +498,86 @@ _arguments "${_arguments_options[@]}" : \
 ':url -- A server root URL or a URL anywhere inside the server:_default' \
 && ret=0
 ;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A server root URL or a URL anywhere inside the server:_default' \
+&& ret=0
+;;
+(repo)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--detail[Also fetch the full repository settings\: answers only to an nx-admin]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A URL inside the repository (the repository root, a version dir, a file):_default' \
+&& ret=0
+;;
+(assets)
+_arguments "${_arguments_options[@]}" : \
+'--q=[The server-side search query, passed through]:Q:_default' \
+'*--prefix=[Keep only assets under this whole-segment path prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A repository URL (the repository root or anything inside it):_default' \
+&& ret=0
+;;
+(eula)
+_arguments "${_arguments_options[@]}" : \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--accept[Accept the presented disclaimer when the gate is closed]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- A server root URL or a URL anywhere inside the server:_default' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_nxr__subcmd__service__subcmd__help_commands" \
@@ -511,6 +591,22 @@ _arguments "${_arguments_options[@]}" : \
         curcontext="${curcontext%:*:*}:nxr-service-help-command-$line[1]:"
         case $line[1] in
             (repos)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(repo)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(assets)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(eula)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -650,6 +746,22 @@ _arguments "${_arguments_options[@]}" : \
         curcontext="${curcontext%:*:*}:nxr-help-service-command-$line[1]:"
         case $line[1] in
             (repos)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(repo)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(assets)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(eula)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -882,13 +994,37 @@ _nxr__subcmd__help__subcmd__rm_commands() {
 _nxr__subcmd__help__subcmd__service_commands() {
     local commands; commands=(
 'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+'status:Server liveness and writability behind \`url\`' \
+'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
+'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
+'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
     )
     _describe -t commands 'nxr help service commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__assets_commands] )) ||
+_nxr__subcmd__help__subcmd__service__subcmd__assets_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help service assets commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__eula_commands] )) ||
+_nxr__subcmd__help__subcmd__service__subcmd__eula_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help service eula commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__repo_commands] )) ||
+_nxr__subcmd__help__subcmd__service__subcmd__repo_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help service repo commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__repos_commands] )) ||
 _nxr__subcmd__help__subcmd__service__subcmd__repos_commands() {
     local commands; commands=()
     _describe -t commands 'nxr help service repos commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__service__subcmd__status_commands] )) ||
+_nxr__subcmd__help__subcmd__service__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help service status commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__sha_commands] )) ||
 _nxr__subcmd__help__subcmd__sha_commands() {
@@ -939,32 +1075,80 @@ _nxr__subcmd__rm_commands() {
 _nxr__subcmd__service_commands() {
     local commands; commands=(
 'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+'status:Server liveness and writability behind \`url\`' \
+'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
+'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
+'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr service commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__assets_commands] )) ||
+_nxr__subcmd__service__subcmd__assets_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service assets commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__eula_commands] )) ||
+_nxr__subcmd__service__subcmd__eula_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service eula commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__service__subcmd__help_commands] )) ||
 _nxr__subcmd__service__subcmd__help_commands() {
     local commands; commands=(
 'repos:List the repositories of the server behind \`url\` (a server root or any repository URL)' \
+'status:Server liveness and writability behind \`url\`' \
+'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
+'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
+'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr service help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__assets_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__assets_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help assets commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__eula_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__eula_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help eula commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__help_commands] )) ||
 _nxr__subcmd__service__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'nxr service help help commands' commands "$@"
 }
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__repo_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__repo_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help repo commands' commands "$@"
+}
 (( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__repos_commands] )) ||
 _nxr__subcmd__service__subcmd__help__subcmd__repos_commands() {
     local commands; commands=()
     _describe -t commands 'nxr service help repos commands' commands "$@"
 }
+(( $+functions[_nxr__subcmd__service__subcmd__help__subcmd__status_commands] )) ||
+_nxr__subcmd__service__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service help status commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__repo_commands] )) ||
+_nxr__subcmd__service__subcmd__repo_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service repo commands' commands "$@"
+}
 (( $+functions[_nxr__subcmd__service__subcmd__repos_commands] )) ||
 _nxr__subcmd__service__subcmd__repos_commands() {
     local commands; commands=()
     _describe -t commands 'nxr service repos commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__service__subcmd__status_commands] )) ||
+_nxr__subcmd__service__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr service status commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__sha_commands] )) ||
 _nxr__subcmd__sha_commands() {

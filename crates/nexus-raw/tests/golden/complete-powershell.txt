@@ -425,6 +425,10 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
+            [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
+            [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -445,12 +449,100 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'nxr;service;status' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;service;repo' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--detail', '--detail', [CompletionResultType]::ParameterName, 'Also fetch the full repository settings: answers only to an nx-admin')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;service;assets' {
+            [CompletionResult]::new('--q', '--q', [CompletionResultType]::ParameterName, 'The server-side search query, passed through')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only assets under this whole-segment path prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;service;eula' {
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--accept', '--accept', [CompletionResultType]::ParameterName, 'Accept the presented disclaimer when the gate is closed')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'nxr;service;help' {
             [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
+            [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
+            [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
         'nxr;service;help;repos' {
+            break
+        }
+        'nxr;service;help;status' {
+            break
+        }
+        'nxr;service;help;repo' {
+            break
+        }
+        'nxr;service;help;assets' {
+            break
+        }
+        'nxr;service;help;eula' {
             break
         }
         'nxr;service;help;help' {
@@ -549,9 +641,25 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;help;service' {
             [CompletionResult]::new('repos', 'repos', [CompletionResultType]::ParameterValue, 'List the repositories of the server behind `url` (a server root or any repository URL)')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
+            [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
+            [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
             break
         }
         'nxr;help;service;repos' {
+            break
+        }
+        'nxr;help;service;status' {
+            break
+        }
+        'nxr;help;service;repo' {
+            break
+        }
+        'nxr;help;service;assets' {
+            break
+        }
+        'nxr;help;service;eula' {
             break
         }
         'nxr;help;complete' {

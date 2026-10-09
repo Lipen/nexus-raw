@@ -295,6 +295,42 @@ pub(crate) enum ServiceOp {
         #[arg(value_name = "URL")]
         url: String,
     },
+    /// Server liveness and writability behind `url`.
+    Status {
+        /// A server root URL or a URL anywhere inside the server.
+        #[arg(value_name = "URL")]
+        url: String,
+    },
+    /// The repository behind `url`: what it is, and with --detail its full settings (nx-admin only).
+    Repo {
+        /// A URL inside the repository (the repository root, a version dir, a file).
+        #[arg(value_name = "URL")]
+        url: String,
+        /// Also fetch the full repository settings: answers only to an nx-admin.
+        #[arg(long)]
+        detail: bool,
+    },
+    /// Every asset of the repository behind `url`, through the search API: any format.
+    Assets {
+        /// A repository URL (the repository root or anything inside it).
+        #[arg(value_name = "URL")]
+        url: String,
+        /// The server-side search query, passed through.
+        #[arg(long)]
+        q: Option<String>,
+        /// Keep only assets under this whole-segment path prefix (repeatable).
+        #[arg(long)]
+        prefix: Vec<String>,
+    },
+    /// The EULA gate of the server behind `url`; with --accept, open it (nx-admin).
+    Eula {
+        /// A server root URL or a URL anywhere inside the server.
+        #[arg(value_name = "URL")]
+        url: String,
+        /// Accept the presented disclaimer when the gate is closed.
+        #[arg(long)]
+        accept: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]

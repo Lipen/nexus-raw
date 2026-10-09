@@ -221,7 +221,9 @@ pub(crate) async fn assets(
     let mut entries = Vec::new();
     let mut pages = 0usize;
     let mut next: Option<String> = None;
-    const MAX_SEARCH_PAGES: usize = 100;
+    // A hostile or broken endpoint can emit continuation tokens forever.
+    // The page cap turns an endless scroll into an Enumerate refusal.
+    const MAX_SEARCH_PAGES: usize = 1000;
     loop {
         pages += 1;
         if pages > MAX_SEARCH_PAGES {
@@ -324,18 +326,24 @@ pub struct EulaOutcome {
 /// Read the EULA gate: `GET <root>/service/rest/v1/system/eula`.
 ///
 /// A 404 means the server has no gate (older CE, PRO, or a non-Sonatype server): `None`.
+/// A 403 means the gate exists but this user may not even read it: `None` with the refusal noted in the hint-free output; `--accept` will fail the same way.
 pub(crate) async fn eula(client: &NexusClient, base: &str) -> Result<Option<EulaStatus>, Error> {
     let root = server_root(base)?;
     let url = format!("{root}/service/rest/v1/system/eula");
-    let Some(bytes) = client.get_small(&url).await? else {
-        return Ok(None);
-    };
-    serde_json::from_slice(&bytes)
-        .map(Some)
-        .map_err(|e| Error::Mismatch {
-            name: url.clone(),
-            detail: format!("the eula response is not JSON: {e}"),
-        })
+    match client.get_small(&url).await {
+        Ok(Some(bytes)) => serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|e| Error::Mismatch {
+                name: url.clone(),
+                detail: format!("the eula response is not JSON: {e}"),
+            }),
+        Ok(None) => Ok(None),
+        Err(Error::Auth { .. }) => {
+            // The gate exists (3.79+ answers it for admins) but this user is not trusted to read it.
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Ensure the EULA gate is open: accept it when the server presents the disclaimer.

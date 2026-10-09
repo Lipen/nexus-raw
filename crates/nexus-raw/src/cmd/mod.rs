@@ -159,6 +159,12 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         Cmd::Verify { dir, manifest } => layout::verify(cli, dir, manifest.as_deref()).await,
         Cmd::Service { op } => match op {
             ServiceOp::Repos { url } => layout::service_repos(cli, url).await,
+            ServiceOp::Status { url } => layout::service_status(cli, url).await,
+            ServiceOp::Repo { url, detail } => layout::service_repo(cli, url, *detail).await,
+            ServiceOp::Assets { url, q, prefix } => {
+                layout::service_assets(cli, url, q.as_deref(), prefix).await
+            }
+            ServiceOp::Eula { url, accept } => layout::service_eula(cli, url, *accept).await,
         },
         Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
         Cmd::Complete { shell } => complete::complete(shell),

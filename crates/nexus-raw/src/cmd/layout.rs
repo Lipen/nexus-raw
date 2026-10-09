@@ -178,3 +178,166 @@ async fn run_service_repos(ctx: &Ctx) -> Result<(), Error> {
     print_line(ctx.json, &human, &serde_json::json!({ "repos": repos }));
     Ok(())
 }
+
+/// Server liveness and writability (spec §1): the verdict plus the server version when it tells one.
+pub(crate) async fn service_status(cli: &Cli, url: &str) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let result = run_service_status(&ctx).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_service_status(ctx: &Ctx) -> Result<(), Error> {
+    let report = ctx.nxr.service_status().await?;
+    let mut human = format!(
+        "{}: {}",
+        report.root,
+        if report.alive {
+            "alive"
+        } else {
+            "no status endpoint (or the server is down)"
+        }
+    );
+    if report.alive {
+        human.push_str(if report.writable {
+            ", writable"
+        } else {
+            ", read-only (or the writable probe was refused)"
+        });
+    }
+    if let Some(v) = &report.version {
+        human.push_str(&format!(", version {v}"));
+    }
+    print_line(
+        ctx.json,
+        &human,
+        &serde_json::to_value(&report).unwrap_or_default(),
+    );
+    Ok(())
+}
+
+/// The repository behind the URL (spec §2): the visible entry, plus the admin detail with --detail.
+pub(crate) async fn service_repo(cli: &Cli, url: &str, detail: bool) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let result = run_service_repo(&ctx, detail).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_service_repo(ctx: &Ctx, detail: bool) -> Result<(), Error> {
+    let repo = ctx.nxr.service_repo(detail).await?;
+    let human = match &repo.detail {
+        Some(d) => format!(
+            "{} {} {} {} (full settings follow)\n{}",
+            repo.info.name,
+            repo.info.format,
+            repo.info.kind,
+            repo.info.url,
+            serde_json::to_string_pretty(d).unwrap_or_default()
+        ),
+        None => format!(
+            "{} {} {} {}",
+            repo.info.name, repo.info.format, repo.info.kind, repo.info.url
+        ),
+    };
+    print_line(
+        ctx.json,
+        &human,
+        &serde_json::to_value(&repo).unwrap_or_default(),
+    );
+    Ok(())
+}
+
+/// Every asset of the repository (spec §3): one NDJSON line per asset, the summary last.
+pub(crate) async fn service_assets(
+    cli: &Cli,
+    url: &str,
+    q: Option<&str>,
+    prefix: &[String],
+) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let result = run_service_assets(&ctx, q, prefix).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_service_assets(ctx: &Ctx, q: Option<&str>, prefix: &[String]) -> Result<(), Error> {
+    let (assets, summary) = ctx.nxr.service_assets(q, prefix).await?;
+    let human = if assets.is_empty() {
+        "no assets (an empty result may also mean the search index lags a recent write)".to_owned()
+    } else {
+        assets
+            .iter()
+            .map(|a| {
+                let sha = a
+                    .sha256
+                    .as_deref()
+                    .map(|s| &s[..8.min(s.len())])
+                    .unwrap_or("-");
+                let size = a.size.map_or_else(|| "-".to_owned(), |s| s.to_string());
+                format!(
+                    "{}  {}  {}  {}",
+                    size,
+                    sha,
+                    a.last_modified.as_deref().unwrap_or("-"),
+                    a.path
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    print_line(
+        ctx.json,
+        &human,
+        &serde_json::json!({ "assets": assets, "summary": summary }),
+    );
+    Ok(())
+}
+
+/// The EULA gate (spec §4): read it, or open it with --accept.
+pub(crate) async fn service_eula(cli: &Cli, url: &str, accept: bool) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let result = run_service_eula(&ctx, accept).await;
+    finish(ctx).await;
+    result
+}
+
+async fn run_service_eula(ctx: &Ctx, accept: bool) -> Result<(), Error> {
+    if !accept {
+        let Some(status) = ctx.nxr.service_eula().await? else {
+            print_line(
+                ctx.json,
+                "no EULA gate on this server",
+                &serde_json::json!({ "gate": false }),
+            );
+            return Ok(());
+        };
+        let human = format!(
+            "accepted: {}; disclaimer: {}",
+            status.accepted,
+            status
+                .disclaimer
+                .split(". ")
+                .next()
+                .unwrap_or(&status.disclaimer)
+        );
+        print_line(
+            ctx.json,
+            &human,
+            &serde_json::to_value(&status).unwrap_or_default(),
+        );
+        return Ok(());
+    }
+    let outcome = ctx.nxr.service_eula_accept().await?;
+    let human = if outcome.accepted {
+        format!("EULA accepted ({})", outcome.action)
+    } else {
+        "no EULA gate on this server".to_owned()
+    };
+    print_line(
+        ctx.json,
+        &human,
+        &serde_json::to_value(&outcome).unwrap_or_default(),
+    );
+    Ok(())
+}
