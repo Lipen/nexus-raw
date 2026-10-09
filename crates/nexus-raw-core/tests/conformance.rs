@@ -1397,7 +1397,8 @@ async fn rm_removes_a_whole_version() {
     assert_eq!(summary.skipped, 0);
     assert!(summary.failed.is_empty());
 
-    // Everything enumerated is gone, down to the markers; the manifest survives as the enumeration source of a rerun.
+    // Everything enumerated is gone, down to the markers.
+    // The manifest survives as the enumeration source of a rerun.
     for name in [
         "a.zip",
         "a.zip.sha256",
@@ -1562,7 +1563,8 @@ async fn rm_dry_run_plans_and_touches_nothing() {
         !mock.requests().iter().any(|r| r.method == "DELETE"),
         "a dry run must not DELETE anything"
     );
-    // Probes are reads; the store itself is untouched.
+    // Probes are reads.
+    // The store itself is untouched.
     assert!(mock.store_get(&format!("{VERSION}/a.zip")).is_some());
     assert!(mock.store_get(&format!("{VERSION}/ghost.bin")).is_none());
 }
@@ -2226,7 +2228,8 @@ async fn ls_entries_walks_the_raw_tree() {
     assert_eq!(entries[1].kind, EntryKind::File);
 }
 
-/// A search 400 for an unknown repository carries the repository hint; a search 404 keeps the generic enumeration hint.
+/// A search 400 for an unknown repository carries the repository hint.
+/// A search 404 keeps the generic enumeration hint.
 #[tokio::test]
 async fn ls_unknown_repository_hinted_on_400_not_on_404() {
     // The search-400 scenario refuses a repository the instance does not serve, like a real Nexus.

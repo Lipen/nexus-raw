@@ -14,7 +14,8 @@ use mock_nexus::{MockNexus, Scenario};
 use nexus_raw_core::{ArtifactName, Config, Enumeration, Event, Nxr};
 
 // The current-thread flavor keeps the example buildable without the `rt-multi-thread` feature
-// (the workspace tokio does not enable it; the CLI and the TUI add it for their own binaries).
+// (the workspace tokio does not enable it.
+// The CLI and the TUI add it for their own binaries).
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The mock: a tiny std-only Nexus with a failure-scenario table.
@@ -38,7 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let summary = nxr.up(dir.path(), None, true, None).await?;
     println!("published: {summary:?}");
 
-    // Down into a second directory; enumeration comes from explicit names.
+    // Down into a second directory.
+    // Enumeration comes from explicit names.
     let out = tempfile::tempdir()?;
     let summary = nxr
         .down(

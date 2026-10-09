@@ -57,8 +57,8 @@ pub(crate) async fn repositories(client: &NexusClient, base: &str) -> Result<Vec
 
 /// Server liveness and write access: `/service/rest/v1/status` and `/status/writable`.
 ///
-/// An empty 200 body is the norm on Nexus 3.79 and is not an error;
-/// a JSON body carrying `version` surfaces it, anything else is ignored.
+/// An empty 200 body is the norm on Nexus 3.79 and is not an error.
+/// A JSON body carrying `version` surfaces it, anything else is ignored.
 /// A server without these endpoints (the mock, an old Nexus) reads `alive: false`:
 /// the verdict is about the endpoint, not about the TCP reachability - `doctor` owns that.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,7 +96,8 @@ pub(crate) async fn status(client: &NexusClient, base: &str) -> Result<StatusRep
     })
 }
 
-/// True when the URL answers 200; any other verdict (404, 403, transport) is `false`.
+/// True when the URL answers 200.
+/// Any other verdict (404, 403, transport) is `false`.
 async fn probe_ok(client: &NexusClient, url: &str) -> Result<bool, Error> {
     Ok(client.get_small(url).await?.is_some())
 }
@@ -189,7 +190,8 @@ pub struct AssetsSummary {
 
 /// List every asset of the repository `base` belongs to, through the search API.
 ///
-/// `q` is passed through to the server; `prefix` filters whole segments client-side.
+/// `q` is passed through to the server.
+/// `prefix` filters whole segments client-side.
 pub(crate) async fn assets(
     client: &NexusClient,
     base: &str,
@@ -326,7 +328,7 @@ pub struct EulaOutcome {
 /// Read the EULA gate: `GET <root>/service/rest/v1/system/eula`.
 ///
 /// A 404 means the server has no gate (older CE, PRO, or a non-Sonatype server): `None`.
-/// A 403 means the gate exists but this user may not even read it: `None` with the refusal noted in the hint-free output; `--accept` will fail the same way.
+/// A 403 means the gate exists but this user may not even read it: `None`, and `--accept` will fail the same way.
 pub(crate) async fn eula(client: &NexusClient, base: &str) -> Result<Option<EulaStatus>, Error> {
     let root = server_root(base)?;
     let url = format!("{root}/service/rest/v1/system/eula");

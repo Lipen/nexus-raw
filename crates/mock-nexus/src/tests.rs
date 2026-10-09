@@ -460,7 +460,8 @@ fn auth_401_gate() {
     assert_eq!(body, b"X");
 }
 
-/// auth-403: everything but the valid Basic token answers 403 `forbidden`, on any method; valid credentials behave like atomic.
+/// auth-403: everything but the valid Basic token answers 403 `forbidden`, on any method.
+/// Valid credentials behave like atomic.
 #[test]
 fn auth_403_gate() {
     let server = MockNexus::start(Scenario::Auth403 {

@@ -284,7 +284,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "status" -d 'Server liveness and writability behind `url`'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "repo" -d 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "assets" -d 'Every asset of the repository behind `url`, through the search API: any format'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "eula" -d 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "eula" -d 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l workers -d 'Parallel artifact transfers' -r
@@ -344,7 +344,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "status" -d 'Server liveness and writability behind `url`'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "repo" -d 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "assets" -d 'Every asset of the repository behind `url`, through the search API: any format'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "eula" -d 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "eula" -d 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l workers -d 'Parallel artifact transfers' -r
@@ -380,4 +380,4 @@ complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "status" -d 'Server liveness and writability behind `url`'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "repo" -d 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "assets" -d 'Every asset of the repository behind `url`, through the search API: any format'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "eula" -d 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "eula" -d 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)'

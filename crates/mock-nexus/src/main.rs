@@ -135,7 +135,8 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
 }
 
 /// Parse the flag list into `flags`.
-/// Values come as `--flag value` pairs; `--fake-length` is a bare switch.
+/// Values come as `--flag value` pairs.
+/// `--fake-length` is a bare switch.
 fn parse_flags(args: &[String], flags: &mut Flags) -> Result<(), String> {
     let mut i = 0;
     while i < args.len() {

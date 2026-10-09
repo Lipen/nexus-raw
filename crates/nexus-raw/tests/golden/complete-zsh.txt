@@ -997,7 +997,7 @@ _nxr__subcmd__help__subcmd__service_commands() {
 'status:Server liveness and writability behind \`url\`' \
 'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
 'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
-'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
+'eula:The EULA gate of the server behind \`url\`\: with --accept, open it (nx-admin)' \
     )
     _describe -t commands 'nxr help service commands' commands "$@"
 }
@@ -1078,7 +1078,7 @@ _nxr__subcmd__service_commands() {
 'status:Server liveness and writability behind \`url\`' \
 'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
 'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
-'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
+'eula:The EULA gate of the server behind \`url\`\: with --accept, open it (nx-admin)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr service commands' commands "$@"
@@ -1100,7 +1100,7 @@ _nxr__subcmd__service__subcmd__help_commands() {
 'status:Server liveness and writability behind \`url\`' \
 'repo:The repository behind \`url\`\: what it is, and with --detail its full settings (nx-admin only)' \
 'assets:Every asset of the repository behind \`url\`, through the search API\: any format' \
-'eula:The EULA gate of the server behind \`url\`; with --accept, open it (nx-admin)' \
+'eula:The EULA gate of the server behind \`url\`\: with --accept, open it (nx-admin)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr service help commands' commands "$@"

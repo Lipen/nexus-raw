@@ -428,7 +428,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
             [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
             [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
-            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -526,7 +526,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
             [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
             [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
-            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -644,7 +644,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Server liveness and writability behind `url`')
             [CompletionResult]::new('repo', 'repo', [CompletionResultType]::ParameterValue, 'The repository behind `url`: what it is, and with --detail its full settings (nx-admin only)')
             [CompletionResult]::new('assets', 'assets', [CompletionResultType]::ParameterValue, 'Every asset of the repository behind `url`, through the search API: any format')
-            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`; with --accept, open it (nx-admin)')
+            [CompletionResult]::new('eula', 'eula', [CompletionResultType]::ParameterValue, 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)')
             break
         }
         'nxr;help;service;repos' {

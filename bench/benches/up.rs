@@ -13,7 +13,8 @@ use tokio::runtime::Runtime;
 // client stack loses one every few tens of thousands in brief storms (the server
 // stays healthy and answers the next request). The core retries absorb most of it;
 // the retry helper below rides out the rest. Fewer samples keep the exposure (and
-// the hand-run time) small; the relative before/after reading does not need 100.
+// the hand-run time) small.
+// The relative before/after reading does not need 100.
 const SAMPLES: usize = 20;
 
 fn retry_up(rt: &Runtime, mock: &Mock, dir: &Path, mut last: Error) -> Summary {

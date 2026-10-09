@@ -7,7 +7,8 @@
 
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
 - Every error prints one `hint:` line on stderr telling the next thing to check.
-- `--json` prints one NDJSON event per line; the last event is always a summary.
+- `--json` prints one NDJSON event per line.
+  The last event is always a summary.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
 - Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
 - Commands `service status|repo|assets|eula` ship since 0.9: `eula --accept` needs nx-admin.
@@ -38,11 +39,14 @@
   Full settings live in the admin-only `GET /v1/repositories/{format}/{type}/{name}`.
 - Anonymous and authenticated users see different repository lists.
 - CE 3.79+: every PUT answers 403 until the EULA is accepted.
-- Right after `up`/`put` the search index lags for a few seconds; an empty listing is not a lost write.
+- Right after `up`/`put` the search index lags for a few seconds.
+  An empty listing is not a lost write.
 - `/-/` in paths is the npm-protocol segment, not part of the nxr protocol.
-- A raw repository holds arbitrary foreign names (spaces, parens, unicode); `ls`/`down`/`diff` tolerate them.
+- A raw repository holds arbitrary foreign names (spaces, parens, unicode).
+  `ls`/`down`/`diff` tolerate them.
   The `[A-Za-z0-9._-]` alphabet constrains only what nxr itself writes.
-- npm repositories: inspect via `nxr service assets`; fetch packages with an npm client.
+- npm repositories: inspect via `nxr service assets`.
+  Fetch packages with an npm client.
 
 ## Docs
 

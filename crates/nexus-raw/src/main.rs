@@ -322,7 +322,7 @@ pub(crate) enum ServiceOp {
         #[arg(long)]
         prefix: Vec<String>,
     },
-    /// The EULA gate of the server behind `url`; with --accept, open it (nx-admin).
+    /// The EULA gate of the server behind `url`: with --accept, open it (nx-admin).
     Eula {
         /// A server root URL or a URL anywhere inside the server.
         #[arg(value_name = "URL")]

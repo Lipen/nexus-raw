@@ -457,7 +457,8 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns transport, auth or HTTP errors; a refused probe reads as `false`, not as an error.
+    /// Returns transport, auth or HTTP errors.
+    /// A refused probe reads as `false`, not as an error.
     pub async fn service_status(&self) -> Result<service::StatusReport, Error> {
         service::status(&self.client, &self.base).await
     }
@@ -497,7 +498,8 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns transport, auth or HTTP errors; the accept POST carries the echoed disclaimer.
+    /// Returns transport, auth or HTTP errors.
+    /// The accept POST carries the echoed disclaimer.
     pub async fn service_eula_accept(&self) -> Result<service::EulaOutcome, Error> {
         service::eula_accept(&self.client, &self.base).await
     }
