@@ -13,9 +13,14 @@ failed=0
 
 head -n 1 "$f" | grep -q '^# ' || { echo "llms-check: the first line is not an H1" >&2; failed=1; }
 
+# At least one H2 section must exist: an empty or truncated file would
+# otherwise pass vacuously, and the drift it hides is the point of the gate.
+grep -q '^## ' "$f" || { echo "llms-check: no H2 section at all" >&2; failed=1; }
+
 # Only line 1 may be an H1 and nothing may dive past H2: the spec's parser
 # treats H2 as the section delimiter and deeper headings as noise.
-if strays="$(grep -nE '^# |^#{3,}' "$f" | grep -v '^1:')"; then
+# Fenced blocks are skipped: a shell comment inside an example is not a heading.
+if strays="$(awk '/^```/{f=!f; next} !f && NR>1 && ($0 ~ /^# / || $0 ~ /^#{3,}/) {print NR":"$0}' "$f")" && [ -n "$strays" ]; then
   echo "llms-check: a heading is not H2 (or a second H1):" >&2
   echo "$strays" >&2
   failed=1
@@ -23,20 +28,22 @@ fi
 
 # Every bullet inside an H2 section must be a markdown link with an https URL:
 # link extraction is the whole point of the format.
-if bad="$(sed -n '/^## /,$p' "$f" | grep -E '^- ' | grep -vE '^- \[[^]]+\]\(https://[^)]+\)' )"; then
+# Nested (indented) bullets count too: a renderer still shows them.
+if bad="$(sed -n '/^## /,$p' "$f" | grep -E '^[[:space:]]*-' | grep -vE '^[[:space:]]*- \[[^]]+\]\(https://[^)]+\)' )"; then
   echo "llms-check: an H2 bullet is not a [name](https://...) link:" >&2
   echo "$bad" >&2
   failed=1
 fi
 
-# A URL may appear twice across the file only when it sits in prose: the link
-# lists are the machine surface, and a repeated entry there means two names
-# for one page.
-if dup="$(grep -E '^- \[' "$f" | grep -oE 'https://[^)]+' | sort | uniq -d)" && [ -n "$dup" ]; then
+# A URL may repeat across the file only in prose: the link lists are the
+# machine surface, and a repeated entry there means two names for one page.
+# The extraction anchors on the link itself, so a URL quoted in a note or
+# wrapped in parens does not collide with its own entry.
+if dup="$(sed -n '/^## /,$p' "$f" | grep -E '^[[:space:]]*- \[' | grep -oE '\]\(https://[^)]+\)' | sort | uniq -d)" && [ -n "$dup" ]; then
   echo "llms-check: a link entry repeats a URL:" >&2
   echo "$dup" >&2
   failed=1
 fi
 
 [ "$failed" = 0 ] || exit 1
-echo "llms-check: $(grep -c '^- \[' "$f") links conform"
+echo "llms-check: $(sed -n '/^## /,$p' "$f" | grep -cE '^[[:space:]]*- \[') links conform"
