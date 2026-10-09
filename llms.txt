@@ -10,7 +10,7 @@
 - `--json` prints one NDJSON event per line; the last event is always a summary.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
 - Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
-- Commands `service status|repo|assets|eula` and `server says:` hints ship in 0.9.
+- Commands `service status|repo|assets|eula` ship since 0.9: `eula --accept` needs nx-admin.
 
 ### Intent to command
 
