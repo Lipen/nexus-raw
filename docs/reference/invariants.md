@@ -178,3 +178,113 @@ The search API (`/service/rest/v1/search/assets`) answers `400 Bad Request` when
 Searches for the served repositories (`raw-main`, `raw-all`) and every other request behave like `atomic`.
 
 **Pinned invariant:** A 400 from a repository-scoped search is diagnosed, never guessed at: the listing refuses with exit 3 and the hint that the repository is missing on the server or is not a raw repository, while a search 404 keeps the generic enumeration hint.
+
+## `service-status-empty`
+
+The status endpoints answer empty, the Nexus 3.79 shape.
+
+`GET /service/rest/v1/status` and `/status/writable` answer `200` with an empty body.
+Storage behavior is `atomic`.
+
+**Pinned invariant:** An empty 200 body is read as alive and writable, never as an error.
+
+## `service-status-version`
+
+The status endpoint carries a version document.
+
+`GET /service/rest/v1/status` answers `200` with a JSON body carrying `version`.
+`/status/writable` answers `200` empty.
+
+**Pinned invariant:** A version field surfaces in the status report when the server tells one, and is absent without lying when it does not.
+
+## `service-status-down`
+
+The status endpoint answers 503.
+
+`GET /service/rest/v1/status` answers `503 down` on every attempt.
+
+**Pinned invariant:** A 5xx from the status probe exhausts the retry budget and reports the transport error: the server that cannot answer is not alive.
+
+## `repo-collection-trimmed`
+
+The repositories document carries size and attributes.
+
+The seeded repositories document carries `size` numbers and non-empty `attributes` for every entry.
+
+**Pinned invariant:** The client shows the collection entry verbatim: whatever the server gives is what the user sees.
+
+## `repo-collection-scoped`
+
+The repositories document differs by caller.
+
+An anonymous request sees the seeded entries.
+A request with the scenario credentials additionally sees `raw-secret`.
+
+**Pinned invariant:** The client resolves repositories against the list its own credentials receive: a hidden repository is a data error, not a guess.
+
+## `repo-detail-admin`
+
+The single-repository settings answer to an admin only.
+
+`GET /service/rest/v1/repositories/{format}/{type}/{name}` answers the full settings JSON for valid credentials.
+Everything else answers `403` with an `nx-admin required` body.
+
+**Pinned invariant:** The detail refusal rides the hint with the server body: the user learns the settings need nx-admin, and the visible overview stays available without it.
+
+## `repo-prefix-match`
+
+Repository resolution from a deep URL.
+
+The scenario is `atomic` storage with the plain repositories document: the resolution work is client-side.
+
+**Pinned invariant:** A URL anywhere inside a repository resolves to that repository by longest prefix: the deep path never becomes a wrong repository.
+
+## `assets-pagination`
+
+The search API paginates via continuation tokens.
+
+`GET /service/rest/v1/search/assets?repository=raw-main` serves 35 generated assets in pages of 10, each non-final page carrying a `continuationToken`.
+Storage behavior is `atomic`.
+
+**Pinned invariant:** The client collects every page before the summary: 35 assets over 4 pages, and the count in the summary matches the entries.
+
+## `assets-absent`
+
+The search API is absent.
+
+`GET /service/rest/v1/search/assets` answers `404` like a store miss.
+
+**Pinned invariant:** The assets listing degrades honestly: an Enumerate refusal with the generic enumeration hint, never an empty-success lie.
+
+## `assets-prefix-q`
+
+The search API honors q and gives the prefixes data.
+
+The search serves the generated assets, so `q` substrings and client-side whole-segment prefixes filter a real list.
+
+**Pinned invariant:** A server-side `q` and a client-side prefix compose: both filters land on the same listing without a second enumeration.
+
+## `eula-gate`
+
+The CE 3.79 EULA gate.
+
+`GET /v1/system/eula` presents `{accepted: false, disclaimer}`.
+Every storage write answers `403` with the EULA body until `POST /v1/system/eula` echoes the disclaimer with `accepted: true` (204), after which writes store normally.
+
+**Pinned invariant:** The gate names itself: the 403 body rides the hint and the hint prescribes the accepting command, and an idempotent ensure pass opens the gate exactly once.
+
+## `eula-absent`
+
+No EULA gate on this server.
+
+`GET /v1/system/eula` answers `404`.
+
+**Pinned invariant:** An absent gate is a success-shaped `gate: false`: the ensure pass is a no-op with exit 0, never an error.
+
+## `detail-in-hint`
+
+A write refusal carries a short server sentence.
+
+Every write answers `403` with a `please ask the administrator` body; reads behave like `atomic`.
+
+**Pinned invariant:** The server body rides the hint after `server says:`, so the user reads the refusal in the server's own words.

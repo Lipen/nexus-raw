@@ -202,6 +202,102 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         ],
         invariant: "A 400 from a repository-scoped search is diagnosed, never guessed at: the listing refuses with exit 3 and the hint that the repository is missing on the server or is not a raw repository, while a search 404 keeps the generic enumeration hint.",
     },
+    ScenarioDoc {
+        id: "service-status-empty",
+        name: "The status endpoints answer empty, the Nexus 3.79 shape.",
+        behavior: &[
+            "`GET /service/rest/v1/status` and `/status/writable` answer `200` with an empty body.",
+            "Storage behavior is `atomic`.",
+        ],
+        invariant: "An empty 200 body is read as alive and writable, never as an error.",
+    },
+    ScenarioDoc {
+        id: "service-status-version",
+        name: "The status endpoint carries a version document.",
+        behavior: &[
+            "`GET /service/rest/v1/status` answers `200` with a JSON body carrying `version`.",
+            "`/status/writable` answers `200` empty.",
+        ],
+        invariant: "A version field surfaces in the status report when the server tells one, and is absent without lying when it does not.",
+    },
+    ScenarioDoc {
+        id: "service-status-down",
+        name: "The status endpoint answers 503.",
+        behavior: &["`GET /service/rest/v1/status` answers `503 down` on every attempt."],
+        invariant: "A 5xx from the status probe exhausts the retry budget and reports the transport error: the server that cannot answer is not alive.",
+    },
+    ScenarioDoc {
+        id: "repo-collection-trimmed",
+        name: "The repositories document carries size and attributes.",
+        behavior: &["The seeded repositories document carries `size` numbers and non-empty `attributes` for every entry."],
+        invariant: "The client shows the collection entry verbatim: whatever the server gives is what the user sees.",
+    },
+    ScenarioDoc {
+        id: "repo-collection-scoped",
+        name: "The repositories document differs by caller.",
+        behavior: &[
+            "An anonymous request sees the seeded entries.",
+            "A request with the scenario credentials additionally sees `raw-secret`.",
+        ],
+        invariant: "The client resolves repositories against the list its own credentials receive: a hidden repository is a data error, not a guess.",
+    },
+    ScenarioDoc {
+        id: "repo-detail-admin",
+        name: "The single-repository settings answer to an admin only.",
+        behavior: &[
+            "`GET /service/rest/v1/repositories/{format}/{type}/{name}` answers the full settings JSON for valid credentials.",
+            "Everything else answers `403` with an `nx-admin required` body.",
+        ],
+        invariant: "The detail refusal rides the hint with the server body: the user learns the settings need nx-admin, and the visible overview stays available without it.",
+    },
+    ScenarioDoc {
+        id: "repo-prefix-match",
+        name: "Repository resolution from a deep URL.",
+        behavior: &["The scenario is `atomic` storage with the plain repositories document: the resolution work is client-side."],
+        invariant: "A URL anywhere inside a repository resolves to that repository by longest prefix: the deep path never becomes a wrong repository.",
+    },
+    ScenarioDoc {
+        id: "assets-pagination",
+        name: "The search API paginates via continuation tokens.",
+        behavior: &[
+            "`GET /service/rest/v1/search/assets?repository=raw-main` serves 35 generated assets in pages of 10, each non-final page carrying a `continuationToken`.",
+            "Storage behavior is `atomic`.",
+        ],
+        invariant: "The client collects every page before the summary: 35 assets over 4 pages, and the count in the summary matches the entries.",
+    },
+    ScenarioDoc {
+        id: "assets-absent",
+        name: "The search API is absent.",
+        behavior: &["`GET /service/rest/v1/search/assets` answers `404` like a store miss."],
+        invariant: "The assets listing degrades honestly: an Enumerate refusal with the generic enumeration hint, never an empty-success lie.",
+    },
+    ScenarioDoc {
+        id: "assets-prefix-q",
+        name: "The search API honors q and gives the prefixes data.",
+        behavior: &["The search serves the generated assets, so `q` substrings and client-side whole-segment prefixes filter a real list."],
+        invariant: "A server-side `q` and a client-side prefix compose: both filters land on the same listing without a second enumeration.",
+    },
+    ScenarioDoc {
+        id: "eula-gate",
+        name: "The CE 3.79 EULA gate.",
+        behavior: &[
+            "`GET /v1/system/eula` presents `{accepted: false, disclaimer}`.",
+            "Every storage write answers `403` with the EULA body until `POST /v1/system/eula` echoes the disclaimer with `accepted: true` (204), after which writes store normally.",
+        ],
+        invariant: "The gate names itself: the 403 body rides the hint and the hint prescribes the accepting command, and an idempotent ensure pass opens the gate exactly once.",
+    },
+    ScenarioDoc {
+        id: "eula-absent",
+        name: "No EULA gate on this server.",
+        behavior: &["`GET /v1/system/eula` answers `404`."],
+        invariant: "An absent gate is a success-shaped `gate: false`: the ensure pass is a no-op with exit 0, never an error.",
+    },
+    ScenarioDoc {
+        id: "detail-in-hint",
+        name: "A write refusal carries a short server sentence.",
+        behavior: &["Every write answers `403` with a `please ask the administrator` body; reads behave like `atomic`."],
+        invariant: "The server body rides the hint after `server says:`, so the user reads the refusal in the server's own words.",
+    },
 ];
 
 /// Render `docs/reference/invariants.md` from [`SCENARIO_DOCS`].

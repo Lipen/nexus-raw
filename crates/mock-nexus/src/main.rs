@@ -130,6 +130,25 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "readonly" => Some(Scenario::ReadOnly),
         "no-service" => Some(Scenario::NoService),
         "search-400" => Some(Scenario::Search400),
+        "service-status-empty" => Some(Scenario::ServiceStatusEmpty),
+        "service-status-version" => Some(Scenario::ServiceStatusVersion),
+        "service-status-down" => Some(Scenario::ServiceStatusDown),
+        "repo-collection-trimmed" => Some(Scenario::RepoCollectionTrimmed),
+        "repo-collection-scoped" => Some(Scenario::RepoCollectionScoped {
+            user: flags.user.clone(),
+            pass: flags.pass.clone(),
+        }),
+        "repo-detail-admin" => Some(Scenario::RepoDetailAdmin {
+            user: flags.user.clone(),
+            pass: flags.pass.clone(),
+        }),
+        "repo-prefix-match" => Some(Scenario::RepoPrefixMatch),
+        "assets-pagination" => Some(Scenario::AssetsPagination),
+        "assets-absent" => Some(Scenario::AssetsAbsent),
+        "assets-prefix-q" => Some(Scenario::AssetsPrefixQ),
+        "eula-gate" => Some(Scenario::EulaGate),
+        "eula-absent" => Some(Scenario::EulaAbsent),
+        "detail-in-hint" => Some(Scenario::DetailInHint),
         _ => None,
     }
 }

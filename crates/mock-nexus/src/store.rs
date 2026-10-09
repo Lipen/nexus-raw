@@ -47,6 +47,8 @@ pub(crate) struct Shared {
     pub(crate) drift: AtomicBool,
     /// Expected `Authorization` token when the scenario requires Basic auth.
     pub(crate) auth_b64: Option<String>,
+    /// Whether the EULA gate has been opened (eula-gate scenario only).
+    pub(crate) eula_accepted: Mutex<bool>,
     /// Slow-drip parameters for GET/HEAD bodies.
     pub(crate) drip: Option<Drip>,
     /// Success GET/HEAD answers hide `Content-Length` (the proxy case).
@@ -108,6 +110,7 @@ impl Shared {
             first_get: Mutex::new(HashMap::new()),
             drift: AtomicBool::new(false),
             auth_b64,
+            eula_accepted: Mutex::new(false),
             drip,
             sizeless,
             partial_first_put,
@@ -152,5 +155,26 @@ fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>
         base = base_url
     );
     store.insert("service/rest/v1/repositories".to_owned(), doc.into_bytes());
+    match scenario {
+        Scenario::ServiceStatusEmpty => {
+            store.insert("service/rest/v1/status".to_owned(), Vec::new());
+            store.insert("service/rest/v1/status/writable".to_owned(), Vec::new());
+        }
+        Scenario::ServiceStatusVersion => {
+            store.insert(
+                "service/rest/v1/status".to_owned(),
+                br#"{"version": "3.79.1-04"}"#.to_vec(),
+            );
+            store.insert("service/rest/v1/status/writable".to_owned(), Vec::new());
+        }
+        Scenario::RepoCollectionTrimmed => {
+            let rich = format!(
+                "[{{\"name\":\"raw-main\",\"format\":\"raw\",\"type\":\"hosted\",\"url\":\"{base}repository/raw-main/\",\"size\":42,\"attributes\":{{\"storage\":{{\"blobStoreName\":\"default\"}}}}}},{{\"name\":\"raw-all\",\"format\":\"raw\",\"type\":\"group\",\"url\":\"{base}repository/raw-all/\",\"size\":7,\"attributes\":{{}}}}]",
+                base = base_url
+            );
+            store.insert("service/rest/v1/repositories".to_owned(), rich.into_bytes());
+        }
+        _ => {}
+    }
     store
 }

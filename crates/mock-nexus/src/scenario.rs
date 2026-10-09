@@ -31,6 +31,19 @@ pub const SCENARIOS: &[&str] = &[
     "readonly",
     "no-service",
     "search-400",
+    "service-status-empty",
+    "service-status-version",
+    "service-status-down",
+    "repo-collection-trimmed",
+    "repo-collection-scoped",
+    "repo-detail-admin",
+    "repo-prefix-match",
+    "assets-pagination",
+    "assets-absent",
+    "assets-prefix-q",
+    "eula-gate",
+    "eula-absent",
+    "detail-in-hint",
 ];
 
 /// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
@@ -109,6 +122,48 @@ pub enum Scenario {
     /// a real Nexus refuses a repository-scoped search for an unknown repository with 400, before any storage is touched.
     /// Searches for the served repositories (`raw-main`, `raw-all`, the names of the seeded service document) and every other request behave like [`Scenario::Atomic`].
     Search400,
+    /// `/service/rest/v1/status` and `/status/writable` answer `200` with an empty body: the Nexus 3.79 shape.
+    /// Storage behavior is [`Scenario::Atomic`].
+    ServiceStatusEmpty,
+    /// `/service/rest/v1/status` answers `200` with a JSON body carrying a `version` field: the newer-server shape.
+    /// `/status/writable` answers `200` empty.
+    /// Storage behavior is [`Scenario::Atomic`].
+    ServiceStatusVersion,
+    /// `/service/rest/v1/status` answers `503` with a `down` body: the server probes as alive but unhealthy.
+    /// Storage behavior is [`Scenario::Atomic`].
+    ServiceStatusDown,
+    /// The repositories document seeds `size` numbers and non-empty `attributes` for every entry: no shape change.
+    /// Included so client behavior against a fuller collection is pinned by name.
+    /// Storage behavior is [`Scenario::Atomic`].
+    RepoCollectionTrimmed,
+    /// The repositories document differs by caller: an anonymous request sees one entry, a request with the scenario credentials sees two.
+    /// Storage behavior is [`Scenario::Atomic`].
+    RepoCollectionScoped { user: String, pass: String },
+    /// `GET /service/rest/v1/repositories/{format}/{type}/{name}` answers the full settings JSON for valid credentials and `403` with a `nx-admin required` body otherwise.
+    /// Storage behavior is [`Scenario::Atomic`].
+    RepoDetailAdmin { user: String, pass: String },
+    /// A plain repositories collection for the client-side prefix-resolution tests.
+    /// Behavior is identical to [`Scenario::Atomic`]: the scenario pins the conformance name.
+    RepoPrefixMatch,
+    /// The search API serves 35 generated assets for `raw-main` across pages of 10 via `continuationToken`, honoring `q` as a substring filter.
+    /// Storage behavior is [`Scenario::Atomic`].
+    AssetsPagination,
+    /// The search API is absent (404): the honest degradation path for `service assets`.
+    /// Storage behavior is [`Scenario::Atomic`].
+    AssetsAbsent,
+    /// The search API serves the generated assets, so `q` and client-side prefixes have data to filter.
+    /// Behavior is identical to [`Scenario::AssetsPagination`]: the scenario pins the conformance name.
+    AssetsPrefixQ,
+    /// The CE 3.79 EULA gate: `GET /v1/system/eula` presents the disclaimer, PUT answers `403` with the EULA body until
+    /// `POST /v1/system/eula` echoes it back with `accepted: true` (204), after which PUTs store normally.
+    /// Storage behavior is otherwise [`Scenario::Atomic`].
+    EulaGate,
+    /// `/v1/system/eula` answers 404: no gate on this server (pre-3.79 CE, PRO).
+    /// Storage behavior is [`Scenario::Atomic`].
+    EulaAbsent,
+    /// Writes answer `403` with a short `please ask the administrator` body, so the client hint carries the server detail.
+    /// Storage reads behave like [`Scenario::Atomic`].
+    DetailInHint,
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
@@ -123,6 +178,71 @@ const FAKE_LENGTH_LIE: usize = 1024;
 
 /// How far the oversized-head drain may read before giving the peer no further courtesy.
 const DRAIN_CAP: usize = 256 * 1024;
+
+/// The EULA disclaimer the gate presents and demands back verbatim: the real CE 3.79 text, shortened to one sentence.
+pub(crate) const EULA_DISCLAIMER: &str = "Use of Sonatype Nexus Repository - Community Edition is governed by the End User License Agreement at https://links.sonatype.com/products/nxrm/ce-eula.";
+
+/// How many assets the assets-pagination scenario serves for `raw-main`.
+const ASSETS_TOTAL: usize = 35;
+
+/// How many assets one search page carries under `continuationToken` pagination.
+const ASSETS_PAGE: usize = 10;
+
+/// Serve one page of the generated asset list: items for the current token, plus the next token until the list is exhausted.
+/// `q`, when present, filters asset paths by substring, the way the real server does.
+fn assets_page(shared: &Shared, req: &Request) -> Resp {
+    let q = query_param(&req.target, "q");
+    let token = query_param(&req.target, "continuationToken");
+    let start = token.and_then(|t| t.parse::<usize>().ok()).unwrap_or(0);
+    let mut all = Vec::new();
+    for i in 0..ASSETS_TOTAL {
+        let path = format!("/v0.9.0-assets/asset-{i:03}.bin");
+        if let Some(q) = q {
+            if !path.contains(q) {
+                continue;
+            }
+        }
+        let sha = format!("{i:064x}");
+        let base = base_of(shared);
+        all.push(format!(
+            "{{\"downloadUrl\":\"{base}repository/raw-main/v0.9.0-assets/asset-{i:03}.bin\",\"path\":\"{path}\",\"id\":\"raw-main:{i:03}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
+        ));
+    }
+    let total = all.len();
+    let page: Vec<String> = all.into_iter().skip(start).take(ASSETS_PAGE).collect();
+    let body = if start + page.len() < total {
+        format!(
+            "{{\"items\": [{}], \"continuationToken\": \"{}\"}}",
+            page.join(", "),
+            start + ASSETS_PAGE
+        )
+    } else {
+        format!("{{\"items\": [{}]}}", page.join(", "))
+    };
+    plain(200, body.as_bytes(), None)
+}
+
+/// The origin the instance was started on, without the trailing slash.
+fn base_of(shared: &Shared) -> String {
+    lock(&shared.store)
+        .get("service/rest/v1/repositories")
+        .and_then(|doc| {
+            String::from_utf8_lossy(doc)
+                .split("\"url\":\"")
+                .nth(1)
+                .map(str::to_owned)
+        })
+        .and_then(|rest| rest.split("/repository/").next().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// The repositories document the seed wrote: verbatim from the store, so trimmed and full shapes both ride it.
+fn seed_repositories_doc(shared: &Shared) -> String {
+    lock(&shared.store)
+        .get("service/rest/v1/repositories")
+        .map(|doc| String::from_utf8_lossy(doc).into_owned())
+        .unwrap_or_else(|| "[]".to_owned())
+}
 
 /// Serve exactly one request on `stream`, then close the connection.
 pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
@@ -301,6 +421,166 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                 }
             }
         }
+    }
+
+    // service-overview scenarios: the server endpoints answer before the storage store is consulted.
+    // Each arm writes its response and returns; storage scenarios fall through to the match below.
+    if matches!(req.method.as_str(), "GET" | "HEAD") {
+        let service = match path {
+            "service/rest/v1/status" => match shared.scenario {
+                Scenario::ServiceStatusEmpty => Some(plain(200, b"", None)),
+                Scenario::ServiceStatusVersion => {
+                    Some(plain(200, br#"{"version": "3.79.1-04"}"#, None))
+                }
+                Scenario::ServiceStatusDown => Some(plain(503, b"down\n", None)),
+                _ => None,
+            },
+            "service/rest/v1/status/writable" => match shared.scenario {
+                Scenario::ServiceStatusEmpty | Scenario::ServiceStatusVersion => {
+                    Some(plain(200, b"", None))
+                }
+                _ => None,
+            },
+            "service/rest/v1/system/eula" => match shared.scenario {
+                Scenario::EulaAbsent => Some(plain(404, b"not found\n", None)),
+                Scenario::EulaGate => {
+                    let accepted = lock(&shared.eula_accepted);
+                    Some(plain(
+                        200,
+                        format!(
+                            "{{\"accepted\": {}, \"disclaimer\": \"{}\"}}",
+                            *accepted, EULA_DISCLAIMER
+                        )
+                        .as_bytes(),
+                        None,
+                    ))
+                }
+                _ => None,
+            },
+            p if p.starts_with("service/rest/v1/repositories/") => match &shared.scenario {
+                Scenario::RepoDetailAdmin { user, pass } => {
+                    let expected = format!(
+                        "Basic {}",
+                        crate::base64::encode(format!("{user}:{pass}").as_bytes())
+                    );
+                    let ok = req.header("Authorization") == Some(expected.as_str());
+                    let name = p.rsplit('/').next().unwrap_or_default();
+                    if ok && name == "raw-main" {
+                        Some(plain(
+                            200,
+                            br#"{"name":"raw-main","format":"raw","type":"hosted","url":"http://127.0.0.1/repository/raw-main","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":false,"writePolicy":"ALLOW_ONCE"}}"#,
+                            None,
+                        ))
+                    } else {
+                        Some(plain(403, b"nx-admin required\n", None))
+                    }
+                }
+                _ => None,
+            },
+            "service/rest/v1/repositories" => match &shared.scenario {
+                Scenario::RepoCollectionScoped { user, pass } => {
+                    let expected = format!(
+                        "Basic {}",
+                        crate::base64::encode(format!("{user}:{pass}").as_bytes())
+                    );
+                    let ok = req.header("Authorization") == Some(expected.as_str());
+                    let body = if ok {
+                        let doc = seed_repositories_doc(shared);
+                        match doc.rfind(']') {
+                            Some(idx) => format!(
+                                "{},{},{}]",
+                                &doc[..idx],
+                                serde_json::json!({
+                                    "name": "raw-secret",
+                                    "format": "raw",
+                                    "type": "hosted",
+                                    "url": format!("{}/repository/raw-secret/", base_of(shared)),
+                                    "size": 0,
+                                    "attributes": {}
+                                }),
+                                serde_json::json!({
+                                    "name": "raw-main",
+                                    "format": "raw",
+                                    "type": "hosted",
+                                    "url": format!("{}/repository/raw-main/", base_of(shared)),
+                                    "size": 0,
+                                    "attributes": {}
+                                })
+                            ),
+                            None => doc,
+                        }
+                    } else {
+                        seed_repositories_doc(shared)
+                    };
+                    Some(plain(200, body.as_bytes(), None))
+                }
+                _ => None,
+            },
+            "service/rest/v1/search/assets" => match shared.scenario {
+                Scenario::AssetsPagination | Scenario::AssetsPrefixQ => {
+                    Some(assets_page(shared, req))
+                }
+                Scenario::AssetsAbsent => Some(plain(404, b"not found\n", None)),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(resp) = service {
+            log_request(shared, &req.method, path, Outcome::Status(resp.status));
+            let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
+            return;
+        }
+    }
+
+    // eula-gate: the acceptance POST echoes the disclaimer back and opens the gate (204).
+    // Idempotent: a second POST still answers 204.
+    if matches!(shared.scenario, Scenario::EulaGate)
+        && req.method == "POST"
+        && path == "service/rest/v1/system/eula"
+    {
+        let raw = String::from_utf8_lossy(&req.body).into_owned();
+        let opened =
+            raw.contains(EULA_DISCLAIMER) && raw.contains("\"accepted\"") && raw.contains("true");
+        log_request(
+            shared,
+            &req.method,
+            path,
+            Outcome::Status(if opened { 204 } else { 500 }),
+        );
+        if opened {
+            *lock(&shared.eula_accepted) = true;
+            let resp = plain(204, b"", None);
+            let _ = server::write_response(stream, &resp);
+        } else {
+            let resp = plain(500, b"Invalid EULA disclaimer\n", None);
+            let _ = server::write_response(stream, &resp);
+        }
+        return;
+    }
+
+    // eula-gate: writes are refused with the EULA body until the gate is opened by echoing the disclaimer.
+    if matches!(shared.scenario, Scenario::EulaGate)
+        && matches!(req.method.as_str(), "PUT" | "POST" | "DELETE")
+        && !path.starts_with("service/rest/v1/system/eula")
+    {
+        let opened = *lock(&shared.eula_accepted);
+        if !opened {
+            log_request(shared, &req.method, path, Outcome::Status(403));
+            let body = b"You must accept the End User License Agreement (EULA) through the onboarding wizard or REST API before proceeding. See https://links.sonatype.com/products/nxrm3/docs/ce-onboarding for details.";
+            let resp = plain(403, body, None);
+            let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
+            return;
+        }
+    }
+
+    // detail-in-hint: writes answer 403 with a short server sentence, so the client hint carries it.
+    if matches!(shared.scenario, Scenario::DetailInHint)
+        && matches!(req.method.as_str(), "PUT" | "POST" | "DELETE")
+    {
+        log_request(shared, &req.method, path, Outcome::Status(403));
+        let resp = plain(403, b"please ask the administrator\n", None);
+        let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
+        return;
     }
 
     match req.method.as_str() {
