@@ -137,7 +137,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## Для агентов
 
 Кулинарная книга на одной странице: намерение -> команда -> ожидаемый результат, в [docs/how-to/agents.md](docs/how-to/agents.md).
-Машиночитаемый индекс документации: [llms.txt](llms.txt).
+Машиночитаемый индекс документации: [llms.txt](docs/llms.txt).
 
 ## Документация
 

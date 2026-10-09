@@ -137,7 +137,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ## For agents
 
 The one-page cookbook: intent -> command -> expected result, in [docs/how-to/agents.md](docs/how-to/agents.md).
-The machine-readable doc index is [llms.txt](llms.txt).
+The machine-readable doc index is [llms.txt](docs/llms.txt).
 
 ## Docs
 
