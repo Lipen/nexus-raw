@@ -29,8 +29,11 @@ if bad="$(sed -n '/^## /,$p' "$f" | grep -E '^- ' | grep -vE '^- \[[^]]+\]\(http
   failed=1
 fi
 
-if dup="$(grep -oE 'https://[^)]+' "$f" | sort | uniq -d)" && [ -n "$dup" ]; then
-  echo "llms-check: a URL appears twice:" >&2
+# A URL may appear twice across the file only when it sits in prose: the link
+# lists are the machine surface, and a repeated entry there means two names
+# for one page.
+if dup="$(grep -E '^- \[' "$f" | grep -oE 'https://[^)]+' | sort | uniq -d)" && [ -n "$dup" ]; then
+  echo "llms-check: a link entry repeats a URL:" >&2
   echo "$dup" >&2
   failed=1
 fi
