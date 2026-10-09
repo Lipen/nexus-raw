@@ -127,7 +127,13 @@ impl Error {
             }
         };
         hint.map(|hint| match self.server_body() {
-            Some(detail) => format!("{hint}; server says: {detail}"),
+            Some(detail) => {
+                if detail.contains("End User License Agreement") {
+                    format!("{hint}; the server requires the EULA accepted first: run `nxr service eula <server-root> --accept`")
+                } else {
+                    format!("{hint}; server says: {detail}")
+                }
+            }
             None => hint,
         })
     }
@@ -290,7 +296,7 @@ mod tests {
         assert_eq!(
             e.hint().as_deref(),
             Some(
-                "pass -u user:pass or export NXR_AUTH (base64 user:pass); server says: You must accept the End User License Agreement"
+                "pass -u user:pass or export NXR_AUTH (base64 user:pass); the server requires the EULA accepted first: run `nxr service eula <server-root> --accept`"
             )
         );
     }

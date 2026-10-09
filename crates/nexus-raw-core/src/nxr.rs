@@ -453,6 +453,55 @@ impl Nxr {
         service::repositories(&self.client, &self.base).await
     }
 
+    /// Server liveness and writability, resolved from this client's base.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors; a refused probe reads as `false`, not as an error.
+    pub async fn service_status(&self) -> Result<service::StatusReport, Error> {
+        service::status(&self.client, &self.base).await
+    }
+
+    /// The repository this base belongs to, with optional admin-only settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ServiceMissing`] when the collection endpoint answers 404, [`Error::Missing`] when no collection entry matches the base, and [`Error::Mismatch`] when a body is not the expected JSON.
+    pub async fn service_repo(&self, detail: bool) -> Result<service::RepoReport, Error> {
+        service::repo(&self.client, &self.base, detail).await
+    }
+
+    /// Every asset of the repository this base belongs to, through the search API.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when the base is not a repository URL, [`Error::Enumerate`] when the search endpoint is absent or lies, and transport/auth errors as they come.
+    pub async fn service_assets(
+        &self,
+        q: Option<&str>,
+        prefix: &[String],
+    ) -> Result<(Vec<service::AssetEntry>, service::AssetsSummary), Error> {
+        service::assets(&self.client, &self.base, q, prefix).await
+    }
+
+    /// The EULA gate state: `None` when the server has no gate.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors, and [`Error::Mismatch`] when the body is not the EULA document.
+    pub async fn service_eula(&self) -> Result<Option<service::EulaStatus>, Error> {
+        service::eula(&self.client, &self.base).await
+    }
+
+    /// Ensure the EULA gate is open: accept the disclaimer when presented.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors; the accept POST carries the echoed disclaimer.
+    pub async fn service_eula_accept(&self) -> Result<service::EulaOutcome, Error> {
+        service::eula_accept(&self.client, &self.base).await
+    }
+
     /// The mirror plan: probes both sides and classifies, moves nothing.
     /// Emits the plan event exactly like [`Nxr::mirror`](Self::mirror) does.
     ///

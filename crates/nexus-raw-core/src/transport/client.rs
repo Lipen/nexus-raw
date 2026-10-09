@@ -394,10 +394,36 @@ impl NexusClient {
                 let req = this.authorize(this.http.put(url)).body(bytes);
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                 let status = resp.status();
-                match status {
-                    s if s.is_success() => Ok(()),
-                    _ => Err(this.status_failure(url, resp).await),
+                if status.is_success() {
+                    return Ok(());
                 }
+                Err(this.status_failure(url, resp).await)
+            })
+        })
+        .await
+    }
+
+    /// POST a small JSON body and require a success status.
+    ///
+    /// The service API uses POST for verbs (the EULA acceptance), unlike storage, which is PUT-only.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
+    pub async fn post_small(&self, url: &str, bytes: Vec<u8>) -> Result<(), Error> {
+        self.with_retries(None, url, |this: &Self, url: &str| {
+            let bytes = bytes.clone();
+            Box::pin(async move {
+                let req = this
+                    .authorize(this.http.post(url))
+                    .header(reqwest::header::CONTENT_TYPE, "application/json")
+                    .body(bytes);
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status();
+                if status.is_success() {
+                    return Ok(());
+                }
+                Err(this.status_failure(url, resp).await)
             })
         })
         .await
