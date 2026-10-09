@@ -8,7 +8,8 @@ default:
 cargo := "cargo"
 prek := "uvx prek"
 
-[doc('Run any cargo subcommand with flags: `just cargo test -p nexus-raw-core`.')]
+# Usage example: `just cargo test -p nexus-raw-core`.
+[doc('Run any cargo subcommand with flags.')]
 cargo *args:
     {{cargo}} {{args}}
 
@@ -31,7 +32,8 @@ tui *args:
         exec {{cargo}} run -p nexus-raw-tui --quiet -- "$@"
 
 # `--auth user:pass` and scenario flags come after the scenario name.
-[doc('Serve the mock Nexus: `just mock atomic --port 8080`.')]
+# Usage: `just mock atomic --port 8080`.
+[doc('Serve the mock Nexus.')]
 [group('mock')]
 mock scenario='atomic' *args:
     {{cargo}} run -p mock-nexus --quiet -- {{scenario}} {{args}}
@@ -39,7 +41,8 @@ mock scenario='atomic' *args:
 # The real-Nexus stand: a dockerized Nexus3, bootstrapped, driven by the same
 # battery the nightly job runs. Needs docker; the recipe dumps the server log
 # on failure and leaves no state behind either way.
-[doc('Run the real-Nexus stand: docker nexus3, bootstrap, the battery.')]
+# Boot, bootstrap (waits, accepts the EULA, creates the repo), the 24-check battery, cleanup on any exit.
+[doc('Run the real-Nexus stand against a local docker Nexus.')]
 [group('stand')]
 stand *args:
     stand/real-nexus/run.sh {{args}}
@@ -86,7 +89,8 @@ check:
 # only the four known names select a target and any other bare word is
 # refused. --locked keeps a comparison free of a silent re-lock between its
 # before and after sides.
-[doc('Run the criterion benches: `just bench` (all, default tree), `just bench scan` (one).')]
+# `just bench` is all, `just bench scan` is one.
+[doc('Run the criterion benches.')]
 [group('bench')]
 bench *args:
     #!/bin/sh
@@ -105,7 +109,8 @@ bench *args:
 # The npm package, the internal dependency pins and the two standalone example locks follow it, their resolutions included.
 # examples/node cannot follow before the registry has the release, so the recipe ends with the `just lock` reminder.
 # `just check` runs version-check.
-[doc('Set the release version everywhere it is asserted: `just version 0.2.0`.')]
+# Usage: `just version 0.2.0`.
+[doc('Set the release version everywhere it is asserted.')]
 [group('release')]
 version v:
     #!/bin/sh
@@ -147,7 +152,8 @@ version v:
 
 # The manifest is the source of truth for the current number; this only does
 # the arithmetic and hands the result to `just version`.
-[doc('Compute the next version and set it: `just bump patch` (also minor, major).')]
+# `patch`, `minor` or `major`: `just bump minor`.
+[doc('Compute the next version and set it.')]
 [group('release')]
 bump part:
     #!/bin/sh
@@ -170,7 +176,8 @@ bump part:
 # call for the same number is the recovery path: the version step is
 # idempotent, the changelog date refreshes to today, the guards in the
 # workflow skip whatever is already published.
-[doc('Release X.Y.Z: a preview by default; --yes really bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.')]
+# The real run bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.
+[doc('Release X.Y.Z: a preview by default, --yes for the real run.')]
 [group('release')]
 release v *mode:
     #!/bin/sh
@@ -246,7 +253,8 @@ build *args:
 build-release:
     {{cargo}} build --release -p nexus-raw
 
-[doc('Run the Node example: link: dependency, claim-first up, channel, down, verify.')]
+# Links the npm package, then claim-first up, channel, down and verify.
+[doc('Run the Node example against the mock.')]
 [group('examples')]
 example-node:
     cargo build -q -p mock-nexus
@@ -256,7 +264,8 @@ example-node:
 # The panel stand, exactly the README's run: build the addon and the mock,
 # serve the mock on :8099, seed a three-level tree, start the panel on :8123.
 # The mock dies with the recipe: Ctrl-C the panel and both are gone.
-[doc('Run the web panel against the mock: builds, seeds, serves on :8123.')]
+# Builds the panel, seeds the mock, serves it.
+[doc('Run the web panel against the mock on :8123.')]
 [group('examples')]
 panel *args:
     #!/bin/sh
@@ -290,7 +299,8 @@ panel *args:
 
 # The wasm sandbox: the read surface of the core compiled for the browser.
 # The first build needs the wasm32 target and wasm-bindgen-cli.
-[doc('Build and serve the wasm sandbox: `just wasm` serves the fake, `just wasm --upstream http://127.0.0.1:8081` serves a real Nexus.')]
+# `just wasm` serves the fake; `just wasm --upstream <url>` serves a real Nexus.
+[doc('Build and serve the wasm sandbox.')]
 [group('examples')]
 wasm *args:
     cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
@@ -301,7 +311,8 @@ wasm *args:
 # node and the ServiceWorker page in a headless browser when one is around.
 # This is what CI's wasm job runs; the browser layer is skipped where no
 # chromium binary lives (set NXR_WASM_DRIVER or NXR_WASM_BROWSER to steer it).
-[doc('Build and smoke the wasm sandbox: the fake module, the wasm listing and the page in a headless browser when available.')]
+# The fake module, the wasm listing and the page in a headless browser when one is available.
+[doc('Build and smoke the wasm sandbox.')]
 [group('examples')]
 wasm-smoke:
     cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
@@ -313,7 +324,8 @@ wasm-smoke:
 # The node example resolves against the registry, so it only refreshes once
 # the released version is actually published; before a release that lock is
 # expected to stay stale. Run after every release, commit the result.
-[doc('Refresh every lockfile: workspace, napi, panel, node (post-release), rust and sandbox examples.')]
+# Workspace, napi, panel, node (post-release), rust and sandbox examples.
+[doc('Refresh every lockfile in the repo.')]
 [group('examples')]
 lock:
     #!/bin/sh
@@ -346,7 +358,8 @@ example-rust:
 
 # The local stand: mock server, stub payloads, the real binary. Every command
 # is printed as it runs; scenarios are the mock's (`just mock --print-scenarios`).
-[doc('Run the demo stand: publish, name, consume, verify, refuse, repair.')]
+# Publish, name, consume, verify, refuse and repair, in order.
+[doc('Run the demo stand scenario.')]
 [group('examples')]
 demo scenario='slow' *args:
     cargo build -q -p mock-nexus -p nexus-raw
@@ -358,7 +371,8 @@ demo scenario='slow' *args:
 # Three steps, one source: the cast (a real run), the pace (a reader's timeline)
 # and the SVG (the same timeline, drawn for pages without JavaScript).
 # Needs python3 for the two tiny scripts next to the stand.
-[doc('Record the demo session: the cast, its pace and the landing SVG.')]
+# The cast file, its pace and the landing SVG.
+[doc('Record the demo session.')]
 [group('examples')]
 demo-cast *args:
     cargo build -q -p mock-nexus -p nexus-raw
