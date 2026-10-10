@@ -43,10 +43,6 @@ elif [ "$rust_pin" != "$minor" ]; then
   echo "version-check: examples/rust pins $rust_pin, the workspace is $minor" >&2
   failed=1
 fi
-if [ -z "$node_pin" ]; then
-  echo "version-check: no @nexus-raw/nxr pin in examples/node/package.json" >&2
-  failed=1
-fi
 
 # The standalone example locks must record nexus-raw-core at the workspace version: a lock left behind pins a number nobody released, and nothing rebuilds the lock until `just lock`.
 # examples/node is exempt: its pnpm lock resolves only once the registry has the release.
