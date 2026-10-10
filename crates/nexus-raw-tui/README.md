@@ -83,7 +83,8 @@ Passwords never live in the config: credentials come from `-u` or the environmen
 A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
 Downloads are one at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`.
 Everything else keeps working: browsing, filters, refreshes, info, tab switches, even adding a server.
-Navigation within the tab cancels a still-walking request. A running transfer is never interrupted by the UI.
+Navigation within the tab cancels a still-walking request.
+A running transfer is never interrupted by the UI.
 Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
 A panel shows the plan, the files in flight with byte progress and the final summary.
 Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.

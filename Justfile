@@ -125,14 +125,6 @@ version v:
     perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw/Cargo.toml
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
-    # The node example's manifest pin is a string, safe to move before the
-    # release; its lockfile resolves only after the registry has the version
-    # and stays on the post-release `just lock` path.
-    perl -pi -e "s/(\"@nexus-raw\/nxr\": \")\\^[^\"]*(\")/\${1}\\^{{v}}\${2}/" examples/node/package.json
-    # The node example's lockfile specifier moves with the manifest, so the
-    # CI `pnpm ci` (frozen) stays green between the bump and the post-release
-    # `just lock` that re-resolves the lock against the published registry.
-    perl -pi -e "s/^(        specifier: )\\^[^\\n]*/\${1}\\^{{v}}/" examples/node/pnpm-lock.yaml
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }

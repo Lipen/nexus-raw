@@ -123,7 +123,8 @@ The mechanism is workspace exclusion, not `.gitignore` and not a cargo feature:
 - `just check` runs the gate over the repo workspace only: bench code is neither compiled nor linted there.
 
 What the gate does still touch: the prek hygiene hooks (`trailing-whitespace`, `end-of-file-fixer`, `check-toml`) scan every tracked file, including the markdown and the manifest here.
-They are per-file and cost milliseconds. They are the only gate surface this directory adds.
+They are per-file and cost milliseconds.
+They are the only gate surface this directory adds.
 
 ## Layout
 
