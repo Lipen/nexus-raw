@@ -1034,6 +1034,25 @@ fn alias_mirror_two_remotes() {
     let _ = std::fs::remove_file("/tmp/alias-mirror-check.bin");
 }
 
+/// doctor through an alias: the URL expands, and the credential source line
+/// names the alias, never claims `-u` (the argv-exposure audit stays honest).
+#[test]
+fn alias_doctor_expands_and_names_the_source() {
+    let srv = server(Scenario::Atomic);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let doc = nxr_r(
+        &["-R", "mock", "doctor", "."],
+        &cfg,
+        &[("TEST_ALIAS_USER", "u"), ("TEST_ALIAS_PASS", "p")],
+    );
+    expect_exit(&doc, 0, "doctor through the alias");
+    let out = String::from_utf8_lossy(&doc.stdout);
+    assert!(out.contains("resolved from the -R alias"), "{out}");
+    assert!(!out.contains("resolved from -u flag"), "{out}");
+}
+
 // ---- scenario coverage ----------------------------------------------------
 
 /// The atomic scenario serves no such object: a GET of a missing name is a

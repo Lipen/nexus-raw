@@ -31,6 +31,13 @@ pub(crate) struct Cli {
     /// A `-u` on the same call wins over the alias credentials.
     #[arg(short = 'R', long, value_name = "ALIAS", global = true)]
     pub(crate) remote: Option<String>,
+    /// The alias credentials resolved by `-R` (never printed).
+    /// Kept apart from `user` so the doctor's source line stays honest.
+    #[arg(skip)]
+    pub(crate) alias_creds: Option<(String, String)>,
+    /// The alias name behind `alias_creds`, for the doctor's source line.
+    #[arg(skip)]
+    pub(crate) alias_name: Option<String>,
     /// Parallel artifact transfers.
     #[arg(long, global = true, value_name = "N", default_value_t = 8)]
     pub(crate) workers: usize,

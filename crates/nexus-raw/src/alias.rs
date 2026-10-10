@@ -259,7 +259,8 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
             | crate::ServiceOp::Assets { url, .. }
             | crate::ServiceOp::Eula { url, .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
         },
-        C::Verify { .. } | C::Complete { .. } | C::Doctor { .. } => vec![],
+        C::Doctor { url: Some(url) } => vec![std::ptr::addr_of!(*url).cast_mut()],
+        C::Verify { .. } | C::Complete { .. } | C::Doctor { url: None } => vec![],
     }
 }
 
@@ -287,9 +288,8 @@ pub fn apply_remote(cli: &mut crate::Cli) -> Result<(), Error> {
     }
 
     if cli.user.is_none() {
-        if let Some((u, p)) = alias.creds(&name)? {
-            cli.user = Some(format!("{u}:{p}"));
-        }
+        cli.alias_creds = alias.creds(&name)?;
+        cli.alias_name = Some(name);
     }
     Ok(())
 }

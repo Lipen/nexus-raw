@@ -209,9 +209,14 @@ pub(crate) fn make_nxr_with(
     sender: tokio::sync::mpsc::UnboundedSender<Event>,
     explicit_user: Option<&str>,
 ) -> Result<Nxr, Error> {
+    // Priority: -u (or the mirror's per-side override) over the alias pair
+    // over the ambient env. The alias pair is resolved in main before dispatch.
     let auth = match split_user(explicit_user)? {
         Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
-        None => creds::resolve(None)?.map(|c| c.header),
+        None => match cli.alias_creds.as_ref() {
+            Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
+            None => creds::resolve(None)?.map(|c| c.header),
+        },
     };
     let cfg = Config {
         base: base.to_owned(),

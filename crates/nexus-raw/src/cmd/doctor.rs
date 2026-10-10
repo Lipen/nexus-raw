@@ -11,33 +11,42 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
 
     // Credentials: resolved presence only, never values.
     let explicit = cli.user.as_deref();
-    let auth = match split_and_resolve(explicit) {
-        Ok(header) => {
-            let source = if explicit.is_some() {
-                "-u flag"
-            } else if std::env::var_os("NXR_AUTH").is_some_and(|v| !v.is_empty()) {
-                "NXR_AUTH"
-            } else {
-                "NXR_USERNAME + NXR_PASSWORD"
-            };
-            let has = header.is_some();
-            if has {
-                report.push(("credentials", true, format!("resolved from {source}")));
-            } else {
-                // Anonymous access is a legitimate configuration: the gap is a warning, not a failure.
-                warns.insert("credentials");
-                report.push((
-                    "credentials",
-                    true,
-                    "warning: none found; anonymous requests go out unauthenticated (pass -u or export NXR_AUTH)".to_owned(),
-                ));
-            }
-            header
+    // The alias pair wins over ambient env but never over -u (§ priority).
+    let alias_pair = if explicit.is_none() {
+        cli.alias_creds
+            .as_ref()
+            .map(|(u, p)| (u.as_str(), p.as_str()))
+    } else {
+        None
+    };
+    let resolved = match alias_pair {
+        Some((u, p)) => creds::resolve(Some((u, p)))?.map(|c| c.header),
+        None => split_and_resolve(explicit)?,
+    };
+    let auth = {
+        let source = if explicit.is_some() {
+            "-u flag"
+        } else if alias_pair.is_some() {
+            // The pair came from the alias: name it, never claim -u.
+            "the -R alias"
+        } else if std::env::var_os("NXR_AUTH").is_some_and(|v| !v.is_empty()) {
+            "NXR_AUTH"
+        } else {
+            "NXR_USERNAME + NXR_PASSWORD"
+        };
+        let has = resolved.is_some();
+        if has {
+            report.push(("credentials", true, format!("resolved from {source}")));
+        } else {
+            // Anonymous access is a legitimate configuration: the gap is a warning, not a failure.
+            warns.insert("credentials");
+            report.push((
+                "credentials",
+                true,
+                "warning: none found; anonymous requests go out unauthenticated (pass -u or export NXR_AUTH)".to_owned(),
+            ));
         }
-        Err(e) => {
-            report.push(("credentials", false, e.to_string()));
-            None
-        }
+        resolved
     };
 
     // --tls-insecure counts as a failed check: the report flags it, it does not hide it.
