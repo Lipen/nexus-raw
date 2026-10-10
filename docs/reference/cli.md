@@ -1099,9 +1099,9 @@ Four codes cover every failure, and the mapping from error to code has one home,
 | Code | Class | Representative causes |
 |:----:|:------|:----------------------|
 | `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
-| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures |
+| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent; a retry cannot change it) |
 | `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o` |
-| `3` | transport | auth failures, connection resets, stalls, 5xx after retries, 404 and other unexpected statuses |
+| `3` | transport | auth failures, connection resets, stalls, 5xx after retries, other unexpected statuses |
 
 `verify` is offline and cannot produce `3`.
 `head` reports statuses as results and exits `0` on any answer.

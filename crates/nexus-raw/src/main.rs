@@ -74,6 +74,7 @@ pub(crate) enum Cmd {
         #[arg(value_name = "URL")]
         url: String,
         /// Output file (stdout when omitted).
+        /// Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part.
         #[arg(short = 'o', long, value_name = "FILE")]
         out: Option<PathBuf>,
         /// Resume from an existing `<out>`.part through a Range request.

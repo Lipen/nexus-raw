@@ -7,9 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `get --continue` validates the finished file against the `.sha256` sibling (the local one, or the server's when the local is absent) and refuses with exit 1 on divergence: a garbage or foreign `.part` can no longer silently corrupt the target.
+  The corrupted part is removed, the target path stays untouched.
 - A storage 404 (a missing object or version) exits 1 as a data fact, not 3 as transport: scripts branch on 0 proceed, 1 absent, 3 retry.
   The service-API 404 keeps exit 3.
   The docs had promised the data class since the agent cookbook landed, the code disagreed, an external agent caught the divergence.
+- Deep listings (`ls`, `lsAssets`) no longer send the `group` search parameter: a real Nexus matches it as Maven coordinates, not raw path prefixes, which silently emptied deep listings against a live server.
+  The scoping is the client-side prefix filter, as the shallow listings already did.
 
 ### Added
 
