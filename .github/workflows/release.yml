@@ -524,7 +524,7 @@ jobs:
           npm install --no-package-lock --no-save "/home/runner/work/nexus-raw/nexus-raw/pkg-main" 2>&1 | tail -1
           # The platform addon comes from the registry explicitly: the same
           # resolve a fresh user install makes for its optionalDependencies.
-          npm install --no-save "@nexus-raw/linux-x64-gnu@${version}" 2>&1 | tail -1
+          npm install --no-save "@nexus-raw/nxr-linux-x64-gnu@${version}" 2>&1 | tail -1
           node -e '
             const nxr = require("@nexus-raw/nxr");
             const methods = ["up", "down", "get", "put", "head", "sha", "ls", "diff", "mirror", "verify", "doctor"];
