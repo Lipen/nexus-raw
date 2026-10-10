@@ -397,5 +397,6 @@ docs *args:
 [doc('Build the docs, check llms.txt and fail on issues.')]
 [group('docs')]
 check-docs *args:
+    scripts/check-hints.sh
     scripts/llms-check.sh
     uvx zensical build --strict {{args}}

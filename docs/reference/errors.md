@@ -12,20 +12,20 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 
 | Variant | Meaning | Exit | Hint (verbatim) | Typical cause |
 |:--------|:--------|:----:|:----------------|:--------------|
-| `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | `the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object` | the same name was published twice with different content, or a sibling belongs to a foreign object |
-| `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command; finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written |
-| `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides; check spelling and the manifest` | a typo, or a manifest entry for something never published |
+| `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | `the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object` | the same name was published twice with different content, or a sibling belongs to a foreign object |
+| `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command: finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written |
+| `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the manifest` | a typo, or a manifest entry for something never published |
 | `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API` | no `manifest.json` at the directory URL and no flag naming a source |
-| `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
+| `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
 | `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
 | `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
-| `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
+| `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network: transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
 | `Http { status: 404, url }` | the object or version does not exist | 1 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
 | `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route; a 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
 | `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
 | `SearchRepoMissing { url }` | the search API answered 400: the repository is missing on the server or is not a raw repository | 3 | `the repository is missing on the server or is not a raw repository` | `ls` against a repository URL the server does not serve, or a name that exists only in another format |
-| `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
+| `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken transport.
 The same classes appear in the [CLI exit code table](cli.md#exit-codes) and in `Error::exit_code()` for API wrappers.
@@ -181,7 +181,7 @@ A local filesystem failure is data, not misuse: the command line may be perfect 
 ```console
 $ nxr put https://nexus.example.com/repository/raw-main/foreign/app.bin -f extra.txt
 error: io: extra.txt: No such file or directory (os error 2)
-hint: check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe
+hint: check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe
 $ echo $?
 1
 ```
