@@ -48,6 +48,8 @@ Quirks that are not bugs:
 - CE 3.79+: every PUT answers 403 until the EULA is accepted.
 - Right after `up`/`put` the search index lags for a few seconds.
   An empty listing is not a lost write.
+- A repository filled by an external publisher may be invisible to the search API entirely.
+  `ls` then works only where a `manifest.json` lies; the honest availability probe is `head`/`get` by name, and `service assets` asks the same search that sees nothing.
 - `/-/` in paths is the npm-protocol segment, not part of the nxr protocol.
 - A raw repository holds arbitrary foreign names (spaces, parens, unicode).
   `ls`/`down`/`diff` tolerate them.

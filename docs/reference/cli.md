@@ -63,6 +63,7 @@ All flags are global: they may appear before or after the subcommand.
 | Flag | Default | Meaning |
 |:-----|:--------|:--------|
 | `-u, --user <USER:PASS>` | env | credentials for this call, takes precedence over `NXR_AUTH` and `NXR_USERNAME`/`NXR_PASSWORD` |
+| `-R, --remote <ALIAS>` | none | named remote from `~/.config/nxr/config.toml` (or `$NXR_CONFIG`); expands relative URL arguments and supplies credentials. The file is read only when this names an alias. See [Name your remotes](../how-to/config.md) |
 | `--workers <N>` | `8` | parallel artifact transfers, accepted range `1..=64` |
 | `--retry <N>` | `4` | attempts per HTTP request |
 | `--connect-timeout-secs <N>` | `15` | TCP connect timeout in seconds |
