@@ -93,7 +93,10 @@ pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<E
 /// Returns [`Error::Misuse`] when `base` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
 pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
     let (repo, group) = split_prefix(base)?;
-    let paths = paginate(client, base, &repo, &group).await?;
+    // The `group` search parameter matches Maven coordinates, not raw path
+    // prefixes, so passing it would empty the listing on a real Nexus; the
+    // client-side filter below scopes the result instead.
+    let paths = paginate(client, base, &repo, &[]).await?;
     let mut versions = std::collections::BTreeSet::new();
     for path in paths {
         let rel = drop_segments(&path, group.len());
@@ -116,7 +119,7 @@ pub async fn search_assets(
     dir_url: &str,
 ) -> Result<Vec<ArtifactName>, Error> {
     let parts = split_base(dir_url)?;
-    let paths = paginate(client, dir_url, &parts.repo, &parts.group).await?;
+    let paths = paginate(client, dir_url, &parts.repo, &[]).await?;
     let mut names = Vec::new();
     for path in paths {
         let rel = drop_segments(&path, parts.group.len());
