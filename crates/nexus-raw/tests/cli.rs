@@ -762,6 +762,23 @@ fn redirect_exit_3() {
 
 // ---- scenario coverage ----------------------------------------------------
 
+/// The atomic scenario serves no such object: a GET of a missing name is a
+/// storage 404, a data fact (exit 1), not a transport failure (exit 3).
+/// Scripts branch on the class: 0 proceed, 1 absent, 3 retry later.
+#[test]
+fn get_missing_object_is_data_not_transport() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}1.14.0/no-such-object.bin", dir_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("no-such-object.bin");
+    let get = nxr(&["get", "--retry", "1", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&get, 1, "a storage 404 is a data error");
+    assert!(stderr(&get).contains("http 404"));
+    assert!(stderr(&get).contains("hint:"));
+    assert!(!target.exists());
+}
+
 /// rate-limit: the run spends retries on the 429s, the NDJSON stream names them, and the upload still lands with exit 0.
 #[test]
 fn rate_limit_up_retries_and_succeeds() {

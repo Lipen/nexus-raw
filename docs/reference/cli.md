@@ -111,9 +111,9 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | body delivered |
-| `1` | local I/O failure around the part file |
+| `1` | the URL answered 404 (the object is absent), or local I/O failure around the part file |
 | `2` | misuse: a non-http URL |
-| `3` | 404, auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
+| `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
 

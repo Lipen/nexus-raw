@@ -78,7 +78,12 @@ impl Error {
             | Error::Enumerate { .. }
             | Error::ReadOnly { .. } => 1,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
-            Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. } => 3,
+            Error::Auth { .. } | Error::Transport { .. } => 3,
+            // A storage 404 is a data fact: the object or version is absent,
+            // and a retry cannot change it. Scripts branch on it (0 proceed,
+            // 1 absent, 3 retry later), so it must not share the transport class.
+            Error::Http { status: 404, .. } => 1,
+            Error::Http { .. } => 3,
             Error::ServiceMissing { .. } | Error::SearchRepoMissing { .. } => 3,
             Error::Io { .. } => 1,
         }

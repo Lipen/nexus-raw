@@ -21,7 +21,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
 | `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network; transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
-| `Http { status: 404, url }` | the object or version does not exist | 3 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
+| `Http { status: 404, url }` | the object or version does not exist | 1 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
 | `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route; a 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
 | `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
 | `SearchRepoMissing { url }` | the search API answered 400: the repository is missing on the server or is not a raw repository | 3 | `the repository is missing on the server or is not a raw repository` | `ls` against a repository URL the server does not serve, or a name that exists only in another format |
@@ -68,9 +68,10 @@ $ echo $?
 
 Missing credentials fail identically, because anonymous access earns the same 401.
 
-### Not found (exit 3)
+### Not found (exit 1)
 
-A 404 becomes `Http { status: 404 }` with its own hint.
+A storage 404 is a data fact: the object or version is absent.
+It becomes `Http { status: 404 }` with its own hint, and a retry cannot change it, so it must not share the transport class.
 `head` is the exception: it reports any status as a result and exits 0.
 
 ```console
@@ -78,7 +79,7 @@ $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/no-such-object.bin
 error: http 404: https://nexus.example.com/repository/raw-main/1.4.0/no-such-object.bin
 hint: check the URL path and that the version or object exists
 $ echo $?
-3
+1
 ```
 
 ### Enumeration refusal (exit 1)
