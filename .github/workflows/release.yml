@@ -321,7 +321,7 @@ jobs:
       - name: Stage the platform package
         run: |
           cd crates/nexus-raw-napi
-          mkdir -p "npm/@nexus-raw"
+          mkdir -p "npm/@nexus-raw/${{ matrix.name }}"
           cp nexus-raw.*.node "npm/@nexus-raw/${{ matrix.name }}/index.node"
           node -e '
             const fs = require("fs");
