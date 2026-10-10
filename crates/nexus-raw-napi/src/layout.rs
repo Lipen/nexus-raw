@@ -230,7 +230,7 @@ pub struct NxrRepoInfo {
 
 /// List the repositories of the server behind `url`: the service REST API (the management surface).
 /// The URL may be the server root or any repository URL: both root to the same server.
-/// Storage invariants never touch this endpoint; it exists for humans and panels.
+/// Storage invariants never touch this endpoint: it exists for humans and panels.
 #[napi]
 pub async fn service_repos(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<NxrRepoInfo>> {
     let o = opts.unwrap_or_default();
@@ -261,6 +261,69 @@ pub async fn service_repos(url: String, opts: Option<NxrCommonOpts>) -> Result<V
             format: r.format,
             kind: r.kind,
             url: r.url,
+        })
+        .collect())
+}
+
+/// One asset of a repository, as the search API reports it: the path, the server-side
+/// digest when the server carries one, and the size. The cheapest integrity probe:
+/// one call returns the whole snapshot with sha256 per file.
+#[napi(object)]
+pub struct NxrAssetEntry {
+    /// Asset path inside the repository, without the leading slash.
+    pub path: String,
+    /// The absolute download URL.
+    pub url: String,
+    /// Asset size in bytes, when the server reports it.
+    pub size: Option<i64>,
+    /// The sha256 digest, when the server reports it.
+    pub sha256: Option<String>,
+    /// The last modification timestamp, when the server reports it.
+    pub last_modified: Option<String>,
+}
+
+/// Every asset of the repository behind `url` (a repository root or anything inside it),
+/// through the search API, with pagination handled: the full snapshot in one call.
+/// `q` filters by substring server-side, `prefix` narrows to whole-segment path prefixes.
+#[napi]
+pub async fn service_assets(
+    url: String,
+    q: Option<String>,
+    prefix: Option<Vec<String>>,
+    opts: Option<NxrCommonOpts>,
+) -> Result<Vec<NxrAssetEntry>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let pump = spawn_pump(rx, on_event);
+    let assets = nxr
+        .service_assets(q.as_deref(), prefix.as_deref().unwrap_or(&[]))
+        .await;
+    drop(nxr);
+    let assets = match assets {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(assets
+        .0
+        .into_iter()
+        .map(|a| NxrAssetEntry {
+            path: a.path,
+            url: a.url,
+            size: a.size.map(|s| s as i64),
+            sha256: a.sha256,
+            last_modified: a.last_modified,
         })
         .collect())
 }

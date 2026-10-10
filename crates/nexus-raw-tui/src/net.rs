@@ -148,7 +148,7 @@ pub fn head_size(
 }
 
 /// Fetches the `.sha256` sibling marker of one file for the file card.
-/// `None` when the server has no marker; a malformed marker is an error,
+/// `None` when the server has no marker. A malformed marker is an error,
 /// because a digest that cannot be read cannot verify anything.
 pub fn fetch_sibling(
     tx: mpsc::UnboundedSender<Msg>,

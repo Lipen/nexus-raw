@@ -84,7 +84,8 @@ pub enum ClearOutcome {
 ///
 /// # Errors
 ///
-/// Returns transport, auth or HTTP errors from the DELETE; a 403/405 surfaces as [`Error::ReadOnly`].
+/// Returns transport, auth or HTTP errors from the DELETE.
+/// A 403/405 surfaces as [`Error::ReadOnly`].
 pub async fn clear(client: &NexusClient, url: &str) -> Result<ClearOutcome, Error> {
     Ok(match client.delete_url(url).await? {
         crate::transport::client::DeleteOutcome::Deleted => ClearOutcome::Cleared,

@@ -96,22 +96,22 @@ impl Error {
     pub fn hint(&self) -> Option<String> {
         let hint = match self {
             Error::Mismatch { .. } => Some(
-                "the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object"
+                "the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object"
                     .into(),
             ),
-            Error::Incomplete { .. } => Some("rerun the same command; finished names are skipped and the rest is retried".into()),
-            Error::Missing { .. } => Some("the name is absent on both sides; check spelling and the manifest".into()),
+            Error::Incomplete { .. } => Some("rerun the same command: finished names are skipped and the rest is retried".into()),
+            Error::Missing { .. } => Some("the name is absent on both sides: check spelling and the manifest".into()),
             Error::Enumerate { .. } => Some(
                 "pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API".into(),
             ),
-            Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved".into()),
+            Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved".into()),
             Error::Auth { .. } => {
                 Some("pass -u user:pass or export NXR_AUTH (base64 user:pass)".into())
             }
-            Error::Transport { .. } => Some("check the network; transfers are resumable, rerunning is safe".into()),
+            Error::Transport { .. } => Some("check the network: transfers are resumable, rerunning is safe".into()),
             Error::ReadOnly { status, .. } => Some(
                 format!(
-                    "the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed"
+                    "the repository answered {status} to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed"
                 ),
             ),
             Error::Http { status: 404, .. } => {
@@ -124,19 +124,19 @@ impl Error {
                 Some("the repository is missing on the server or is not a raw repository".into())
             }
             Error::Http { status, .. } => Some(
-                format!("the server answered {status}; check the URL path and the server health"),
+                format!("the server answered {status}: check the URL path and the server health"),
             ),
             Error::Misuse(_) => Some("check the command line arguments".into()),
             Error::Io { .. } => {
-                Some("check the local filesystem: permissions, space, symlinks; transfers are resumable, rerunning is safe".into())
+                Some("check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe".into())
             }
         };
         hint.map(|hint| match self.server_body() {
             Some(detail) => {
                 if detail.contains("End User License Agreement") {
-                    format!("{hint}; the server requires the EULA accepted first: run `nxr service eula <server-root> --accept`")
+                    format!("{hint}. The server requires the EULA accepted first: run `nxr service eula <server-root> --accept`")
                 } else {
-                    format!("{hint}; server says: {detail}")
+                    format!("{hint}. server says: {detail}")
                 }
             }
             None => hint,
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(
             e.hint().as_deref(),
             Some(
-                "pass -u user:pass or export NXR_AUTH (base64 user:pass); the server requires the EULA accepted first: run `nxr service eula <server-root> --accept`"
+                "pass -u user:pass or export NXR_AUTH (base64 user:pass). The server requires the EULA accepted first: run `nxr service eula <server-root> --accept`"
             )
         );
     }

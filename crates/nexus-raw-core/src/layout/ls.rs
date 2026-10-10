@@ -43,10 +43,25 @@ pub enum EntryKind {
 ///
 /// Returns [`Error::Misuse`] when `dir_url` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
 pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<Entry>, Error> {
+    Ok(search_entries_counted(client, dir_url).await?.0)
+}
+
+/// The same listing, plus the count of `.sha256` markers the enumerator hid:
+/// a silent undercount becomes a visible one (a user-facing report asked for
+/// exactly this after the markers vanished from a version listing).
+///
+/// # Errors
+///
+/// The same as [`search_entries`].
+pub async fn search_entries_counted(
+    client: &NexusClient,
+    dir_url: &str,
+) -> Result<(Vec<Entry>, usize), Error> {
     let (repo, prefix) = split_prefix(dir_url)?;
-    let paths = paginate(client, dir_url, &repo, &[]).await?;
+    let paths = paginate(client, dir_url, &repo).await?;
     let mut dirs = std::collections::BTreeSet::new();
     let mut files = std::collections::BTreeSet::new();
+    let mut hidden = 0usize;
     for path in paths {
         let segs: Vec<String> = path
             .split('/')
@@ -64,6 +79,7 @@ pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<E
         if rel.len() == 1 {
             // A leaf marker is derived data, not a tree member: hidden, like `--assets` skips it.
             if first.ends_with(".sha256") {
+                hidden += 1;
                 continue;
             }
             files.insert(first.clone());
@@ -71,7 +87,7 @@ pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<E
             dirs.insert(first.clone());
         }
     }
-    Ok(dirs
+    let entries = dirs
         .into_iter()
         .map(|name| Entry {
             name,
@@ -81,7 +97,8 @@ pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<E
             name,
             kind: EntryKind::File,
         }))
-        .collect())
+        .collect();
+    Ok((entries, hidden))
 }
 
 /// Versions under a repository/group base: the path segment right after the group prefix of every asset, collected and sorted.
@@ -94,9 +111,9 @@ pub async fn search_entries(client: &NexusClient, dir_url: &str) -> Result<Vec<E
 pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
     let (repo, group) = split_prefix(base)?;
     // The `group` search parameter matches Maven coordinates, not raw path
-    // prefixes, so passing it would empty the listing on a real Nexus; the
-    // client-side filter below scopes the result instead.
-    let paths = paginate(client, base, &repo, &[]).await?;
+    // prefixes, so passing it would empty the listing on a real Nexus.
+    // The client-side filter below scopes the result instead.
+    let paths = paginate(client, base, &repo).await?;
     let mut versions = std::collections::BTreeSet::new();
     for path in paths {
         let rel = drop_segments(&path, group.len());
@@ -119,7 +136,7 @@ pub async fn search_assets(
     dir_url: &str,
 ) -> Result<Vec<ArtifactName>, Error> {
     let parts = split_base(dir_url)?;
-    let paths = paginate(client, dir_url, &parts.repo, &[]).await?;
+    let paths = paginate(client, dir_url, &parts.repo).await?;
     let mut names = Vec::new();
     for path in paths {
         let rel = drop_segments(&path, parts.group.len());
@@ -204,12 +221,11 @@ fn drop_segments(path: &str, n: usize) -> String {
 }
 
 /// Walk the search pages, collecting asset paths.
-async fn paginate(
-    client: &NexusClient,
-    base: &str,
-    repo: &str,
-    group: &[String],
-) -> Result<Vec<String>, Error> {
+///
+/// The `group` search parameter is deliberately never sent: on a real Nexus it
+/// matches Maven coordinates, not raw path prefixes, which emptied deep
+/// listings. Scoping is the caller's client-side filter.
+async fn paginate(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<String>, Error> {
     let url = reqwest::Url::parse(base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;
     let mut origin = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
     if let Some(port) = url.port() {
@@ -218,11 +234,6 @@ async fn paginate(
     let mut endpoint = reqwest::Url::parse(&format!("{origin}/service/rest/v1/search/assets"))
         .map_err(|e| Error::misuse(format!("search endpoint: {e}")))?;
     endpoint.query_pairs_mut().append_pair("repository", repo);
-    if !group.is_empty() {
-        endpoint
-            .query_pairs_mut()
-            .append_pair("group", &group.join("/"));
-    }
     let mut paths = Vec::new();
     let mut next: Option<String> = None;
     // A hostile or broken endpoint can emit continuation tokens forever.
@@ -303,13 +314,59 @@ mod tests {
         };
         let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
 
-        let err = paginate(&client, server.base_url().as_str(), "raw", &[])
+        let err = paginate(&client, server.base_url().as_str(), "raw")
             .await
             .unwrap_err();
         assert!(
             err.to_string().contains("pagination exceeded"),
             "the cap fires: {err}"
         );
+    }
+
+    /// The enumerator counts what it hides: a `.sha256` marker in the search
+    /// page never appears as an entry and raises the hidden counter, which the
+    /// CLI turns into a visible warning line.
+    #[tokio::test]
+    async fn search_entries_count_hides_markers_visibly() {
+        let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Atomic).unwrap();
+        let page = serde_json::json!({
+            "items": [
+                {"path": "1.0.0/app.zip"},
+                {"path": "1.0.0/app.zip.sha256"},
+                {"path": "1.0.0/needs.json"},
+            ],
+        });
+        server.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let cfg = crate::config::Config {
+            base: server.base_url(),
+            tls_insecure: false,
+            workers: 1,
+            retry_attempts: 1,
+            connect_timeout: std::time::Duration::from_secs(5),
+            stall_timeout: std::time::Duration::from_secs(5),
+            auth: None,
+        };
+        let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
+
+        let (entries, hidden) = search_entries_counted(
+            &client,
+            &format!("{}/repository/raw/1.0.0/", server.base_url()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(hidden, 1, "one marker hidden");
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["app.zip", "needs.json"], "no marker among entries");
+
+        // The plain listing stays the same shape: the marker never surfaces.
+        let plain = search_entries(
+            &client,
+            &format!("{}/repository/raw/1.0.0/", server.base_url()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain.len(), 2);
     }
 
     #[test]

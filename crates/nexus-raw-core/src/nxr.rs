@@ -699,6 +699,15 @@ impl Nxr {
         layout::ls::search_entries(&self.client, &self.base).await
     }
 
+    /// [`Self::ls_entries`] plus the number of `.sha256` markers the enumerator hid.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`Self::ls_entries`].
+    pub async fn ls_entries_counted(&self) -> Result<(Vec<layout::ls::Entry>, usize), Error> {
+        layout::ls::search_entries_counted(&self.client, &self.base).await
+    }
+
     /// Version tokens under this base via the search API (experimental, the version view).
     ///
     /// # Errors

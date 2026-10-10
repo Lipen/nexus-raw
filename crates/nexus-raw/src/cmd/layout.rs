@@ -26,7 +26,7 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
             );
         }
     } else {
-        let entries = ctx.nxr.ls_entries().await?;
+        let (entries, hidden) = ctx.nxr.ls_entries_counted().await?;
         for e in &entries {
             match e.kind {
                 nexus_raw_core::EntryKind::Dir => {
@@ -45,6 +45,15 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
                     );
                 }
             }
+        }
+        if hidden > 0 {
+            // The enumerator hides markers by design: naming the count keeps
+            // the undercount visible instead of a silent surprise.
+            print_line(
+                ctx.json,
+                &format!("{hidden} marker objects hidden (fetch one by adding .sha256)"),
+                &serde_json::json!({"event": "hidden", "count": hidden}),
+            );
         }
     }
     Ok(())

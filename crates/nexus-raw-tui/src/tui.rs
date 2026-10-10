@@ -161,7 +161,7 @@ fn restore_terminal() {
         DisableMouseCapture,
         DisableBracketedPaste
     );
-    // ratatui hides the cursor on every frame; leaving the alternate screen
+    // ratatui hides the cursor on every frame. Leaving the alternate screen
     // does not bring it back.
     let _ = execute!(stdout(), crossterm::cursor::Show);
 }
@@ -185,7 +185,7 @@ async fn pump(
                 None => return Ok(()),
             },
             ev = input_rx.recv() => match ev {
-                // Unix reports only presses; Windows also reports releases and repeats.
+                // Unix reports only presses. Windows also reports releases and repeats.
                 Some(Event::Key(key)) if key.kind == KeyEventKind::Press => {
                     app.handle(Msg::Key(key));
                 }

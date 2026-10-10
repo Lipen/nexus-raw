@@ -116,6 +116,13 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                         plaintext_host = Some(host);
                     }
                 }
+                // The probe asks the service status endpoint first (computed
+                // before `base` moves into the config): a repository-root HEAD
+                // can answer 400 on URLs that are not a plain object path,
+                // which read as a failure. Any non-5xx answer still proves
+                // reachability, and the line says so, because a bare `400`
+                // reads as a bug.
+                let status_url = format!("{}/service/rest/v1/status", base.trim_end_matches('/'));
                 let cfg = nexus_raw_core::Config {
                     base,
                     tls_insecure: cli.tls_insecure,
@@ -126,21 +133,34 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                     auth,
                 };
                 match nexus_raw_core::NexusClient::new(&cfg, dead_progress()) {
-                    Ok(client) => match client.head_info(url).await {
-                        Ok(info) => {
-                            // A 401 or 403 means the server rejected the call: the probe is a
-                            // credentials failure, not a pass, whatever the status table says.
-                            let rejected = info.status == 401 || info.status == 403;
-                            let ok = !rejected && info.status < 500;
-                            let detail = if rejected {
-                                format!("HEAD {url} → HTTP {}: credentials rejected", info.status)
-                            } else {
-                                format!("HEAD {url} → HTTP {}", info.status)
-                            };
-                            report.push(("probe", ok, detail));
+                    Ok(client) => {
+                        let detail;
+                        let ok;
+                        match client.get_small(&status_url).await {
+                            Ok(Some(_)) | Ok(None) => {
+                                ok = true;
+                                detail =
+                                    "status endpoint answered: the server is reachable".to_owned();
+                            }
+                            _ => match client.head_info(url).await {
+                                Ok(info) => {
+                                    // A 401 or 403 means the server rejected the
+                                    // call: a credentials failure, not a pass.
+                                    let rejected = info.status == 401 || info.status == 403;
+                                    ok = !rejected && info.status < 500;
+                                    detail = format!(
+                                        "HEAD {url} → HTTP {}: any non-5xx means the server is reachable",
+                                        info.status
+                                    );
+                                }
+                                Err(e) => {
+                                    ok = false;
+                                    detail = e.to_string();
+                                }
+                            },
                         }
-                        Err(e) => report.push(("probe", false, e.to_string())),
-                    },
+                        report.push(("probe", ok, detail));
+                    }
                     Err(e) => report.push(("probe", false, e.to_string())),
                 }
             }

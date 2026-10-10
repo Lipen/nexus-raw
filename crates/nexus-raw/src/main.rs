@@ -381,6 +381,8 @@ fn main() -> std::process::ExitCode {
     let mut cli = Cli::parse();
     if let Err(e) = alias::apply_remote(&mut cli) {
         if cli.json {
+            // The NDJSON channel carries the failure alone: scripts parse this
+            // line, and a plaintext echo on stderr would leak into their logs.
             println!(
                 "{}",
                 serde_json::json!({
@@ -390,10 +392,11 @@ fn main() -> std::process::ExitCode {
                     "hint": e.hint(),
                 })
             );
-        }
-        eprintln!("error: {e}");
-        if let Some(h) = e.hint() {
-            eprintln!("hint: {h}");
+        } else {
+            eprintln!("error: {e}");
+            if let Some(h) = e.hint() {
+                eprintln!("hint: {h}");
+            }
         }
         return std::process::ExitCode::from(e.exit_code());
     }
@@ -405,8 +408,8 @@ fn main() -> std::process::ExitCode {
         Ok(code) => std::process::ExitCode::from(code),
         Err(e) => {
             if cli.json {
-                // The NDJSON channel must see the failure too: scripts parse this
-                // line, they do not scrape stderr.
+                // The NDJSON channel carries the failure alone: scripts parse
+                // this line, they do not scrape stderr.
                 println!(
                     "{}",
                     serde_json::json!({
@@ -416,10 +419,11 @@ fn main() -> std::process::ExitCode {
                         "hint": e.hint(),
                     })
                 );
-            }
-            eprintln!("error: {e}");
-            if let Some(hint) = e.hint() {
-                eprintln!("hint: {hint}");
+            } else {
+                eprintln!("error: {e}");
+                if let Some(hint) = e.hint() {
+                    eprintln!("hint: {hint}");
+                }
             }
             std::process::ExitCode::from(e.exit_code())
         }

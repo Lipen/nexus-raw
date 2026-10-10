@@ -614,7 +614,8 @@ fn cut_body_first_get_truncated_then_honest() {
     assert_eq!(body, b"0123456789");
 }
 
-/// cut-body with a lying length: the first GET promises `total + 1024` and breaks after `after_bytes`; the retry is honest.
+/// cut-body with a lying length: the first GET promises `total + 1024` and breaks after `after_bytes`.
+/// The retry is honest.
 #[test]
 fn cut_body_fake_length_lies_high() {
     let server = MockNexus::start(Scenario::CutBody {

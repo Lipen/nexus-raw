@@ -166,8 +166,9 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
 
 /// Run the plan: claim first and alone, then the rest under the worker semaphore.
 ///
-/// Per-name failures land in `Summary.failed`; a diverging digest refuses the run as
-/// [`Error::Mismatch`], a transport failure surfaces as its own error after retries.
+/// Per-name failures land in `Summary.failed`.
+/// A diverging digest refuses the run as [`Error::Mismatch`].
+/// A transport failure surfaces as its own error after retries.
 ///
 /// # Errors
 ///

@@ -1128,6 +1128,30 @@ fn test_hex(bytes: &[u8]) -> String {
         .collect()
 }
 
+/// `--json` failures print exactly one NDJSON error line and nothing on stderr:
+/// scripts parse stdout, and a plaintext echo would leak into their pipelines.
+#[test]
+fn json_failure_prints_ndjson_only() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}1.14.0/missing.bin", dir_url(&srv));
+
+    let mut cmd = Command::new(NXR);
+    cmd.args(["--json", "get", "--retry", "1", &url, "-o", "x.bin"])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD");
+    let out = cmd.output().expect("nxr binary runs");
+    assert_eq!(code(&out), 1, "the storage 404 is data");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(stderr.len(), 0, "stderr must stay empty: {stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).expect("one JSON line");
+    assert_eq!(parsed["event"], "error");
+    assert_eq!(parsed["code"], 1);
+    assert!(parsed["hint"].is_string());
+}
+
 /// rate-limit: the run spends retries on the 429s, the NDJSON stream names them, and the upload still lands with exit 0.
 #[test]
 fn rate_limit_up_retries_and_succeeds() {
@@ -1606,9 +1630,11 @@ fn failing_up_still_flushes_ndjson_events() {
             &dir_url(&srv),
         ]);
         expect_exit(&up, 3, "an exhausted cut-off upload is transport");
+        // With --json the NDJSON stream is the only channel: stderr stays empty,
+        // and the hint rides the error object below.
         assert!(
-            stderr(&up).contains("hint:"),
-            "a hint accompanies the failure: {}",
+            stderr(&up).is_empty(),
+            "no plaintext echo beside --json: {}",
             stderr(&up)
         );
         let events = ndjson(&up);
@@ -1659,9 +1685,10 @@ fn failing_up_still_flushes_ndjson_events() {
         "1",
     ]);
     expect_exit(&guarded, 3, "an auth-gated up is an auth failure");
+    // The NDJSON stream is the only channel: the hint rides the error object.
     assert!(
-        stderr(&guarded).contains("hint:"),
-        "a hint accompanies the failure: {}",
+        stderr(&guarded).is_empty(),
+        "no plaintext echo beside --json: {}",
         stderr(&guarded)
     );
     let lines = ndjson(&guarded);
@@ -1770,11 +1797,15 @@ fn doctor_probe_rejects_rejected_credentials() {
         .expect("the probe is reported");
     assert_eq!(probe["ok"], false);
     assert!(
+        probe["detail"].as_str().unwrap().contains("HTTP 401"),
+        "got: {probe}"
+    );
+    assert!(
         probe["detail"]
             .as_str()
             .unwrap()
-            .contains("credentials rejected"),
-        "got: {probe}"
+            .contains("any non-5xx means the server is reachable"),
+        "the reachability note rides every HEAD fallback line: {probe}"
     );
 
     let good = nxr(&["--json", "-u", "nexus:secret", "doctor", &url]);

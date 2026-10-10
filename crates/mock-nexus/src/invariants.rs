@@ -189,7 +189,7 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         name: "No service REST endpoint.",
         behavior: &[
             "The service REST endpoint (`/service/rest/v1/repositories`) answers `404` like a store miss: an installation without the management API (an old Nexus, or a non-Sonatype server).",
-            "Storage behavior is `atomic`; only `service repos` notices.",
+            "Storage behavior is `atomic`. Only `service repos` notices.",
         ],
         invariant: "The service REST endpoint is optional: the client refuses with a hint that names the server root, and every storage command is unaffected.",
     },
@@ -295,7 +295,7 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
     ScenarioDoc {
         id: "detail-in-hint",
         name: "A write refusal carries a short server sentence.",
-        behavior: &["Every write answers `403` with a `please ask the administrator` body; reads behave like `atomic`."],
+        behavior: &["Every write answers `403` with a `please ask the administrator` body. Reads behave like `atomic`."],
         invariant: "The server body rides the hint after `server says:`, so the user reads the refusal in the server's own words.",
     },
 ];

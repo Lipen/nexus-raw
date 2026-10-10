@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `get --continue` validates the finished file against the `.sha256` sibling (the local one, or the server's when the local is absent) and refuses with exit 1 on divergence: a garbage or foreign `.part` can no longer silently corrupt the target.
   The corrupted part is removed, the target path stays untouched.
+- `doctor` probes `/service/rest/v1/status` instead of a HEAD of the repository root, and the probe line explains that any non-5xx answer means the server is reachable.
 - A storage 404 (a missing object or version) exits 1 as a data fact, not 3 as transport: scripts branch on 0 proceed, 1 absent, 3 retry.
   The service-API 404 keeps exit 3.
   The docs had promised the data class since the agent cookbook landed, the code disagreed, an external agent caught the divergence.

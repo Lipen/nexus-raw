@@ -406,8 +406,8 @@ mod tests {
     }
 
     /// One name per delta state against an in-process mock-nexus.
-    /// `a.zip` is same, `b.zip` missing-local, `c.zip` missing-remote, `d.zip` diverged;
-    /// the conventional `manifest.json` at the directory URL enumerates all four.
+    /// `a.zip` is same, `b.zip` missing-local, `c.zip` missing-remote, `d.zip` diverged.
+    /// The conventional `manifest.json` at the directory URL enumerates all four.
     fn seed_four_states() -> (MockNexus, tempfile::TempDir) {
         let srv = MockNexus::start(Scenario::Atomic).expect("mock nexus starts");
         let local = tempfile::tempdir().expect("tempdir");

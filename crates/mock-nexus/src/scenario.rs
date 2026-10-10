@@ -424,7 +424,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
     }
 
     // service-overview scenarios: the server endpoints answer before the storage store is consulted.
-    // Each arm writes its response and returns; storage scenarios fall through to the match below.
+    // Each arm writes its response and returns. Storage scenarios fall through to the match below.
     if matches!(req.method.as_str(), "GET" | "HEAD") {
         let service = match path {
             "service/rest/v1/status" => match shared.scenario {

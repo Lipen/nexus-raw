@@ -1482,7 +1482,8 @@ impl App {
         }
     }
 
-    /// A left click selects the row under the pointer; a second click on the
+    /// A left click selects the row under the pointer.
+    /// A second click on the
     /// same row within [`DOUBLE_CLICK`] activates it.
     /// With the local pane open, the left half selects in the pane and the
     /// right half in the list.
@@ -2788,7 +2789,7 @@ impl App {
 
     /// One file with the direct get primitive, digest-checked against the
     /// `.sha256` sibling when present. `flat` lands the file straight under
-    /// `base` as `{base}/{name}` (the local pane anchor); otherwise the path
+    /// `base` as `{base}/{name}` (the local pane anchor). Otherwise the path
     /// from the repository root mirrors below `base`.
     fn download_file(&mut self, path: Vec<String>, row: &Row, base: PathBuf, flat: bool) {
         let Some(t) = self.tabs.get(self.tab) else {
@@ -2841,7 +2842,7 @@ impl App {
 
     /// Starts a subtree walk. `scope_relative` strips the scope prefix from
     /// the collected names, so they land straight under `dst` (the dialog's
-    /// `{dir}/{name}`); from-root names mirror the repository under `dst`.
+    /// `{dir}/{name}`). From-root names mirror the repository under `dst`.
     fn begin_walk(&mut self, repo: RepoRow, rel: String, dst: PathBuf, scope_relative: bool) {
         if self.transfer_busy() {
             self.status = "transfer in flight: one at a time".into();
@@ -3018,7 +3019,7 @@ impl App {
                 t.entries = entries;
                 t.screen = Screen::Tree;
                 // A refresh keeps the filter and puts the cursor back on its
-                // row; a descend or an open starts clean.
+                // row. A descend or an open starts clean.
                 match t.keep_cursor_name.take() {
                     Some(name) => {
                         let rows = t.rows();
@@ -3054,7 +3055,7 @@ impl App {
     }
 
     /// Folds an expansion result into the tree: the folder opens with its
-    /// cached children; a stale result only drops the loading marker.
+    /// cached children. A stale result only drops the loading marker.
     fn on_expand(&mut self, tab: usize, gen: u64, dir_rel: String, res: Result<Vec<Entry>, Error>) {
         let Some(t) = self.tabs.get_mut(tab) else {
             return;
@@ -3247,7 +3248,7 @@ impl App {
             }
             DlEv::Plan { transfer, skip } => {
                 dl.planned = Some((transfer, skip));
-                // A download learns the count at Start; an upload learns it here.
+                // A download learns the count at Start. An upload learns it here.
                 if dl.files.is_none() {
                     dl.files = Some(transfer);
                 }
@@ -5678,7 +5679,7 @@ mod tests {
         app.handle(Msg::Key(key(KeyCode::Down)));
         app.handle(Msg::Key(key(KeyCode::Left)));
         assert_eq!(app.tabs[0].tree_cursor, 0);
-        // Right on the expanded folder collapses it; right again reopens it
+        // Right on the expanded folder collapses it. Right again reopens it
         // from the cache without another load.
         app.handle(Msg::Key(key(KeyCode::Right)));
         assert!(!app.tabs[0].open.contains("app"));
@@ -5881,7 +5882,7 @@ mod tests {
             app.tabs[0].selected_row().map(|r| r.name),
             Some("apple.txt".to_owned())
         );
-        // r rereads; the landed listing keeps the filter and the cursor row.
+        // r rereads. The landed listing keeps the filter and the cursor row.
         app.handle(Msg::Key(key(KeyCode::Char('r'))));
         app.handle(Msg::Entries {
             tab: 0,

@@ -50,7 +50,7 @@ url = \"http://127.0.0.1:8081/\"
 ";
 
 /// One server preset: a label and a server root URL.
-/// The label names the tab; the URL is what every request resolves against.
+/// The label names the tab. The URL is what every request resolves against.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerCfg {
     /// The preset name and tab label.
@@ -238,7 +238,7 @@ pub fn default_path() -> Option<PathBuf> {
 }
 
 /// Loads the config file.
-/// A missing file is the default config; a broken file is a misuse error.
+/// A missing file is the default config. A broken file is a misuse error.
 ///
 /// # Errors
 ///

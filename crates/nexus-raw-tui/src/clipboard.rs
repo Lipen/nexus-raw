@@ -1,6 +1,6 @@
 //! Clipboard: OSC52 to the terminal first, then the platform tool.
 //!
-//! OSC52 works over ssh and needs no child process; the external tools cover
+//! OSC52 works over ssh and needs no child process. The external tools cover
 //! terminals that drop the escape. Nothing is reported on failure: the `copied`
 //! toast only appears after [`copy`], so a silent miss is possible by design.
 

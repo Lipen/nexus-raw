@@ -1,7 +1,7 @@
 //! Remote aliases: named endpoints in a TOML file, resolved only when the invocation names one.
 //!
 //! The file never loads implicitly: no `-R`, no read.
-//! That keeps the curl-model contract intact — a call without the flag behaves
+//! That keeps the curl-model contract intact: a call without the flag behaves
 //! exactly like a call on a machine without the file.
 
 use std::collections::BTreeMap;
@@ -200,7 +200,8 @@ impl Aliases {
 /// Expand an alias URL against a path argument.
 ///
 /// The argument is joined onto the alias base when it looks relative
-/// (no scheme, does not start with `/`); an absolute path or a full URL passes through.
+/// (no scheme, does not start with `/`).
+/// An absolute path or a full URL passes through.
 /// `.` on a repository-root alias stays the root itself.
 #[must_use]
 pub fn join(base: &str, arg: &str) -> String {
@@ -240,8 +241,8 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
         }
         C::Diff { src, .. } => vec![std::ptr::addr_of!(*src).cast_mut()],
         C::Sha { target } => {
-            // A local path is common; the alias join passes it through unchanged
-            // unless it looks relative to the alias — but sha of a local path
+            // A local path is common, and the alias join passes it through unchanged
+            // unless it looks relative to the alias. But sha of a local path
             // has no scheme, so rewriting it would corrupt it. Skip: sha takes
             // URLs only as `http(s)://…`, which never needs an alias.
             let _ = target;
@@ -266,7 +267,7 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
 
 /// Resolve `-R`: expand URL arguments through the alias and attach the alias credentials.
 ///
-/// Priority: `-u` wins over the alias credentials; the alias wins over ambient env.
+/// Priority: `-u` wins over the alias credentials. The alias wins over ambient env.
 ///
 /// # Errors
 ///

@@ -9,7 +9,7 @@ pub struct NxrSummary {
     pub uploaded: u32,
     pub downloaded: u32,
     pub skipped: u32,
-    /// Names the call deleted (`rm`); transfers never delete and stay at 0.
+    /// Names the call deleted (`rm`). Transfers never delete and stay at 0.
     pub removed: u32,
     pub failed: Vec<String>,
 }

@@ -21,7 +21,7 @@ export interface NxrAuth {
  * The options every command shares: transport tuning, credentials, events.
  */
 export interface NxrCommonOpts {
-  /** Explicit credentials; they win over the environment fallback. */
+  /** Explicit credentials. They win over the environment fallback. */
   auth?: NxrAuth
   /** Parallel artifact transfers, 1..=64, default 8. */
   workers?: number
@@ -35,7 +35,7 @@ export interface NxrCommonOpts {
   tlsInsecure?: boolean
   /**
    * Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
-   * Events cross threads; every event has reached the callback by the time the
+   * Events cross threads: every event has reached the callback by the time the
    * promise settles.
    * Shapes: `plan`, `artifact` (states uploading/downloading/done/skipped),
    * `retrying`, `summary`, and `removing`/`removed`/`missing` from `rm`.
@@ -79,7 +79,7 @@ export interface NxrSummary {
   uploaded: number
   downloaded: number
   skipped: number
-  /** Names the call deleted (`rm`); transfers never delete and stay at 0. */
+  /** Names the call deleted (`rm`). Transfers never delete and stay at 0. */
   removed: number
   failed: string[]
 }
@@ -98,7 +98,7 @@ export interface NxrPlan {
 }
 
 export interface NxrGetOpts extends NxrCommonOpts {
-  /** Output file; without it the body streams to the process stdout, like the CLI. */
+  /** Output file. Without it the body streams to the process stdout, like the CLI. */
   out?: string
   /** Resume from an existing `<out>.part` through a Range request. */
   cont?: boolean
@@ -190,7 +190,7 @@ export interface NxrRmPlan {
   actions: NxrRmPlanAction[]
 }
 
-/** The content facts one side holds for a name; `null` means the fact is unknown, never that it differs. */
+/** The content facts one side holds for a name. `null` means the fact is unknown, never that it differs. */
 export interface NxrDeltaSide {
   /** The sha256 digest, when the side carries one. */
   digest: string | null
@@ -226,9 +226,9 @@ export interface NxrDeltaReport {
 }
 
 export interface NxrMirrorOpts extends NxrCommonOpts {
-  /** Explicit credentials for the source; they win over `auth` and the environment fallback. */
+  /** Explicit credentials for the source. They win over `auth` and the environment fallback. */
   srcAuth?: NxrAuth
-  /** Explicit credentials for the destination; they win over `auth` and the environment fallback. */
+  /** Explicit credentials for the destination. They win over `auth` and the environment fallback. */
   dstAuth?: NxrAuth
   /** Enumeration source at the source repository: a manifest file, URL or `-` for stdin. */
   manifest?: string
@@ -264,7 +264,7 @@ export function get(url: string, opts?: NxrGetOpts): Promise<NxrGetResult>
 
 /**
  * PUT a file path or an exact byte body, optionally with its sha-sibling.
- * A string source is a file path (like the CLI `-f`); a Buffer is the exact bytes.
+ * A string source is a file path (like the CLI `-f`). A Buffer is the exact bytes.
  */
 export function put(url: string, source: string | Buffer, opts?: NxrPutOpts): Promise<NxrPutResult>
 
@@ -334,7 +334,9 @@ export function channelSet(
 /** DELETE a pointer file: absence is a normal outcome, like `point --clear`. */
 export function pointClear(url: string, opts?: NxrCommonOpts): Promise<NxrPointClearResult>
 
-/** List the asset names the server search API reports for this directory (`ls --assets`). */
+/** Flat artifact names under a version directory URL: the URL must point inside
+ * `/repository/<name>/<group...>/<version>/`. The listing runs through the server
+ * search API, and `.sha256` siblings are never returned (fetch one by name). */
 export function lsAssets(url: string, opts?: NxrCommonOpts): Promise<Array<string>>
 
 /** List the version tokens the server search API reports for this directory (`ls`). */
@@ -351,6 +353,25 @@ export interface NxrRepoInfo {
 
 /** List the repositories of the server behind `url` (the service REST API, not the storage protocol). */
 export function serviceRepos(url: string, opts?: NxrCommonOpts): Promise<Array<NxrRepoInfo>>
+
+/** One asset of a repository, as the search API reports it: the path, the server-side
+ * digest when the server carries one, and the size. The cheapest integrity probe:
+ * one call returns the whole snapshot with sha256 per file. */
+export interface NxrAssetEntry {
+  path: string
+  url: string
+  /** Asset size in bytes, when the server reports it. */
+  size?: number
+  /** The sha256 digest, when the server reports it. */
+  sha256?: string
+  /** The last modification timestamp, when the server reports it. */
+  lastModified?: string
+}
+
+/** Every asset of the repository behind `url` (a repository root or anything inside it),
+ * through the search API, with pagination handled: the full snapshot in one call.
+ * `q` filters by substring server-side, `prefix` narrows to whole-segment path prefixes. */
+export function serviceAssets(url: string, q?: string, prefix?: Array<string>, opts?: NxrCommonOpts): Promise<Array<NxrAssetEntry>>
 
 /** One immediate child of a raw directory: a folder or a file. */
 export interface NxrLsEntry {
