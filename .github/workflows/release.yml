@@ -465,6 +465,7 @@ jobs:
               "@nexus-raw/linux-arm64-gnu": version,
               "@nexus-raw/darwin-x64": version,
               "@nexus-raw/darwin-arm64": version,
+              "@nexus-raw/win32-x64-msvc": version,
             },
           };
           fs.mkdirSync("pkg-main", { recursive: true });
