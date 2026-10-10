@@ -411,16 +411,23 @@ jobs:
           node <<'EOF'
           const fs = require("fs");
           const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
-          const dirs = fs.readdirSync("npm/@nexus-raw").map((d) => "@nexus-raw/" + d);
-          if (dirs.length !== 4) {
-            throw new Error(`expected 4 staged packages, found ${dirs.length}`);
+          const expected = [
+            "@nexus-raw/linux-x64-gnu",
+            "@nexus-raw/linux-arm64-gnu",
+            "@nexus-raw/darwin-x64",
+            "@nexus-raw/darwin-arm64",
+            "@nexus-raw/win32-x64-msvc",
+          ];
+          const dirs = fs.readdirSync("npm/@nexus-raw").map((d) => "@nexus-raw/" + d).sort();
+          if (JSON.stringify(dirs) !== JSON.stringify(expected)) {
+            throw new Error(`staged packages ${dirs.join(", ")} do not match the expected ${expected.join(", ")}`);
           }
           for (const dir of dirs) {
-            const pkg = JSON.parse(fs.readFileSync(`crates/nexus-raw-napi/npm/${dir}/package.json`, "utf8"));
-            if (!fs.existsSync(`crates/nexus-raw-napi/npm/${dir}/index.node`)) {
+            const pkg = JSON.parse(fs.readFileSync(`npm/@nexus-raw/${dir.slice("@nexus-raw/".length)}/package.json`, "utf8"));
+            if (!fs.existsSync(`npm/@nexus-raw/${dir.slice("@nexus-raw/".length)}/index.node`)) {
               throw new Error(`${dir}: index.node is missing`);
             }
-            if (pkg.name !== "nexus-raw-" + dir.slice(4)) {
+            if (pkg.name !== dir) {
               throw new Error(`${dir}: package name ${pkg.name} does not match the artifact`);
             }
             if (pkg.version !== main.version) {
@@ -438,7 +445,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for d in npm/npm-*/; do
+          for d in npm/@nexus-raw/*/; do
             name="$(node -p "require('./$d/package.json').name")"
             if npm view "$name@$version" version > /dev/null 2>&1; then
               echo "$name@$version is already on the registry, skipping"
@@ -483,7 +490,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for name in @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64; do
+          for name in @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64 @nexus-raw/win32-x64-msvc; do
             # The registry serves fresh publishes with a lag: a check that runs
             # right after the platform publish can miss a package that landed.
             # Retry before refusing, so a green release never dies to propagation.
@@ -507,8 +514,8 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
-            echo "nexus-raw@$version is already on the registry, skipping"
+          if npm view "@nexus-raw/nxr@$version" version > /dev/null 2>&1; then
+            echo "@nexus-raw/nxr@$version is already on the registry, skipping"
           else
             npm publish ./pkg-main --provenance --access public
           fi
@@ -564,7 +571,7 @@ jobs:
             sleep 30
           done
           [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
-          for name in @nexus-raw/nxr @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64; do
+          for name in @nexus-raw/nxr @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64 @nexus-raw/win32-x64-msvc; do
             ok=0
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
               if npm view "$name@$version" version > /dev/null 2>&1; then
