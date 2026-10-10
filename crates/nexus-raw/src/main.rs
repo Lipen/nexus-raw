@@ -13,6 +13,12 @@ use std::path::PathBuf;
 /// curl for a Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
 #[derive(Debug, Parser)]
 #[command(name = "nxr", version, about)]
+#[command(after_help = "\
+Agent entry points:
+  Every error carries a `hint:` line naming the next thing to check.
+  `--json` emits NDJSON (exit 0 ok, 1 data, 2 misuse, 3 transport).
+  Cookbook: https://lipen.github.io/nexus-raw/llms.txt
+  Source:   https://github.com/Lipen/nexus-raw")]
 pub(crate) struct Cli {
     /// Credentials as user:pass, curl style.
     /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD.
