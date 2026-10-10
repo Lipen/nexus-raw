@@ -37,7 +37,7 @@ fn complain(e: nexus_raw_core::Error) -> String {
 /// List the immediate children of a raw directory URL: folders first, then files, `.sha256` markers hidden.
 ///
 /// `auth` is the raw `Authorization` header value (`Basic ...`), passed through to the proxy when present.
-/// Returns a JSON array of `{name, dir}` rows; the error is a plain message string.
+/// Returns a JSON array of `{name, dir}` rows. The error is a plain message string.
 ///
 /// # Errors
 ///

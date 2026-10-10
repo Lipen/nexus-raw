@@ -411,7 +411,7 @@ class Conformance(unittest.TestCase):
             self.assertEqual(nx.sha(path), digest)
 
     def test_auth_401(self):
-        """Auth failures fail fast with no retries and name the URL; the right credentials pass every method."""
+        """Auth failures fail fast with no retries and name the URL. The right credentials pass every method."""
         with mock_server("auth-401", "--auth", f"{USER}:{PASS}") as mock:
             anonymous = self.client()
             with self.assertRaises(nxr.AuthError) as raised:

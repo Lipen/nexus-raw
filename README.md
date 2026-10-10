@@ -92,12 +92,12 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
 | `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
 | `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh] [--plan]` | enumerate → diff → stream+hash → rename + local marker |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha); exit 1 when different, nothing written |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written |
 | `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | enumerate at the source, diff at the destination, copy bytes + markers |
 | `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
 | `nxr point --clear <URL>` | DELETE a pointer file (channel ref, absent is fine) |
-| `nxr ls <URL> [--assets]` | the raw-tree listing of a directory URL, any depth (folders `/`-marked); `--assets`: flat artifact names |
+| `nxr ls <URL> [--assets]` | the raw-tree listing of a directory URL, any depth (folders `/`-marked). `--assets`: flat artifact names |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token (`--if-forward` accepts only forward moves in dotted-numeric order) |
 | `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
