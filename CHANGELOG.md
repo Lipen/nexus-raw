@@ -5,15 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.11.0] - 2026-10-10
+
 ### Changed
 
 - The npm package is renamed: `nexus-raw` becomes `@nexus-raw/nxr`, and the platform addons become `@nexus-raw/<platform>` (linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64, win32-x64-msvc).
   The publish rides GitHub OIDC trusted publishing, no tokens.
   The Windows npm addon joins the matrix: `npm install @nexus-raw/nxr` works on Windows x64 without a local toolchain.
   The old unscoped name will be deprecated after this release settles; the import and the install line change with the name.
+- The napi surface grows `serviceAssets()`: the full repository snapshot with server-reported sha256 per asset, the cheapest integrity probe in one call.
 
 ### Fixed
 
+- `get --continue` validates the resumed download against the `.sha256` sibling: a garbage or foreign `.part` can no longer silently corrupt the target.
 - `ls` names the count of markers its enumerator hides (`N marker objects hidden`), so a short listing is a fact and not a silent surprise.
 
 ## [0.10.0] - 2026-10-10
@@ -212,7 +218,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Lipen/nexus-raw/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Lipen/nexus-raw/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Lipen/nexus-raw/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Lipen/nexus-raw/compare/v0.7.0...v0.8.0
