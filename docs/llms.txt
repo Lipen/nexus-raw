@@ -3,7 +3,7 @@
 > curl for a Sonatype Nexus raw repository: URL in argv, credentials from `-u` or env, no config file.
 > Resumable verified directory transfers, digests, channels, plus server metadata over the service REST API.
 
-Install: `cargo install nexus-raw`, or `npm install nexus-raw` under node.
+Install: `cargo install nexus-raw`, or `npm install @nexus-raw/nxr` under node.
 Prebuilt binaries on the releases page: https://github.com/Lipen/nexus-raw/releases
 
 The agent minimum:

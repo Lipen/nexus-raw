@@ -7,7 +7,7 @@
 
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import pkg from "nexus-raw";
+import pkg from "@nexus-raw/nxr";
 const { up, down, verify, channelSet, channelGet } = pkg;
 
 const mock = process.argv[2] ? { url: process.argv[2], child: null } : await spawnMock();

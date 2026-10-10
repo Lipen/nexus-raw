@@ -113,7 +113,7 @@ The `nexus-raw-napi` crate ships a subset of the surface to Node as promises: th
 Install from the registry:
 
 ```bash
-npm install nexus-raw
+npm install @nexus-raw/nxr
 ```
 
 Prebuilt addons ship for `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64` and `darwin-arm64`.

@@ -13,7 +13,7 @@
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
 [![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
-[![npm](https://img.shields.io/npm/v/nexus-raw.svg)](https://www.npmjs.com/package/nexus-raw)
+[![npm](https://img.shields.io/npm/v/@nexus-raw/nxr.svg)](https://www.npmjs.com/package/@nexus-raw/nxr)
 
 [Документация](https://lipen.github.io/nexus-raw/) · [Установка](#установка) · [Быстрый старт](#быстрый-старт) · [Команды](#команды) · [README in English](README.md)
 
@@ -40,7 +40,7 @@ cargo binstall nexus-raw
 Из npm, нативный аддон ставится готовым пакетом:
 
 ```bash
-npm install nexus-raw
+npm install @nexus-raw/nxr
 ```
 
 Из crates.io:

@@ -5,7 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The npm package is renamed: `nexus-raw` becomes `@nexus-raw/nxr`, and the platform addons become `@nexus-raw/<platform>` (linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64).
+  The publish rides GitHub OIDC trusted publishing, no tokens.
+  The old unscoped name will be deprecated after this release settles; the import and the install line change with the name.
 
 ## [0.10.0] - 2026-10-10
 

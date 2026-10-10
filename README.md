@@ -13,7 +13,7 @@ The same engine ships as three surfaces: the `nxr` CLI, the `nexus-raw-core` Rus
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
 [![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
-[![npm](https://img.shields.io/npm/v/nexus-raw.svg)](https://www.npmjs.com/package/nexus-raw)
+[![npm](https://img.shields.io/npm/v/@nexus-raw/nxr.svg)](https://www.npmjs.com/package/@nexus-raw/nxr)
 
 [Docs](https://lipen.github.io/nexus-raw/) · [Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
 
@@ -40,7 +40,7 @@ cargo binstall nexus-raw
 From npm, with the native addon fetched as a prebuilt package:
 
 ```bash
-npm install nexus-raw
+npm install @nexus-raw/nxr
 ```
 
 From crates.io:

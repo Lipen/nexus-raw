@@ -1,5 +1,5 @@
 {
-  "name": "nexus-raw",
+  "name": "@nexus-raw/nxr",
   "version": "0.10.0",
   "license": "MIT",
   "repository": {
@@ -43,5 +43,8 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.10.6"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
