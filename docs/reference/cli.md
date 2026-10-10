@@ -673,7 +673,9 @@ nxr ls <URL> [--assets]
 A raw repository is an arbitrary tree, and `ls` treats it as one: it lists the entries of a directory URL (folders first, then files, each sorted) at any depth.
 Folders carry a trailing `/`.
 Leaf `.sha256` siblings are hidden: they are derived data the protocol generates (fetch one by name, `ls` never lists it).
-The enumeration runs through the server search API (`/service/rest/v1/search/assets`), so a subtree the server has not indexed is invisible to `ls` even though its bytes are there; probe availability by name with `head` or `get` instead.
+The enumeration runs through the server search API (`/service/rest/v1/search/assets`), so a subtree the server has not indexed is invisible to `ls` even though its bytes are there.
+Probe availability by name with `head` or `get` instead.
+When the enumerator hides markers, `ls` names the count in a trailing line (`N marker objects hidden`), so a short listing is a fact, not a surprise.
 
 | Flag | Meaning |
 |:-----|:--------|

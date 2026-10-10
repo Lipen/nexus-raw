@@ -143,7 +143,7 @@ let cfg = Config {
 };
 let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
 let client = NexusClient::new(&cfg, nexus_raw_core::Progress::new(tx))?;
-// `client` is shared behind an Arc by the facade; every request it makes
+// `client` is shared behind an Arc by the facade. Every request it makes
 // retries, stalls and authenticates by exactly the policy configured above.
 ```
 

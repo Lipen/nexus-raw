@@ -166,7 +166,7 @@ GET, HEAD and PUT behave like `atomic`.
 No service REST endpoint.
 
 The service REST endpoint (`/service/rest/v1/repositories`) answers `404` like a store miss: an installation without the management API (an old Nexus, or a non-Sonatype server).
-Storage behavior is `atomic`; only `service repos` notices.
+Storage behavior is `atomic`. Only `service repos` notices.
 
 **Pinned invariant:** The service REST endpoint is optional: the client refuses with a hint that names the server root, and every storage command is unaffected.
 
@@ -285,6 +285,6 @@ No EULA gate on this server.
 
 A write refusal carries a short server sentence.
 
-Every write answers `403` with a `please ask the administrator` body; reads behave like `atomic`.
+Every write answers `403` with a `please ask the administrator` body. Reads behave like `atomic`.
 
 **Pinned invariant:** The server body rides the hint after `server says:`, so the user reads the refusal in the server's own words.

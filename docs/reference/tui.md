@@ -26,9 +26,11 @@ Positional URLs and `--server` presets compose: both open, in that order.
 An unknown preset name is a usage error (exit 2) that names the known presets.
 
 Inside the TUI, `s` opens the servers overlay: every server the session knows, with the open ones marked.
-`enter` focuses the tab of the selected server or connects a new one in the background; `a` opens the add form.
+`enter` focuses the tab of the selected server or connects a new one in the background.
+`a` opens the add form.
 A successfully added server joins the config as a preset under a fresh unique name (`host`, `host-2`, ...), so the next `nxr-tui` without arguments opens it too.
-`tab`/`backtab` and `1`-`9` switch tabs; every tab keeps its own screen, cursor and filter.
+`tab`/`backtab` and `1`-`9` switch tabs.
+Every tab keeps its own screen, cursor and filter.
 
 The overlay works against a refusing server the same way the CLI does: the error lands in the status bar with its hint, the form keeps the typed URL, nothing closes.
 
@@ -39,7 +41,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `up`/`down`, `k`/`j` | move the selection |
 | `pgup`/`pgdown` | move by page |
 | `home`/`end`, `g`/`G` | first/last row |
-| `right`, `enter` | open a folder or repository; on a file, open the file card |
+| `right`, `enter` | open a folder or repository: on a file, open the file card |
 | `left`, `esc`/`backspace` | up one level, then back to the repositories |
 | `e` | toggle the tree navigation mode (see below) |
 | `d` | download the selected entry into the destination folder |
@@ -47,17 +49,17 @@ The overlay works against a refusing server the same way the CLI does: the error
 | `p` | upload a local folder into the current tree position (source picker) |
 | `c` | copy the URL of the selection: the repository, the file or the folder |
 | `x` | cancel the running transfer |
-| `v` | toggle the local pane; `h`/`l` move the focus to it and back |
-| `space` | mark the selection; `d` transfers the marks as a queue |
+| `v` | toggle the local pane. `h`/`l` move the focus to it and back |
+| `space` | mark the selection. `d` transfers the marks as a queue |
 | `up`/`down` | in the pickers: walk the confirmed values of the session |
 | `o` | pick the destination folder of the session |
 | `i` | card of the selected repository (repositories screen) |
 | `r` | refresh the current listing, keeping the filter and the cursor |
-| `/` | filter the tree: type to narrow, enter applies, esc closes; backspace to empty closes too |
+| `/` | filter the tree: type to narrow, enter applies, esc closes, backspace to empty closes too |
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay, `a` opens the add form |
 | `?` | keybindings overlay |
-| `q`/`ctrl-c` | quit; twice while a transfer runs; inside an overlay or a modal, `q` closes it |
+| `q`/`ctrl-c` | quit. Twice while a transfer runs. Inside an overlay or a modal, `q` closes it |
 | mouse | wheel scrolls, click selects, double click opens a folder or the file card |
 
 ## The file card
@@ -100,7 +102,8 @@ An empty source opens the error modal without a retry.
 ## Dual-pane
 
 `v` splits the body: the left half shows a folder of the local filesystem, the right half keeps the repositories or the tree unchanged.
-The gate is a terminal of eighty columns; a narrower one answers `the terminal is too narrow for dual-pane` and nothing opens.
+The gate is a terminal of eighty columns.
+A narrower one answers `the terminal is too narrow for dual-pane` and nothing opens.
 A second `v` closes the pane, and the anchors return to the session destination.
 
 `h` moves the keyboard focus into the pane, `l` back to the remote side.
@@ -127,7 +130,8 @@ The marks are names, not row indices: a refresh keeps them, while any navigation
 ## Cancel
 
 `x` aborts the running transfer, whichever direction.
-The panel ends with `cancelled` and the status line says so; the stragglers of the aborted task are ignored, no modal opens.
+The panel ends with `cancelled` and the status line says so.
+The stragglers of the aborted task are ignored, no modal opens.
 There is no retry behind a cancel: starting again is a normal `d` or `p`.
 An upload cancelled in the middle leaves markerless objects behind, exactly like any interrupted `nxr up`: the next put completes them.
 
@@ -142,7 +146,8 @@ An error over an error passes the covered layer on, so a second refusal never bu
 
 ## Tree modes
 
-`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`); the choice is saved to the config file.
+`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`).
+The choice is saved to the config file.
 
 - `nav enter` (default): `right` enters a folder, `left` goes back up.
 - `nav expand`: `right` expands a folder inline (`▸`/`▾` markers, indented children, loading folders show `…`), `left` collapses it or jumps to the parent row. `enter` keeps entering folders, and the expansion folds on descend, on refresh and on the mode switch.
@@ -154,7 +159,8 @@ The derived `.sha256` siblings stay hidden, exactly as in `nxr ls`.
 
 ## Config
 
-The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`; `--config` overrides both.
+The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`.
+`--config` overrides both.
 A missing file is the default config, so the TUI works with nothing on disk.
 `nxr-tui --init-config` writes a commented template and refuses to overwrite an existing one.
 
@@ -241,7 +247,7 @@ CI uses the same mode: `cargo test -p nexus-raw-tui` drives the real binary agai
 |:-----|:--------|
 | `BASE_URL...` | server root URLs to open (positional, repeatable) |
 | `-s, --server <NAME>` | open the named config preset (repeatable) |
-| `-u, --user <USER:PASS>` | credentials, curl style; env fallback as in `nxr` |
+| `-u, --user <USER:PASS>` | credentials, curl style, env fallback as in `nxr` |
 | `--all-formats` | let repositories of every format be opened, not only raw |
 | `--smoke` | the headless browse-and-download flow |
 | `--config <PATH>` | alternative config file path |
@@ -250,9 +256,10 @@ CI uses the same mode: `cargo test -p nexus-raw-tui` drives the real binary agai
 ## Limitations
 
 - One credential set per session: `-u` or the environment applies to every server.
-- The search page cap of the core (100 pages) bounds every listing; a repository with more files needs the manifest enumeration path instead, which the TUI does not expose.
+- The search page cap of the core (100 pages) bounds every listing.
+  A repository with more files needs the manifest enumeration path instead, which the TUI does not expose.
 - A group repository passes the raw filter, but the search API it needs may refuse on the server, which the status bar shows as an error with its hint.
-- TLS verification is always on; there is no `--insecure` flag.
+- TLS verification is always on. There is no `--insecure` flag.
 - The tree listing is best-effort: the search API must exist on the server.
 
 Embedding the same operations without a terminal: [the API](api.md), [the CLI](cli.md).
