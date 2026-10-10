@@ -1072,6 +1072,62 @@ fn get_missing_object_is_data_not_transport() {
     assert!(!target.exists());
 }
 
+/// A resumed part is validated against the `.sha256` sibling the server
+/// carries: garbage in the part diverges after the download and the run
+/// refuses with exit 1, keeping nothing. The quiet-corruption guard.
+#[test]
+fn get_resume_validates_against_the_sibling() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", BETA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}\n", test_hex(BETA)).as_bytes(),
+    );
+    let url = format!("{}a.zip", dir_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.zip");
+    // A foreign garbage part from another session or a crashed run.
+    let part = out.path().join("a.zip.part");
+    std::fs::write(&part, vec![0xEEu8; 4096]).unwrap();
+
+    let get = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&get, 1, "the diverging resume is refused");
+    assert!(stderr(&get).contains("diverges"), "{}", stderr(&get));
+    // Nothing lands: the corrupted bytes never reach the target path.
+    assert!(!target.exists());
+}
+
+/// A matching part resumes normally: the guard never fires on honest parts.
+#[test]
+fn get_resume_with_matching_part_succeeds() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", BETA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}\n", test_hex(BETA)).as_bytes(),
+    );
+    let url = format!("{}a.zip", dir_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.zip");
+    // An honest prefix of the artifact.
+    std::fs::write(out.path().join("a.zip.part"), &BETA[..8]).unwrap();
+
+    let get = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&get, 0, "the honest resume lands the file");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// The lowercase hex sha256 of a byte slice, for sibling markers in tests.
+fn test_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest as _, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 /// rate-limit: the run spends retries on the 429s, the NDJSON stream names them, and the upload still lands with exit 0.
 #[test]
 fn rate_limit_up_retries_and_succeeds() {

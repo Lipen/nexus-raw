@@ -79,6 +79,37 @@ pub async fn get(
                 return Err(e);
             }
         };
+        // A resumed part is unvalidated until the bytes say otherwise: when a
+        // `.sha256` sibling exists (locally or on the server), the finished
+        // file is checked against it before the rename, and a divergence is
+        // a data error (exit 1), not a warning. The quiet-corruption guard.
+        if cont && resumed_from > 0 {
+            let mut sibling = out.clone().into_os_string();
+            sibling.push(".sha256");
+            let expected = if tokio::fs::try_exists(&sibling).await.unwrap_or(false) {
+                tokio::fs::read_to_string(&sibling)
+                    .await
+                    .ok()
+                    .and_then(|t| digest_hex(&t))
+            } else {
+                let remote = format!("{url}.sha256");
+                match client.get_small(&remote).await {
+                    Ok(Some(bytes)) => String::from_utf8(bytes).ok().and_then(|t| digest_hex(&t)),
+                    _ => None,
+                }
+            };
+            if let Some(expected) = expected {
+                if digest != expected {
+                    tokio::fs::remove_file(&part).await.ok();
+                    return Err(Error::Mismatch {
+                        name: out.display().to_string(),
+                        detail: format!(
+                            "resumed content diverges: the .sha256 sibling says {expected}, the bytes hash {digest}"
+                        ),
+                    });
+                }
+            }
+        }
         tokio::fs::rename(&part, &out)
             .await
             .map_err(|e| Error::io(&out, e))?;
@@ -206,6 +237,17 @@ fn part_of(out: &Path) -> PathBuf {
     let mut s = out.as_os_str().to_os_string();
     s.push(".part");
     PathBuf::from(s)
+}
+
+/// The sha256 sum inside a marker-style text (`<hex>` or `<hex>  <name>`).
+#[cfg(not(target_arch = "wasm32"))]
+fn digest_hex(text: &str) -> Option<Digest> {
+    let hex = text.split_whitespace().next()?;
+    if hex.len() == 64 && hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        Some(Digest::from_hex_string(hex.to_lowercase()))
+    } else {
+        None
+    }
 }
 
 /// The final path segment of a URL, percent-decoded: the marker's name field.
