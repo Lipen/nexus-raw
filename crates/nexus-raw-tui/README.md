@@ -42,12 +42,12 @@ The same bootstrap runs in `--smoke` mode, which is how CI exercises it.
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay: switch or add, `a` opens the add form |
 | `?` | keybindings overlay |
-| `q`/`ctrl-c` | quit; twice while a download runs |
+| `q`/`ctrl-c` | quit. twice while a download runs |
 | mouse | wheel scrolls, click selects, double click opens |
 
 ## Tree modes
 
-`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`); the choice is saved to the config file.
+`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`). The choice is saved to the config file.
 
 - `nav enter` (default): `right` enters a folder, `left` goes back up.
 - `nav expand`: `right` expands a folder inline (`▸`/`▾` markers, indented children, loading folders show `…`), `left` collapses it or jumps to the parent row. `enter` keeps entering folders, and the expansion folds on descend, on refresh and on the mode switch.
@@ -56,7 +56,7 @@ The mode is the config key `tui.nav = "enter" | "expand"`.
 
 ## Config
 
-The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`; `--config` overrides both.
+The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`. `--config` overrides both.
 `nxr-tui --init-config` writes a commented template and refuses to overwrite.
 
 ```toml
@@ -83,7 +83,7 @@ Passwords never live in the config: credentials come from `-u` or the environmen
 A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
 Downloads are one at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`.
 Everything else keeps working: browsing, filters, refreshes, info, tab switches, even adding a server.
-Navigation within the tab cancels a still-walking request; a running transfer is never interrupted by the UI.
+Navigation within the tab cancels a still-walking request. A running transfer is never interrupted by the UI.
 Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
 A panel shows the plan, the files in flight with byte progress and the final summary.
 Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.

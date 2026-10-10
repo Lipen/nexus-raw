@@ -16,7 +16,9 @@ The interesting rules are all client-side and all present:
 - `get` downloads the bytes and the sibling and refuses unless the digest matches.
   Completion is bytes plus the sibling: anything less is an exception, never a silent return.
 - A 2xx without `Content-Length` is present-but-unverifiable, never absent (`head` reports `length=None`).
-- 401/403 fail fast with no retries; 5xx and transport failures retry with backoff (4 attempts, 0.5s x 2^n, capped, jittered); a 429 honors its `Retry-After` pause, clamped to 1..=60 seconds, in place of the backoff.
+- 401/403 fail fast with no retries.
+  5xx and transport failures retry with backoff (4 attempts, 0.5s x 2^n, capped, jittered).
+  A 429 honors its `Retry-After` pause, clamped to 1..=60 seconds, in place of the backoff.
 - Redirects are never followed: a 301 surfaces as `HttpError` with the status.
 - The per-operation socket timeout is the stall watchdog: a frozen server aborts the attempt, a slow-but-moving transfer never trips it.
 - `ls` walks `/service/rest/v1/search/assets` with continuation tokens, capped at 100 pages, and diagnoses a repository-scoped 400 as "missing or not raw".
@@ -46,7 +48,7 @@ The current skip rows, with the reasons:
 
 | Scenario | Reason |
 |:---------|:-------|
-| `doc-drift` | The drift toggle is a library-only knob (`MockNexus::enable_drift`), so the binary serves plain storage; the client-side half, `version.json` being an ordinary name, is pinned under `atomic` |
+| `doc-drift` | The drift toggle is a library-only knob (`MockNexus::enable_drift`), so the binary serves plain storage. the client-side half, `version.json` being an ordinary name, is pinned under `atomic` |
 | `no-service` | The scenario only breaks `/service/rest/v1/repositories`, and the client has no service-repos surface |
 | `readonly` | The scenario only answers 403 to `DELETE`, and the client implements no delete |
 

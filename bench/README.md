@@ -24,7 +24,7 @@ They mean everything in relative terms: same machine, same tree, same code shape
 
 | Benches | What it exercises |
 |:--------|:------------------|
-| `scan` | the local walk (`Nxr::scan`), the front door of every plan; two tree sizes |
+| `scan` | the local walk (`Nxr::scan`), the front door of every plan. Two tree sizes |
 | `diff` | the delta report (`Nxr::delta`): local scan, remote probes over HEAD, classify |
 | `up` | the full put flow against an empty mock: bytes, then markers of the same name |
 | `down` | the full get flow with sibling digest checks: bytes plus `.sha256` verify |
@@ -123,7 +123,7 @@ The mechanism is workspace exclusion, not `.gitignore` and not a cargo feature:
 - `just check` runs the gate over the repo workspace only: bench code is neither compiled nor linted there.
 
 What the gate does still touch: the prek hygiene hooks (`trailing-whitespace`, `end-of-file-fixer`, `check-toml`) scan every tracked file, including the markdown and the manifest here.
-They are per-file and cost milliseconds; they are the only gate surface this directory adds.
+They are per-file and cost milliseconds. They are the only gate surface this directory adds.
 
 ## Layout
 

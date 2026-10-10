@@ -8,6 +8,7 @@ hooks = [
   { id = "cargo-fmt", name = "cargo fmt", entry = "cargo fmt --all -- --check", language = "system", pass_filenames = false },
   { id = "cargo-clippy", name = "cargo clippy", entry = "cargo clippy --workspace --all-targets -- -D warnings", language = "system", pass_filenames = false },
   { id = "check-external-names", name = "check external names", entry = "scripts/check-external-names.sh", language = "system", pass_filenames = false, types = ["text"] },
+  { id = "check-md-semicolon", name = "check markdown semicolons", entry = "scripts/check-md-semicolon.sh", language = "system", pass_filenames = false, types = ["markdown"] },
 ]
 
 [[repos]]

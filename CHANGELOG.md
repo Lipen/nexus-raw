@@ -14,7 +14,7 @@ Nothing yet.
 - The npm package is renamed: `nexus-raw` becomes `@nexus-raw/nxr`, and the platform addons become `@nexus-raw/<platform>` (linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64, win32-x64-msvc).
   The publish rides GitHub OIDC trusted publishing, no tokens.
   The Windows npm addon joins the matrix: `npm install @nexus-raw/nxr` works on Windows x64 without a local toolchain.
-  The old unscoped name will be deprecated after this release settles; the import and the install line change with the name.
+  The old unscoped name will be deprecated after this release settles. The import and the install line change with the name.
 - The napi surface grows `serviceAssets()`: the full repository snapshot with server-reported sha256 per asset, the cheapest integrity probe in one call.
 
 ### Fixed
@@ -70,7 +70,7 @@ Nothing yet.
 
 ### Fixed
 
-- The mock server rides out transient `accept()` errors (connection aborted, reset, interrupted) instead of dying mid-run; fatal errors are logged before the acceptor stops, and a unit test pins the classification.
+- The mock server rides out transient `accept()` errors (connection aborted, reset, interrupted) instead of dying mid-run. Fatal errors are logged before the acceptor stops, and a unit test pins the classification.
 
 ## [0.7.0] - 2026-10-08
 
@@ -79,7 +79,7 @@ Nothing yet.
 - `ls` diagnoses a 400 from a repository-scoped search: the new `SearchRepoMissing` error carries the hint `the repository is missing on the server or is not a raw repository`, while every other endpoint keeps the generic status hint.
 - The `search-400` scenario in `mock-nexus`: the search API answers 400 when the `repository` parameter names an unknown repository, like a real Nexus refusing a repository-scoped search, pinned by core, CLI and mock tests.
 - `diff(local_dir, remote_url, opts)` in the npm bindings: the four-way delta report (`same` / `missing-local` / `missing-remote` / `diverged`) with per-side digest and size facts, shaped like the CLI's `diff --json`.
-- The wasm sandbox: the fake Nexus moved into a ServiceWorker, so the page runs on static hosting with no backend at an origin root over https or localhost; the upstream proxy gains an upstream allowlist, rate limiting and response size caps; CI gates the wasm read surface.
+- The wasm sandbox: the fake Nexus moved into a ServiceWorker, so the page runs on static hosting with no backend at an origin root over https or localhost. The upstream proxy gains an upstream allowlist, rate limiting and response size caps. CI gates the wasm read surface.
 
 ## [0.6.0] - 2026-10-07
 

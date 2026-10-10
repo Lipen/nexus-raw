@@ -11,7 +11,7 @@ demand with `just stand`.
 just stand
 ```
 
-Docker is the only prerequisite; the pinned image is pulled on first use.
+Docker is the only prerequisite. The pinned image is pulled on first use.
 `NEXUS_BASE` and `NXR` retarget the battery at a different server or binary.
 
 ## Covered here, and what stays with the mock

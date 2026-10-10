@@ -394,7 +394,7 @@ docs *args:
     uvx zensical serve {{args}}
 
 # A docs link or config typo fails the build instead of shipping broken pages.
-[doc('Build the docs, check llms.txt and fail on issues.')]
+[doc('Build the docs, check hints, llms.txt and fail on issues.')]
 [group('docs')]
 check-docs *args:
     scripts/check-hints.sh

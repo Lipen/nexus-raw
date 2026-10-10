@@ -30,7 +30,7 @@ Open `http://localhost:8134/`: the page lists `/repository/demo/` on load.
 
 ## Serving an upstream
 
-The fake's repository is named `demo`; a real Nexus knows nothing about it.
+The fake's repository is named `demo`. A real Nexus knows nothing about it.
 Open the page with the repository you want: `http://localhost:8134/?repo=<name>`
 The listing then points at `/repository/<name>/`.
 
@@ -85,7 +85,7 @@ node smoke.mjs
 
 Three layers, in order: the fake module's pagination and 404 arm, the built wasm under plain node (a full listing of the demo repository, one injected 500 burned on the way), and the page in a headless chromium against a backend-free static server, where the only path to a listing is the ServiceWorker.
 The browser run waits for the page's beacon and asserts it (`rows > 0`, `failed = ""`), and asserts that the browser never touched the backend that is not there.
-With neither a driver nor a chromium binary the browser layer is skipped; `--require-browser` makes its absence fatal.
+With neither a driver nor a chromium binary the browser layer is skipped. `--require-browser` makes its absence fatal.
 Two environment variables tune the browser run: `NXR_WASM_DRIVER` names a `playwright-core` module path for setups that carry one (the CLI's dump quiescence wait is brittle in sandboxed environments), `NXR_WASM_BROWSER` names a chromium-family binary for the CLI path.
 CI runs the same smoke in the `wasm` job: the read surface must keep compiling for wasm32 and keep listing.
 

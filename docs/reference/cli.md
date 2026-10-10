@@ -22,7 +22,7 @@ Three credential sources, in precedence order:
 
 | Source | Form | Typical use |
 |:-------|:-----|:------------|
-| `-u user:pass` | plain `user:pass`, curl style | interactive one-offs; the value is visible in `ps` and shell history |
+| `-u user:pass` | plain `user:pass`, curl style | interactive one-offs. the value is visible in `ps` and shell history |
 | `NXR_AUTH` | base64 of `user:pass` | CI, where argv must stay clean |
 | `NXR_USERNAME` + `NXR_PASSWORD` | the readable form | CI with masked variables |
 
@@ -63,7 +63,7 @@ All flags are global: they may appear before or after the subcommand.
 | Flag | Default | Meaning |
 |:-----|:--------|:--------|
 | `-u, --user <USER:PASS>` | env | credentials for this call, takes precedence over `NXR_AUTH` and `NXR_USERNAME`/`NXR_PASSWORD` |
-| `-R, --remote <ALIAS>` | none | named remote from `~/.config/nxr/config.toml` (or `$NXR_CONFIG`); expands relative URL arguments and supplies credentials. The file is read only when this names an alias. See [Name your remotes](../how-to/config.md) |
+| `-R, --remote <ALIAS>` | none | named remote from `~/.config/nxr/config.toml` (or `$NXR_CONFIG`). expands relative URL arguments and supplies credentials. The file is read only when this names an alias. See [Name your remotes](../how-to/config.md) |
 | `--workers <N>` | `8` | parallel artifact transfers, accepted range `1..=64` |
 | `--retry <N>` | `4` | attempts per HTTP request |
 | `--connect-timeout-secs <N>` | `15` | TCP connect timeout in seconds |
@@ -85,7 +85,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 
 | Flag | Meaning |
 |:-----|:--------|
-| `-o, --out <FILE>` | output file; stdout when omitted |
+| `-o, --out <FILE>` | output file. stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
 
 ```console
@@ -318,7 +318,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, remote converged |
-| `1` | data refusal: `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete`; local I/O failures |
+| `1` | data refusal: `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete`. local I/O failures |
 | `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
@@ -388,7 +388,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, local copies complete |
-| `1` | data refusal: `cannot enumerate`, `missing`, `mismatch` with the remote sibling; local I/O failures |
+| `1` | data refusal: `cannot enumerate`, `missing`, `mismatch` with the remote sibling. local I/O failures |
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure |
 
@@ -491,7 +491,7 @@ When the enumeration leads with `version.json`, the conventional version documen
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, the destination holds every enumerated name |
-| `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`); local I/O around the staging directory |
+| `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`). local I/O around the staging directory |
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure, on either side |
 
@@ -562,8 +562,8 @@ $ echo $?
 
 | Exit | When |
 |:----:|:-----|
-| `0` | every name deleted or already absent; also the `--dry-run` plan |
-| `1` | data refusal: `cannot enumerate`, the read-only repository (403/405); local I/O failures |
+| `0` | every name deleted or already absent. also the `--dry-run` plan |
+| `1` | data refusal: `cannot enumerate`, the read-only repository (403/405). local I/O failures |
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure: the `failed:` list names where the run stopped |
 
@@ -621,7 +621,7 @@ rm a.zip
 | `2` | misuse: a bad URL, name or prefix |
 | `3` | transport or auth failure of either phase |
 
-`--json` streams the events of both phases; the summary of the pour is followed by the summary of the delete.
+`--json` streams the events of both phases. the summary of the pour is followed by the summary of the delete.
 
 ## nxr point --clear
 
@@ -845,7 +845,7 @@ Credentials work like everywhere else (`-u`, `NXR_AUTH`, `NXR_USERNAME` + `NXR_P
 |:----:|:-----|
 | `0` | the document parsed |
 | `2` | misuse: the URL is not a URL |
-| `3` | transport or auth failure; a 404 means the service API is absent (not a Nexus, or a version without it) |
+| `3` | transport or auth failure. a 404 means the service API is absent (not a Nexus, or a version without it) |
 
 ## nxr service status
 
@@ -1101,7 +1101,7 @@ Four codes cover every failure, and the mapping from error to code has one home,
 | Code | Class | Representative causes |
 |:----:|:------|:----------------------|
 | `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
-| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent; a retry cannot change it) |
+| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent. a retry cannot change it) |
 | `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o` |
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, other unexpected statuses |
 
