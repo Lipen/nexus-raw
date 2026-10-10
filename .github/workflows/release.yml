@@ -412,23 +412,20 @@ jobs:
           const fs = require("fs");
           const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
           const expected = [
-            "@nexus-raw/linux-x64-gnu",
-            "@nexus-raw/linux-arm64-gnu",
-            "@nexus-raw/darwin-x64",
-            "@nexus-raw/darwin-arm64",
-            "@nexus-raw/win32-x64-msvc",
+            ["@nexus-raw/linux-x64-gnu", "npm-linux-x64-gnu"],
+            ["@nexus-raw/linux-arm64-gnu", "npm-linux-arm64-gnu"],
+            ["@nexus-raw/darwin-x64", "npm-darwin-x64"],
+            ["@nexus-raw/darwin-arm64", "npm-darwin-arm64"],
+            ["@nexus-raw/win32-x64-msvc", "npm-win32-x64-msvc"],
           ];
-          const dirs = fs.readdirSync("npm/@nexus-raw").map((d) => "@nexus-raw/" + d).sort();
-          if (JSON.stringify(dirs) !== JSON.stringify(expected)) {
-            throw new Error(`staged packages ${dirs.join(", ")} do not match the expected ${expected.join(", ")}`);
-          }
-          for (const dir of dirs) {
-            const pkg = JSON.parse(fs.readFileSync(`npm/@nexus-raw/${dir.slice("@nexus-raw/".length)}/package.json`, "utf8"));
-            if (!fs.existsSync(`npm/@nexus-raw/${dir.slice("@nexus-raw/".length)}/index.node`)) {
+          for (const [name, artifact] of expected) {
+            const dir = `npm/${artifact}`;
+            const pkg = JSON.parse(fs.readFileSync(`${dir}/package.json`, "utf8"));
+            if (!fs.existsSync(`${dir}/index.node`)) {
               throw new Error(`${dir}: index.node is missing`);
             }
-            if (pkg.name !== dir) {
-              throw new Error(`${dir}: package name ${pkg.name} does not match the artifact`);
+            if (pkg.name !== name) {
+              throw new Error(`${dir}: package name ${pkg.name} does not match ${name}`);
             }
             if (pkg.version !== main.version) {
               throw new Error(`${dir}: version ${pkg.version} does not match the workspace ${main.version}`);
@@ -445,7 +442,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for d in npm/@nexus-raw/*/; do
+          for d in npm/npm-*/; do
             name="$(node -p "require('./$d/package.json').name")"
             if npm view "$name@$version" version > /dev/null 2>&1; then
               echo "$name@$version is already on the registry, skipping"
