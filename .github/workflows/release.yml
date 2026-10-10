@@ -507,6 +507,34 @@ jobs:
             echo "$name@$version is on the registry"
           done
 
+      # The consumer smoke installs the staged main package the way a user
+      # would (fresh sandbox, real resolve of the platform addon from the
+      # registry) and requires the surface. It catches a "green CI, dead
+      # package" — a publish whose loader cannot resolve its addon — before
+      # the main package goes out, which is the point of no return.
+      - name: Consumer smoke of the staged package
+        if: ${{ !inputs.dry-run }}
+        run: |
+          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
+          mkdir -p /tmp/consumer-smoke && cd /tmp/consumer-smoke
+          echo '{"name":"consumer-smoke","private":true,"dependencies":{"@nexus-raw/nxr":"'"$version"'"}}' > package.json
+          # The sandbox resolves @nexus-raw/nxr@$version through a file: spec
+          # pointing at the staged package, while the platform addon resolves
+          # from the registry: the same resolve a fresh user install makes.
+          npm install --no-package-lock --no-save "/home/runner/work/nexus-raw/nexus-raw/pkg-main" 2>&1 | tail -1
+          # The platform addon comes from the registry explicitly: the same
+          # resolve a fresh user install makes for its optionalDependencies.
+          npm install --no-save "@nexus-raw/linux-x64-gnu@${version}" 2>&1 | tail -1
+          node -e '
+            const nxr = require("@nexus-raw/nxr");
+            const methods = ["up", "down", "get", "put", "head", "sha", "ls", "diff", "mirror", "verify", "doctor"];
+            const missing = methods.filter((m) => typeof nxr[m] !== "function");
+            if (missing.length > 0) {
+              throw new Error(`consumer smoke: the surface is missing ${missing.join(", ")}`);
+            }
+            console.log(`consumer smoke: the full surface resolves (${methods.length} methods)`);
+          '
+
       - name: Publish the main package
         if: ${{ !inputs.dry-run }}
         run: |
