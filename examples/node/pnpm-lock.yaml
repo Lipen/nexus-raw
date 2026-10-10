@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       '@nexus-raw/nxr':
-        specifier: 0.0.1
-        version: 0.0.1
+        specifier: 0.0.2
+        version: 0.0.2
 
 packages:
 
-  '@nexus-raw/nxr@0.0.1':
-    resolution: {integrity: sha512-dnFOfndWoRn0ho8ZvFvLbls55OHhVKoLHAOf5lxl6SeZEdhZ4HMGHORSuqHHnUojYhFxdIUe6gX9x8gEoMkB1w==}
+  '@nexus-raw/nxr@0.0.2':
+    resolution: {integrity: sha512-jMdnf4HfW5zgbA5QdCS7/7uGl1KoFQ7id1D/fdxOex3v9KPEG+gnd11bYqsXk0MJrpmSEKt4oLI+MpYeXyqePA==}
 
 snapshots:
 
-  '@nexus-raw/nxr@0.0.1': {}
+  '@nexus-raw/nxr@0.0.2': {}
