@@ -8,6 +8,8 @@
 
 `nxr` работает как curl для raw-репозитория Sonatype Nexus.
 
+Один движок, три поверхности: CLI `nxr`, Rust-крейт `nexus-raw-core` (фасад `Nxr`) и npm-пакет `nexus-raw` для Node, отдающий тот же фасад промисами через napi-аддон.
+
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
 [![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
