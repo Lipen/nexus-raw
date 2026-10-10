@@ -52,6 +52,8 @@ Quirks that are not bugs:
   The `[A-Za-z0-9._-]` alphabet constrains only what nxr itself writes.
 - npm repositories: inspect via `nxr service assets`.
   Fetch packages with an npm client.
+- `-o` must be a real path: nxr writes a sibling `<name>.part` and renames it after the transfer (the resume scheme).
+  Omit `-o` to stream to stdout.
 
 ## Tutorials
 

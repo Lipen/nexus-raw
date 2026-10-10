@@ -45,3 +45,5 @@ A 403/405 is the read-only repository: refused with a hint, exit 1.
 Divergence is never checked when deleting: names, not content.
 
 Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse, 3 transport) and [`Error::hint`], the human hint the CLI renders.
+A storage 404 (the object or version is absent) is data: exit 1 with the `Http { status: 404 }` error, never transport.
+A service-API 404 (`service repos` against a server without the management API) stays transport: exit 3 with [`Error::ServiceMissing`].

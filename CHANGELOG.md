@@ -5,7 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- A storage 404 (a missing object or version) exits 1 as a data fact, not 3 as transport: scripts branch on 0 proceed, 1 absent, 3 retry.
+  The service-API 404 keeps exit 3.
+  The docs had promised the data class since the agent cookbook landed, the code disagreed, an external agent caught the divergence.
+
+### Added
+
+- `nxr --help` ends with agent entry points: the cookbook URL, the doc index and the source, plus the one-line contract (hint on every error, NDJSON via `--json`, the exit-code taxonomy).
 
 ## [0.9.0] - 2026-10-10
 
