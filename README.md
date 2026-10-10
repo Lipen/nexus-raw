@@ -8,9 +8,12 @@
 
 `nxr` is curl for a Sonatype Nexus raw repository.
 
+The same engine ships as three surfaces: the `nxr` CLI, the `nexus-raw-core` Rust crate (the `Nxr` facade), and the `nexus-raw` npm package for Node, which exposes the same facade as promises over a napi addon.
+
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
 [![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
+[![npm](https://img.shields.io/npm/v/nexus-raw.svg)](https://www.npmjs.com/package/nexus-raw)
 
 [Docs](https://lipen.github.io/nexus-raw/) · [Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [README на русском](README.ru.md)
 
