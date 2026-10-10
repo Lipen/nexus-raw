@@ -412,11 +412,11 @@ jobs:
           const fs = require("fs");
           const main = JSON.parse(fs.readFileSync("crates/nexus-raw-napi/package.json", "utf8"));
           const expected = [
-            ["@nexus-raw/linux-x64-gnu", "npm-linux-x64-gnu"],
-            ["@nexus-raw/linux-arm64-gnu", "npm-linux-arm64-gnu"],
-            ["@nexus-raw/darwin-x64", "npm-darwin-x64"],
-            ["@nexus-raw/darwin-arm64", "npm-darwin-arm64"],
-            ["@nexus-raw/win32-x64-msvc", "npm-win32-x64-msvc"],
+            ["@nexus-raw/nxr-linux-x64-gnu", "npm-linux-x64-gnu"],
+            ["@nexus-raw/nxr-linux-arm64-gnu", "npm-linux-arm64-gnu"],
+            ["@nexus-raw/nxr-darwin-x64", "npm-darwin-x64"],
+            ["@nexus-raw/nxr-darwin-arm64", "npm-darwin-arm64"],
+            ["@nexus-raw/nxr-win32-x64-msvc", "npm-win32-x64-msvc"],
           ];
           for (const [name, artifact] of expected) {
             const dir = `npm/${artifact}`;
@@ -465,11 +465,11 @@ jobs:
           const pkg = {
             ...main,
             optionalDependencies: {
-              "@nexus-raw/linux-x64-gnu": version,
-              "@nexus-raw/linux-arm64-gnu": version,
-              "@nexus-raw/darwin-x64": version,
-              "@nexus-raw/darwin-arm64": version,
-              "@nexus-raw/win32-x64-msvc": version,
+              "@nexus-raw/nxr-linux-x64-gnu": version,
+              "@nexus-raw/nxr-linux-arm64-gnu": version,
+              "@nexus-raw/nxr-darwin-x64": version,
+              "@nexus-raw/nxr-darwin-arm64": version,
+              "@nexus-raw/nxr-win32-x64-msvc": version,
             },
           };
           fs.mkdirSync("pkg-main", { recursive: true });
@@ -487,7 +487,7 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for name in @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64 @nexus-raw/win32-x64-msvc; do
+          for name in @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
             # The registry serves fresh publishes with a lag: a check that runs
             # right after the platform publish can miss a package that landed.
             # Retry before refusing, so a green release never dies to propagation.
@@ -568,7 +568,7 @@ jobs:
             sleep 30
           done
           [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
-          for name in @nexus-raw/nxr @nexus-raw/linux-x64-gnu @nexus-raw/linux-arm64-gnu @nexus-raw/darwin-x64 @nexus-raw/darwin-arm64 @nexus-raw/win32-x64-msvc; do
+          for name in @nexus-raw/nxr @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
             ok=0
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
               if npm view "$name@$version" version > /dev/null 2>&1; then
