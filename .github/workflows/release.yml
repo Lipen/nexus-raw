@@ -327,7 +327,7 @@ jobs:
             const fs = require("fs");
             const main = JSON.parse(fs.readFileSync("package.json", "utf8"));
             const pkg = {
-              name: "@nexus-raw/" + process.argv[1],
+              name: "@nexus-raw/nxr-" + process.argv[1],
               version: main.version,
               description: "Prebuilt nexus-raw native addon",
               license: "MIT",

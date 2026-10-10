@@ -10,13 +10,62 @@ importers:
     dependencies:
       '@nexus-raw/nxr':
         specifier: ^0.11.0
-        version: 0.0.2
+        version: 0.11.0
 
 packages:
 
-  '@nexus-raw/nxr@0.0.2':
-    resolution: {integrity: sha512-jMdnf4HfW5zgbA5QdCS7/7uGl1KoFQ7id1D/fdxOex3v9KPEG+gnd11bYqsXk0MJrpmSEKt4oLI+MpYeXyqePA==}
+  '@nexus-raw/darwin-arm64@0.11.0':
+    resolution: {integrity: sha512-42Qaof3Ue/wRl4wGynsydqU5Q2oS4W4cE2YQ9Z0wl+Nt6bEgrMPW80NJuL6x9hHITqTJDPUJYSuJtPG7C6TFqw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@nexus-raw/darwin-x64@0.11.0':
+    resolution: {integrity: sha512-yLdqQosp6wpZcmIeyFb82+QXSxirKxxWDolsoZdSRVotkm1061RfIfPdlEoiRtxvOu9HOjURv9kdu3ZsI9HwAw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@nexus-raw/linux-arm64-gnu@0.11.0':
+    resolution: {integrity: sha512-4rPIqz4P9MdeSDsp7V/W2sJ+1wGPh/xiz4p8CPuMhrl6YWTWFHCeSuhyIgU19z5PRWorbhc6Y33fDa4g8OuCWQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@nexus-raw/linux-x64-gnu@0.11.0':
+    resolution: {integrity: sha512-PAq3yYhqESGaWK73hGt9Ukmkc9+yjNT/Df9ICMa3pSYYLbjska7TeWBrvZL4fDJ3m7jBJJCAgrMWThdSW4NOgA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@nexus-raw/nxr@0.11.0':
+    resolution: {integrity: sha512-+5buS7xa1g6A6BzKXiuJxPYzbHpwilcCV4gd8w69c2ZhFMKBpm+vSrHglZF3LjFf0tMlywK4Y0mYPGoQ/YRJEA==}
+    engines: {node: '>= 18'}
+
+  '@nexus-raw/win32-x64-msvc@0.11.0':
+    resolution: {integrity: sha512-qoQGISC4U0/tzM3+WMDfTp3+3Gh0LD0/mQJcM5TfiA90O+jajtrnt4XHvTbmNYDE7QAB7p8nJoo9AxIlfIhCyw==}
+    cpu: [x64]
+    os: [win32]
 
 snapshots:
 
-  '@nexus-raw/nxr@0.0.2': {}
+  '@nexus-raw/darwin-arm64@0.11.0':
+    optional: true
+
+  '@nexus-raw/darwin-x64@0.11.0':
+    optional: true
+
+  '@nexus-raw/linux-arm64-gnu@0.11.0':
+    optional: true
+
+  '@nexus-raw/linux-x64-gnu@0.11.0':
+    optional: true
+
+  '@nexus-raw/nxr@0.11.0':
+    optionalDependencies:
+      '@nexus-raw/darwin-arm64': 0.11.0
+      '@nexus-raw/darwin-x64': 0.11.0
+      '@nexus-raw/linux-arm64-gnu': 0.11.0
+      '@nexus-raw/linux-x64-gnu': 0.11.0
+      '@nexus-raw/win32-x64-msvc': 0.11.0
+
+  '@nexus-raw/win32-x64-msvc@0.11.0':
+    optional: true

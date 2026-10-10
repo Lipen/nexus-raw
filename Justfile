@@ -148,7 +148,6 @@ version v:
     # The workspace pins are already asserted above, so a drifted pin still fails before any resolver does.
     scripts/version-check.sh
     echo "version {{v}} set (was $old)"
-    echo "remind: run just lock after the release: it refreshes every lockfile, examples/node against the registry"
 
 # The manifest is the source of truth for the current number; this only does
 # the arithmetic and hands the result to `just version`.
@@ -217,6 +216,9 @@ release v *mode:
     fi
     just version "{{v}}"
     python3 scripts/changelog-finalize.py "{{v}}"
+    # Every lockfile follows the bump inside the same commit: the post-release
+    # `just lock` only refreshes examples/node against the now-published registry.
+    just lock
     git add -u
     if ! git diff --cached --quiet; then
       git commit -m "chore: bump the workspace to {{v}}"
@@ -341,8 +343,8 @@ lock:
     cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 > /dev/null
     echo "examples/wasm-sandbox Cargo.lock: refreshed"
     v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-    if curl -sf https://registry.npmjs.org/nexus-raw | grep -q "\"latest\":\"$v\""; then
-      (cd examples/node && pnpm up "nexus-raw@^$v" --reporter=silent)
+    if curl -sf https://registry.npmjs.org/@nexus-raw%2Fnxr | grep -q "\"latest\":\"$v\""; then
+      (cd examples/node && pnpm up "@nexus-raw/nxr@^$v" --reporter=silent)
       echo "examples/node pnpm-lock: refreshed against $v"
     else
       echo "examples/node pnpm-lock: skipped, the registry does not have $v yet (normal before a release)"
