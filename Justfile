@@ -334,13 +334,7 @@ lock:
     echo "examples/rust Cargo.lock: refreshed"
     cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 > /dev/null
     echo "examples/wasm-sandbox Cargo.lock: refreshed"
-    v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-    if curl -sf https://registry.npmjs.org/@nexus-raw%2Fnxr | grep -q "\"latest\":\"$v\""; then
-      (cd examples/node && pnpm up "@nexus-raw/nxr@^$v" --reporter=silent)
-      echo "examples/node pnpm-lock: refreshed against $v"
-    else
-      echo "examples/node pnpm-lock: skipped, the registry does not have $v yet (normal before a release)"
-    fi
+    # examples/node pins the released package exactly and is never bumped here: a demo tracks a shipped version, not the workspace.
     echo "---"
     git status --short | grep -E "Cargo.lock|pnpm-lock.yaml" || echo "everything was already fresh"
 
