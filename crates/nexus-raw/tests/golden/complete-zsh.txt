@@ -44,8 +44,8 @@ _nxr() {
         case $line[1] in
             (get)
 _arguments "${_arguments_options[@]}" : \
-'-o+[Output file (stdout when omitted)]:FILE:_files' \
-'--out=[Output file (stdout when omitted)]:FILE:_files' \
+'-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
+'--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \

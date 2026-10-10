@@ -54,7 +54,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "doctor" -d 'Diagnose creden
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "service" -d 'Server metadata through the Sonatype service REST API (not part of the storage protocol)'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "complete" -d 'Print a shell completion script to stdout (bash, zsh, fish, powershell)'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted)' -r -F
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l workers -d 'Parallel artifact transfers' -r
