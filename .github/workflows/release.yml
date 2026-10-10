@@ -248,11 +248,13 @@ jobs:
     needs: [gate]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        # win32-x64-msvc joins when its placeholder package clears the npm
-        # spam filter (403 on first publish, support ticket filed).
+        # The platform addons publish under the @nexus-raw scope.
         include:
           - name: linux-x64-gnu
             os: ubuntu-latest
@@ -276,6 +278,11 @@ jobs:
             target: aarch64-apple-darwin
             platform-os: darwin
             platform-cpu: arm64
+          - name: win32-x64-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform-os: win32
+            platform-cpu: x64
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

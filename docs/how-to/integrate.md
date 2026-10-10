@@ -116,9 +116,9 @@ Install from the registry:
 npm install @nexus-raw/nxr
 ```
 
-Prebuilt addons ship for `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64` and `darwin-arm64`.
-There is no `win32-x64-msvc` prebuild: npm's spam filter rejects that platform package, so on Windows the addon builds from a repository checkout (below).
-The CLI does ship a Windows binary: `nxr-windows-x64.tar.gz` in the [GitHub release](https://github.com/Lipen/nexus-raw/releases/latest).
+Prebuilt addons ship for `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64`, `darwin-arm64` and `win32-x64-msvc`, all under the `@nexus-raw` scope.
+On Alpine (musl) there is no native addon: use the static CLI from the releases page, or build the addon from a repository checkout (below).
+The CLI also ships a Windows binary: `nxr-windows-x64.tar.gz` in the [GitHub release](https://github.com/Lipen/nexus-raw/releases/latest).
 A runnable consumer lives in [examples/node](https://github.com/Lipen/nexus-raw/tree/master/examples/node): it installs the package from the registry and drives the whole publish-and-consume loop against the mock server:
 
 ```bash
