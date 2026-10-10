@@ -17,6 +17,8 @@ _nxr() {
     _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -46,6 +48,8 @@ _arguments "${_arguments_options[@]}" : \
 '--out=[Output file (stdout when omitted)]:FILE:_files' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -68,6 +72,8 @@ _arguments "${_arguments_options[@]}" : \
 '--file=[The file to send]:FILE:_files' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -88,6 +94,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -107,6 +115,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -128,6 +138,8 @@ _arguments "${_arguments_options[@]}" : \
 '--claim-first=[Upload this file first, alone, before any other name (claim-first)]:NAME:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -154,6 +166,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -181,6 +195,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -205,6 +221,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -226,6 +244,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -251,6 +271,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -278,6 +300,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -300,6 +324,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -320,6 +346,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -346,6 +374,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -365,6 +395,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -419,6 +451,8 @@ _arguments "${_arguments_options[@]}" : \
 '--manifest=[Check exactly these names]:FILE|-:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -438,6 +472,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -457,6 +493,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -483,6 +521,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -502,6 +542,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -521,6 +563,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -543,6 +587,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--prefix=[Keep only assets under this whole-segment path prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -562,6 +608,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
@@ -626,6 +674,8 @@ esac
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
 '--workers=[Parallel artifact transfers]:N:_default' \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \

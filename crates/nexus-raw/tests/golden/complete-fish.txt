@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_nxr_global_optspecs
-    string join \n u/user= workers= retry= connect-timeout-secs= stall-secs= tls-insecure json q/quiet v/verbose h/help V/version
+    string join \n u/user= R/remote= workers= retry= connect-timeout-secs= stall-secs= tls-insecure json q/quiet v/verbose h/help V/version
 end
 
 function __fish_nxr_needs_command
@@ -25,6 +25,7 @@ function __fish_nxr_using_subcommand
 end
 
 complete -c nxr -n "__fish_nxr_needs_command" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_needs_command" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_needs_command" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_needs_command" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_needs_command" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -55,6 +56,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "complete" -d 'Print a shell
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted)' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -67,6 +69,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand get" -s v -l verbose -d 'Print m
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s f -l file -d 'The file to send' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -78,6 +81,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand put" -s q -l quiet -d 'Print onl
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -88,6 +92,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand head" -s q -l quiet -d 'Print on
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -100,6 +105,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l manifest -d 'Restrict the transfer to these names' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -115,6 +121,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -l manifest -d 'Enumeratio
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -131,6 +138,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -l manifest -d 'Enumeratio
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -145,6 +153,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -l manifest -d 'Enumeration 
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -157,6 +166,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print only
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -173,6 +183,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l src-user -d 'Credenti
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -190,6 +201,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mv" -l src-user -d 'Credentials 
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -202,6 +214,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mv" -s q -l quiet -d 'Print only
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -213,6 +226,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand ls" -s q -l quiet -d 'Print only
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -226,6 +240,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "set" -d 'Write the token, optionally only forward in version order'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -236,6 +251,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -251,6 +267,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l manifest -d 'Check exactly these names' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -261,6 +278,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print 
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -271,6 +289,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s q -l quiet -d 'Print 
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -287,6 +306,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "eula" -d 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -297,6 +317,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -307,6 +328,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -320,6 +342,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l q -d 'The server-side search query, passed through' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l prefix -d 'Keep only assets under this whole-segment path prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -330,6 +353,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
@@ -347,6 +371,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "eula" -d 'The EULA gate of the server behind `url`: with --accept, open it (nx-admin)'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r

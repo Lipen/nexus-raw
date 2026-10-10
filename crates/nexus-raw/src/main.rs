@@ -3,6 +3,7 @@
 //! This crate owns only flag parsing, event rendering and exit codes.
 //! All protocol logic lives in the core crate.
 
+mod alias;
 mod cmd;
 mod render;
 
@@ -25,6 +26,11 @@ pub(crate) struct Cli {
     /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD.
     #[arg(short = 'u', long, value_name = "USER:PASS", global = true)]
     pub(crate) user: Option<String>,
+    /// A remote alias from the config file (the file is read only when this names one).
+    /// The alias expands URL arguments that look relative and supplies the credentials.
+    /// A `-u` on the same call wins over the alias credentials.
+    #[arg(short = 'R', long, value_name = "ALIAS", global = true)]
+    pub(crate) remote: Option<String>,
     /// Parallel artifact transfers.
     #[arg(long, global = true, value_name = "N", default_value_t = 8)]
     pub(crate) workers: usize,
@@ -364,7 +370,25 @@ pub(crate) enum ChannelOp {
 }
 
 fn main() -> std::process::ExitCode {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if let Err(e) = alias::apply_remote(&mut cli) {
+        if cli.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "event": "error",
+                    "code": e.exit_code(),
+                    "error": e.to_string(),
+                    "hint": e.hint(),
+                })
+            );
+        }
+        eprintln!("error: {e}");
+        if let Some(h) = e.hint() {
+            eprintln!("hint: {h}");
+        }
+        return std::process::ExitCode::from(e.exit_code());
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

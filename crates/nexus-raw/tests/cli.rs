@@ -760,6 +760,280 @@ fn redirect_exit_3() {
     assert!(!dst.path().join("a.zip").exists());
 }
 
+// ---- aliases (-R) ----------------------------------------------------------
+
+/// A hermetic alias file next to the mock: `mock` carries env credentials,
+/// `anon` carries none (anonymous through the alias is legal).
+fn alias_config(srv: &MockNexus, dir: &tempfile::TempDir) -> std::path::PathBuf {
+    let cfg = dir.path().join("nxr");
+    std::fs::create_dir_all(&cfg).unwrap();
+    let file = cfg.join("config.toml");
+    std::fs::write(
+        &file,
+        format!(
+            "[alias.mock]\nurl = \"{}\"\nuser_env = \"TEST_ALIAS_USER\"\npass_env = \"TEST_ALIAS_PASS\"\n\n[alias.anon]\nurl = \"{}\"\n",
+            srv.base_url(),
+            srv.base_url()
+        ),
+    )
+    .unwrap();
+    file
+}
+
+fn nxr_r(args: &[&str], cfg_dir: &tempfile::TempDir, env: &[(&str, &str)]) -> Output {
+    let mut cmd = Command::new(NXR);
+    cmd.args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .env("XDG_CONFIG_HOME", cfg_dir.path());
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("nxr binary runs")
+}
+
+/// -R expands a relative path argument onto the alias base and authenticates
+/// through the env variables the alias names: the round trip works end to end.
+#[test]
+fn alias_put_get_roundtrip() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.0.0/host.txt", ALPHA);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("host.txt");
+    let get = nxr_r(
+        &[
+            "-R",
+            "mock",
+            "get",
+            "1.0.0/host.txt",
+            "-o",
+            target.to_str().unwrap(),
+        ],
+        &cfg,
+        &[("TEST_ALIAS_USER", "u"), ("TEST_ALIAS_PASS", "p")],
+    );
+    expect_exit(&get, 0, "get through the alias");
+    assert_eq!(std::fs::read(&target).unwrap(), ALPHA);
+}
+
+/// An absolute URL argument passes through unchanged: the alias stays out of the way.
+#[test]
+fn alias_absolute_url_passes_through() {
+    let srv = server(Scenario::Atomic);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let url = format!("{}1.0.0/missing.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let get = nxr_r(
+        &[
+            "-R",
+            "mock",
+            "get",
+            &url,
+            "-o",
+            out.path().join("m.bin").to_str().unwrap(),
+        ],
+        &cfg,
+        &[("TEST_ALIAS_USER", "u"), ("TEST_ALIAS_PASS", "p")],
+    );
+    expect_exit(&get, 1, "the absolute URL is honored: 404 is data");
+}
+
+/// A bare alias (no credential source) runs anonymous: the server decides.
+#[test]
+fn alias_anonymous_is_legal() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.0.0/a.bin", ALPHA);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.bin");
+    let get = nxr_r(
+        &[
+            "-R",
+            "anon",
+            "get",
+            "1.0.0/a.bin",
+            "-o",
+            target.to_str().unwrap(),
+        ],
+        &cfg,
+        &[],
+    );
+    expect_exit(&get, 0, "the bare alias runs anonymously");
+    assert_eq!(std::fs::read(&target).unwrap(), ALPHA);
+}
+
+/// A missing env variable the alias names is a misuse error naming the variable.
+#[test]
+fn alias_missing_env_names_the_variable() {
+    let srv = server(Scenario::Atomic);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let get = nxr_r(
+        &["-R", "mock", "get", "1.0.0/a.bin", "-o", "x.bin"],
+        &cfg,
+        &[],
+    );
+    expect_exit(&get, 2, "the env source is broken");
+    let err = stderr(&get);
+    assert!(err.contains("TEST_ALIAS_USER"), "{err}");
+}
+
+/// An unknown alias lists the known ones.
+#[test]
+fn alias_unknown_lists_known() {
+    let srv = server(Scenario::Atomic);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let ls = nxr_r(&["-R", "nope", "ls", "."], &cfg, &[]);
+    expect_exit(&ls, 2, "an unknown alias is misuse");
+    let err = stderr(&ls);
+    assert!(err.contains("known: anon, mock"), "{err}");
+}
+
+/// Without -R no config file is read: a broken config file does not touch the call.
+#[test]
+fn no_r_flag_never_reads_the_file() {
+    let srv = server(Scenario::Atomic);
+    let cfg = TempDir::new().unwrap();
+    let cfgdir = cfg.path().join("nxr");
+    std::fs::create_dir_all(&cfgdir).unwrap();
+    std::fs::write(cfgdir.join("config.toml"), "this is not toml [").unwrap();
+
+    srv.insert("1.0.0/a.bin", ALPHA);
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.bin");
+    let get = nxr_r(
+        &[
+            "get",
+            &format!("{}1.0.0/a.bin", srv.base_url()),
+            "-o",
+            target.to_str().unwrap(),
+        ],
+        &cfg,
+        &[],
+    );
+    expect_exit(&get, 0, "the broken file is invisible without -R");
+}
+
+/// -u wins over the alias credentials: the wrong alias env is never consulted.
+#[test]
+fn u_flag_wins_over_alias() {
+    let srv = server(Scenario::Auth401 {
+        user: "real".into(),
+        pass: "pass".into(),
+    });
+    srv.insert("1.0.0/a.bin", BETA);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.bin");
+    let get = nxr_r(
+        &[
+            "-R",
+            "mock",
+            "-u",
+            "real:pass",
+            "get",
+            "1.0.0/a.bin",
+            "-o",
+            target.to_str().unwrap(),
+        ],
+        &cfg,
+        // The alias env would fail the call if it were consulted first.
+        &[],
+    );
+    expect_exit(&get, 0, "-u overrides the alias credentials");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// NXR_CONFIG relocations the file: the default location stays untouched.
+#[test]
+fn nxr_config_env_relocates_the_file() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.0.0/a.bin", ALPHA);
+    let cfg = TempDir::new().unwrap();
+    let file = cfg.path().join("elsewhere.toml");
+    std::fs::write(
+        &file,
+        format!("[alias.mock]\nurl = \"{}\"\n", srv.base_url()),
+    )
+    .unwrap();
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.bin");
+    let mut cmd = Command::new(NXR);
+    cmd.args([
+        "-R",
+        "mock",
+        "get",
+        "1.0.0/a.bin",
+        "-o",
+        target.to_str().unwrap(),
+    ])
+    .env("NXR_CONFIG", &file)
+    .env_remove("XDG_CONFIG_HOME")
+    .env_remove("HOME")
+    .env_remove("NXR_AUTH")
+    .env_remove("NXR_USERNAME")
+    .env_remove("NXR_PASSWORD");
+    let get = cmd.output().expect("nxr binary runs");
+    expect_exit(&get, 0, "NXR_CONFIG names the file");
+    assert_eq!(std::fs::read(&target).unwrap(), ALPHA);
+}
+
+/// A mirror through two aliases: both URLs expand, the mirror pours for real.
+#[test]
+fn alias_mirror_two_remotes() {
+    let src_srv = server(Scenario::Atomic);
+    let dst_srv = server(Scenario::Atomic);
+    seed_publish(&dir_url(&src_srv));
+    let cfg = TempDir::new().unwrap();
+    let cfgdir = cfg.path().join("nxr");
+    std::fs::create_dir_all(&cfgdir).unwrap();
+    std::fs::write(
+        cfgdir.join("config.toml"),
+        format!(
+            "[alias.src]\nurl = \"{}\"\n\n[alias.dst]\nurl = \"{}\"\n",
+            src_srv.base_url(),
+            dst_srv.base_url()
+        ),
+    )
+    .unwrap();
+
+    let mirror = nxr_r(
+        &[
+            "-R",
+            "src",
+            "mirror",
+            "1.14.0/",
+            &format!("{}1.14.0/", dst_srv.base_url()),
+        ],
+        &cfg,
+        &[],
+    );
+    expect_exit(&mirror, 0, "the mirror pours through two aliases");
+    let back = nxr(&[
+        "get",
+        &format!("{}1.14.0/a.zip", dst_srv.base_url()),
+        "-o",
+        "/tmp/alias-mirror-check.bin",
+    ]);
+    expect_exit(&back, 0, "the artifact landed on the destination");
+    assert_eq!(std::fs::read("/tmp/alias-mirror-check.bin").unwrap(), ALPHA);
+    let _ = std::fs::remove_file("/tmp/alias-mirror-check.bin");
+}
+
 // ---- scenario coverage ----------------------------------------------------
 
 /// The atomic scenario serves no such object: a GET of a missing name is a
