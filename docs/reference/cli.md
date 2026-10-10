@@ -897,8 +897,8 @@ raw-main raw hosted https://nexus.example.com/repository/raw-main (full settings
 Every asset of a repository, in any format, through the search API: the full picture without knowing the layout.
 
 ```console
-$ nxr service assets https://nexus.example.com/repository/koala-npm/
-5123  2cc4b7d7  2026-08-11T02:28:44.355+00:00  @panda/sdk-darwin/-/sdk-darwin-1.5.0-dev.84915.tgz
+$ nxr service assets https://nexus.example.com/repository/releases-npm/
+5123  2cc4b7d7  2026-08-11T02:28:44.355+00:00  @corp/sdk-linux/-/sdk-linux-1.5.0.tgz
 ...
 ```
 

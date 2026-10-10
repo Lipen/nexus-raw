@@ -306,13 +306,13 @@ mod tests {
     }
 
     const FILE: &str = r#"
-[alias.openlab]
+[alias.corp]
 url = "https://nex.example.com:10443"
 user_env = "TEST_ALIAS_USER"
 pass_env = "TEST_ALIAS_PASS"
 
-[alias.koala]
-url = "https://nex.example.com:10443/repository/koala-raw"
+[alias.releases]
+url = "https://nex.example.com:10443/repository/releases-raw"
 user = "deploy"
 pass = "literal-secret"
 
@@ -334,8 +334,8 @@ url = "https://anon.example.com"
         let a = Aliases::load(&p).unwrap();
         assert_eq!(a.map.len(), 4);
         assert_eq!(
-            a.get("koala").unwrap().url,
-            "https://nex.example.com:10443/repository/koala-raw"
+            a.get("releases").unwrap().url,
+            "https://nex.example.com:10443/repository/releases-raw"
         );
     }
 
@@ -344,7 +344,7 @@ url = "https://anon.example.com"
         let (_d, p) = write(FILE);
         let a = Aliases::load(&p).unwrap();
         let e = format!("{}", a.get("nope").unwrap_err());
-        assert!(e.contains("known: bare, koala, openlab, prod"), "{e}");
+        assert!(e.contains("known: bare, corp, prod, releases"), "{e}");
     }
 
     #[test]
@@ -371,7 +371,7 @@ url = "https://anon.example.com"
         std::env::set_var("TEST_ALIAS_PASS", "p1");
         let (_d, p) = write(FILE);
         let a = Aliases::load(&p).unwrap();
-        let (u, s) = a.get("openlab").unwrap().creds("openlab").unwrap().unwrap();
+        let (u, s) = a.get("corp").unwrap().creds("corp").unwrap().unwrap();
         assert_eq!((u.as_str(), s.as_str()), ("u1", "p1"));
         std::env::remove_var("TEST_ALIAS_USER");
         std::env::remove_var("TEST_ALIAS_PASS");
@@ -384,10 +384,7 @@ url = "https://anon.example.com"
         std::env::remove_var("TEST_ALIAS_PASS");
         let (_d, p) = write(FILE);
         let a = Aliases::load(&p).unwrap();
-        let e = format!(
-            "{}",
-            a.get("openlab").unwrap().creds("openlab").unwrap_err()
-        );
+        let e = format!("{}", a.get("corp").unwrap().creds("corp").unwrap_err());
         assert!(e.contains("TEST_ALIAS_USER"), "{e}");
     }
 
@@ -395,7 +392,12 @@ url = "https://anon.example.com"
     fn literal_creds_pass_through() {
         let (_d, p) = write(FILE);
         let a = Aliases::load(&p).unwrap();
-        let (u, s) = a.get("koala").unwrap().creds("koala").unwrap().unwrap();
+        let (u, s) = a
+            .get("releases")
+            .unwrap()
+            .creds("releases")
+            .unwrap()
+            .unwrap();
         assert_eq!((u.as_str(), s.as_str()), ("deploy", "literal-secret"));
     }
 

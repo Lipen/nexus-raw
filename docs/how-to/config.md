@@ -10,13 +10,13 @@ The file is read **only** when the invocation names an alias with `-R/--remote`:
 
 ```toml
 # ~/.config/nxr/config.toml
-[alias.openlab]
+[alias.corp]
 url = "https://nexus.example.com:10443"
 user_env = "NEXUS_USERNAME"        # the env variable carrying the user
 pass_env = "NEXUS_PASSWORD"        # ...and the password
 
-[alias.koala]
-url = "https://nexus.example.com:10443/repository/koala-raw"
+[alias.releases]
+url = "https://nexus.example.com:10443/repository/releases-raw"
 user = "deploy"                    # inline credentials work too...
 pass = "..."                       # ...but the file then carries a secret
 
@@ -34,16 +34,16 @@ url = "https://public.example.com/repository/mirror"
 
 ```console
 # The alias expands relative paths onto its URL:
-$ nxr -R koala ls 1.4.0/
-$ nxr -R koala up ./dist 1.4.0/
-$ nxr -R koala get 1.4.0/app.zip -o app.zip
+$ nxr -R releases ls 1.4.0/
+$ nxr -R releases up ./dist 1.4.0/
+$ nxr -R releases get 1.4.0/app.zip -o app.zip
 
 # The alias may point at a repository root; `.` stays the root itself:
-$ nxr -R koala service status .
-$ nxr -R openlab service repo /repository/koala-raw
+$ nxr -R releases service status .
+$ nxr -R corp service repo /repository/releases-raw
 
 # Absolute URLs pass through unchanged, the alias only carries credentials:
-$ nxr -R koala get https://other.example.com/repository/x/1.0/file -o file
+$ nxr -R releases get https://other.example.com/repository/x/1.0/file -o file
 ```
 
 An alias may name a version directory, a repository root or a server root: the alias URL is exactly the base every relative path joins onto.

@@ -15,7 +15,7 @@ The agent minimum:
   The last event is always a summary.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
   Without `-R` there is no config file in play, by design.
-- Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R koala ls 1.4.0/`).
+- Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R releases ls 1.4.0/`).
   The file is read only when the flag names an alias, nothing is picked up implicitly.
 - Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
 - Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
