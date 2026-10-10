@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "mock-nexus"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "serde_json",
 ]
@@ -1139,7 +1139,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-raw"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -1157,7 +1157,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-raw-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "base64",
  "futures-util",
@@ -1179,7 +1179,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-raw-napi"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "mock-nexus",
  "napi",
@@ -1194,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-raw-tui"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "base64",
