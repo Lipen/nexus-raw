@@ -145,7 +145,7 @@ For every name, each side (local directory or remote directory) is in one of:
 | `Complete` | yes | yes | digest matches |
 | `Markerless` | yes | no | bytes without a marker, either under-uploaded or mid-transfer |
 | `Broken` | yes | yes | digest mismatch, or the marker does not parse |
-| `Absent` | none | none | no bytes; a stray marker is ignored |
+| `Absent` | none | none | no bytes. A stray marker is ignored |
 
 Locally, bytes decide: a sibling without bytes is `Absent`.
 Remotely, a name costs two requests: `HEAD` on the bytes and `GET` on the sibling, both overlapped by the worker pool.
@@ -195,7 +195,8 @@ That is a protocol change with a compatibility story, not a client fix, and it i
 ## Server metadata
 
 The service REST API (`/service/rest/v1/repositories`, the search endpoints behind `ls` and `down --ls`) is server metadata, not part of the storage protocol.
-A server without it serves every invariant in this document; `nxr` reads it only for human convenience (listing what exists, `service repos`).
+A server without it serves every invariant in this document.
+`nxr` reads it only for human convenience (listing what exists, `service repos`).
 The storage contract lives entirely in the sections above.
 
 ## The write order
@@ -376,8 +377,8 @@ When the enumeration leads with the conventional version document `version.json`
 |:-------|:---------|
 | auth | `Basic`, attached to every request when credentials resolve; `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
-| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry; other 4xx never, except 429 |
-| 429 | retryable: a `Retry-After` pause in seconds (clamped to 1..=60) replaces the backoff; exhausting attempts is exit 3 |
+| retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry. Other 4xx never, except 429 |
+| 429 | retryable: a `Retry-After` pause in seconds (clamped to 1..=60) replaces the backoff. Exhausting attempts is exit 3 |
 | backoff | 0.5 s × 2ⁿ per attempt, capped at 60 s, plus hash-based jitter ≤ 250 ms |
 | stall | no bytes for `--stall-secs` aborts the attempt as retryable (default 30 s) |
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |

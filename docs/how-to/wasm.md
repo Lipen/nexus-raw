@@ -5,7 +5,7 @@ The same protocol code answers as on the command line: the transport issues the 
 What stays native is the write half: the filesystem-bound slice of the core is gated out of the wasm build.
 
 The code lives in `examples/wasm-sandbox/`, a standalone crate like the other examples.
-Its [README](https://github.com/lipen/nexus-raw/blob/master/examples/wasm-sandbox/README.md) carries the full detail; this page is the tour.
+Its [README](https://github.com/lipen/nexus-raw/blob/master/examples/wasm-sandbox/README.md) carries the full detail. This page is the tour.
 
 ## Run it locally
 
@@ -25,7 +25,7 @@ Then open `http://localhost:8134/`: the page lists `/repository/demo/` on load, 
 
 ## Point it at a real Nexus
 
-The fake's repository is named `demo`; a real one knows nothing about it.
+The fake's repository is named `demo`. A real one knows nothing about it.
 Open the page with your repository: `http://localhost:8134/?repo=<name>`.
 
 ```bash
@@ -38,12 +38,12 @@ The guards default to the strict end:
 
 | Flag | Default | Meaning |
 |:-----|:--------|:--------|
-| `--allow-host HOST` | empty | lets a request name `HOST` in its `Host` header; repeatable |
+| `--allow-host HOST` | empty | lets a request name `HOST` in its `Host` header, repeatable |
 | `--rate-limit N` | 60 | proxied requests per 10 seconds per client, then `429` with `Retry-After` |
 | `--max-response-bytes N` | 8388608 | cuts an upstream answer off at the cap with `502` |
 
 A forward-proxy request (`curl --proxy ...`) answers `403`: the proxy is a facade for the page, not a relay.
-A `400` or `404` on the listing means the upstream has no searchable repository under that name, or it is not raw; the page says so in its error block.
+A `400` or `404` on the listing means the upstream has no searchable repository under that name, or it is not raw. The page says so in its error block.
 
 ## Static hosting, no backend
 

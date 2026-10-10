@@ -54,7 +54,7 @@ An alias may name a version directory, a repository root or a server root: the a
 2. The alias credentials (resolved at call time: env variables read, `pass_cmd` run).
 3. Ambient env (`NXR_AUTH`, `NXR_USERNAME`+`NXR_PASSWORD`) — but only when neither `-u` nor the alias carry credentials.
 
-`NXR_CONFIG=/path/to/file` moves the file; the priority stays.
+`NXR_CONFIG=/path/to/file` moves the file. The priority stays.
 
 ## What breaks loudly
 
@@ -67,4 +67,4 @@ Anonymous through a bare alias is legal: a real Nexus answers 401 with the usual
 
 ## Shell completion
 
-`nxr complete` scripts know `-R`; the alias names come from your file at edit time, not from the completion.
+`nxr complete` scripts know `-R`. The alias names come from your file at edit time, not from the completion.
