@@ -3,3 +3,5 @@
 minimumReleaseAgeExclude:
   - nexus-raw
   - nexus-raw-*
+  - '@nexus-raw/nxr'
+  - '@nexus-raw/*'
