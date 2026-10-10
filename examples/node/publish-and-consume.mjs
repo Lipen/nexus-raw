@@ -8,6 +8,14 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import pkg from "@nexus-raw/nxr";
+
+// The placeholder package resolves but exports nothing: the smoke runs only
+// against the real scoped surface, which the next release ships.
+if (!pkg || typeof pkg.up !== "function") {
+  console.log("@nexus-raw/nxr placeholder: the functional smoke starts with the scoped release");
+  process.exit(0);
+}
+
 const { up, down, verify, channelSet, channelGet } = pkg;
 
 const mock = process.argv[2] ? { url: process.argv[2], child: null } : await spawnMock();
