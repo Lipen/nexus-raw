@@ -123,6 +123,7 @@ nxr-tui https://nexus.example.com/     # или без аргументов: п�
 ## Учётные данные
 
 Источники в порядке проверки: `-u user:pass`, затем `NXR_AUTH` (base64 от `user:pass`), затем `NXR_USERNAME` + `NXR_PASSWORD`.
+`-R <алиас>` называет ремоут из `~/.config/nxr/config.toml` (один TOML из именованных URL + источников кредов): файл читается только когда флаг называет алиас. Подробности: [how-to/config.md](docs/how-to/config.md).
 
 ```bash
 export NXR_USERNAME="my-login"

@@ -14,7 +14,9 @@ The agent minimum:
 - `--json` prints one NDJSON event per line.
   The last event is always a summary.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
-  There is no config file by design.
+  Without `-R` there is no config file in play, by design.
+- Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R koala ls 1.4.0/`).
+  The file is read only when the flag names an alias, nothing is picked up implicitly.
 - Listing needs an enumeration source: `manifest.json` at the directory URL, `--manifest <file|url|->`, repeatable `--name`, or `--ls` (search API).
 - Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
 
@@ -69,6 +71,7 @@ Quirks that are not bugs:
 - [Publish a version](https://lipen.github.io/nexus-raw/how-to/publish/): up, markers, channels, the sha-sibling rule
 - [Consume artifacts](https://lipen.github.io/nexus-raw/how-to/consume/): down, unpack, digest verification
 - [Use in CI](https://lipen.github.io/nexus-raw/how-to/ci/): credentials, caching, the retry contract
+- [Named remotes](https://lipen.github.io/nexus-raw/how-to/config/): the -R alias file: one TOML, read only when named
 - [Run the demo](https://lipen.github.io/nexus-raw/how-to/demo/): a scripted tour: publish, consume, refuse, repair
 - [Run the browser sandbox](https://lipen.github.io/nexus-raw/how-to/wasm/): nxr compiled to wasm, serving a fake or a real Nexus
 - [When it breaks](https://lipen.github.io/nexus-raw/how-to/troubleshoot/): symptom to cause to fix, plus server quirks

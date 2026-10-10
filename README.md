@@ -122,7 +122,8 @@ Keys, the config file and the headless smoke mode: [the TUI reference](docs/refe
 
 ## Credentials
 
-Sources, in checked order: `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
+- Sources, in checked order: `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
+- `-R <alias>` names a remote from `~/.config/nxr/config.toml` (one TOML of named URLs + credential sources): the file is read only when the flag names an alias. See [how-to/config.md](docs/how-to/config.md).
 
 ```bash
 export NXR_USERNAME="my-login"

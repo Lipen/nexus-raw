@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Named remotes: `nxr -R <alias>` reads `~/.config/nxr/config.toml` (or `$NXR_CONFIG`) and expands the URL arguments that look relative onto the alias URL, plus supplies the credentials (env variable names, inline, or a `pass_cmd`).
+  The file is read only when the flag names an alias: without `-R` the call keeps the curl-model contract.
+  `nxr complete` knows the flag, `doctor` accepts an alias-expanded URL.
 - `nxr --help` ends with agent entry points: the cookbook URL, the doc index and the source, plus the one-line contract (hint on every error, NDJSON via `--json`, the exit-code taxonomy).
 
 ## [0.9.0] - 2026-10-10

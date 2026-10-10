@@ -52,6 +52,7 @@ nav:
       - Consume artifacts: how-to/consume.md
       - Integrate it: how-to/integrate.md
       - Use in CI: how-to/ci.md
+      - Name your remotes: how-to/config.md
       - When it breaks: how-to/troubleshoot.md
       - Drive it with an agent: how-to/agents.md
   - Reference:
