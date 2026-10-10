@@ -10,53 +10,53 @@ importers:
     dependencies:
       nexus-raw:
         specifier: ^0.10.0
-        version: 0.9.0
+        version: 0.10.0
 
 packages:
 
-  nexus-raw-darwin-arm64@0.9.0:
-    resolution: {integrity: sha512-ENCX202N8+xNXLrPHluQFeYUkYyCHTEd95T7n+xHFFfwrODigUlZVMC3vH5Zppt7DLIwSX/BQDkAdTPfo0jBTw==}
+  nexus-raw-darwin-arm64@0.10.0:
+    resolution: {integrity: sha512-H/U6+P3XtZxIgF/KwDBbqCcvh5LbnrqKbOjVOphM4z2egeG1QfoHsUJMDOV40S42GOP4mlwLCnrobvM9N0Ydnw==}
     cpu: [arm64]
     os: [darwin]
 
-  nexus-raw-darwin-x64@0.9.0:
-    resolution: {integrity: sha512-kdcj5edirrKzUSj/iYNolI5A3ifzlJ4uGvwPe4jxVOC4nb32DpyE33ZPelOguvYtX3bJgn+XG1MhS+eoGm24sw==}
+  nexus-raw-darwin-x64@0.10.0:
+    resolution: {integrity: sha512-jN+S08M5oMWzV03XzcRJy28TLyANlRXNaLPeljM5KH6juApgqIvs5Qa5PY3+eh8bokAUzINpql4K58/haiilXA==}
     cpu: [x64]
     os: [darwin]
 
-  nexus-raw-linux-arm64-gnu@0.9.0:
-    resolution: {integrity: sha512-j5oyJShRInOBWNRi/5vV6UTOzACTfBWRDgODiVPagnp58dHjii67/hUHDiRR1gpQ2NXeMNxNGF/QWDTu4WcHyQ==}
+  nexus-raw-linux-arm64-gnu@0.10.0:
+    resolution: {integrity: sha512-qs4uK3mViG2m4q35onnKR2bPK/gFtMqWFICJ96m7x4O29RlXQ6DIvRIEMGHo3ZLv39h3k1rWEve4fxr1wzAbGg==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  nexus-raw-linux-x64-gnu@0.9.0:
-    resolution: {integrity: sha512-h1upEUbvhxxFj02Q4tTeCPBmo38E5bkuIkcHve1wOgt2vfyhg+NqPCs5vlC+2Rx/rcSPESdpeo/nk3x6BaJziQ==}
+  nexus-raw-linux-x64-gnu@0.10.0:
+    resolution: {integrity: sha512-Gc6iIN3aqSZLJ2huE4RVszuQMUfIHnNWtfwLKmYgNV6vUIhXoJs1Cb0n2EiM6NMO+H8YmDnm3yMSHpocIbhnqg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  nexus-raw@0.9.0:
-    resolution: {integrity: sha512-10m+QVRwgAEwEuAqYNka4L1TkAwc3jUjU/ENjbmUnv+DEFNLVHt4idwEy/EVt7+KGGHbPgJ2ZZxUQXgVYOJRSg==}
+  nexus-raw@0.10.0:
+    resolution: {integrity: sha512-pZIBoVs8VcXx6eUVKgTYmSUIurQOiqPYMWksyS72poErFgxtWlNw6vbF5WE+inIftgXNaS5js7hX4Ims65EciA==}
     engines: {node: '>= 18'}
 
 snapshots:
 
-  nexus-raw-darwin-arm64@0.9.0:
+  nexus-raw-darwin-arm64@0.10.0:
     optional: true
 
-  nexus-raw-darwin-x64@0.9.0:
+  nexus-raw-darwin-x64@0.10.0:
     optional: true
 
-  nexus-raw-linux-arm64-gnu@0.9.0:
+  nexus-raw-linux-arm64-gnu@0.10.0:
     optional: true
 
-  nexus-raw-linux-x64-gnu@0.9.0:
+  nexus-raw-linux-x64-gnu@0.10.0:
     optional: true
 
-  nexus-raw@0.9.0:
+  nexus-raw@0.10.0:
     optionalDependencies:
-      nexus-raw-darwin-arm64: 0.9.0
-      nexus-raw-darwin-x64: 0.9.0
-      nexus-raw-linux-arm64-gnu: 0.9.0
-      nexus-raw-linux-x64-gnu: 0.9.0
+      nexus-raw-darwin-arm64: 0.10.0
+      nexus-raw-darwin-x64: 0.10.0
+      nexus-raw-linux-arm64-gnu: 0.10.0
+      nexus-raw-linux-x64-gnu: 0.10.0
