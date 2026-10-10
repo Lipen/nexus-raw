@@ -7,7 +7,7 @@
 
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import pkg from "@nexus-raw/nxr";
+import pkg from "nexus-raw";
 
 // The placeholder package resolves but exports nothing: the smoke runs only
 // against the real scoped surface, which the next release ships.
