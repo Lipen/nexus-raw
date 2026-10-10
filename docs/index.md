@@ -75,7 +75,7 @@ The full tour: [run the demo](how-to/demo.md).
 - [:material-language-typescript: **First transfer in Node** *about 5 minutes*. Promises over the same surface, a diff before any write. `pnpm add nexus-raw`](tutorials/node/)
 - [:material-console: **First transfer in a terminal** *about 5 minutes*. The release binary and the one-liners. `nxr up`](tutorials/ops/)
 - [:material-upload: **Publish a version** *about 2 minutes*. The manifest lands first, bytes and markers follow. `nxr up --claim-first`](how-to/publish/)
-- [:material-download: **Fetch artifacts** *about 2 minutes*. Named files come down verified. An interrupted pull resumes. `nxr down`](how-to/consume/)
+- [:material-download: **Fetch artifacts** *about 2 minutes*: named files come down verified, an interrupted pull resumes. `nxr down`](how-to/consume/)
 - [:material-play-circle: **See it run** *half a minute*. The full session against the mock, then on your machine. `just demo`](how-to/demo/)
 - [:material-robot: **Use it in CI** *about 5 minutes*. Exit codes, NDJSON events, credentials from the environment. `nxr --json`](how-to/ci/)
 - [:material-wrench: **When it breaks**. Decode the error, recover, rerun safely. `nxr doctor`](how-to/troubleshoot/)

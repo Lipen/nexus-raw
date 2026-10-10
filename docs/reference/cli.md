@@ -555,7 +555,7 @@ $ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
 uploaded 0, downloaded 0, skipped 0
 failed: a.zip
 error: read-only: https://nexus.example.com/repository/raw-main/1.14.0/a.zip.sha256: HTTP 403
-hint: the repository answered 403 to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed
+hint: the repository answered 403 to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed
 $ echo $?
 1
 ```
@@ -810,7 +810,7 @@ $ nxr verify dist/1.4.0/ --manifest dist/1.4.0/manifest.json
 uploaded 0, downloaded 0, skipped 2
 failed: pinned.xml
 error: incomplete: pinned.xml
-hint: rerun the same command; finished names are skipped and the rest is retried
+hint: rerun the same command: finished names are skipped and the rest is retried
 $ echo $?
 1
 ```
@@ -973,7 +973,7 @@ doctor:
   [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
   [ FAIL ] probe: transport: https://nexus.example.com/repository/raw-main/: error sending request for url (https://nexus.example.com/repository/raw-main/)
 error: transport: https://nexus.example.com/repository/raw-main/: 1 check(s) failed
-hint: check the network; transfers are resumable, rerunning is safe
+hint: check the network: transfers are resumable, rerunning is safe
 $ echo $?
 3
 ```
@@ -1073,7 +1073,7 @@ Artifact lines arrive in worker completion order, not plan order.
 - a failed run ends stdout with one `error` object before the non-zero exit, carrying the exit `code` and the `hint` that stderr carries:
 
 ```json
-{"event":"error","code":3,"hint":"check the network; transfers are resumable, rerunning is safe"}
+{"event":"error","code":3,"hint":"check the network: transfers are resumable, rerunning is safe"}
 ```
 
 A captured transfer stream:

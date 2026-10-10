@@ -22,7 +22,7 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `mirror` | pour a version from one repository into another: read the source, write the destination through the `up` rules |
 | `get`, `put`, `head`, `sha` | curl-grade primitives, digest computed on the fly |
 | `channel get`, `channel set` | name versions through token files, with the forward-only guard |
-| `ls` | the raw-tree listing of a directory URL, any depth (`--assets`: flat artifact names). Search-API based, best-effort |
+| `ls` | the raw-tree listing of a directory URL, any depth (`--assets`: flat artifact names), search-API based, best-effort |
 | `verify` | offline check of bytes, markers and digests |
 | `diff` | the local-against-storage delta report, nothing written |
 | `rm` | delete an enumerated version, marker first, 404 is success |
