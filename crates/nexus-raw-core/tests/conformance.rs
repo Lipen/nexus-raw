@@ -328,7 +328,11 @@ async fn oversized_small_get_refuses_with_the_cap() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
     let err = nxr.manifest_at_base().await.unwrap_err();
-    assert_eq!(err.exit_code(), 2, "the cap is a misuse refusal, got {err}");
+    assert_eq!(
+        err.exit_code(),
+        3,
+        "the cap is a server-condition refusal, got {err}"
+    );
     assert!(
         err.to_string().contains("small-object cap"),
         "the message names the cap: {err}"

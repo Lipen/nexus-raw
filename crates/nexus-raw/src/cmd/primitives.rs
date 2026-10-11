@@ -89,8 +89,10 @@ pub(crate) async fn sha(cli: &Cli, target: &str) -> Result<(), Error> {
     // A local file needs no HTTP client at all.
     if !target.starts_with("http://") && !target.starts_with("https://") {
         let path = std::path::PathBuf::from(target);
-        let d = nexus_raw_core::model::digest::sha256_file(&path)
-            .map_err(|e| Error::Misuse(format!("{}: {e}", path.display())))?;
+        let d = nexus_raw_core::model::digest::sha256_file(&path).map_err(|e| Error::Io {
+            path: path.display().to_string(),
+            detail: e.to_string(),
+        })?;
         print_line(
             cli.json,
             d.as_str(),

@@ -357,18 +357,20 @@ impl NexusClient {
                 match status {
                     s if s.is_success() => {
                         if resp.content_length().is_some_and(|n| n > SMALL_CAP) {
-                            return Err(AttemptFailure::stop(Error::misuse(format!(
-                                "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
-                            ))));
+                            return Err(AttemptFailure::stop(Error::SmallObjectCap {
+                                url: url.to_owned(),
+                                cap: SMALL_CAP,
+                            }));
                         }
                         let mut body = resp.bytes_stream();
                         let mut buf = Vec::new();
                         while let Some(chunk) = body.next().await {
                             let chunk = chunk.map_err(|e| this.wrap_send_err(url, e))?;
                             if buf.len() as u64 + chunk.len() as u64 > SMALL_CAP {
-                                return Err(AttemptFailure::stop(Error::misuse(format!(
-                                    "{url} exceeds the small-object cap ({SMALL_CAP} bytes)"
-                                ))));
+                                return Err(AttemptFailure::stop(Error::SmallObjectCap {
+                                    url: url.to_owned(),
+                                    cap: SMALL_CAP,
+                                }));
                             }
                             buf.extend_from_slice(&chunk);
                         }

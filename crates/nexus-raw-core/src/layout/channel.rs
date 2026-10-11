@@ -25,8 +25,8 @@ pub async fn get(client: &NexusClient, url: &str) -> Result<Option<String>, Erro
         None => Ok(None),
         Some(raw) => pointer::parse_token(&String::from_utf8_lossy(&raw))
             .map(Some)
-            .map_err(|e| Error::Mismatch {
-                name: url.to_owned(),
+            .map_err(|e| Error::ServerBody {
+                url: url.to_owned(),
                 detail: format!("channel file does not parse: {e}"),
             }),
     }
@@ -50,7 +50,7 @@ pub async fn set(
     // A current value that cannot be parsed reads as absent: this command is the tool
     // that repairs a broken channel, so garbage on the file must not block the write.
     let current = get(client, url).await.or_else(|e| match e {
-        Error::Mismatch { .. } => Ok(None),
+        Error::ServerBody { .. } => Ok(None),
         other => Err(other),
     })?;
     if if_forward {

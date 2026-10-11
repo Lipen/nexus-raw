@@ -65,6 +65,14 @@ pub enum Error {
     /// Not misuse: the command line may be perfect and the disk full.
     #[error("io: {path}: {detail}")]
     Io { path: String, detail: String },
+    /// A server answered a small-object GET with a body beyond the protocol's bound (§3).
+    /// Not misuse: the command line may be perfect and the server hostile or broken.
+    #[error("small object: {url} exceeds the small-object cap ({cap} bytes)")]
+    SmallObjectCap { url: String, cap: u64 },
+    /// A server body the protocol requires to be JSON (or the channel token text) did not parse.
+    /// Not a divergent object: the wire shape itself is broken, so the class is transport, not data.
+    #[error("server body: {url}: {detail}")]
+    ServerBody { url: String, detail: String },
 }
 
 impl Error {
@@ -85,6 +93,11 @@ impl Error {
             Error::Http { status: 404, .. } => 1,
             Error::Http { .. } => 3,
             Error::ServiceMissing { .. } | Error::SearchRepoMissing { .. } => 3,
+            // A hostile or broken server is the transport's problem: a retry
+            // on the same URL changes nothing, but the class is not the
+            // user's command line either.
+            Error::SmallObjectCap { .. } => 3,
+            Error::ServerBody { .. } => 3,
             Error::Io { .. } => 1,
         }
     }
@@ -129,6 +142,12 @@ impl Error {
             Error::Misuse(_) => Some("check the command line arguments".into()),
             Error::Io { .. } => {
                 Some("check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe".into())
+            }
+            Error::SmallObjectCap { .. } => {
+                Some("the server sent a small object beyond its protocol bound: check the server health, or a proxy answering for it".into())
+            }
+            Error::ServerBody { .. } => {
+                Some("the server answered with a body the protocol does not define: check the server health, or a proxy answering for it".into())
             }
         };
         hint.map(|hint| match self.server_body() {

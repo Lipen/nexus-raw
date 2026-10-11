@@ -49,8 +49,8 @@ pub(crate) async fn repositories(client: &NexusClient, base: &str) -> Result<Vec
             root,
         });
     };
-    serde_json::from_slice(&bytes).map_err(|e| Error::Mismatch {
-        name: url.clone(),
+    serde_json::from_slice(&bytes).map_err(|e| Error::ServerBody {
+        url: url.clone(),
         detail: format!("the service response is not a repository list: {e}"),
     })
 }
@@ -129,8 +129,8 @@ pub(crate) async fn repo(
             root,
         });
     };
-    let list: Vec<RepoInfo> = serde_json::from_slice(&bytes).map_err(|e| Error::Mismatch {
-        name: url.clone(),
+    let list: Vec<RepoInfo> = serde_json::from_slice(&bytes).map_err(|e| Error::ServerBody {
+        url: url.clone(),
         detail: format!("the service response is not a repository list: {e}"),
     })?;
     let needle = base.trim_end_matches('/');
@@ -143,6 +143,9 @@ pub(crate) async fn repo(
         }
     }
     let Some(info) = best.cloned() else {
+        // Data-class on purpose: the repo is absent *for this principal* (a
+        // scoped deployment hides it), which is exactly the Missing semantics.
+        // A dedicated hint needs a new variant: deferred to the next wave.
         return Err(Error::Missing {
             names: vec![base.to_owned()],
         });
@@ -154,10 +157,12 @@ pub(crate) async fn repo(
             report.info.format, report.info.kind, report.info.name
         );
         report.detail = match client.get_small(&detail_url).await? {
-            Some(bytes) => Some(serde_json::from_slice(&bytes).map_err(|e| Error::Mismatch {
-                name: detail_url.clone(),
-                detail: format!("the repository detail is not JSON: {e}"),
-            })?),
+            Some(bytes) => Some(
+                serde_json::from_slice(&bytes).map_err(|e| Error::ServerBody {
+                    url: detail_url.clone(),
+                    detail: format!("the repository detail is not JSON: {e}"),
+                })?,
+            ),
             None => None,
         };
     }
@@ -333,12 +338,14 @@ pub(crate) async fn eula(client: &NexusClient, base: &str) -> Result<Option<Eula
     let root = server_root(base)?;
     let url = format!("{root}/service/rest/v1/system/eula");
     match client.get_small(&url).await {
-        Ok(Some(bytes)) => serde_json::from_slice(&bytes)
-            .map(Some)
-            .map_err(|e| Error::Mismatch {
-                name: url.clone(),
-                detail: format!("the eula response is not JSON: {e}"),
-            }),
+        Ok(Some(bytes)) => {
+            serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|e| Error::ServerBody {
+                    url: url.clone(),
+                    detail: format!("the eula response is not JSON: {e}"),
+                })
+        }
         Ok(None) => Ok(None),
         Err(Error::Auth { .. }) => {
             // The gate exists (3.79+ answers it for admins) but this user is not trusted to read it.

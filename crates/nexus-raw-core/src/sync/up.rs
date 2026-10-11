@@ -133,6 +133,26 @@ pub async fn execute(
     Ok(summary)
 }
 
+/// The TOCTOU guard: the marker blesses only the bytes it was computed from.
+/// A file rewritten between classification and upload carries a different
+/// digest on the wire: publishing the classified marker would bless foreign
+/// bytes behind exit 0.
+pub(crate) fn ensure_matches(
+    name: &crate::model::name::ArtifactName,
+    classified: &crate::model::digest::Digest,
+    wire: &crate::model::digest::Digest,
+) -> Result<(), Error> {
+    if classified != wire {
+        return Err(Error::Mismatch {
+            name: name.to_string(),
+            detail: format!(
+                "the file changed during the upload: classified as {classified}, the wire carried {wire}"
+            ),
+        });
+    }
+    Ok(())
+}
+
 /// PUT the bytes, then the canonical marker of the same name (§5.2).
 /// The marker strictly follows the bytes: a crash in between leaves a Markerless object, which every reader refuses to trust.
 /// `emit_done == false` hands the settle event to the caller: the mirror reports one done line for the whole copy, not one per phase.
@@ -147,10 +167,14 @@ pub(crate) async fn upload_one(
 ) -> Result<(), Error> {
     let bytes_url = client.object_url(dir_url, name);
     let src = bytes_path(dir, name);
-    client
+    let wire = client
         .upload_file((name.as_str(), Dir::Up), &bytes_url, &src, size)
         .await?;
+    // The wire digest is what actually crossed the network: a file rewritten
+    // between classification and upload diverges here, and the marker must
+    // never bless bytes it does not describe (§5.2, the TOCTOU guard).
     if let Some(d) = digest {
+        ensure_matches(name, &d, &wire)?;
         let marker_url = client.sibling_url(dir_url, name);
         client
             .put_small(
@@ -218,4 +242,25 @@ pub(crate) async fn generate_markers(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_matches;
+    use crate::model::digest::Digest;
+    use crate::model::name::ArtifactName;
+
+    #[test]
+    fn the_guard_refuses_a_wire_divergence() {
+        let name = ArtifactName::parse("a.zip").unwrap();
+        let classified = Digest::from_hex(&"a".repeat(64)).unwrap();
+        let wire = Digest::from_hex(&"b".repeat(64)).unwrap();
+        let err = ensure_matches(&name, &classified, &wire).unwrap_err();
+        assert!(
+            err.to_string().contains("changed during the upload"),
+            "the message must name the race: {err}"
+        );
+        // The matching pair passes: the happy path is untouched.
+        ensure_matches(&name, &classified, &classified).unwrap();
+    }
 }

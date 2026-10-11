@@ -126,16 +126,19 @@ pub async fn get(
         let mut size: u64 = 0;
         while let Some(chunk) = body.next().await {
             let chunk = chunk.map_err(|e| Error::transport(url, e))?;
-            stdout
-                .write_all(&chunk)
-                .await
-                .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
+            stdout.write_all(&chunk).await.map_err(|e| {
+                // A closed pipe (`nxr get URL | head`) is an I/O condition, not a command-line mistake.
+                Error::Io {
+                    path: "stdout".into(),
+                    detail: e.to_string(),
+                }
+            })?;
             size += chunk.len() as u64;
         }
-        stdout
-            .flush()
-            .await
-            .map_err(|e| Error::misuse(format!("stdout: {e}")))?;
+        stdout.flush().await.map_err(|e| Error::Io {
+            path: "stdout".into(),
+            detail: e.to_string(),
+        })?;
         Ok(GetOutcome {
             size,
             digest: None,
