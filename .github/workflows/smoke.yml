@@ -1,0 +1,44 @@
+name: Smoke
+
+# The release smoke runs on ubuntu only: the published darwin and win32
+# addon binaries never load anywhere in the pipeline. This workflow loads
+# the published package on the three desktop OSes, dispatch or schedule,
+# so a dead addon surfaces here instead of in a user issue.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:20 UTC, daily: long after the release window closes.
+    - cron: "20 4 * * *"
+
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+jobs:
+  load:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Install and load the published package
+        run: |
+          mkdir -p tmp-smoke && cd tmp-smoke
+          echo '{"name":"os-smoke","private":true}' > package.json
+          npm install --no-package-lock --no-save "@nexus-raw/nxr@latest"
+          node -e '
+            const nxr = require("@nexus-raw/nxr");
+            const methods = ["up", "down", "verify"];
+            const missing = methods.filter((m) => typeof nxr[m] !== "function");
+            if (missing.length > 0) {
+              throw new Error(`os smoke: the core surface is missing ${missing.join(", ")}`);
+            }
+            console.log(`os smoke (${process.platform}): the core surface resolves`);
+          '

@@ -21,8 +21,7 @@
   "files": [
     "index.d.ts",
     "index.js",
-    "binding.cjs",
-    "binding.d.ts"
+    "binding.cjs"
   ],
   "engines": {
     "node": ">= 18"

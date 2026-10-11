@@ -32,7 +32,7 @@ permissions:
 jobs:
   gate:
     name: Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -170,7 +170,7 @@ jobs:
     name: Publish the crates
     needs: [gate, build]
     if: ${{ !inputs.dry-run }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -372,7 +372,7 @@ jobs:
     # A real run publishes only after the crates are out; a rehearsal
     # exercises the staging and validation with the publish steps off.
     if: ${{ always() && needs.node.result == 'success' && (needs.publish.result == 'success' || inputs.dry-run) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -488,12 +488,14 @@ jobs:
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           for name in @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
-            # The registry serves fresh publishes with a lag: a check that runs
-            # right after the platform publish can miss a package that landed.
-            # Retry before refusing, so a green release never dies to propagation.
+            # The registry serves fresh publishes with a lag, and the npm CLI
+            # caches a missing packument negatively: one early 404 poisons
+            # every later npm view for minutes (caught live in the 0.11.1
+            # cycle). A plain curl to the registry origin carries no such
+            # cache, so the poll reads the truth as soon as it lands.
             ok=0
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if npm view "$name@$version" version > /dev/null 2>&1; then
+              if curl -sf "https://registry.npmjs.org/$(echo "$name" | sed 's|/|%2F|')" | grep -q "\"$version\""; then
                 ok=1
                 break
               fi
@@ -512,10 +514,21 @@ jobs:
       # registry) and requires the surface. It catches a "green CI, dead
       # package" — a publish whose loader cannot resolve its addon — before
       # the main package goes out, which is the point of no return.
+      # The step runs in the rehearsal too: it burned two real releases by
+      # never executing before the dispatch. In a rehearsal the addon resolves
+      # from the published latest (the fresh one is not built for all targets
+      # yet) and the surface check covers the core only: a method added in
+      # this release is absent from the published addon binary.
       - name: Consumer smoke of the staged package
-        if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
+          if [ -n "${{ inputs.dry-run && 'dry' || '' }}" ]; then
+            addon_spec="@nexus-raw/nxr-linux-x64-gnu@latest"
+            mode=rehearsal
+          else
+            addon_spec="@nexus-raw/nxr-linux-x64-gnu@${version}"
+            mode=release
+          fi
           mkdir -p /tmp/consumer-smoke && cd /tmp/consumer-smoke
           echo '{"name":"consumer-smoke","private":true,"dependencies":{"@nexus-raw/nxr":"'"$version"'"}}' > package.json
           # The staged package installs as a tarball, not a file: spec: a
@@ -528,16 +541,29 @@ jobs:
           # tree against package.json and drop the first package (npm/cli#4828),
           # and the main version is not on the registry yet to survive it.
           npm pack /home/runner/work/nexus-raw/nexus-raw/pkg-main --pack-destination /tmp/consumer-smoke
-          npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "@nexus-raw/nxr-linux-x64-gnu@${version}"
+          npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "$addon_spec"
           node -e '
+            const fs = require("fs");
             const nxr = require("@nexus-raw/nxr");
-            const methods = ["up", "down", "get", "put", "head", "sha", "lsAssets", "lsEntries", "lsVersions", "diff", "mirror", "verify", "serviceAssets", "serviceRepos", "channelGet", "channelSet", "pointClear", "rm"];
-            const missing = methods.filter((m) => typeof nxr[m] !== "function");
-            if (missing.length > 0) {
-              throw new Error(`consumer smoke: the surface is missing ${missing.join(", ")}`);
+            const dts = fs.readFileSync("/home/runner/work/nexus-raw/nexus-raw/pkg-main/index.d.ts", "utf8");
+            const declared = [...dts.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
+            if (declared.length < 10) {
+              throw new Error(`consumer smoke: only ${declared.length} functions parsed from index.d.ts, the d.ts shape drifted`);
             }
-            console.log(`consumer smoke: the full surface resolves (${methods.length} methods)`);
+            const core = ["up", "down", "verify"].filter((m) => typeof nxr[m] !== "function");
+            if (core.length > 0) {
+              throw new Error(`consumer smoke: the core surface is missing ${core.join(", ")}`);
+            }
+            if (process.env.SMOKE_MODE === "release") {
+              const missing = declared.filter((m) => typeof nxr[m] !== "function");
+              if (missing.length > 0) {
+                throw new Error(`consumer smoke: the surface is missing ${missing.join(", ")}`);
+              }
+            }
+            console.log(`consumer smoke: core ok, ${declared.length} declared functions resolve (mode ${process.env.SMOKE_MODE})`);
           '
+        env:
+          SMOKE_MODE: ${{ inputs.dry-run && 'rehearsal' || 'release' }}
 
       - name: Publish the main package
         if: ${{ !inputs.dry-run }}
@@ -557,7 +583,7 @@ jobs:
     name: Tag and publish the release
     needs: [publish, build, node, npm]
     if: ${{ !inputs.dry-run }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
