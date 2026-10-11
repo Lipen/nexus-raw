@@ -531,7 +531,7 @@ jobs:
           npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "@nexus-raw/nxr-linux-x64-gnu@${version}"
           node -e '
             const nxr = require("@nexus-raw/nxr");
-            const methods = ["up", "down", "get", "put", "head", "sha", "ls", "diff", "mirror", "verify", "doctor"];
+            const methods = ["up", "down", "get", "put", "head", "sha", "lsAssets", "lsEntries", "lsVersions", "diff", "mirror", "verify", "serviceAssets", "serviceRepos", "channelGet", "channelSet", "pointClear", "rm"];
             const missing = methods.filter((m) => typeof nxr[m] !== "function");
             if (missing.length > 0) {
               throw new Error(`consumer smoke: the surface is missing ${missing.join(", ")}`);
