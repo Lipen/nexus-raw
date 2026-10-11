@@ -7,14 +7,7 @@
 
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import pkg from "nexus-raw";
-
-// The placeholder package resolves but exports nothing: the smoke runs only
-// against the real scoped surface, which the next release ships.
-if (!pkg || typeof pkg.up !== "function") {
-  console.log("@nexus-raw/nxr placeholder: the functional smoke starts with the scoped release");
-  process.exit(0);
-}
+import pkg from "@nexus-raw/nxr";
 
 const { up, down, verify, channelSet, channelGet } = pkg;
 
