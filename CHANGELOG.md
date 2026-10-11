@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.11.1] - 2026-10-11
+
 ### Fixed
 
 - The npm platform addons ship under their generated names (`@nexus-raw/nxr-<platform>`, 5 targets): the 0.11.0 loader could not resolve the short-named addons it was published with, which made `npm install @nexus-raw/nxr@0.11.0` dead on arrival.
@@ -221,7 +225,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/Lipen/nexus-raw/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/Lipen/nexus-raw/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Lipen/nexus-raw/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Lipen/nexus-raw/compare/v0.8.0...v0.9.0
