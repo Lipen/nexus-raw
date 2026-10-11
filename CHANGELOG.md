@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The small-object cap refusal and the unparseable server body are transport facts, not misuses: the new `SmallObjectCap` and `ServerBody` error variants exit 3 with their own hints, where `Misuse` (exit 2, check the command line) blamed the user for a hostile or broken server.
+  The channel `--if-forward` still repairs a garbage token: the repair arm follows the new class.
+  The up command refuses to publish a marker over bytes it does not describe: a file rewritten during the upload is a Mismatch, not a silent divergence behind exit 0.
+  A stdout write failure (`nxr get URL | head`) is an I/O condition, not a misuse.
+
+## [Unreleased]
+
 Nothing yet.
 
 ## [0.11.1] - 2026-10-11

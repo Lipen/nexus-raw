@@ -19,7 +19,7 @@ pub enum ChannelOutcome {
 ///
 /// # Errors
 ///
-/// Returns transport, auth or HTTP errors from the underlying GET, and [`Error::Misuse`] when the body exceeds the small-object cap.
+/// Returns transport, auth or HTTP errors from the underlying GET, and [`Error::SmallObjectCap`] when the body exceeds the small-object cap.
 pub async fn get(client: &NexusClient, url: &str) -> Result<Option<String>, Error> {
     match client.get_small(url).await? {
         None => Ok(None),
