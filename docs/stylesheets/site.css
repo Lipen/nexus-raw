@@ -240,22 +240,16 @@
 .md-typeset .nxr-go > ul > li {
   margin: 0;
   padding: 0;
-  grid-column: span 1;
-}
-
-/* the first two are the personas this tool actually has: they get the width */
-.md-typeset .nxr-go > ul > li:nth-child(-n + 4) {
-  grid-column: span 1;
 }
 
 .md-typeset .nxr-go > ul > li > p {
   margin: 0;
 }
 
+/* The card: flow-root contains the icon float. The badge sits left, the
+   title and time pill share the first line beside it, the description
+   wraps under. No icon-only row, no stray separators. */
 .md-typeset .nxr-go > ul > li a {
-  /* flow-root contains the icon float inside the card. The icon floats
-     left: the title sits on its first line, the description wraps and
-     clears below it. No empty second line, no wasted height. */
   display: flow-root;
   height: 100%;
   padding: 0.95rem 1.1rem 1rem;
@@ -264,6 +258,7 @@
   background: color-mix(in oklch, var(--md-default-fg-color) 3%, transparent);
   font-size: 0.78rem;
   line-height: 1.55;
+  color: var(--md-default-fg-color--light);
   text-decoration: none;
   transition:
     transform var(--nxr-lift),
@@ -277,8 +272,8 @@
   transform: translateY(-2px);
 }
 
-/* The icon badge floats left: title and text wrap around it, so the card
-   spends zero height on a lone icon row. */
+/* The icon badge floats left: title and time pill sit on the first line
+   beside it, the description wraps below. */
 .md-typeset .nxr-go > ul > li a .twemoji,
 .md-typeset .nxr-go > ul > li a .md-icon {
   float: left;
@@ -306,7 +301,7 @@
   color: var(--md-default-fg-color);
 }
 
-/* The time reads as a quiet uppercase pill right after the title. */
+/* The time pill: quiet uppercase, beside the title. */
 .md-typeset .nxr-go > ul > li a em {
   font-style: normal;
   font-size: 0.62rem;
@@ -322,11 +317,7 @@
   vertical-align: 0.08em;
 }
 
-/* The murmur text of the card. */
-.md-typeset .nxr-go > ul > li a {
-  color: var(--md-default-fg-color--light);
-}
-
+/* The command chip is the one accent: this is what the reader runs. */
 .md-typeset .nxr-go > ul > li a code {
   font-size: 0.72rem;
   padding: 0.1rem 0.45rem;
@@ -335,62 +326,32 @@
   color: var(--nxr-hero-teal);
 }
 
-/* the time-to-value hint is a quiet tag pinned to the card's top-right corner */
-.md-typeset .nxr-go > ul > li a {
-  position: relative;
-}
-
-.md-typeset .nxr-go > ul > li a em {
-  color: var(--md-default-fg-color--light);
-  font-style: normal;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.md-typeset .nxr-go > ul > li a em::before {
-  content: "\00b7\00a0";
-}
-
-/* the title is the loudest text, the line murmurs under it */
-.md-typeset .nxr-go > ul > li a strong {
-  color: var(--md-default-fg-color);
-  font-size: 15px;
-}
-
-.md-typeset .nxr-go > ul > li a {
-  color: var(--md-default-fg-color--light);
-}
-
-/* the command chip is the card's one accent: this is what the reader runs */
-.md-typeset .nxr-go > ul > li a code {
-  display: block;
-  width: fit-content;
-  margin: 0.45rem 0 0;
-  padding: 0.12rem 0.55rem;
-  border: 1px solid color-mix(in oklch, var(--nxr-teal) 45%, transparent);
-  border-radius: 6px;
-  background: color-mix(in oklch, var(--nxr-teal) 12%, transparent);
-  color: var(--nxr-hero-teal);
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-/* the arrow is the affordance: it is not there until the reader aims at it */
-.md-typeset .nxr-go > ul > li a::after {
-  content: "\2192";
-  float: right;
-  margin-left: 0.5rem;
-  color: var(--md-accent-fg-color);
+/* The hover affordance: a gradient hairline across the card top fades in.
+   No floating arrows. */
+.md-typeset .nxr-go > ul > li a::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--md-accent-fg-color), transparent);
   opacity: 0;
-  transform: translateX(-0.4rem);
+  transform: scaleX(0.4);
   transition:
     opacity var(--nxr-lift),
     transform var(--nxr-lift);
 }
 
-.md-typeset .nxr-go > ul > li a:hover::after {
+.md-typeset .nxr-go > ul > li a:hover::before {
   opacity: 1;
   transform: none;
+}
+
+/* The card is the positioning context for the hairline. */
+.md-typeset .nxr-go > ul > li {
+  position: relative;
 }
 
 .md-typeset .nxr-go__under {
