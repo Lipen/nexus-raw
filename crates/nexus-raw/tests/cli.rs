@@ -2546,6 +2546,60 @@ fn service_repos_missing_prints_the_root_hint() {
     assert!(stderr(&out).contains("server root"), "{}", stderr(&out));
 }
 
+/// `service status` prints the alive verdict; --json carries the same shape.
+#[test]
+fn service_status_prints_the_alive_verdict() {
+    let srv = server(Scenario::ServiceStatusVersion);
+    let out = nxr(&["service", "status", &srv.base_url()]);
+    expect_exit(&out, 0, "a live server is a zero");
+    let text = stdout(&out);
+    assert!(text.contains("alive"), "{text}");
+}
+
+/// `service repo` resolves the repository behind any URL inside it.
+#[test]
+fn service_repo_resolves_from_a_deep_url() {
+    let srv = server(Scenario::Atomic);
+    let inside = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["service", "repo", &inside, "--json"]);
+    expect_exit(&out, 0, "the prefix match resolves");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    assert_eq!(v["name"], "raw-main");
+    assert_eq!(v["format"], "raw");
+}
+
+/// `service repo` on a URL the server does not serve is a data refusal.
+#[test]
+fn service_repo_unknown_url_is_a_data_miss() {
+    let srv = server(Scenario::Atomic);
+    let ghost = format!("{}repository/ghost/", srv.base_url());
+    let out = nxr(&["service", "repo", &ghost]);
+    expect_exit(&out, 1, "a miss is a data fact");
+}
+
+/// `service assets` walks the search pages: one --json object with every asset.
+#[test]
+fn service_assets_walks_the_search_pages() {
+    let srv = server(Scenario::AssetsPagination);
+    let repo = format!("{}repository/raw-main/", srv.base_url());
+    let out = nxr(&["service", "assets", &repo, "--json"]);
+    expect_exit(&out, 0, "the walk succeeds");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    let assets = v["assets"].as_array().expect("assets array");
+    assert_eq!(assets.len(), 35, "the mock serves 35 assets");
+    assert_eq!(assets[0]["path"], "v0.9.0-assets/asset-000.bin");
+}
+
+/// `service eula` on a server without the gate reports gate:false and exits zero.
+#[test]
+fn service_eula_without_a_gate_is_a_noop() {
+    let srv = server(Scenario::EulaAbsent);
+    let out = nxr(&["service", "eula", &srv.base_url(), "--json"]);
+    expect_exit(&out, 0, "no gate is a zero");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    assert_eq!(v["gate"], false);
+}
+
 // ---- prefix ----------------------------------------------------------------
 
 /// `down --prefix` plans exactly the subtree; a bare prefix is misuse.
