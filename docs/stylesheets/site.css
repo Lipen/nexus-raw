@@ -228,8 +228,10 @@
 
 .md-typeset .nxr-go > ul {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0.8rem;
+  /* Auto-fit: four comfortable columns on a wide screen, reflowing down to
+     one on a phone, and never overflowing the reading column. */
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: 0.9rem;
   margin: 0 0 1rem;
   padding: 0;
   list-style: none;
@@ -238,12 +240,12 @@
 .md-typeset .nxr-go > ul > li {
   margin: 0;
   padding: 0;
-  grid-column: span 2;
+  grid-column: span 1;
 }
 
 /* the first two are the personas this tool actually has: they get the width */
-.md-typeset .nxr-go > ul > li:nth-child(-n + 2) {
-  grid-column: span 3;
+.md-typeset .nxr-go > ul > li:nth-child(-n + 4) {
+  grid-column: span 1;
 }
 
 .md-typeset .nxr-go > ul > li > p {
@@ -393,9 +395,6 @@
 }
 
 @media screen and (max-width: 60em) {
-  .md-typeset .nxr-go > ul {
-    grid-template-columns: 1fr;
-  }
 
   /* the persona cards' span outranks a bare li selector, so it is named here too */
   .md-typeset .nxr-go > ul > li,
