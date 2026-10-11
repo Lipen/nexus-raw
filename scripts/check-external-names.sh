@@ -13,6 +13,7 @@ for name in $banned; do
   if grep -rIn -i -E "(^|[^a-z0-9])${name}([^a-z0-9]|$)" \
       --exclude-dir=.dev --exclude-dir=target --exclude-dir=node_modules \
       --exclude-dir=.git --exclude-dir=site --exclude-dir=.cache \
+      --exclude-dir=.worktrees \
       . 2>/dev/null | grep -v "scripts/check-external-names.sh"; then
     echo "check-external-names: the name '$name' must not appear in tracked sources" >&2
     hits=1

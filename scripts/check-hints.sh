@@ -34,3 +34,24 @@ EOF
 
 [ "$failed" = 0 ] || { echo "check-hints: see crates/nexus-raw-core/src/error.rs vs $doc" >&2; exit 1; }
 echo "check-hints: every error hint is documented"
+
+# The reverse pass: a hint-looking quoted string in the docs (the `hint:` table
+# cells quote the source verbatim) must exist in the source. A stale transcript
+# otherwise passes CI forever while the binary prints something else.
+while IFS= read -r line; do
+  case "$line" in
+    *hint*": "*) ;;
+    *) continue ;;
+  esac
+  quoted="$(printf '%s' "$line" | sed -n 's/.*`: \([^`]*\)`[^`]*$/\1/p')"
+  [ -n "$quoted" ] || continue
+  case "$src_hints" in
+    *"$quoted"*) ;;
+    *)
+      echo "check-hints: the docs quote a hint the source does not carry: $quoted" >&2
+      failed=1
+      ;;
+  esac
+done < "$doc"
+[ "$failed" = 0 ] || { echo "check-hints: see $doc vs crates/nexus-raw-core/src/error.rs" >&2; exit 1; }
+echo "check-hints: the docs quote only carried hints"

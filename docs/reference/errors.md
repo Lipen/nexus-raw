@@ -26,6 +26,8 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
 | `SearchRepoMissing { url }` | the search API answered 400: the repository is missing on the server or is not a raw repository | 3 | `the repository is missing on the server or is not a raw repository` | `ls` against a repository URL the server does not serve, or a name that exists only in another format |
 | `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
+| `SmallObjectCap { url, cap }` | a server answered a small-object GET with a body beyond the protocol bound | 3 | `the server sent a small object beyond its protocol bound: check the server health, or a proxy answering for it` | a hostile or broken server, or a proxy answering for it |
+| `ServerBody { url, detail }` | a server body the protocol requires to be JSON did not parse | 3 | `the server answered with a body the protocol does not define: check the server health, or a proxy answering for it` | a broken server, or a proxy or login page answering for it |
 
 Exit `1` is a data verdict, `2` a broken invocation, `3` a broken transport.
 The same classes appear in the [CLI exit code table](cli.md#exit-codes) and in `Error::exit_code()` for API wrappers.

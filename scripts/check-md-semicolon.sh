@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Markdown prose must not splice sentences with `;`: the repo style is one
 # sentence per line, sentences end with a period. Code blocks and inline code
 # are exempt: a semicolon there is syntax, not typography.
