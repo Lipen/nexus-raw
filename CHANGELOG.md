@@ -12,7 +12,8 @@ Nothing yet.
 ### Fixed
 
 - The npm platform addons ship under their generated names (`@nexus-raw/nxr-<platform>`, 5 targets): the 0.11.0 loader could not resolve the short-named addons it was published with, which made `npm install @nexus-raw/nxr@0.11.0` dead on arrival.
-  The 0.11.0 npm release is written off; the crate and CLI surfaces are unaffected.
+  The 0.11.0 npm release is written off.
+  The crate and CLI surfaces are unaffected.
 
 ## [0.11.0] - 2026-10-10
 

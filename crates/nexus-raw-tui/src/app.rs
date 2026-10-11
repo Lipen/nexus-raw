@@ -1786,6 +1786,10 @@ impl App {
                 t.path.pop();
                 let url = t.here_url();
                 t.entries.clear();
+                // The expansion maps are keyed by rel paths: without the
+                // clear, a same-named folder at the parent level renders
+                // pre-expanded with the wrong directory's cached children.
+                t.clear_expansion();
                 t.filter = None;
                 t.filter_edit = false;
                 t.keep_cursor_name = None;
@@ -3008,11 +3012,14 @@ impl App {
         let Some(t) = self.tabs.get_mut(tab) else {
             return;
         };
-        t.loading = false;
-        let quiet = std::mem::take(&mut t.refresh_quiet);
+        // The stale-result drop comes first: a late answer for an older
+        // generation must not clear the loading marker or the quiet flag
+        // of the newer request that replaced it.
         if gen != t.gen {
             return;
         }
+        t.loading = false;
+        let quiet = std::mem::take(&mut t.refresh_quiet);
         match res {
             Ok(entries) => {
                 let empty = entries.is_empty();
@@ -5743,6 +5750,35 @@ mod tests {
         });
         assert_eq!(app.tabs[0].repos.len(), 1);
         assert_eq!(app.tabs[0].repos[0].name, "fresh");
+    }
+
+    #[tokio::test]
+    async fn climb_up_drops_the_stale_expansion_state() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        // Land in a tree and open a folder: the expansion maps now carry
+        // rel-path keys of that directory level.
+        app.tabs[0].repo = Some(repo("raw-main", "raw", "hosted"));
+        app.tabs[0].screen = Screen::Tree;
+        app.tabs[0].path = vec!["deep".into()];
+        app.tabs[0]
+            .expanded
+            .insert("folder".into(), Vec::new());
+        app.tabs[0].open.insert("folder".into());
+        // Climb up to the parent level, which has a same-named folder.
+        app.handle(Msg::Key(key(KeyCode::Backspace)));
+        assert!(
+            !app.tabs[0]
+                .open
+                .contains("folder"),
+            "the stale open state survives the climb-up"
+        );
+        assert!(
+            app.tabs[0].expanded.is_empty(),
+            "the stale cached children survive the climb-up"
+        );
     }
 
     #[tokio::test]

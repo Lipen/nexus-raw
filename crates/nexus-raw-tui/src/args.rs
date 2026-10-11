@@ -85,6 +85,12 @@ impl Args {
                 ))
                 .into());
             };
+            // A preset equal to an already gathered URL is one tab, like
+            // every other open path: dedup by the trimmed URL key.
+            let key = preset.url.trim_end_matches('/');
+            if out.iter().any(|s| s.url.trim_end_matches('/') == key) {
+                continue;
+            }
             out.push(preset.clone());
         }
         if out.is_empty() {
