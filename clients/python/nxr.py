@@ -373,7 +373,7 @@ class Nxr:
     # ------------------------------------------------------------ the wire
 
     def _send(
-        self, method: str, url: str, body: bytes | None = None
+        self, method: str, url: str, body: bytes | None = None, cap: int | None = None
     ) -> tuple[int, http.client.HTTPMessage, bytes]:
         """One logical request through the retry loop, returning `(status, headers, payload)`.
 
@@ -385,7 +385,7 @@ class Nxr:
         while True:
             attempt += 1
             try:
-                status, headers, payload = self._attempt(method, url, body)
+                status, headers, payload = self._attempt(method, url, body, cap)
             except (OSError, http.client.HTTPException) as err:
                 if attempt >= self.attempts:
                     raise TransportError(
@@ -423,19 +423,14 @@ class Nxr:
         """A small-object GET (sibling, manifest, channel token, search page).
 
         Mirrors the rust core's get_small (transport/client.rs): these objects are
-        KiB-scale by protocol, so the response is capped at SMALL_CAP, and a body
-        over the cap is a misuse-class refusal, not a transport error.
+        KiB-scale by protocol, so the response is capped at SMALL_CAP (Content-Length
+        pre-check plus a streaming budget), and an over-cap body is a misuse-class
+        refusal, not a transport error.
         """
-        status, headers, payload = self._send(method, url)
-        if len(payload) > SMALL_CAP:
-            raise MisuseError(
-                f"misuse: {url} exceeds the small-object cap ({SMALL_CAP} bytes)",
-                hint="the server answered beyond the bound the protocol sets for small objects",
-            )
-        return status, headers, payload
+        return self._send(method, url, cap=SMALL_CAP)
 
     def _attempt(
-        self, method: str, url: str, body: bytes | None
+        self, method: str, url: str, body: bytes | None, cap: int | None = None
     ) -> tuple[int, http.client.HTTPMessage, bytes]:
         """One wire attempt on a fresh connection.
 
@@ -465,7 +460,34 @@ class Nxr:
                 headers["Content-Length"] = str(len(body))
             conn.request(method, path, body=body, headers=headers)
             resp = conn.getresponse()
-            payload = resp.read()
+            if cap is None:
+                payload = resp.read()
+            else:
+                # The rust get_small checks the announced length first, then
+                # budgets the stream: stdlib reads capped+1, so an over-cap
+                # body is refused without ever holding it whole in memory.
+                # A chunked body (no Content-Length) cannot be pre-checked:
+                # the streaming budget is the only bound, like the rust loop.
+                declared = resp.length
+                if declared is not None:
+                    if declared > cap:
+                        raise MisuseError(
+                            f"misuse: {url} declares {declared} bytes over the {cap} cap",
+                            hint="the server answered beyond the bound the protocol sets for small objects",
+                        )
+                    # A declared length within the cap reads plain: the wire
+                    # break then surfaces as IncompleteRead (a retryable
+                    # transport failure), not as a silent short body.
+                    payload = resp.read()
+                else:
+                    # A chunked body cannot be pre-checked: the streaming
+                    # budget is the only bound, like the rust loop.
+                    payload = resp.read(cap + 1)
+                    if len(payload) > cap:
+                        raise MisuseError(
+                            f"misuse: {url} exceeds the {cap} cap",
+                            hint="the server answered beyond the bound the protocol sets for small objects",
+                        )
             return resp.status, resp.headers, payload
         finally:
             conn.close()
