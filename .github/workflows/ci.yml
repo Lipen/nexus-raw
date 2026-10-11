@@ -319,27 +319,27 @@ jobs:
         run: |
           node --eval "const nxr = require('./crates/nexus-raw-napi/index.js'); const missing = ['get', 'put', 'head', 'sha', 'up', 'down', 'verify', 'channelGet', 'channelSet'].filter((f) => typeof nxr[f] !== 'function'); if (missing.length > 0) { throw new Error('addon surface missing: ' + missing.join(', ')) }"
 
-# The python reference client pins the wire contract from the outside: a
-# behavioral drift between it and the rust core fails here, not in an issue.
-python-conformance:
-  name: Python conformance
-  runs-on: ubuntu-latest
-  timeout-minutes: 15
-  steps:
-    - name: Checkout
-      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+  # The python reference client pins the wire contract from the outside: a
+  # behavioral drift between it and the rust core fails here, not in an issue.
+  python-conformance:
+    name: Python conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
-    - name: Set up Rust cache
-      uses: Swatinem/rust-cache@f13886b937689c021705a89b45e142880235791a # v2
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@f13886b937689c021705a89b45e142880235791a # v2
 
-    - name: Build the mock server
-      run: cargo build -p mock-nexus
+      - name: Build the mock server
+        run: cargo build -p mock-nexus
 
-    - name: Run the python conformance suite
-      working-directory: clients/python
-      env:
-        MOCK_NEXUS_BIN: ${{ github.workspace }}/target/debug/mock-nexus
-      run: python3 test_conformance.py
+      - name: Run the python conformance suite
+        working-directory: clients/python
+        env:
+          MOCK_NEXUS_BIN: ${{ github.workspace }}/target/debug/mock-nexus
+        run: python3 test_conformance.py
