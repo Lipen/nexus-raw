@@ -12,10 +12,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The up command refuses to publish a marker over bytes it does not describe: a file rewritten during the upload is a Mismatch, not a silent divergence behind exit 0.
   A stdout write failure (`nxr get URL | head`) is an I/O condition, not a misuse.
 
-## [Unreleased]
-
-Nothing yet.
-
 ## [0.11.1] - 2026-10-11
 
 ### Fixed
