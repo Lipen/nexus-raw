@@ -1,6 +1,6 @@
 // Hand-maintained declarations for the nexus-raw Node bindings.
 // They must stay in sync with the item definitions under `crates/nexus-raw-napi/src/`;
-// `binding.d.ts` next to this file is the mechanically generated surface.
+// `binding.d.ts` is generated at build time and consumed by check-dts.mjs, it does not ship in the npm package.
 //
 // Every command is one self-sufficient call, like the `nxr` CLI: the base URL
 // is an argument, credentials come from `auth` or the environment
