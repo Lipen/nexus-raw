@@ -393,6 +393,43 @@
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
 }
 
+/* ---- inline diagrams ---- */
+
+/* The svg is a block that fills the figure: without this an inline svg
+   collapses to zero width and the figure collapses with it. */
+.md-typeset figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The figure carries the card treatment: a quiet frame, not a bare float.
+   The theme defaults a figure to fit-content, which starves a
+   width: 100% svg down to zero; own the width explicitly. */
+.md-typeset figure {
+  margin: 1.4rem 0;
+  padding: 0.6rem 0.6rem 0.4rem;
+  width: 100%;
+  border: 1px solid var(--dg-line);
+  border-radius: var(--nxr-radius);
+  background: color-mix(in oklch, var(--md-default-fg-color) 2%, transparent);
+}
+
+/* ---- diagrams ---- */
+
+:root {
+  --dg-ink: var(--md-default-fg-color);
+  --dg-muted: var(--md-default-fg-color--light);
+  --dg-faint: var(--md-default-fg-color--lighter);
+  --dg-line: var(--md-default-fg-color--lightest);
+  --dg-accent: var(--md-accent-fg-color);
+  --dg-ok: oklch(0.72 0.13 155);
+  --dg-warn: oklch(0.75 0.13 80);
+  --dg-err: oklch(0.68 0.16 25);
+  --dg-card: var(--md-default-bg-color);
+  --dg-band: color-mix(in oklch, var(--md-default-fg-color) 4%, transparent);
+}
+
 /*
  * Console blocks: a quiet frame around real transcripts.
  */

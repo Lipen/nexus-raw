@@ -13,6 +13,72 @@ The Rust suites, the mock binary (`mock-nexus --print-scenarios`) and any extern
 
 The mock keeps its own answers honest: a status answer that can reach a HEAD (401, 403, 405, 503) carries the body's `Content-Length` but no body bytes (RFC 9110 §9.3.2), and a request head past the 64 KiB bound is answered with 400 instead of a silent hang-up.
 
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" role="img" aria-labelledby="dg-table-t dg-table-d" font-family="inherit">
+<title id="dg-table-t">One scenario table, many drivers</title>
+<desc id="dg-table-d">The Scenario enum in mock-nexus is the single source. The core suite, the CLI suite, the python suite and the mock binary all read or derive from it, and the python drift guard fails any scenario that lacks a test or a skip entry.</desc>
+<style>
+.dg-src { fill: color-mix(in oklch, var(--dg-accent) 10%, var(--md-default-bg-color)); stroke: var(--dg-accent); stroke-width: 1.5; }
+.dg-card2 { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5; }
+.dg-ttl { font-size: 14px; font-weight: 700; fill: var(--dg-ink); }
+.dg-sub { font-size: 11.5px; fill: var(--dg-muted); }
+.dg-edge { font-size: 11px; fill: var(--dg-muted); }
+.dg-ln4 { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
+.dg-ln4d { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.dg-head4 { fill: var(--dg-muted); }
+.dg-plate4 { fill: var(--md-default-bg-color); }
+</style>
+<defs>
+<marker id="dg-arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,1 L9,5 L0,9 Z" class="dg-head4"/>
+</marker>
+</defs>
+<!-- source card top-center: x=230..530, y=24..96 -->
+<g filter="url(#dg-shadow4)">
+<rect x="230" y="24" width="300" height="72" rx="12" class="dg-src"/>
+</g>
+<text x="380" y="50" text-anchor="middle" class="dg-ttl">scenario.rs · the Scenario enum</text>
+<text x="380" y="70" text-anchor="middle" class="dg-sub">one list: every failure mode with its doc comment</text>
+<text x="380" y="86" text-anchor="middle" class="dg-sub">the conformance contract</text>
+<!-- driver cards y=200..272, centers x=120/320/520/680... grid: 4 cards of 160, gaps 20: total 700, x0=30 -->
+<g filter="url(#dg-shadow4)">
+<rect x="30" y="200" width="160" height="72" rx="12" class="dg-card2"/>
+</g>
+<text x="110" y="226" text-anchor="middle" class="dg-ttl">core suite</text>
+<text x="110" y="246" text-anchor="middle" class="dg-sub">facade, in process</text>
+<g filter="url(#dg-shadow4)">
+<rect x="210" y="200" width="160" height="72" rx="12" class="dg-card2"/>
+</g>
+<text x="290" y="226" text-anchor="middle" class="dg-ttl">CLI suite</text>
+<text x="290" y="246" text-anchor="middle" class="dg-sub">the real nxr binary</text>
+<g filter="url(#dg-shadow4)">
+<rect x="390" y="200" width="160" height="72" rx="12" class="dg-card2"/>
+</g>
+<text x="470" y="226" text-anchor="middle" class="dg-ttl">python suite</text>
+<text x="470" y="246" text-anchor="middle" class="dg-sub">stdlib client, real HTTP</text>
+<g filter="url(#dg-shadow4)">
+<rect x="570" y="200" width="160" height="72" rx="12" class="dg-card2"/>
+</g>
+<text x="650" y="226" text-anchor="middle" class="dg-ttl">mock binary</text>
+<text x="650" y="246" text-anchor="middle" class="dg-sub">--print-scenarios</text>
+<!-- fan-out: from source bottom (y=96) to each card top (y=200), rounded orthogonal -->
+<path d="M 330,96 L 330,132 Q 330,144 318,144 L 110,144 Q 110,144 110,156 L 110,200" class="dg-ln4" marker-end="url(#dg-arrow4)"/>
+<path d="M 350,96 L 350,140 Q 350,152 338,152 L 290,152 Q 290,152 290,164 L 290,200" class="dg-ln4" marker-end="url(#dg-arrow4)"/>
+<path d="M 410,96 L 410,140 Q 410,152 422,152 L 470,152 L 470,200" class="dg-ln4" marker-end="url(#dg-arrow4)"/>
+<path d="M 430,96 L 430,132 Q 430,144 442,144 L 650,144 L 650,200" class="dg-ln4" marker-end="url(#dg-arrow4)"/>
+<!-- drift guard: the python suite cross-checks itself against the source, dashed, bottom lane y=296, right lane x=752 -->
+<path d="M 470,272 L 470,288 Q 470,296 482,296 L 740,296 Q 752,296 752,284 L 752,60 Q 752,52 744,52 L 530,52" class="dg-ln4d" marker-end="url(#dg-arrow4)"/>
+<g transform="translate(610,296)"><rect x="-84" y="-9" width="168" height="18" class="dg-plate4"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">every scenario tested or skip-listed</text></g>
+<text x="700" y="140" text-anchor="middle" class="dg-edge">drift guard</text>
+<filter id="dg-shadow4" x="-10%" y="-10%" width="120%" height="135%">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+<feOffset dy="2"/>
+<feComponentTransfer><feFuncA type="linear" slope="0.10"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+</svg>
+</figure>
+
 Group repositories are a separate deployment kind, not a scenario: `MockNexus::start_group` builds one over two or more running members.
 The group forwards reads to the members in order and relays the first `2xx`, so every scenario in the table above keeps applying behind a group.
 Writes are refused by the group itself with `405` and `Allow: GET,HEAD`, in the wire shape of the real Nexus group handler.

@@ -29,17 +29,91 @@ The cost is bounded: repeating a long URL is the caller's problem, solved with a
 The crate is embeddable at four depths.
 Dependencies point one way, from UX down to transport, and no layer ever imports upward.
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "fontFamily": "inherit"}}}%%
-flowchart TB
-    L3["<b>L3: UX (the CLI)</b><br/>doctor · hints · NDJSON · exit codes<br/><i>may not speak HTTP</i>"]
-    L2["<b>L2: layout helpers</b><br/>channels · manifests · search listings<br/><i>may not know the CLI exists</i>"]
-    L1["<b>L1: transfer</b><br/>sync up/down · symmetric diff · markers · Range-resume · workers<br/><i>may not know versions or channels exist</i>"]
-    L0["<b>L0: transport + primitives</b><br/>retries · stall · TLS · auth · get/put/head/sha<br/><i>may not know directories or markers exist</i>"]
-    L3 --> L2
-    L2 --> L1
-    L1 --> L0
-```
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 392" role="img" aria-labelledby="dg-layers-t dg-layers-d" font-family="inherit" style="--dg-accent: var(--md-accent-fg-color)">
+<title id="dg-layers-t">The four layers of nxr and their one-way dependencies</title>
+<desc id="dg-layers-d">L3 UX depends on L2 layout, which depends on L1 transfer, which depends on L0 transport. Each layer is blind to everything above it.</desc>
+<defs>
+<marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,1 L9,5 L0,9 Z" class="dg-head"/>
+</marker>
+</defs>
+<style>
+.dg-card { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5; }
+.dg-chip { fill: var(--dg-accent); }
+.dg-ico { stroke: var(--md-default-bg-color); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.dg-name { font-size: 15px; font-weight: 700; fill: var(--dg-ink); }
+.dg-knows { font-size: 12px; fill: var(--dg-muted); }
+.dg-blind { font-size: 11.5px; font-style: italic; fill: var(--dg-accent); }
+.dg-line { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
+.dg-head { fill: var(--dg-muted); }
+.dg-axis { font-size: 11px; font-weight: 600; fill: var(--dg-muted); letter-spacing: 0.08em; }
+</style>
+<!-- the dependency axis: one straight spine, left edge x=32 -->
+<text x="32" y="20" class="dg-axis">DEPENDENCIES POINT DOWN</text>
+<!-- L3 -->
+<g filter="url(#dg-shadow)">
+<rect x="32" y="32" width="576" height="80" rx="12" class="dg-card"/>
+</g>
+<rect x="48" y="48" width="40" height="40" rx="10" class="dg-chip"/>
+<g transform="translate(48,48)" class="dg-ico">
+<g transform="translate(8,8)">
+<path d="M4 16h16M6 16V9m6 7V6m6 10v-5"/>
+</g>
+</g>
+<text x="104" y="64" class="dg-name">L3 · UX (the CLI)</text>
+<text x="104" y="82" class="dg-knows">doctor · hints · NDJSON · exit codes</text>
+<text x="104" y="99" class="dg-blind">may not speak HTTP</text>
+<line x1="32" y1="112" x2="32" y2="140" class="dg-line" marker-end="url(#dg-arrow)"/>
+<!-- L2 -->
+<g filter="url(#dg-shadow)">
+<rect x="32" y="140" width="576" height="72" rx="12" class="dg-card"/>
+</g>
+<rect x="48" y="152" width="40" height="40" rx="10" class="dg-chip"/>
+<g transform="translate(48,152)" class="dg-ico">
+<g transform="translate(8,8)">
+<path d="M9 4h6m-6 8h12m-12 8h8"/><circle cx="3" cy="4" r="1.6"/><circle cx="3" cy="12" r="1.6"/><circle cx="3" cy="20" r="1.6"/>
+</g>
+</g>
+<text x="104" y="168" class="dg-name">L2 · layout helpers</text>
+<text x="104" y="186" class="dg-knows">channels · manifests · search listings</text>
+<text x="104" y="203" class="dg-blind">may not know the CLI exists</text>
+<line x1="32" y1="212" x2="32" y2="240" class="dg-line" marker-end="url(#dg-arrow)"/>
+<!-- L1 -->
+<g filter="url(#dg-shadow)">
+<rect x="32" y="240" width="576" height="72" rx="12" class="dg-card"/>
+</g>
+<rect x="48" y="252" width="40" height="40" rx="10" class="dg-chip"/>
+<g transform="translate(48,252)" class="dg-ico">
+<g transform="translate(8,8)">
+<path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+</g>
+</g>
+<text x="104" y="268" class="dg-name">L1 · transfer</text>
+<text x="104" y="286" class="dg-knows">sync up/down · symmetric diff · markers · Range-resume · workers</text>
+<text x="104" y="303" class="dg-blind">may not know versions or channels exist</text>
+<line x1="32" y1="312" x2="32" y2="340" class="dg-line" marker-end="url(#dg-arrow)"/>
+<!-- L0 -->
+<g filter="url(#dg-shadow)">
+<rect x="32" y="340" width="576" height="40" rx="12" class="dg-card"/>
+</g>
+<rect x="48" y="344" width="32" height="32" rx="8" class="dg-chip"/>
+<g transform="translate(48,344)" class="dg-ico">
+<g transform="translate(6,6)">
+<path d="M3 10h18M9 10V6m6 4V6"/><circle cx="4" cy="17" r="1.6"/><circle cx="12" cy="17" r="1.6"/><circle cx="20" cy="17" r="1.6"/>
+</g>
+</g>
+<text x="104" y="356" class="dg-name">L0 · transport + primitives</text>
+<text x="104" y="372" class="dg-knows">retries · stall · TLS · auth · get/put/head/sha</text>
+</g>
+<filter id="dg-shadow" x="-10%" y="-10%" width="120%" height="135%">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+<feOffset dy="2"/>
+<feComponentTransfer><feFuncA type="linear" slope="0.10"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+</svg>
+</figure>
 
 Each layer is blind on purpose.
 L0 knows HTTP, retries, stall detection, TLS and auth, and does not know that directories or markers exist.
@@ -70,30 +144,78 @@ Four states per side (Absent, Markerless, Broken, Complete) remove the two harde
 States are per side, and the decision is about the pair.
 The full table is in the [protocol reference](../reference/protocol.md).
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
-stateDiagram-v2
-    direction LR
-    classDef good fill:#e2efe6,stroke:#2e7d54,color:#1b3a29
-    classDef refuse fill:#f6e3df,stroke:#b3402f,color:#571f15
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-labelledby="dg-state-t dg-state-d" font-family="inherit">
+<title id="dg-state-t">The four states of one name and the refused transitions</title>
+<desc id="dg-state-d">A name moves from Absent through Markerless to Complete. Complete and Markerless decay to Broken through tampering or foreign markers. Refused transfers self-loop on Broken and Complete with exit 1.</desc>
+<defs>
+<marker id="dg-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,1 L9,5 L0,9 Z" class="dg-head2"/>
+</marker>
+</defs>
+<style>
+.dg-st { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5; }
+.dg-st-good { stroke: var(--dg-ok); fill: color-mix(in oklch, var(--dg-ok) 10%, var(--md-default-bg-color)); }
+.dg-st-refuse { stroke: var(--dg-err); fill: color-mix(in oklch, var(--dg-err) 8%, var(--md-default-bg-color)); }
+.dg-st-name { font-size: 14px; font-weight: 700; fill: var(--dg-ink); }
+.dg-st-sub { font-size: 11px; fill: var(--dg-muted); }
+.dg-edge { font-size: 11px; fill: var(--dg-muted); }
+.dg-ln { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
+.dg-ln-soft { stroke: var(--dg-faint); stroke-width: 1.5; fill: none; }
+.dg-head2 { fill: var(--dg-muted); }
+.dg-plate { fill: var(--md-default-bg-color); }
+</style>
+<!-- states on one axis, y=110..170, centers x=100/300/500/700 -->
+<g filter="url(#dg-shadow2)">
+<rect x="28" y="110" width="144" height="60" rx="30" class="dg-st"/>
+</g>
+<text x="100" y="133" text-anchor="middle" class="dg-st-name">Absent</text>
+<text x="100" y="151" text-anchor="middle" class="dg-st-sub">no bytes on this side</text>
+<g filter="url(#dg-shadow2)">
+<rect x="228" y="110" width="144" height="60" rx="30" class="dg-st"/>
+</g>
+<text x="300" y="133" text-anchor="middle" class="dg-st-name">Markerless</text>
+<text x="300" y="151" text-anchor="middle" class="dg-st-sub">bytes, no marker yet</text>
+<g filter="url(#dg-shadow2)">
+<rect x="428" y="110" width="144" height="60" rx="30" class="dg-st-good"/>
+</g>
+<text x="500" y="133" text-anchor="middle" class="dg-st-name">Complete</text>
+<text x="500" y="151" text-anchor="middle" class="dg-st-sub">digest matches</text>
+<g filter="url(#dg-shadow2)">
+<rect x="628" y="110" width="128" height="60" rx="30" class="dg-st-refuse"/>
+</g>
+<text x="692" y="133" text-anchor="middle" class="dg-st-name">Broken</text>
+<text x="692" y="151" text-anchor="middle" class="dg-st-sub">marker disagrees</text>
+<!-- entry: start dot into Absent -->
+<circle cx="8" cy="140" r="5" class="dg-chip"/>
+<line x1="13" y1="140" x2="28" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<!-- forward path: Absent -> Markerless -> Complete -->
+<line x1="172" y1="140" x2="228" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(200,118)"><rect x="-34" y="-9" width="68" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">bytes land</text></g>
+<line x1="372" y1="140" x2="428" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(400,96)"><rect x="-42" y="-9" width="84" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">marker follows</text></g>
+<!-- clean transfer: Absent arcs over the top to Complete -->
+<path d="M 100,110 L 100,64 Q 100,52 112,52 L 488,52 Q 500,52 500,64 L 500,110" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(300,52)"><rect x="-46" y="-9" width="92" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">clean transfer</text></g>
+<!-- decay: Complete -> Broken, Markerless -> Broken (two parallel horizontals at y=140; second lane routed below, y=200, rounded) -->
+<line x1="572" y1="140" x2="628" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(600,118)"><rect x="-38" y="-9" width="76" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">tampering</text></g>
+<path d="M 340,170 L 340,196 Q 340,208 352,208 L 680,208 Q 692,208 692,196 L 692,170" class="dg-ln" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(516,208)"><rect x="-56" y="-9" width="112" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">foreign marker</text></g>
+<!-- refusals: self loops on top of Complete and Broken -->
+<path d="M 460,110 C 460,80 540,80 540,110" class="dg-ln-soft" stroke-dasharray="5 4" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(500,84)"><rect x="-88" y="-9" width="176" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">divergent refused, exit 1</text></g>
+<path d="M 656,110 C 656,20 728,20 728,52 Q 728,60 720,60 L 704,60 Q 692,60 692,72 L 692,110" class="dg-ln-soft" stroke-dasharray="5 4" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(692,34)"><rect x="-60" y="-9" width="120" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">transfer refused, exit 1</text></g>
+<filter id="dg-shadow2" x="-10%" y="-10%" width="120%" height="135%">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+<feOffset dy="2"/>
+<feComponentTransfer><feFuncA type="linear" slope="0.10"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+</svg>
+</figure>
 
-    Absent: Absent<br/>no bytes on this side
-    Markerless: Markerless<br/>bytes, no marker yet
-    Broken: Broken<br/>marker disagrees
-    Complete: Complete<br/>digest matches
-
-    [*] --> Absent
-    Absent --> Markerless: bytes landed
-    Markerless --> Complete: marker follows
-    Absent --> Complete: clean transfer
-    Complete --> Broken: tampering, bitrot
-    Markerless --> Broken: foreign marker
-    Broken --> Broken: transfer refused, exit 1
-    Complete --> Complete: divergent refused, exit 1
-
-    class Broken refuse
-    class Complete good
-```
 
 The gap between `Absent` and `Markerless` is the crash window: the bytes landed, the marker write is still ahead.
 
@@ -118,34 +240,77 @@ A resumed part that belongs to an older remote version fails the digest check an
 `--fresh` starts every name over, and only a fresh download that still diverges refuses with exit 1.
 The asymmetry that remains is deliberate: the `get` primitive resumes only under `--continue`, because a primitive trusts the caller to know its part files, while `down` resumes by default, because a rerun of a directory transfer should converge.
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
-sequenceDiagram
-    autonumber
-    participant nxr as nxr down
-    participant srv as Nexus raw
-
-    nxr->>srv: HEAD 1.0.0/a.zip
-    srv-->>nxr: 200 OK, Content-Length
-    nxr->>srv: GET 1.0.0/a.zip.sha256
-    srv-->>nxr: 200 OK, digest line
-    note over nxr: part file holds N bytes
-    alt the part holds the whole object
-        nxr->>srv: GET …, Range: bytes=N-
-        srv-->>nxr: 416 Range Not Satisfiable
-        note over nxr: finalize, no bytes re-fetched
-    else a partial prefix
-        nxr->>srv: GET …, Range: bytes=N-
-        srv-->>nxr: 206 Partial Content
-        note over nxr: append from byte N
-    end
-    note over nxr: part digest vs remote sibling
-    alt digests match
-        note over nxr: rename into place, write the marker
-    else digest differs
-        note over nxr: delete the part, refuse with exit 1
-    end
-```
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 560" role="img" aria-labelledby="dg-seq-t dg-seq-d" font-family="inherit">
+<title id="dg-seq-t">How down resumes a broken download</title>
+<desc id="dg-seq-d">nxr down reads the marker, sends a range request, and either finalizes a complete part on 416 or appends on 206, then verifies the digest before rename.</desc>
+<style>
+.dg-life { stroke: var(--dg-faint); stroke-width: 1.5; }
+.dg-msg { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
+.dg-msg-r { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.dg-head3 { fill: var(--dg-muted); }
+.dg-actor { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5; }
+.dg-actor-t { font-size: 14px; font-weight: 700; fill: var(--dg-ink); }
+.dg-msg-t { font-size: 12px; fill: var(--dg-ink); }
+.dg-note { fill: color-mix(in oklch, var(--dg-accent) 12%, var(--md-default-bg-color)); stroke: color-mix(in oklch, var(--dg-accent) 35%, transparent); stroke-width: 1; }
+.dg-note-t { font-size: 11.5px; fill: var(--dg-accent); }
+.dg-alt { stroke: var(--dg-faint); stroke-width: 1; fill: none; }
+.dg-alt-t { font-size: 11.5px; font-weight: 700; fill: var(--dg-muted); letter-spacing: 0.06em; }
+.dg-phase { fill: color-mix(in oklch, var(--md-default-fg-color) 4%, transparent); stroke: none; }
+.dg-phase-t { font-size: 11px; font-weight: 700; fill: var(--dg-muted); letter-spacing: 0.08em; }
+</style>
+<defs>
+<marker id="dg-arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,1 L9,5 L0,9 Z" class="dg-head3"/>
+</marker>
+</defs>
+<!-- actors -->
+<rect x="80" y="16" width="160" height="36" rx="18" class="dg-actor"/>
+<text x="160" y="34" text-anchor="middle" dominant-baseline="central" class="dg-actor-t">nxr down</text>
+<rect x="480" y="16" width="160" height="36" rx="18" class="dg-actor"/>
+<text x="560" y="34" text-anchor="middle" dominant-baseline="central" class="dg-actor-t">Nexus raw</text>
+<!-- lifelines -->
+<line x1="160" y1="52" x2="160" y2="540" class="dg-life"/>
+<line x1="560" y1="52" x2="560" y2="540" class="dg-life"/>
+<!-- phase band: probe -->
+<rect x="24" y="76" width="672" height="112" class="dg-phase"/>
+<text x="32" y="92" class="dg-phase-t">PROBE</text>
+<line x1="160" y1="108" x2="560" y2="108" class="dg-msg" marker-end="url(#dg-arrow3)"/>
+<text x="356" y="100" text-anchor="middle" class="dg-msg-t">HEAD 1.0.0/a.zip</text>
+<line x1="560" y1="132" x2="160" y2="132" class="dg-msg-r" marker-end="url(#dg-arrow3)"/>
+<text x="364" y="124" text-anchor="middle" class="dg-msg-t">200 OK, Content-Length</text>
+<line x1="160" y1="160" x2="560" y2="160" class="dg-msg" marker-end="url(#dg-arrow3)"/>
+<text x="356" y="152" text-anchor="middle" class="dg-msg-t">GET 1.0.0/a.zip.sha256</text>
+<line x1="560" y1="180" x2="160" y2="180" class="dg-msg-r" marker-end="url(#dg-arrow3)"/>
+<text x="364" y="172" text-anchor="middle" class="dg-msg-t">200 OK, digest line</text>
+<!-- phase band: resume the part: two alternatives, not a sequence -->
+<rect x="24" y="196" width="672" height="200" class="dg-phase"/>
+<text x="32" y="212" class="dg-phase-t">RESUME THE PART</text>
+<rect x="176" y="222" width="240" height="22" rx="6" class="dg-note"/>
+<text x="296" y="233" text-anchor="middle" dominant-baseline="central" class="dg-note-t">part file holds N bytes</text>
+<text x="32" y="262" class="dg-alt-t">IF THE PART HELD EVERYTHING</text>
+<line x1="160" y1="276" x2="560" y2="276" class="dg-msg" marker-end="url(#dg-arrow3)"/>
+<text x="356" y="268" text-anchor="middle" class="dg-msg-t">GET …, Range: bytes=N-</text>
+<line x1="560" y1="300" x2="160" y2="300" class="dg-msg-r" marker-end="url(#dg-arrow3)"/>
+<text x="364" y="292" text-anchor="middle" class="dg-msg-t">416 · yes</text>
+<rect x="176" y="312" width="280" height="22" rx="6" class="dg-note"/>
+<text x="316" y="323" text-anchor="middle" dominant-baseline="central" class="dg-note-t">finalize, no bytes re-fetched</text>
+<text x="32" y="354" class="dg-alt-t">IF A PARTIAL PREFIX</text>
+<line x1="160" y1="368" x2="560" y2="368" class="dg-msg" marker-end="url(#dg-arrow3)"/>
+<text x="356" y="360" text-anchor="middle" class="dg-msg-t">GET …, Range: bytes=N-</text>
+<line x1="560" y1="386" x2="160" y2="386" class="dg-msg-r" marker-end="url(#dg-arrow3)"/>
+<text x="364" y="378" text-anchor="middle" class="dg-msg-t">206 · append from byte N</text>
+<!-- phase band: verify and land -->
+<rect x="24" y="404" width="672" height="140" class="dg-phase"/>
+<text x="32" y="420" class="dg-phase-t">VERIFY AND LAND</text>
+<rect x="176" y="432" width="300" height="22" rx="6" class="dg-note"/>
+<text x="326" y="443" text-anchor="middle" dominant-baseline="central" class="dg-note-t">part digest vs remote sibling</text>
+<rect x="176" y="464" width="320" height="22" rx="6" class="dg-note"/>
+<text x="336" y="475" text-anchor="middle" dominant-baseline="central" class="dg-note-t">match: rename into place, write the marker</text>
+<rect x="176" y="496" width="344" height="22" rx="6" class="dg-note"/>
+<text x="348" y="507" text-anchor="middle" dominant-baseline="central" class="dg-note-t">differ: delete the part, refuse with exit 1</text>
+</svg>
+</figure>
 
 `416` means the part already holds the whole object: the previous run died between the last downloaded byte and the rename.
 The client finalizes the part, digest-checks it against the remote sibling, and renames or discards.
