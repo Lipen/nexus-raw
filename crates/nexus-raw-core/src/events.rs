@@ -228,10 +228,18 @@ impl Progress {
             }
         };
         if due {
-            self.last
-                .lock()
-                .expect("progress throttle lock")
-                .insert(key, now);
+            {
+                let mut last = self.last.lock().expect("progress throttle lock");
+                last.insert(key, now);
+                // A long-running mirror sees a name per file: without a prune
+                // the throttle map grows with the tree, one entry per key.
+                // Past a bound, entries older than two intervals are dead
+                // weight (their next event is due anyway) and go.
+                if last.len() > 1024 {
+                    let cutoff = now - 2 * MIN_INTERVAL;
+                    last.retain(|_, t| *t > cutoff);
+                }
+            }
             let _ = self.tx.send(Event::ArtifactBytes {
                 name: name.to_owned(),
                 dir,

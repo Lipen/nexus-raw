@@ -540,12 +540,12 @@ jobs:
           # One reify for both specs: a second install would re-reconcile the
           # tree against package.json and drop the first package (npm/cli#4828),
           # and the main version is not on the registry yet to survive it.
-          npm pack /home/runner/work/nexus-raw/nexus-raw/pkg-main --pack-destination /tmp/consumer-smoke
+          npm pack "${{ github.workspace }}/pkg-main" --pack-destination /tmp/consumer-smoke
           npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "$addon_spec"
           node -e '
             const fs = require("fs");
             const nxr = require("@nexus-raw/nxr");
-            const dts = fs.readFileSync("/home/runner/work/nexus-raw/nexus-raw/pkg-main/index.d.ts", "utf8");
+            const dts = fs.readFileSync(process.env.GITHUB_WORKSPACE + "/pkg-main/index.d.ts", "utf8");
             const declared = [...dts.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
             if (declared.length < 10) {
               throw new Error(`consumer smoke: only ${declared.length} functions parsed from index.d.ts, the d.ts shape drifted`);

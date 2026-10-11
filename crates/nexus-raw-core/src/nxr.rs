@@ -569,15 +569,42 @@ impl Nxr {
         #[cfg(unix)]
         let _staging_guard = {
             use std::os::unix::io::AsRawFd;
-            let lock_path = staging.with_extension("lock");
-            let lock = std::fs::File::create(&lock_path).map_err(|e| Error::io(&lock_path, e))?;
-            let rc = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-            if rc != 0 {
-                return Err(Error::misuse(format!(
-                    "another mirror is already running for this pair (lock: {})",
-                    lock_path.display()
-                )));
-            }
+            // The lock sits inside the 0700 staging directory, not next to it:
+            // a predictable name in a world-writable temp dir is a symlink
+            // plant, and File::create follows symlinks. OpenOptions with
+            // create_new (O_CREAT|O_EXCL) refuses an existing entry outright.
+            let lock_path = staging.join(".lock");
+            let lock = match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock_path)
+            {
+                // Fresh lock: ours, guarded against a symlink plant by the
+                // exclusive create.
+                Ok(file) => Some(file),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    // A lock from a dead run (a crash never unlocked): take
+                    // over only when the flock comes free. A live run keeps
+                    // holding it, and the refusal names the path.
+                    match std::fs::File::open(&lock_path) {
+                        Ok(existing) => {
+                            let rc = unsafe {
+                                libc::flock(existing.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB)
+                            };
+                            if rc == 0 {
+                                Some(existing)
+                            } else {
+                                return Err(Error::misuse(format!(
+                                    "another mirror is already running for this pair (lock: {})",
+                                    lock_path.display()
+                                )));
+                            }
+                        }
+                        Err(io_err) => return Err(Error::io(&lock_path, io_err)),
+                    }
+                }
+                Err(e) => return Err(Error::io(&lock_path, e)),
+            };
             // `_`-prefixed on purpose: the warning is silenced, the lock is not dropped.
             Some(lock)
         };

@@ -204,15 +204,21 @@ release v *mode:
       echo "nothing was pushed or published: call 'just release {{v}} --yes' for the real act"
       exit 0
     fi
+    if [ -n "$(git status --porcelain)" ]; then
+      echo "release {{v}}: the tree is dirty, commit or stash first (a --yes run commits only its own bump)" >&2
+      exit 1
+    fi
     just version "{{v}}"
     python3 scripts/changelog-finalize.py "{{v}}"
     # Every lockfile follows the bump inside the same commit: the post-release
     # `just lock` only refreshes examples/node against the now-published registry.
     just lock
     git add -u
-    if ! git diff --cached --quiet; then
-      git commit -m "chore: bump the workspace to {{v}}"
+    if git diff --cached --quiet; then
+      echo "release {{v}}: the bump produced no changes, the version is already {{v}}?" >&2
+      exit 1
     fi
+    git commit -m "chore: bump the workspace to {{v}}"
     git push origin master
     sha="$(git rev-parse origin/master)"
     # The dispatch API takes a branch, not a raw SHA: master is the ref, and

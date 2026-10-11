@@ -370,9 +370,9 @@ class Conformance(unittest.TestCase):
             seen = {}
             original = http.client.HTTPConnection.request
 
-            def spy(conn, method, url, body=None, headers={}):
-                seen[method] = dict(headers)
-                return original(conn, method, url, body=body, headers=headers)
+            def spy(conn, method, url, body=None, headers=None):
+                seen[method] = dict(headers or {})
+                return original(conn, method, url, body=body, headers=headers or {})
 
             with unittest.mock.patch.object(http.client.HTTPConnection, "request", spy):
                 nx.get(path)
