@@ -518,14 +518,17 @@ jobs:
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           mkdir -p /tmp/consumer-smoke && cd /tmp/consumer-smoke
           echo '{"name":"consumer-smoke","private":true,"dependencies":{"@nexus-raw/nxr":"'"$version"'"}}' > package.json
-          # The sandbox resolves @nexus-raw/nxr@$version through a file: spec
-          # pointing at the staged package, while the platform addon resolves
-          # from the registry: the same resolve a fresh user install makes.
-          npm install --no-package-lock --no-save "/home/runner/work/nexus-raw/nexus-raw/pkg-main" 2>&1 | tail -1
-          # The platform addon comes from the registry explicitly: the same
-          # resolve a fresh user install makes for its optionalDependencies.
-          # No tail swallow: a failed addon resolve must fail the step.
-          npm install --no-save "@nexus-raw/nxr-linux-x64-gnu@${version}"
+          # The staged package installs as a tarball, not a file: spec: a
+          # directory install symlinks, node resolves the symlink to its
+          # realpath, and the addon require then walks up the staging tree
+          # where no node_modules exists (verified on mannequins: file: FAIL,
+          # tarball OK). The tarball lands as a real copy: the addon sits as
+          # its sibling, the exact layout a fresh user install produces.
+          # One reify for both specs: a second install would re-reconcile the
+          # tree against package.json and drop the first package (npm/cli#4828),
+          # and the main version is not on the registry yet to survive it.
+          npm pack /home/runner/work/nexus-raw/nexus-raw/pkg-main --pack-destination /tmp/consumer-smoke
+          npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "@nexus-raw/nxr-linux-x64-gnu@${version}"
           node -e '
             const nxr = require("@nexus-raw/nxr");
             const methods = ["up", "down", "get", "put", "head", "sha", "ls", "diff", "mirror", "verify", "doctor"];
