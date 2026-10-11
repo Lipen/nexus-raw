@@ -47,6 +47,36 @@ SKIP = {
     "readonly": (
         "the scenario only answers 403 to DELETE, and the reference client implements no delete"
     ),
+    "service-status-empty": (
+        "the scenario only shapes /service/rest/v1/status, and the reference client has no service-status surface"
+    ),
+    "service-status-version": (
+        "the scenario only shapes /service/rest/v1/status, and the reference client has no service-status surface"
+    ),
+    "service-status-down": (
+        "the scenario only breaks /service/rest/v1/status, and the reference client has no service-status surface"
+    ),
+    "repo-collection-trimmed": (
+        "the scenario only shapes /service/rest/v1/repositories, and the reference client has no service-repos surface"
+    ),
+    "repo-collection-scoped": (
+        "the scenario only shapes /service/rest/v1/repositories, and the reference client has no service-repos surface"
+    ),
+    "repo-detail-admin": (
+        "the scenario only shapes the per-repo service detail, and the reference client has no service detail surface"
+    ),
+    "repo-prefix-match": (
+        "the scenario only shapes the per-repo service detail, and the reference client has no service detail surface"
+    ),
+    "eula-gate": (
+        "the scenario only shapes /v1/system/eula, and the reference client has no eula surface"
+    ),
+    "eula-absent": (
+        "the scenario only shapes /v1/system/eula, and the reference client has no eula surface"
+    ),
+    "detail-in-hint": (
+        "the scenario only shapes the service detail error body, and the reference client has no service detail surface"
+    ),
 }
 
 
@@ -283,6 +313,52 @@ class Conformance(unittest.TestCase):
                 any("repository=raw-main" in p for _, p in nx.requests),
                 "the search must be repository-scoped",
             )
+
+    def test_assets_pagination(self):
+        """ls walks the server's continuation tokens to the end: 35 assets across 10-per-page chunks."""
+        with mock_server("assets-pagination") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main")
+            self.assertEqual(len(paths), 35)
+            self.assertTrue(all(p.startswith("/v0.9.0-assets/") for p in paths))
+            pages = [p for _, p in nx.requests if "continuationToken" in p]
+            self.assertEqual(len(pages), 3, "4 pages total: the first has no token, 3 follow it")
+
+    def test_assets_prefix_q(self):
+        """The server-side q filter narrows the walk: the client sends no q, so the full listing arrives complete."""
+        with mock_server("assets-prefix-q") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main")
+            self.assertEqual(len(paths), 35)
+
+    def test_assets_absent(self):
+        """A server without the search endpoint answers 404: the client refuses with the guidance to publish a manifest."""
+        with mock_server("assets-absent") as mock:
+            nx = self.client()
+            with self.assertRaises(nxr.EnumerateError) as raised:
+                nx.ls(mock.base, "raw-main")
+            self.assertEqual(raised.exception.status, 404)
+
+    def test_atomic_big_object_flows_past_the_small_cap(self):
+        """An object body has no small-object bound: a 17 MiB artifact downloads whole, the cap is for small surfaces alone."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            path = mock.url("big.bin")
+            big = b"x" * (nxr.SMALL_CAP + 1)
+            nx.put(path, big)
+            self.assertEqual(nx.get(path), big)
+            self.assertEqual(nx.sha(path), hashlib.sha256(big).hexdigest())
+
+    def test_atomic_small_surface_over_the_cap_is_misuse(self):
+        """A search page beyond the small-object cap is a misuse refusal: the rust core refuses the same way."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            huge_page = json.dumps(
+                {"continuationToken": None, "items": [{"path": "x"}], "pad": "y" * (nxr.SMALL_CAP + 1)}
+            ).encode()
+            raw_put(f"{mock.base}service/rest/v1/search/assets", huge_page)
+            with self.assertRaises(nxr.MisuseError):
+                nx.ls(mock.base, "raw-main")
 
     def test_atomic_version_json_is_an_ordinary_name(self):
         """version.json carries no protocol meaning: it uploads and downloads like any artifact."""

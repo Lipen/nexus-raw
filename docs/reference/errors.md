@@ -19,10 +19,10 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
 | `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
-| `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access; rerunning is safe, nothing was removed` | a read-only deployment, or credentials without write access |
+| `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed` | a read-only deployment, or credentials without write access |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network: transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
 | `Http { status: 404, url }` | the object or version does not exist | 1 | `check the URL path and that the version or object exists` | a typo in the path, or a version never published |
-| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}; check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route; a 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
+| `Http { status, url }` | any other unexpected status | 3 | `the server answered {status}: check the URL path and the server health` | a proxy answered 429, or the path hit a non-artifact route. A 429 and a 5xx are retryable, the 429 honoring `Retry-After` |
 | `ServiceMissing { url, root }` | the service REST API answered 404: not a Nexus, or a version without the endpoint | 3 | `the service API lives at the server root: try {root}/service/rest/v1/repositories` | `service repos` against a server without the management API |
 | `SearchRepoMissing { url }` | the search API answered 400: the repository is missing on the server or is not a raw repository | 3 | `the repository is missing on the server or is not a raw repository` | `ls` against a repository URL the server does not serve, or a name that exists only in another format |
 | `Io { path, detail }` | a local filesystem failure | 1 | `check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe` | a full disk, a missing directory, an unwritable part path |
@@ -38,7 +38,7 @@ This refusal was produced by a real run: a local sibling that no longer matches 
 ```console
 $ nxr up dist-bad/ https://nexus.example.com/repository/raw-main/1.4.0/ --plan
 error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 48f92f1ecbe87b5702a77327c4b1da6bb3f78218eb93edfcdb9c21624d430413, actual f7324dec778c7f17852694ef8c8624e9f1f55289010f77bf7f8b56e0d9088989
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 $ echo $?
 1
 ```
@@ -124,7 +124,7 @@ A name that exists on neither side is collected and refused before any transfer.
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/v3/ --name no-such-file.bin
 error: missing: no-such-file.bin: exist nowhere
-hint: the name is absent on both sides; check spelling and the manifest
+hint: the name is absent on both sides: check spelling and the manifest
 $ echo $?
 1
 ```
@@ -136,7 +136,7 @@ The grammar rejects the file before anything is hashed or sent.
 ```console
 $ nxr up dist-broken/ https://nexus.example.com/repository/raw-main/broken/
 error: unsafe name: bad name.zip: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
-hint: names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
 $ echo $?
 2
 ```
@@ -148,12 +148,12 @@ Two flavors: a connection that resets before answering, and a body that stops mi
 ```console
 $ nxr get https://nexus.example.com/reset/app.bin --retry 1
 error: transport: https://nexus.example.com/reset/app.bin: error sending request for url (https://nexus.example.com/reset/app.bin)
-hint: check the network; transfers are resumable, rerunning is safe
+hint: check the network: transfers are resumable, rerunning is safe
 $ echo $?
 3
 $ nxr get https://nexus.example.com/slowdata/big.bin --stall-secs 1 --retry 1 -o app.bin
 error: transport: https://nexus.example.com/slowdata/big.bin: stalled: no bytes for 1s
-hint: check the network; transfers are resumable, rerunning is safe
+hint: check the network: transfers are resumable, rerunning is safe
 $ echo $?
 3
 ```
@@ -169,7 +169,7 @@ plan: 0 to upload, 1 to download, 0 up to date
 uploaded 0, downloaded 0, skipped 0
 failed: app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000
 error: mismatch: app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000: remote content diverges from its sha-sibling
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 $ echo $?
 1
 ```
@@ -196,7 +196,7 @@ $ nxr verify dist/1.4.0/ --manifest dist/1.4.0/manifest.json
 uploaded 0, downloaded 0, skipped 2
 failed: pinned.xml
 error: incomplete: pinned.xml
-hint: rerun the same command; finished names are skipped and the rest is retried
+hint: rerun the same command: finished names are skipped and the rest is retried
 $ echo $?
 1
 ```
@@ -206,7 +206,7 @@ $ echo $?
 The per-command tables live in [the CLI page](cli.md#exit-codes).
 In short: `0` continue the pipeline, `1` stop and show stderr to a human, `2` fix the invocation and rerun, `3` retry later, because resume makes reruns cheap.
 
-`doctor` reuses the same classes: a failed local check such as TLS verification off or settings out of range exits `2`, a failed reachability probe exits `3` (a 401 or 403 probe fails as `credentials rejected`, still exit `3`).
+`doctor` reuses the same classes: a failed local check such as TLS verification off or settings out of range exits `2`, a failed reachability probe exits `3`, a 401 or 403 probe included.
 
 ## The refusal rule
 

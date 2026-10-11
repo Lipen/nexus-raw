@@ -45,6 +45,9 @@ MAX_JITTER = 0.25
 
 # A hostile endpoint can emit continuation tokens forever: the walk gives up instead of scrolling.
 MAX_SEARCH_PAGES = 100
+# Upper bound for small GETs: siblings, manifests, channel tokens, search pages.
+# Mirrors the rust core's SMALL_CAP (transport/client.rs).
+SMALL_CAP = 16 * 1024 * 1024
 
 _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 _SEGMENT = re.compile(r"\A[A-Za-z0-9._-]{1,255}\Z")
@@ -56,9 +59,11 @@ class NxrError(Exception):
     The message is one human sentence naming the URL.
     `status` carries the HTTP status when one exists, `None` for pure transport failures.
     `hint` is the action line a CLI would print after `hint:`.
+    `exit_code` mirrors the rust Error::exit_code: 1 data, 2 misuse, 3 transport.
     """
 
     status: int | None = None
+    exit_code = 1
 
     def __init__(self, message: str, *, status: int | None = None, hint: str = "") -> None:
         super().__init__(message)
@@ -70,19 +75,33 @@ class NxrError(Exception):
 class TransportError(NxrError):
     """A broken or exhausted transport: resets, timeouts, truncated bodies, spent 5xx/429 retries."""
 
+    exit_code = 3
+
 
 class AuthError(NxrError):
     """The server refused the credentials with 401 or 403.
     Auth failures never retry.
     """
 
+    exit_code = 3
+
 
 class HttpError(NxrError):
-    """An unexpected HTTP status: misses, redirects and refusals that are never retried."""
+    """An unexpected HTTP status: a miss is data (1), every other status is transport (3).
+
+    The rust core splits exactly so: Http{404} is data, any other Http status is transport
+    (error.rs: the exit codes live in Error::exit_code alone).
+    """
+
+    @property
+    def exit_code(self) -> int:
+        return 1 if self.status == 404 else 3
 
 
 class UnsafeName(NxrError):
     """A name outside the grammar, or carrying the reserved `.sha256` suffix."""
+
+    exit_code = 2
 
 
 class DigestMismatch(NxrError):
@@ -98,7 +117,18 @@ class EnumerateError(NxrError):
 
 
 class SearchRepoMissing(EnumerateError):
-    """A repository-scoped search answered 400: the repository is missing or is not raw."""
+    """A repository-scoped search answered 400: the repository is missing or is not raw.
+
+    The rust core classes it transport (error.rs: SearchRepoMissing => 3), not data.
+    """
+
+    exit_code = 3
+
+
+class MisuseError(NxrError):
+    """A misuse: a bound the protocol or the command sets was violated. Exit code 2, no retries."""
+
+    exit_code = 2
 
 
 def format_marker(name: str, digest_hex: str) -> str:
@@ -193,7 +223,7 @@ class Nxr:
         payload = self._send("GET", url)[2]
         sibling_url = f"{url}.sha256"
         try:
-            marker = self._send("GET", sibling_url)[2]
+            marker = self._send_small("GET", sibling_url)[2]
         except HttpError as err:
             if err.status == 404:
                 raise MarkerMissing(
@@ -243,7 +273,9 @@ class Nxr:
         length = headers.get("Content-Length")
         return HeadInfo(
             status,
-            int(length) if length is not None else None,
+            # A lying or malformed header is an unverifiable object, not a crash:
+            # the rust core parses with parse::<u64>().ok() and reports None.
+            int(length) if length is not None and length.isdigit() else None,
             headers.get("Content-Type"),
         )
 
@@ -267,7 +299,7 @@ class Nxr:
         for _page in range(MAX_SEARCH_PAGES):
             url = first_page if token is None else f"{first_page}&{urlencode({'continuationToken': token})}"
             try:
-                _status, _headers, payload = self._send("GET", url)
+                _status, _headers, payload = self._send_small("GET", url)
             except HttpError as err:
                 if err.status == 400:
                     raise SearchRepoMissing(
@@ -310,7 +342,7 @@ class Nxr:
         Returns `None` on 404: an unset channel is a normal state.
         """
         try:
-            payload = self._send("GET", url)[2]
+            payload = self._send_small("GET", url)[2]
         except HttpError as err:
             if err.status == 404:
                 return None
@@ -318,12 +350,12 @@ class Nxr:
         try:
             text = payload.decode("utf-8")
         except UnicodeDecodeError:
-            raise NxrError(
+            raise DigestMismatch(
                 f"channel: {url}: the file is not UTF-8 text",
                 hint="rewrite the channel with channel_set",
             ) from None
         if len(text) < 2 or not text.endswith("\n") or "\r" in text or "\n" in text[:-1]:
-            raise NxrError(
+            raise DigestMismatch(
                 f"channel: {url}: the file is not one token line",
                 hint="rewrite the channel with channel_set",
             )
@@ -386,6 +418,21 @@ class Nxr:
                 status=status,
                 hint=_status_hint(status),
             )
+
+    def _send_small(self, method: str, url: str) -> tuple[int, http.client.HTTPMessage, bytes]:
+        """A small-object GET (sibling, manifest, channel token, search page).
+
+        Mirrors the rust core's get_small (transport/client.rs): these objects are
+        KiB-scale by protocol, so the response is capped at SMALL_CAP, and a body
+        over the cap is a misuse-class refusal, not a transport error.
+        """
+        status, headers, payload = self._send(method, url)
+        if len(payload) > SMALL_CAP:
+            raise MisuseError(
+                f"misuse: {url} exceeds the small-object cap ({SMALL_CAP} bytes)",
+                hint="the server answered beyond the bound the protocol sets for small objects",
+            )
+        return status, headers, payload
 
     def _attempt(
         self, method: str, url: str, body: bytes | None

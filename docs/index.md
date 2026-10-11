@@ -5,7 +5,7 @@
 # curl for a Nexus raw repository
 
 `nxr` publishes and fetches version directories whose files are digest-verified on the way in and on the way out.
-One binary, no config file, nothing to install on the server.
+One binary, nothing to install on the server: the URL in argv, credentials from the call or the environment, and an alias file read only when `-R` names it.
 
 [Get started](get-started.md){ .md-button .md-button--primary }
 [The 30-second version](#the-30-second-version){ .md-button }

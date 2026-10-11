@@ -70,23 +70,24 @@ dist/1.4.0/
    Without it, `down` needs `--manifest`, `--name` or `--ls`, a refusal you will trigger later in this tour.
 
 ```bash
-nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/   # (1)!
+nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/ --claim-first manifest.json   # (1)!
 ```
 
 1. Source directory first, destination URL second.
    No config file, no login step: the whole instruction is on one line.
 
 ```console
-$ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/
+$ nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/ --claim-first manifest.json
 plan: 4 to upload, 0 to download, 0 up to date
+↑ manifest.json ok
 ↑ bom/linux-x86_64.json ok
 ↑ pinned.xml ok
-↑ manifest.json ok
 ↑ app-1.4.0.zip ok
 uploaded 4, downloaded 0, skipped 0
 ```
 
-The `ok` lines print in completion order, so your ordering may differ.
+With `--claim-first` the manifest uploads first, alone: a consumer polling the URL never sees bytes without their enumeration source.
+The remaining `ok` lines print in completion order, so your ordering may differ.
 No marker step appears anywhere because `up` generated every `<name>.sha256` from the bytes before uploading.
 The markers are ordinary `sha256sum -c` lines, and `up` leaves a copy next to your files:
 

@@ -153,7 +153,7 @@ A local file disagrees with its own marker because the bytes drifted after the m
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 A local copy is complete and valid, but the server already holds a different complete object under the same name, for example a rebuild with different flags published twice into one version:
@@ -161,7 +161,7 @@ A local copy is complete and valid, but the server already holds a different com
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 Both refuse with exit 1.
@@ -177,7 +177,7 @@ Everything listed must exist locally, and one ghost name refuses the whole run:
 ```console
 $ echo '{"artifacts": ["app-1.4.0.zip", "ghost.zip"]}' | nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --manifest -
 error: missing: ghost.zip: exist nowhere
-hint: the name is absent on both sides; check spelling and the manifest
+hint: the name is absent on both sides: check spelling and the manifest
 ```
 
 Exit 1, nothing uploaded.

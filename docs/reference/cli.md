@@ -9,7 +9,7 @@ Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 Shell completions: `complete`.
 
 Every invocation is self-sufficient: the URL is a command-line argument and credentials come from `-u` or the environment.
-There is no config file, no profile and no state directory.
+There is no profile and no state directory: the one optional file is the `-R` alias file, read only when `-R` names an alias and relocatable with `NXR_CONFIG` (see [Name your remotes](../how-to/config.md)).
 
 The transcripts on this page are real output of `nxr`.
 The mock scenarios ran against `crates/mock-nexus`, the `ls` capture against a live Nexus Repository, and hosts are shown as `nexus.example.com` either way.
@@ -325,7 +325,7 @@ $ echo $?
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--plan]
+nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
@@ -621,7 +621,7 @@ rm a.zip
 | `2` | misuse: a bad URL, name or prefix |
 | `3` | transport or auth failure of either phase |
 
-`--json` streams the events of both phases. the summary of the pour is followed by the summary of the delete.
+`--json` streams the events of both phases. The summary of the pour is followed by the summary of the delete.
 
 ## nxr point --clear
 
@@ -710,6 +710,7 @@ Treat both as conveniences only.
 | `3` | transport or auth failure |
 
 `--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file"}` from the tree, `{"name":"app.zip"}` from `--assets`.
+When the tree enumeration hides `.sha256` markers as derived data, a final line reports the count: `{"event":"hidden","count":1}`.
 
 ## nxr channel get
 
@@ -957,7 +958,7 @@ Local checks always execute: credentials (resolved source, never values), TLS mo
 Settings are validated, not just echoed: workers outside `1..=64`, `--retry 0` or a zero timeout fail the check.
 
 With a URL: one `HEAD` probe for reachability.
-Any status below 500 passes, except 401 and 403: the server rejected the credentials, and the probe fails with the detail `credentials rejected`.
+Any status below 500 passes, except 401 and 403: the server rejected the credentials, the probe fails, and the detail is the probe line itself (`HEAD <URL> → HTTP 401: any non-5xx means the server is reachable`).
 A 5xx or a connection failure fails the probe as transport.
 
 Missing credentials are a warning, not a failure: the run reports `none found` and still exits 0, because anonymous requests are a legitimate setup against a read-open repository.

@@ -161,7 +161,7 @@ doctor:
 Without credentials the gate still passes against a server that serves anonymous reads: `doctor` reports the missing credentials as a warning and exits 0.
 The warning is a nudge, not a failure: a pipeline that intentionally talks to a read-open repository stays green.
 
-Credentials that the server rejects are a different story: the probe answers 401 or 403, `doctor` fails it with the detail `credentials rejected`, and the run exits 3.
+Credentials that the server rejects are a different story: the probe answers 401 or 403, `doctor` fails it with the rejected status in the detail (`HEAD <url> → HTTP 401`), and the run exits 3.
 That is the cheap preflight for a typo'd password.
 
 The exit code says which side to fix: `2` is the job definition, `3` is the server, the network or the credentials (an unreachable server probes as `transport` and exits 3).

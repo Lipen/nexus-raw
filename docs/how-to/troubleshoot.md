@@ -8,7 +8,7 @@ Find yours in the tables, fix the cause, repeat the command: `up` skips finished
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 The `error:` line starts with the error kind and names the artifact and both sides of the disagreement.
@@ -64,7 +64,7 @@ A local file drifted after its marker was written:
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 The same name holds two different artifacts on the two sides, for example a rebuild published into a version directory that was already used:
@@ -72,7 +72,7 @@ The same name holds two different artifacts on the two sides, for example a rebu
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 38e98b1651bd21fdc5da48c407b711947a0115b28a2b979cf637a5497c3720b5, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a
-hint: the two sides diverge; delete or fix one copy, never let nxr overwrite a diverging object
+hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
 
 Exit 1 in both cases, and nothing was sent.
@@ -158,7 +158,7 @@ A connection reset, with retries disabled to make it visible:
 ```console
 $ nxr --retry 1 down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/drop/
 error: transport: https://nexus.example.com/repository/raw-main/1.4.0/manifest.json: error sending request for url (https://nexus.example.com/repository/raw-main/1.4.0/manifest.json)
-hint: check the network; transfers are resumable, rerunning is safe
+hint: check the network: transfers are resumable, rerunning is safe
 ```
 
 With the default `--retry 4` the same blips are absorbed and surface as `retrying` events under `--json` (see [NDJSON events](ci.md#ndjson-events)).
@@ -171,13 +171,13 @@ Names are rejected before any request when they fail the grammar:
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name '../etc/passwd'
 error: unsafe name: ../etc/passwd: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
-hint: names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
 ```
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name 'app-1.4.0.zip.sha256'
 error: unsafe name: app-1.4.0.zip.sha256: reserved suffix .sha256 (artifact/marker collision)
-hint: names must be relative paths of [A-Za-z0-9._-] segments; the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
 ```
 
 Exit 2 in both cases: path traversal is impossible by construction, and an artifact can never collide with its own marker.

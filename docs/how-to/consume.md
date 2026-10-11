@@ -132,7 +132,7 @@ $ nxr verify vendor/app/
 uploaded 0, downloaded 0, skipped 2
 failed: bom/linux-x86_64.json
 error: incomplete: bom/linux-x86_64.json
-hint: rerun the same command; finished names are skipped and the rest is retried
+hint: rerun the same command: finished names are skipped and the rest is retried
 ```
 
 Two repairs fit: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum`, whichever matches why the digest drifted.
