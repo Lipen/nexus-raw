@@ -332,9 +332,6 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@f13886b937689c021705a89b45e142880235791a # v2
-
       - name: Build the mock server
         run: cargo build -p mock-nexus
 
