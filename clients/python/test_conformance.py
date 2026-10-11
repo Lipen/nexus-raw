@@ -23,6 +23,7 @@ import subprocess
 import threading
 import time
 import unittest
+import unittest.mock
 import urllib.parse
 
 import nxr
@@ -338,6 +339,44 @@ class Conformance(unittest.TestCase):
             with self.assertRaises(nxr.EnumerateError) as raised:
                 nx.ls(mock.base, "raw-main")
             self.assertEqual(raised.exception.status, 404)
+
+    def test_cut_body_fake_length(self):
+        """A lying Content-Length breaks the body mid-read: the retry lands the bytes whole."""
+        with mock_server("cut-body", "--fake-length") as mock:
+            nx = self.client()
+            path = mock.url("a.zip")
+            body = b"\x5a" * 4096
+            nx.put(path, body)
+            self.assertEqual(nx.get(path), body)
+            attempts = [1 for m, p in nx.requests if m == "GET" and p == wire_path(path)]
+            self.assertGreaterEqual(len(attempts), 2, "the lie must cost a retry, not pass silently")
+
+    def test_atomic_channel_garbage_maps_to_data(self):
+        """A channel file that is not one token line is a data verdict: the Mismatch class, exit 1."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            url = mock.url("latest")
+            raw_put(url, b"not a token\nsecond line\n")
+            with self.assertRaises(nxr.DigestMismatch) as raised:
+                nx.channel_get(url)
+            self.assertEqual(raised.exception.exit_code, 1)
+
+    def test_atomic_get_sends_identity_encoding(self):
+        """GET pins Accept-Encoding: identity: every wire byte is the stored byte and digests describe the original."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            path = mock.url("a.zip")
+            nx.put(path, CONTENT)
+            seen = {}
+            original = http.client.HTTPConnection.request
+
+            def spy(conn, method, url, body=None, headers={}):
+                seen[method] = dict(headers)
+                return original(conn, method, url, body=body, headers=headers)
+
+            with unittest.mock.patch.object(http.client.HTTPConnection, "request", spy):
+                nx.get(path)
+            self.assertEqual(seen["GET"].get("Accept-Encoding"), "identity")
 
     def test_atomic_big_object_flows_past_the_small_cap(self):
         """An object body has no small-object bound: a 17 MiB artifact downloads whole, the cap is for small surfaces alone."""
