@@ -253,12 +253,12 @@
 }
 
 .md-typeset .nxr-go > ul > li a {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
+  /* flow-root contains the icon float inside the card. The icon floats
+     left: the title sits on its first line, the description wraps and
+     clears below it. No empty second line, no wasted height. */
+  display: flow-root;
   height: 100%;
-  padding: 1.1rem 1.15rem 1.15rem;
+  padding: 0.95rem 1.1rem 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: var(--nxr-radius);
   background: color-mix(in oklch, var(--md-default-fg-color) 3%, transparent);
@@ -277,18 +277,20 @@
   transform: translateY(-2px);
 }
 
-/* The icon is a badge: a tinted square the icon sits in, not a floating glyph. */
+/* The icon badge floats left: title and text wrap around it, so the card
+   spends zero height on a lone icon row. */
 .md-typeset .nxr-go > ul > li a .twemoji,
 .md-typeset .nxr-go > ul > li a .md-icon {
+  float: left;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 0.75rem;
+  width: 2.9rem;
+  height: 2.9rem;
+  margin: 0.1rem 0.75rem 0.25rem 0;
+  border-radius: 0.7rem;
   background: color-mix(in oklch, var(--md-accent-fg-color) 14%, transparent);
   color: var(--md-accent-fg-color);
-  margin-bottom: 0.2rem;
 }
 
 .md-typeset .nxr-go > ul > li a .twemoji svg,
@@ -297,28 +299,30 @@
   height: 1.5rem;
 }
 
-/* The title is its own line, the loudest text on the card. */
+/* The title is the loudest text on the card. */
 .md-typeset .nxr-go > ul > li a strong {
   font-size: 0.92rem;
   font-weight: 700;
   color: var(--md-default-fg-color);
 }
 
-/* The time reads as a quiet pill, not as a sentence fragment. */
+/* The time reads as a quiet uppercase pill right after the title. */
 .md-typeset .nxr-go > ul > li a em {
   font-style: normal;
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--md-accent-fg-color);
   border: 1px solid color-mix(in oklch, var(--md-accent-fg-color) 40%, transparent);
   border-radius: 999px;
-  padding: 0.08rem 0.55rem;
+  padding: 0.06rem 0.5rem;
   white-space: nowrap;
+  margin-left: 0.35rem;
+  vertical-align: 0.08em;
 }
 
-/* The murmur line and the command chip close the card. */
+/* The murmur text of the card. */
 .md-typeset .nxr-go > ul > li a {
   color: var(--md-default-fg-color--light);
 }
