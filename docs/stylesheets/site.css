@@ -470,6 +470,7 @@
   --nxr-term-font: 1.85cqw;
   position: relative;
   margin: 1.6rem 0 1.2rem;
+  padding: 0;
   border: 1px solid oklch(0.32 0.02 210);
   border-radius: 0.75rem;
   overflow: hidden;

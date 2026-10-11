@@ -30,7 +30,7 @@ The crate is embeddable at four depths.
 Dependencies point one way, from UX down to transport, and no layer ever imports upward.
 
 <figure>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 392" role="img" aria-labelledby="dg-layers-t dg-layers-d" font-family="inherit" style="--dg-accent: var(--md-accent-fg-color)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="dg-layers-t dg-layers-d" font-family="inherit" style="--dg-accent: var(--md-accent-fg-color)">
 <title id="dg-layers-t">The four layers of nxr and their one-way dependencies</title>
 <desc id="dg-layers-d">L3 UX depends on L2 layout, which depends on L1 transfer, which depends on L0 transport. Each layer is blind to everything above it.</desc>
 <defs>
@@ -95,17 +95,17 @@ Dependencies point one way, from UX down to transport, and no layer ever imports
 <line x1="32" y1="312" x2="32" y2="340" class="dg-line" marker-end="url(#dg-arrow)"/>
 <!-- L0 -->
 <g filter="url(#dg-shadow)">
-<rect x="32" y="340" width="576" height="40" rx="12" class="dg-card"/>
+<rect x="32" y="340" width="576" height="64" rx="12" class="dg-card"/>
 </g>
-<rect x="48" y="344" width="32" height="32" rx="8" class="dg-chip"/>
-<g transform="translate(48,344)" class="dg-ico">
+<rect x="48" y="356" width="32" height="32" rx="8" class="dg-chip"/>
+<g transform="translate(48,356)" class="dg-ico">
 <g transform="translate(6,6)">
 <path d="M3 10h18M9 10V6m6 4V6"/><circle cx="4" cy="17" r="1.6"/><circle cx="12" cy="17" r="1.6"/><circle cx="20" cy="17" r="1.6"/>
 </g>
 </g>
-<text x="104" y="356" class="dg-name">L0 · transport + primitives</text>
-<text x="104" y="372" class="dg-knows">retries · stall · TLS · auth · get/put/head/sha</text>
-</g>
+<text x="104" y="360" class="dg-name">L0 · transport + primitives</text>
+<text x="104" y="376" class="dg-knows">retries · stall · TLS · auth · get/put/head/sha</text>
+<text x="104" y="393" class="dg-blind">may not know directories or markers exist</text>
 <filter id="dg-shadow" x="-10%" y="-10%" width="120%" height="135%">
 <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
 <feOffset dy="2"/>
@@ -191,7 +191,7 @@ The full table is in the [protocol reference](../reference/protocol.md).
 <line x1="13" y1="140" x2="28" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
 <!-- forward path: Absent -> Markerless -> Complete -->
 <line x1="172" y1="140" x2="228" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
-<g transform="translate(200,118)"><rect x="-34" y="-9" width="68" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">bytes land</text></g>
+<g transform="translate(200,96)"><rect x="-34" y="-9" width="68" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">bytes land</text></g>
 <line x1="372" y1="140" x2="428" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
 <g transform="translate(400,96)"><rect x="-42" y="-9" width="84" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">marker follows</text></g>
 <!-- clean transfer: Absent arcs over the top to Complete -->
@@ -199,12 +199,12 @@ The full table is in the [protocol reference](../reference/protocol.md).
 <g transform="translate(300,52)"><rect x="-46" y="-9" width="92" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">clean transfer</text></g>
 <!-- decay: Complete -> Broken, Markerless -> Broken (two parallel horizontals at y=140; second lane routed below, y=200, rounded) -->
 <line x1="572" y1="140" x2="628" y2="140" class="dg-ln" marker-end="url(#dg-arrow2)"/>
-<g transform="translate(600,118)"><rect x="-38" y="-9" width="76" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">tampering</text></g>
+<g transform="translate(600,96)"><rect x="-38" y="-9" width="76" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">tampering</text></g>
 <path d="M 340,170 L 340,196 Q 340,208 352,208 L 680,208 Q 692,208 692,196 L 692,170" class="dg-ln" marker-end="url(#dg-arrow2)"/>
 <g transform="translate(516,208)"><rect x="-56" y="-9" width="112" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">foreign marker</text></g>
 <!-- refusals: self loops on top of Complete and Broken -->
-<path d="M 460,110 C 460,80 540,80 540,110" class="dg-ln-soft" stroke-dasharray="5 4" marker-end="url(#dg-arrow2)"/>
-<g transform="translate(500,84)"><rect x="-88" y="-9" width="176" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">divergent refused, exit 1</text></g>
+<path d="M 460,110 C 460,56 540,56 540,110" class="dg-ln-soft" stroke-dasharray="5 4" marker-end="url(#dg-arrow2)"/>
+<g transform="translate(500,50)"><rect x="-88" y="-9" width="176" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">divergent refused, exit 1</text></g>
 <path d="M 656,110 C 656,20 728,20 728,52 Q 728,60 720,60 L 704,60 Q 692,60 692,72 L 692,110" class="dg-ln-soft" stroke-dasharray="5 4" marker-end="url(#dg-arrow2)"/>
 <g transform="translate(692,34)"><rect x="-60" y="-9" width="120" height="18" class="dg-plate"/><text text-anchor="middle" dominant-baseline="central" font-size="11" class="dg-edge">transfer refused, exit 1</text></g>
 <filter id="dg-shadow2" x="-10%" y="-10%" width="120%" height="135%">
