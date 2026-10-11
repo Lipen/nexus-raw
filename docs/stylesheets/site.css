@@ -246,11 +246,22 @@
   margin: 0;
 }
 
-/* The card: flow-root contains the icon float. The badge sits left, the
-   title and time pill share the first line beside it, the description
-   wraps under. No icon-only row, no stray separators. */
+/* The card is a three-row grid.
+   The header row holds the badge and the title side by side.
+   The description runs full width below the header.
+   The command chip sits pinned at the bottom-right. */
 .md-typeset .nxr-go > ul > li a {
-  display: flow-root;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "icon title"
+    "desc desc"
+    ". cmd";
+  column-gap: 0.7rem;
+  row-gap: 0.5rem;
+  align-items: start;
   height: 100%;
   padding: 0.95rem 1.1rem 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -272,17 +283,16 @@
   transform: translateY(-2px);
 }
 
-/* The icon badge floats left: title and time pill sit on the first line
-   beside it, the description wraps below. */
+/* The icon badge fills the header row left cell. */
 .md-typeset .nxr-go > ul > li a .twemoji,
 .md-typeset .nxr-go > ul > li a .md-icon {
-  float: left;
+  grid-area: icon;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  margin: 0.1rem 0.75rem 0.25rem 0;
+  width: 2.6rem;
+  height: 2.6rem;
   border-radius: 0.7rem;
   background: color-mix(in oklch, var(--md-accent-fg-color) 14%, transparent);
   color: var(--md-accent-fg-color);
@@ -294,36 +304,39 @@
   height: 1.5rem;
 }
 
-/* The title is the loudest text on the card. */
+/* The title is a bold gradient from the foreground into the accent.
+   The juiciest text on the page. */
 .md-typeset .nxr-go > ul > li a strong {
-  font-size: 0.92rem;
+  grid-area: title;
+  align-self: center;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: var(--md-default-fg-color);
+  letter-spacing: -0.01em;
+  background: linear-gradient(100deg, var(--md-default-fg-color) 45%, var(--md-accent-fg-color));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
-/* The time pill: quiet uppercase, beside the title. */
+/* The description is the full-width row under the header. */
 .md-typeset .nxr-go > ul > li a em {
+  grid-area: desc;
   font-style: normal;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--md-accent-fg-color);
-  border: 1px solid color-mix(in oklch, var(--md-accent-fg-color) 40%, transparent);
-  border-radius: 999px;
-  padding: 0.06rem 0.5rem;
-  white-space: nowrap;
-  margin-left: 0.35rem;
-  vertical-align: 0.08em;
 }
 
-/* The command chip is the one accent: this is what the reader runs. */
+/* The command chip is the one accent.
+   It sits at the bottom-right because it is what the reader runs. */
 .md-typeset .nxr-go > ul > li a code {
+  grid-area: cmd;
+  justify-self: end;
   font-size: 0.72rem;
-  padding: 0.1rem 0.45rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--nxr-teal) 35%, transparent);
   border-radius: 6px;
   background: color-mix(in oklch, var(--nxr-teal) 12%, transparent);
   color: var(--nxr-hero-teal);
+  white-space: nowrap;
 }
 
 /* The hover affordance: a gradient hairline across the card top fades in.
@@ -347,11 +360,6 @@
 .md-typeset .nxr-go > ul > li a:hover::before {
   opacity: 1;
   transform: none;
-}
-
-/* The card is the positioning context for the hairline. */
-.md-typeset .nxr-go > ul > li {
-  position: relative;
 }
 
 .md-typeset .nxr-go__under {
