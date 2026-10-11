@@ -30,7 +30,7 @@ The crate is embeddable at four depths.
 Dependencies point one way, from UX down to transport, and no layer ever imports upward.
 
 <figure>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="dg-layers-t dg-layers-d" font-family="inherit" style="--dg-accent: var(--md-accent-fg-color)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 472" role="img" aria-labelledby="dg-layers-t dg-layers-d" font-family="inherit">
 <title id="dg-layers-t">The four layers of nxr and their one-way dependencies</title>
 <desc id="dg-layers-d">L3 UX depends on L2 layout, which depends on L1 transfer, which depends on L0 transport. Each layer is blind to everything above it.</desc>
 <defs>
@@ -45,67 +45,67 @@ Dependencies point one way, from UX down to transport, and no layer ever imports
 .dg-name { font-size: 15px; font-weight: 700; fill: var(--dg-ink); }
 .dg-knows { font-size: 12px; fill: var(--dg-muted); }
 .dg-blind { font-size: 11.5px; font-style: italic; fill: var(--dg-accent); }
-.dg-line { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
+.dg-link { stroke: var(--dg-muted); stroke-width: 2; fill: none; }
 .dg-head { fill: var(--dg-muted); }
-.dg-axis { font-size: 11px; font-weight: 600; fill: var(--dg-muted); letter-spacing: 0.08em; }
+.dg-axis { font-size: 11px; font-weight: 700; fill: var(--dg-muted); letter-spacing: 0.1em; }
+.dg-dep { font-size: 11px; fill: var(--dg-muted); }
 </style>
-<!-- the dependency axis: one straight spine, left edge x=32 -->
-<text x="32" y="20" class="dg-axis">DEPENDENCIES POINT DOWN</text>
-<!-- L3 -->
+<!-- header axis -->
+<text x="64" y="22" class="dg-axis">DEPENDENCIES POINT DOWN</text>
+<!-- the central spine: one straight line, midline x=360, from L3 bottom into L0 top -->
+<!-- L3 card: x=64..656, y=32..128 -->
 <g filter="url(#dg-shadow)">
-<rect x="32" y="32" width="576" height="80" rx="12" class="dg-card"/>
+<rect x="64" y="32" width="592" height="96" rx="12" class="dg-card"/>
 </g>
-<rect x="48" y="48" width="40" height="40" rx="10" class="dg-chip"/>
-<g transform="translate(48,48)" class="dg-ico">
-<g transform="translate(8,8)">
-<path d="M4 16h16M6 16V9m6 7V6m6 10v-5"/>
-</g>
-</g>
-<text x="104" y="64" class="dg-name">L3 · UX (the CLI)</text>
-<text x="104" y="82" class="dg-knows">doctor · hints · NDJSON · exit codes</text>
-<text x="104" y="99" class="dg-blind">may not speak HTTP</text>
-<line x1="32" y1="112" x2="32" y2="140" class="dg-line" marker-end="url(#dg-arrow)"/>
-<!-- L2 -->
+<rect x="84" y="56" width="48" height="48" rx="12" class="dg-chip"/>
+<g transform="translate(84,56)" class="dg-ico"><g transform="translate(12,12)">
+<path d="M4 18h16M7 18v-8m5 8V5m5 13v-5"/>
+</g></g>
+<text x="152" y="60" class="dg-name">L3 · UX (the CLI)</text>
+<text x="152" y="80" class="dg-knows">doctor · hints · NDJSON · exit codes</text>
+<text x="152" y="102" class="dg-blind">may not speak HTTP</text>
+<!-- link L3 -> L2: spine x=360, card gap 128..152 -->
+<line x1="360" y1="128" x2="360" y2="152" class="dg-link" marker-end="url(#dg-arrow)"/>
+<text x="376" y="145" class="dg-dep">imports L2</text>
+<!-- L2 card: y=152..240 -->
 <g filter="url(#dg-shadow)">
-<rect x="32" y="140" width="576" height="72" rx="12" class="dg-card"/>
+<rect x="64" y="152" width="592" height="88" rx="12" class="dg-card"/>
 </g>
-<rect x="48" y="152" width="40" height="40" rx="10" class="dg-chip"/>
-<g transform="translate(48,152)" class="dg-ico">
-<g transform="translate(8,8)">
-<path d="M9 4h6m-6 8h12m-12 8h8"/><circle cx="3" cy="4" r="1.6"/><circle cx="3" cy="12" r="1.6"/><circle cx="3" cy="20" r="1.6"/>
-</g>
-</g>
-<text x="104" y="168" class="dg-name">L2 · layout helpers</text>
-<text x="104" y="186" class="dg-knows">channels · manifests · search listings</text>
-<text x="104" y="203" class="dg-blind">may not know the CLI exists</text>
-<line x1="32" y1="212" x2="32" y2="240" class="dg-line" marker-end="url(#dg-arrow)"/>
-<!-- L1 -->
+<rect x="84" y="172" width="48" height="48" rx="12" class="dg-chip"/>
+<g transform="translate(84,172)" class="dg-ico"><g transform="translate(12,12)">
+<path d="M9 4h6m-6 8h12m-12 8h8"/><circle cx="4" cy="4" r="1.8"/><circle cx="4" cy="12" r="1.8"/><circle cx="4" cy="20" r="1.8"/>
+</g></g>
+<text x="152" y="176" class="dg-name">L2 · layout helpers</text>
+<text x="152" y="196" class="dg-knows">channels · manifests · search listings</text>
+<text x="152" y="218" class="dg-blind">may not know the CLI exists</text>
+<!-- link L2 -> L1 -->
+<line x1="360" y1="240" x2="360" y2="264" class="dg-link" marker-end="url(#dg-arrow)"/>
+<text x="376" y="257" class="dg-dep">imports L1</text>
+<!-- L1 card: y=264..352 -->
 <g filter="url(#dg-shadow)">
-<rect x="32" y="240" width="576" height="72" rx="12" class="dg-card"/>
+<rect x="64" y="264" width="592" height="88" rx="12" class="dg-card"/>
 </g>
-<rect x="48" y="252" width="40" height="40" rx="10" class="dg-chip"/>
-<g transform="translate(48,252)" class="dg-ico">
-<g transform="translate(8,8)">
-<path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-</g>
-</g>
-<text x="104" y="268" class="dg-name">L1 · transfer</text>
-<text x="104" y="286" class="dg-knows">sync up/down · symmetric diff · markers · Range-resume · workers</text>
-<text x="104" y="303" class="dg-blind">may not know versions or channels exist</text>
-<line x1="32" y1="312" x2="32" y2="340" class="dg-line" marker-end="url(#dg-arrow)"/>
-<!-- L0 -->
+<rect x="84" y="284" width="48" height="48" rx="12" class="dg-chip"/>
+<g transform="translate(84,284)" class="dg-ico"><g transform="translate(12,12)">
+<path d="M12 3v11m0 0 4-4m-4 4-4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+</g></g>
+<text x="152" y="288" class="dg-name">L1 · transfer</text>
+<text x="152" y="308" class="dg-knows">sync up/down · symmetric diff · markers · Range-resume · workers</text>
+<text x="152" y="330" class="dg-blind">may not know versions or channels exist</text>
+<!-- link L1 -> L0 -->
+<line x1="360" y1="352" x2="360" y2="376" class="dg-link" marker-end="url(#dg-arrow)"/>
+<text x="376" y="369" class="dg-dep">imports L0</text>
+<!-- L0 card: y=376..464 -->
 <g filter="url(#dg-shadow)">
-<rect x="32" y="340" width="576" height="64" rx="12" class="dg-card"/>
+<rect x="64" y="376" width="592" height="88" rx="12" class="dg-card"/>
 </g>
-<rect x="48" y="356" width="32" height="32" rx="8" class="dg-chip"/>
-<g transform="translate(48,356)" class="dg-ico">
-<g transform="translate(6,6)">
-<path d="M3 10h18M9 10V6m6 4V6"/><circle cx="4" cy="17" r="1.6"/><circle cx="12" cy="17" r="1.6"/><circle cx="20" cy="17" r="1.6"/>
-</g>
-</g>
-<text x="104" y="360" class="dg-name">L0 · transport + primitives</text>
-<text x="104" y="376" class="dg-knows">retries · stall · TLS · auth · get/put/head/sha</text>
-<text x="104" y="393" class="dg-blind">may not know directories or markers exist</text>
+<rect x="84" y="396" width="48" height="48" rx="12" class="dg-chip"/>
+<g transform="translate(84,396)" class="dg-ico"><g transform="translate(12,12)">
+<path d="M3 11h18M9 11V7m6 4V7"/><circle cx="4" cy="18" r="1.8"/><circle cx="12" cy="18" r="1.8"/><circle cx="20" cy="18" r="1.8"/>
+</g></g>
+<text x="152" y="400" class="dg-name">L0 · transport + primitives</text>
+<text x="152" y="420" class="dg-knows">retries · stall · TLS · auth · get/put/head/sha</text>
+<text x="152" y="442" class="dg-blind">may not know directories or markers exist</text>
 <filter id="dg-shadow" x="-10%" y="-10%" width="120%" height="135%">
 <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
 <feOffset dy="2"/>
