@@ -14,17 +14,16 @@ const { up, down, verify, channelSet, channelGet } = pkg;
 const mock = process.argv[2] ? { url: process.argv[2], child: null } : await spawnMock();
 const repo = mock.url;
 
-// The producer side: a version directory plus the manifest naming its files.
+// The producer side: a version directory of plain artifacts.
 const dist = "demo-dist";
 mkdirSync(`${dist}/bom`, { recursive: true });
 writeFileSync(`${dist}/app.bin`, Buffer.alloc(4096, 7));
-writeFileSync(`${dist}/bom/manifest.json`, JSON.stringify({ artifacts: ["app.bin"] }));
-// The manifest sits at the version root and lists what consumers may fetch.
-writeFileSync(`${dist}/manifest.json`, JSON.stringify({ artifacts: ["app.bin"] }));
+writeFileSync(`${dist}/bom/sbom.json`, Buffer.from('{"deps":[]}\n'));
 
 const events = (ev) => console.log(`  ${JSON.stringify(ev)}`);
 
-const upSummary = await up(dist, `${repo}1.0.0/`, { claimFirst: "manifest.json", onEvent: events });
+// The claim name lands first, alone: a polling consumer never sees an empty version.
+const upSummary = await up(dist, `${repo}1.0.0/`, { claimFirst: "app.bin", onEvent: events });
 console.log(`up: uploaded ${upSummary.uploaded}, skipped ${upSummary.skipped}`);
 
 // Name the version so consumers never hard-code it.
@@ -32,9 +31,9 @@ await channelSet(`${repo}latest`, "1.0.0", true);
 const version = await channelGet(`${repo}latest`);
 console.log(`channel latest -> ${version}`);
 
-// The consumer side: enumerate from the manifest, land the tree, verify offline.
+// The consumer side: name what to fetch, land the tree, verify offline.
 const downSummary = await down(`${repo}${version}/`, "demo-vendor", {
-  manifest: `${dist}/manifest.json`,
+  names: ["app.bin", "bom/sbom.json"],
   onEvent: events,
 });
 console.log(`down: downloaded ${downSummary.downloaded}, skipped ${downSummary.skipped}`);

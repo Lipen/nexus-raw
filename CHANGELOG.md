@@ -22,6 +22,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The up command refuses to publish a marker over bytes it does not describe: a file rewritten during the upload is a Mismatch, not a silent divergence behind exit 0.
   A stdout write failure (`nxr get URL | head`) is an I/O condition, not a misuse.
 
+### Fixed
+
+- The TUI drops the cached expansion state on a climb to a parent level: a same-named folder there rendered pre-expanded with the wrong directory's children.
+  Presets resolving to an already gathered URL now deduplicate into one tab instead of a second view of the same path.
+- The Python reference client follows the same wire contracts: the small-object cap reads with a budget like the Rust transport, and the exit-code map matches the new error classes.
+
 ## [0.11.1] - 2026-10-11
 
 ### Fixed

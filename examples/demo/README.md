@@ -16,7 +16,7 @@ The payloads in `dist/1.4.0/` are generated on every run, deterministically, so 
 
 | Beat | What it proves |
 | :-- | :-- |
-| `up --claim-first manifest.json` | the enumeration source lands before any other name, so a consumer never sees half a version |
+| `up --claim-first manifest.json` | the session's published list file lands first, an ordinary artifact the session publishes for its consumers |
 | `channel set --if-forward` | a version gets a name, and the pointer only moves forward |
 | `down --workers 1` | exactly the enumerated names, one at a time, so you can watch each land |
 | `verify` | digests check offline, no network |

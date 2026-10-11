@@ -1,7 +1,7 @@
 # nxr wasm sandbox
 
 The GO/NO-GO spike for running `nexus-raw-core` in the browser.
-`src/lib.rs` exports one call, `nxr_ls(dir_url, auth)`, on top of the wasm-compatible slice of core: transport, `ls`, manifests, channels, pointers.
+`src/lib.rs` exports one call, `nxr_ls(dir_url, auth)`, on top of the wasm-compatible slice of core: transport, `ls`, channels, pointers.
 Everything that touches the local filesystem is native-only and gated out by `cfg(target_arch = "wasm32")` in the core crate.
 
 ## Build and run

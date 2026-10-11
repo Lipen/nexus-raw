@@ -131,8 +131,6 @@ export interface NxrHeadResult {
 }
 
 export interface NxrUpOpts extends NxrCommonOpts {
-  /** Restrict the transfer to these names: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Restrict the transfer to these explicit names. */
   names?: string[]
   /** Upload this file first, alone, before any other name (claim-first). */
@@ -144,8 +142,6 @@ export interface NxrUpOpts extends NxrCommonOpts {
 }
 
 export interface NxrDownOpts extends NxrCommonOpts {
-  /** Enumeration source: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Explicit names to download. */
   names?: string[]
   /** Best-effort enumeration through the server search API (`--ls`). */
@@ -155,8 +151,6 @@ export interface NxrDownOpts extends NxrCommonOpts {
 }
 
 export interface NxrDiffOpts extends NxrCommonOpts {
-  /** Enumeration source: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Explicit names to compare. */
   names?: string[]
   /** Best-effort enumeration through the server search API (`--ls`). */
@@ -166,8 +160,6 @@ export interface NxrDiffOpts extends NxrCommonOpts {
 }
 
 export interface NxrRmOpts extends NxrCommonOpts {
-  /** Enumeration source: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Explicit names to delete. */
   names?: string[]
   /** Best-effort enumeration through the server search API (`--ls`). */
@@ -230,8 +222,6 @@ export interface NxrMirrorOpts extends NxrCommonOpts {
   srcAuth?: NxrAuth
   /** Explicit credentials for the destination. They win over `auth` and the environment fallback. */
   dstAuth?: NxrAuth
-  /** Enumeration source at the source repository: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Explicit names to copy. */
   names?: string[]
   /** Best-effort enumeration through the server search API (`--ls`). */
@@ -244,8 +234,6 @@ export interface NxrPointClearResult {
 }
 
 export interface NxrVerifyOpts extends NxrCommonOpts {
-  /** Check exactly these names: a manifest file, URL or `-` for stdin. */
-  manifest?: string
   /** Check exactly these explicit names. */
   names?: string[]
 }
@@ -282,8 +270,8 @@ export function up(srcDir: string, dstUrl: string, opts?: NxrUpOpts): Promise<Nx
 
 /**
  * Download a remote directory into a local one.
- * The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
- * or the conventional `manifest.json` at the directory URL.
+ * The enumeration source is mandatory: explicit `names`, or `ls` when the
+ * server has the search API.
  */
 export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promise<NxrSummary>
 
@@ -292,8 +280,8 @@ export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promis
  * Read-only on both sides: the promise resolves to the report whatever the delta is.
  * Every scanned or enumerated name lands in exactly one entry: `same`,
  * `missing-local`, `missing-remote` or `diverged`.
- * The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
- * or the conventional `manifest.json` at the directory URL.
+ * The enumeration source is mandatory: explicit `names`, or `ls` when the
+ * server has the search API.
  */
 export function diff(
   localDir: string,
@@ -304,8 +292,8 @@ export function diff(
 /**
  * Delete the enumerated names from the remote directory (`rm`).
  * Divergence is never checked: `rm` deletes names, not content.
- * The enumeration source is mandatory: `ls`, `manifest`, explicit `names`,
- * or the conventional `manifest.json` at the directory URL.
+ * The enumeration source is mandatory: explicit `names`, or `ls` when the
+ * server has the search API.
  * With `dryRun` the promise resolves to the plan instead of a summary.
  */
 export function rm(srcUrl: string, opts?: NxrRmOpts): Promise<NxrSummary | NxrRmPlan>

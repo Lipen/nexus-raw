@@ -60,7 +60,7 @@ The panel itself never proxies file contents.
 
 The download always targets the directory on screen, repository root or any subtree below it.
 The server walks that subtree with recursive `lsEntries` calls, collects every file name relative to the repository root, and passes the whole list to `down` as explicit `names` against the repository URL.
-Nothing is enumerated through a manifest: the files the browser showed are the files that download.
+The files the browser showed are exactly the files that download.
 The local target directory mirrors the repository layout, so a download of `app/core` lands as `<target>/app/core/...`.
 
 ## Keyboard
