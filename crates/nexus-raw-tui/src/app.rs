@@ -5763,16 +5763,12 @@ mod tests {
         app.tabs[0].repo = Some(repo("raw-main", "raw", "hosted"));
         app.tabs[0].screen = Screen::Tree;
         app.tabs[0].path = vec!["deep".into()];
-        app.tabs[0]
-            .expanded
-            .insert("folder".into(), Vec::new());
+        app.tabs[0].expanded.insert("folder".into(), Vec::new());
         app.tabs[0].open.insert("folder".into());
         // Climb up to the parent level, which has a same-named folder.
         app.handle(Msg::Key(key(KeyCode::Backspace)));
         assert!(
-            !app.tabs[0]
-                .open
-                .contains("folder"),
+            !app.tabs[0].open.contains("folder"),
             "the stale open state survives the climb-up"
         );
         assert!(
