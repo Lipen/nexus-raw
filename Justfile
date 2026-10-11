@@ -183,26 +183,7 @@ release v *mode:
       esac
     done
     if [ -z "$yes" ]; then
-      old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-      echo "release {{v}}: dry run, nothing is pushed or published"
-      if [ "$old" = "{{v}}" ]; then
-        echo "  version: already {{v}}, the bump would be a no-op"
-      else
-        echo "  version: $old -> {{v}} in Cargo.toml, the napi package.json, two dependency pins, Cargo.lock"
-      fi
-      python3 scripts/changelog-finalize.py "{{v}}" --dry | sed 's/^/  /'
-      if [ -n "$(git status --porcelain)" ]; then
-        echo "  warning: the tree is dirty, --yes would commit the tracked changes"
-      fi
-      if git ls-remote --exit-code origin "refs/tags/v{{v}}" > /dev/null 2>&1; then
-        echo "  warning: tag v{{v}} already exists, --yes would fail at the gate"
-      fi
-      if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"{{v}}\""; then
-        echo "  note: {{v}} is already on crates.io, the crates job would skip"
-      fi
-      echo "  pipeline: gate -> builds (linux-x64, linux-aarch64, darwin-x64, darwin-arm64, windows-x64) -> crates -> node addons -> npm -> tag v{{v}} + release"
-      echo "nothing was pushed or published: call 'just release {{v}} --yes' for the real act"
-      exit 0
+      exec scripts/release-preview.sh "{{v}}"
     fi
     if [ -n "$(git status --porcelain)" ]; then
       echo "release {{v}}: the tree is dirty, commit or stash first (a --yes run commits only its own bump)" >&2
