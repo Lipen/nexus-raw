@@ -251,14 +251,17 @@
 }
 
 .md-typeset .nxr-go > ul > li a {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
   height: 100%;
-  padding: 1rem 1.1rem 1.1rem;
+  padding: 1.1rem 1.15rem 1.15rem;
   border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: var(--nxr-radius);
   background: color-mix(in oklch, var(--md-default-fg-color) 3%, transparent);
-  font-size: 0.72rem;
-  line-height: 1.6;
+  font-size: 0.78rem;
+  line-height: 1.55;
   text-decoration: none;
   transition:
     transform var(--nxr-lift),
@@ -272,9 +275,58 @@
   transform: translateY(-2px);
 }
 
-.md-typeset .nxr-go .twemoji {
+/* The icon is a badge: a tinted square the icon sits in, not a floating glyph. */
+.md-typeset .nxr-go > ul > li a .twemoji,
+.md-typeset .nxr-go > ul > li a .md-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--md-accent-fg-color) 14%, transparent);
   color: var(--md-accent-fg-color);
-  vertical-align: -0.25em;
+  margin-bottom: 0.2rem;
+}
+
+.md-typeset .nxr-go > ul > li a .twemoji svg,
+.md-typeset .nxr-go > ul > li a .md-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* The title is its own line, the loudest text on the card. */
+.md-typeset .nxr-go > ul > li a strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+/* The time reads as a quiet pill, not as a sentence fragment. */
+.md-typeset .nxr-go > ul > li a em {
+  font-style: normal;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  border: 1px solid color-mix(in oklch, var(--md-accent-fg-color) 40%, transparent);
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  white-space: nowrap;
+}
+
+/* The murmur line and the command chip close the card. */
+.md-typeset .nxr-go > ul > li a {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .nxr-go > ul > li a code {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--nxr-teal) 12%, transparent);
+  color: var(--nxr-hero-teal);
 }
 
 /* the time-to-value hint is a quiet tag pinned to the card's top-right corner */
