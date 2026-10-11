@@ -188,7 +188,7 @@ mod tests {
         assert!(!unsafe_reason("x/").is_empty());
         assert!(!unsafe_reason("x.sha256").is_empty());
         // No reserved names beyond the .sha256 suffix.
-        // `latest`/`nightly`/`version.json` are ordinary artifact names: channels and manifests are generic files, not protocol.
+        // `latest`/`nightly`/`version.json` are ordinary artifact names: no name carries protocol meaning.
         for name in ["latest", "nightly", "version.json"] {
             ArtifactName::parse(name).unwrap_or_else(|e| panic!("{name}: {e}"));
         }

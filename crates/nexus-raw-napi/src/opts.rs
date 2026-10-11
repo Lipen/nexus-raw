@@ -137,8 +137,6 @@ pub struct NxrUpOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Restrict the transfer to these names: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Restrict the transfer to these explicit names.
     pub names: Option<Vec<String>>,
     /// Upload this file first, alone, before any other name (claim-first).
@@ -169,8 +167,6 @@ pub struct NxrDownOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Enumeration source: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Explicit names to download.
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
@@ -199,8 +195,6 @@ pub struct NxrDiffOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Enumeration source: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Explicit names to compare.
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
@@ -229,8 +223,6 @@ pub struct NxrRmOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Enumeration source: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Explicit names to delete.
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
@@ -264,8 +256,6 @@ pub struct NxrMirrorOpts {
     /// Explicit credentials for the destination repository.
     /// They win over `auth` and the env fallback.
     pub dst_auth: Option<NxrAuth>,
-    /// Enumeration source: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Explicit names to copy.
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
@@ -292,8 +282,6 @@ pub struct NxrVerifyOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Check exactly these names: a manifest file, URL or `-` for stdin.
-    pub manifest: Option<String>,
     /// Check exactly these explicit names.
     pub names: Option<Vec<String>>,
 }

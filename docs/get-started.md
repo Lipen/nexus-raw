@@ -66,8 +66,8 @@ dist/1.4.0/
 └── pinned.xml
 ```
 
-1. The enumeration source for consumers.
-   Without it, `down` needs `--manifest`, `--name` or `--ls`, a refusal you will trigger later in this tour.
+1. An ordinary uploaded artifact.
+   Nothing in `nxr` reads it: `down` needs repeatable `--name` or `--ls`, a refusal you will trigger later in this tour.
 
 ```bash
 nxr up dist/1.4.0/ http://127.0.0.1:8080/1.4.0/ --claim-first manifest.json   # (1)!
@@ -86,7 +86,7 @@ plan: 4 to upload, 0 to download, 0 up to date
 uploaded 4, downloaded 0, skipped 0
 ```
 
-With `--claim-first` the manifest uploads first, alone: a consumer polling the URL never sees bytes without their enumeration source.
+With `--claim-first` that name uploads first, alone: the file is an ordinary artifact, and claim-first only fixes its order.
 The remaining `ok` lines print in completion order, so your ordering may differ.
 No marker step appears anywhere because `up` generated every `<name>.sha256` from the bytes before uploading.
 The markers are ordinary `sha256sum -c` lines, and `up` leaves a copy next to your files:
@@ -127,11 +127,11 @@ $ nxr channel get http://127.0.0.1:8080/latest
 
 ## Consume the version
 
-Point `down` at the version URL.
-It reads `manifest.json`, fetches exactly the listed names, hashes each stream on the fly, checks the digest against the server marker, and only then renames the file into place:
+Point `down` at the version URL and name what you want.
+It fetches exactly the named artifacts, hashes each stream on the fly, checks the digest against the server marker, and only then renames the file into place:
 
 ```console
-$ nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/
+$ nxr down http://127.0.0.1:8080/1.4.0/ vendor/app/ --name app-1.4.0.zip --name pinned.xml --name bom/linux-x86_64.json
 plan: 0 to upload, 3 to download, 0 up to date
 ↓ pinned.xml ok
 ↓ bom/linux-x86_64.json ok
@@ -149,12 +149,12 @@ uploaded 0, downloaded 0, skipped 3
 
 ## Break it on purpose
 
-Publish a version without a `manifest.json` and `down` refuses to guess instead of inventing a name list:
+Call `down` with neither `--name` nor `--ls` and it refuses to guess instead of inventing a name list:
 
 ```console
 $ nxr down http://127.0.0.1:8080/1.3.0/ vendor/old/
-error: cannot enumerate: http://127.0.0.1:8080/1.3.0/: no manifest.json on the server and no --manifest/--name/--ls given
-hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: http://127.0.0.1:8080/1.3.0/: no --name/--ls given
+hint: repeat --name, or use --ls when the server has the search API
 ```
 
 Every failure prints this way: the kind, the facts, and a `hint:` line naming the next check.

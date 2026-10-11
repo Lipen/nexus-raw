@@ -492,16 +492,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__diff)
-            opts="-u -R -q -v -h --manifest --name --ls --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --ls --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --name)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -596,16 +592,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__down)
-            opts="-u -R -q -v -h --manifest --name --ls --fresh --dry-run --plan --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --ls --fresh --dry-run --plan --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --name)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1164,16 +1156,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__mirror)
-            opts="-u -R -q -v -h --manifest --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --name)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1230,16 +1218,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__mv)
-            opts="-u -R -q -v -h --manifest --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --name)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1396,16 +1380,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__rm)
-            opts="-u -R -q -v -h --manifest --name --ls --dry-run --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --ls --dry-run --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --name)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1882,16 +1862,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__up)
-            opts="-u -R -q -v -h --manifest --claim-first --no-sha --dry-run --plan --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --claim-first --no-sha --dry-run --plan --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --claim-first)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -1936,16 +1912,12 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__verify)
-            opts="-u -R -q -v -h --manifest --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --manifest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --user)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

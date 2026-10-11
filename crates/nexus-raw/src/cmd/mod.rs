@@ -6,10 +6,9 @@ mod layout;
 mod primitives;
 mod transfer;
 
-use std::path::Path;
 use std::time::Duration;
 
-use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Manifest, Nxr};
+use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Nxr};
 
 use crate::render::{Mode, Session};
 use crate::{ChannelOp, Cli, Cmd, ServiceOp};
@@ -22,13 +21,12 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
     if let Cmd::Diff {
         local,
         src,
-        manifest,
         name,
         ls,
         prefix,
     } = &cli.command
     {
-        return transfer::diff(cli, local, src, manifest.as_deref(), name, *ls, prefix).await;
+        return transfer::diff(cli, local, src, name, *ls, prefix).await;
     }
     run(cli).await.map(|()| 0)
 }
@@ -42,7 +40,6 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         Cmd::Up {
             src,
             dst,
-            manifest,
             claim_first,
             no_sha,
             plan,
@@ -51,39 +48,24 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                 Some(raw) => Some(ArtifactName::parse(raw)?),
                 None => None,
             };
-            transfer::up(cli, src, dst, manifest.as_deref(), claim, *no_sha, *plan).await
+            transfer::up(cli, src, dst, claim, *no_sha, *plan).await
         }
         Cmd::Down {
             src,
             dst,
-            manifest,
             name,
             ls,
             fresh,
             plan,
             prefix,
-        } => {
-            transfer::down(
-                cli,
-                src,
-                dst,
-                manifest.as_deref(),
-                name,
-                *ls,
-                *fresh,
-                *plan,
-                prefix,
-            )
-            .await
-        }
+        } => transfer::down(cli, src, dst, name, *ls, *fresh, *plan, prefix).await,
         Cmd::Rm {
             src,
-            manifest,
             name,
             ls,
             dry_run,
             prefix,
-        } => transfer::rm(cli, src, manifest.as_deref(), name, *ls, *dry_run, prefix).await,
+        } => transfer::rm(cli, src, name, *ls, *dry_run, prefix).await,
         Cmd::Point { clear, url } => {
             if !clear {
                 return Err(Error::Misuse(
@@ -96,7 +78,6 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         Cmd::Mirror {
             src,
             dst,
-            manifest,
             name,
             ls,
             dry_run,
@@ -112,7 +93,6 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     src_user: src_user.as_deref(),
                     dst_user: dst_user.as_deref(),
                 },
-                manifest.as_deref(),
                 name,
                 *ls,
                 *dry_run,
@@ -123,7 +103,6 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         Cmd::Mv {
             src,
             dst,
-            manifest,
             name,
             ls,
             dry_run,
@@ -139,7 +118,6 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     src_user: src_user.as_deref(),
                     dst_user: dst_user.as_deref(),
                 },
-                manifest.as_deref(),
                 name,
                 *ls,
                 *dry_run,
@@ -156,7 +134,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                 if_forward,
             } => layout::channel_set(cli, url, token, *if_forward).await,
         },
-        Cmd::Verify { dir, manifest } => layout::verify(cli, dir, manifest.as_deref()).await,
+        Cmd::Verify { dir } => layout::verify(cli, dir).await,
         Cmd::Service { op } => match op {
             ServiceOp::Repos { url } => layout::service_repos(cli, url).await,
             ServiceOp::Status { url } => layout::service_status(cli, url).await,
@@ -259,40 +237,23 @@ pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> 
     names.iter().map(|s| ArtifactName::parse(s)).collect()
 }
 
-/// Resolve the enumeration source of `down` and `rm`: `--ls`, `--manifest`, repeatable `--name`, or the conventional `manifest.json` at the directory URL.
+/// Resolve the enumeration source of `down` and `rm`: repeatable `--name`, or `--ls`.
 /// Without any source the call refuses (exit 1) with the enumeration hint.
 pub(crate) async fn enumeration_source(
     ctx: &Ctx,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
 ) -> Result<Enumeration, Error> {
     if ls {
         return Ok(Enumeration::Search);
     }
-    if let Some(spec) = manifest {
-        return Ok(Enumeration::Manifest(load_manifest(&ctx.nxr, spec).await?));
-    }
     if !names.is_empty() {
         return Ok(Enumeration::Names(parse_names(names)?));
     }
-    // The convention: a manifest.json in the version directory.
-    match ctx.nxr.manifest_at_base().await? {
-        Some(m) => Ok(Enumeration::Manifest(m)),
-        None => Err(Error::Enumerate {
-            url: ctx.nxr.base().to_owned(),
-            reason: "no manifest.json on the server and no --manifest/--name/--ls given".into(),
-        }),
-    }
-}
-
-/// Resolve a `--manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file.
-pub(crate) async fn load_manifest(nxr: &Nxr, spec: &str) -> Result<Manifest, Error> {
-    match spec {
-        "-" => Manifest::from_stdin(),
-        u if u.starts_with("http://") || u.starts_with("https://") => nxr.manifest_from(u).await,
-        p => Manifest::from_file(Path::new(p)),
-    }
+    Err(Error::Enumerate {
+        url: ctx.nxr.base().to_owned(),
+        reason: "no --name/--ls given".into(),
+    })
 }
 
 /// One JSON line for the simple (non-event) results.

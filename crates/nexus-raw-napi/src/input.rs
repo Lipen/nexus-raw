@@ -1,49 +1,26 @@
-use std::path::Path;
-
 use napi::Result;
-use nexus_raw_core::{ArtifactName, Enumeration, Manifest, Nxr};
+use nexus_raw_core::{ArtifactName, Enumeration, Nxr};
 
 use crate::error::js_error;
-use crate::mapping;
 
-/// Resolve the enumeration source the way the CLI does: `ls`, a `manifest` spec, explicit `names`, or the conventional `manifest.json` at the directory URL.
-/// The caller must drop the facade before draining the pump on the error path.
-pub(crate) async fn resolve_enumeration(
+/// Resolve the enumeration source the way the CLI does: `ls` or explicit `names`.
+pub(crate) fn resolve_enumeration(
     nxr: &Nxr,
-    manifest: &Option<String>,
     parsed_names: Option<Vec<ArtifactName>>,
     ls: bool,
-    no_manifest_reason: &'static str,
+    no_source_reason: &'static str,
 ) -> std::result::Result<Enumeration, nexus_raw_core::Error> {
+    let _ = nxr;
     if ls {
         return Ok(Enumeration::Search);
-    }
-    if let Some(spec) = manifest {
-        return load_manifest(nxr, spec).await.map(Enumeration::Manifest);
     }
     if let Some(v) = parsed_names {
         return Ok(Enumeration::Names(v));
     }
-    match nxr.manifest_at_base().await {
-        Ok(Some(m)) => Ok(Enumeration::Manifest(m)),
-        Ok(None) => Err(nexus_raw_core::Error::Enumerate {
-            url: nxr.base().to_owned(),
-            reason: no_manifest_reason.to_owned(),
-        }),
-        Err(e) => Err(e),
-    }
-}
-
-/// Resolve a `manifest` spec: `-` for stdin, http(s) URLs through the server, everything else as a local file: the CLI rules.
-pub(crate) async fn load_manifest(
-    nxr: &Nxr,
-    spec: &str,
-) -> std::result::Result<Manifest, nexus_raw_core::Error> {
-    match mapping::classify_manifest_spec(spec) {
-        mapping::ManifestSpec::Stdin => Manifest::from_stdin(),
-        mapping::ManifestSpec::Url(url) => nxr.manifest_from(&url).await,
-        mapping::ManifestSpec::File(path) => Manifest::from_file(Path::new(&path)),
-    }
+    Err(nexus_raw_core::Error::Enumerate {
+        url: nxr.base().to_owned(),
+        reason: no_source_reason.to_owned(),
+    })
 }
 
 /// Parse explicit names through the grammar (exit 2 on bad names).

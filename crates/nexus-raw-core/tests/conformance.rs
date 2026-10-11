@@ -5,9 +5,15 @@ use std::time::Duration;
 
 use mock_nexus::{MockNexus, Outcome, ReqLog, Scenario};
 use nexus_raw_core::sync::down::part_path;
+
+/// The explicit enumeration the tests used to receive from the manifest convention.
+fn enum_names(v: &[&str]) -> Enumeration {
+    Enumeration::Names(names(v))
+}
+
 use nexus_raw_core::{
     model::sibling, staging_dir, ArtifactName, Config, Digest, EntryKind, Enumeration, Error,
-    Event, Manifest, Mode, Nxr, Summary,
+    Event, Mode, Nxr, Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -318,16 +324,26 @@ async fn symlinked_local_marker_is_never_followed_on_up() {
 #[cfg(unix)]
 #[tokio::test]
 async fn oversized_small_get_refuses_with_the_cap() {
-    // A manifest is a "small" GET: past the 16 MiB cap the read refuses (exit 2) instead of slurping an unbounded body into memory.
+    // A sibling is a "small" GET: past the 16 MiB cap the read refuses (exit 2) instead of slurping an unbounded body into memory.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     mock.insert(
-        &format!("{VERSION}/manifest.json"),
+        &format!("{VERSION}/a.zip.sha256"),
         &vec![0u8; 16 * 1024 * 1024 + 1],
     );
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let err = nxr.manifest_at_base().await.unwrap_err();
+    let url = format!("{}{VERSION}/a.zip.sha256", mock.base_url());
+    let err = nxr.channel_get(&url).await.unwrap_err();
+    assert_eq!(
+        err.exit_code(),
+        3,
+        "the cap is a server-condition refusal, got {err}"
+    );
+    assert!(
+        err.to_string().contains("small-object cap"),
+        "the message names the cap: {err}"
+    );
     assert_eq!(
         err.exit_code(),
         3,
@@ -437,11 +453,9 @@ async fn up_manifest_missing_local_name_is_data_error() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let manifest = Manifest {
-        names: names(&["a.zip", "ghost.bin"]),
-    };
+    let list = names(&["a.zip", "ghost.bin"]);
     let err = nxr
-        .up(local.path(), Some(manifest.names), true, None)
+        .up(local.path(), Some(list), true, None)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Missing { .. }), "got {err:?}");
@@ -625,32 +639,19 @@ async fn down_resume_of_complete_part_finalizes_without_refetch() {
 }
 
 #[tokio::test]
-async fn down_auto_enumerates_through_manifest_convention() {
+async fn down_enumerates_explicit_names() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    // No manifest yet: the conventional source is absent.
-    assert!(nxr.manifest_at_base().await.unwrap().is_none());
-
-    // A directory that carries manifest.json publishes it like any artifact.
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
-    std::fs::write(
-        src.path().join("manifest.json"),
-        br#"{"artifacts":["a.zip","manifest.json"]}"#,
-    )
-    .unwrap();
     nxr.up(src.path(), None, true, None).await.unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    assert_eq!(manifest.names.len(), 2);
+    let names = Enumeration::Names(names(&["a.zip"]));
     let dst = TempDir::new().unwrap();
-    let summary = nxr
-        .down(dst.path(), Enumeration::Manifest(manifest), false)
-        .await
-        .unwrap();
-    assert_eq!(summary.downloaded, 2);
+    let summary = nxr.down(dst.path(), names, false).await.unwrap();
+    assert_eq!(summary.downloaded, 1);
     assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
 }
 
@@ -758,11 +759,8 @@ async fn mirror_pours_byte_equal_trees_through_a_manifest() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
 
-    let manifest = src.manifest_at_base().await.unwrap().unwrap();
-    let summary = src
-        .mirror(&dst, Enumeration::Manifest(manifest))
-        .await
-        .unwrap();
+    let manifest = enum_names(FIXTURE);
+    let summary = src.mirror(&dst, manifest).await.unwrap();
     assert_eq!(summary.uploaded, FIXTURE.len());
     assert_eq!(summary.skipped, 0);
     assert!(summary.failed.is_empty());
@@ -1060,11 +1058,8 @@ async fn mirror_uses_the_destination_client_for_its_writes() {
     )
     .unwrap();
 
-    let manifest = src.manifest_at_base().await.unwrap().unwrap();
-    let summary = src
-        .mirror(&dst, Enumeration::Manifest(manifest))
-        .await
-        .unwrap();
+    let manifest = enum_names(FIXTURE);
+    let summary = src.mirror(&dst, manifest).await.unwrap();
     assert_eq!(summary.uploaded, FIXTURE.len());
 
     // The bytes landed behind the destination's own credentials.
@@ -1395,8 +1390,8 @@ async fn rm_removes_a_whole_version() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     publish_version(&nxr, &mock, &local).await;
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let summary = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+    let manifest = enum_names(&["a.zip", "b.bin", "version.json"]);
+    let summary = nxr.rm(manifest).await.unwrap();
     assert_eq!(summary.removed, 3);
     assert_eq!(summary.skipped, 0);
     assert!(summary.failed.is_empty());
@@ -1465,12 +1460,12 @@ async fn second_rm_is_all_404_and_exits_clean() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     publish_version(&nxr, &mock, &local).await;
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+    let manifest = enum_names(&["a.zip", "b.bin", "version.json"]);
+    nxr.rm(manifest).await.unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let manifest = enum_names(&["a.zip", "b.bin", "version.json"]);
     let requests_before = mock.requests().len();
-    let summary = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap();
+    let summary = nxr.rm(manifest).await.unwrap();
     assert_eq!(summary.removed, 0);
     assert_eq!(summary.skipped, 3, "every name reports missing");
 
@@ -1495,8 +1490,8 @@ async fn readonly_refuses_rm_and_changes_nothing() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     publish_version(&nxr, &mock, &local).await;
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let err = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap_err();
+    let manifest = enum_names(&["a.zip", "b.bin", "version.json"]);
+    let err = nxr.rm(manifest).await.unwrap_err();
     assert_eq!(
         err.exit_code(),
         1,
@@ -1543,8 +1538,8 @@ async fn rm_dry_run_plans_and_touches_nothing() {
         br#"{"artifacts":["a.zip","b.bin","version.json","ghost.bin"]}"#,
     );
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let plan = nxr.rm_plan(Enumeration::Manifest(manifest)).await.unwrap();
+    let manifest = enum_names(&["a.zip", "b.bin", "version.json", "ghost.bin"]);
+    let plan = nxr.rm_plan(manifest).await.unwrap();
     let planned: Vec<String> = plan
         .iter()
         .map(|a| match a {
@@ -1800,8 +1795,8 @@ async fn rm_against_a_group_refuses_as_read_only() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let err = nxr.rm(Enumeration::Manifest(manifest)).await.unwrap_err();
+    let manifest = enum_names(&["a.zip"]);
+    let err = nxr.rm(manifest).await.unwrap_err();
     assert!(
         matches!(&err, Error::ReadOnly { status: 405, .. }),
         "got {err:?}"
@@ -2070,10 +2065,8 @@ async fn prefix_filter_narrows_down_to_the_subtree() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let filtered = Enumeration::Manifest(manifest)
-        .with_prefixes(&["bom/".to_owned()])
-        .unwrap();
+    let manifest = enum_names(&["bom/a.zip", "lib/c.bin"]);
+    let filtered = manifest.with_prefixes(&["bom/".to_owned()]).unwrap();
     nxr.down(local.path(), filtered, false).await.unwrap();
 
     assert!(local.path().join("bom/a.zip").is_file());
@@ -2092,10 +2085,10 @@ async fn prefix_filter_unions_multiple_prefixes() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
+    let manifest = enum_names(&["bom/a.zip", "lib/c.bin"]);
     let names = nxr
         .enumerate(
-            Enumeration::Manifest(manifest)
+            manifest
                 .with_prefixes(&["bom/".to_owned(), "lib/".to_owned()])
                 .unwrap(),
         )
@@ -2114,10 +2107,8 @@ async fn prefix_filter_that_keeps_nothing_refuses() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
-    let manifest = nxr.manifest_at_base().await.unwrap().unwrap();
-    let filtered = Enumeration::Manifest(manifest)
-        .with_prefixes(&["etc/".to_owned()])
-        .unwrap();
+    let manifest = enum_names(&["bom/a.zip", "lib/c.bin"]);
+    let filtered = manifest.with_prefixes(&["etc/".to_owned()]).unwrap();
     let err = nxr.rm(filtered).await.unwrap_err();
     match &err {
         Error::Enumerate { reason, .. } => {
@@ -2270,6 +2261,6 @@ async fn ls_unknown_repository_hinted_on_400_not_on_404() {
     let err = nxr.ls_entries().await.unwrap_err();
     assert_eq!(err.exit_code(), 1);
     let hint = err.hint().unwrap();
-    assert!(hint.contains("--manifest"), "{hint}");
+    assert!(hint.contains("--name"), "{hint}");
     assert!(!hint.contains("not a raw repository"), "{hint}");
 }

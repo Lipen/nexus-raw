@@ -1,6 +1,6 @@
 //! The `Nxr` facade: the single entry point for CLI and wrappers.
 //!
-//! On wasm32 the surface carries the read paths only: `ls`, `head`, manifests,
+//! On wasm32 the surface carries the read paths only: `ls`, `head`,
 //! channels, pointers and the service API. Everything that reads or writes the
 //! local filesystem, or fans out over spawned tasks, is native-only.
 
@@ -17,7 +17,7 @@ use crate::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::events::{Dir, Summary};
 use crate::events::{Event, Progress};
-use crate::layout::{self, Manifest};
+use crate::layout;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
@@ -42,8 +42,6 @@ use crate::transport::client::NexusClient;
 /// How a directory command (`down`, `diff`) learns which names the storage holds (spec §5.2.1).
 #[derive(Debug, Clone)]
 pub enum Enumeration {
-    /// A parsed manifest (`--manifest`).
-    Manifest(Manifest),
     /// Explicit names (`--name`, repeatable).
     Names(Vec<ArtifactName>),
     /// Best-effort search-API traversal (`--ls`).
@@ -224,7 +222,7 @@ impl Nxr {
 
     /// Upload a local directory (§5.2).
     ///
-    /// `names` restricts the transfer (manifest mode).
+    /// `names` restricts the transfer to the explicit list.
     /// `None` scans the directory.
     /// Markers are written by default.
     /// `gen_markers == false` (`--no-sha`) uploads bytes only.
@@ -399,7 +397,6 @@ impl Nxr {
     /// A repeated explicit name collapses to its first occurrence: one artifact, one worker.
     async fn resolve_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
         let names = match enum_src {
-            Enumeration::Manifest(m) => m.names,
             Enumeration::Names(mut v) => {
                 let mut seen = std::collections::HashSet::with_capacity(v.len());
                 v.retain(|n| seen.insert(n.clone()));
@@ -689,29 +686,6 @@ impl Nxr {
         if_forward: bool,
     ) -> Result<layout::ChannelOutcome, Error> {
         layout::channel_set(&self.client, url, token, if_forward).await
-    }
-
-    /// Fetch `{base}manifest.json`: the conventional enumeration source.
-    /// None when the server has no manifest there.
-    ///
-    /// # Errors
-    ///
-    /// Returns transport, auth or HTTP errors from the GET and the [`Manifest::from_slice`] parse errors.
-    pub async fn manifest_at_base(&self) -> Result<Option<Manifest>, Error> {
-        let url = format!("{}manifest.json", self.base);
-        match self.client.get_small(&url).await? {
-            None => Ok(None),
-            Some(bytes) => Manifest::from_slice(&bytes).map(Some),
-        }
-    }
-
-    /// Fetch a manifest from an arbitrary URL (`--manifest <url>`).
-    ///
-    /// # Errors
-    ///
-    /// Returns transport, auth or HTTP errors from the GET (a missing object is [`Error::Http`] 404) and the [`Manifest::from_slice`] parse errors.
-    pub async fn manifest_from(&self, url: &str) -> Result<Manifest, Error> {
-        Manifest::from_url(&self.client, url).await
     }
 
     /// The immediate children of a raw directory URL (`nxr ls`): folders first, then files.

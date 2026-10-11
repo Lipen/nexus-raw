@@ -257,7 +257,7 @@ CI uses the same mode: `cargo test -p nexus-raw-tui` drives the real binary agai
 
 - One credential set per session: `-u` or the environment applies to every server.
 - The search page cap of the core (100 pages) bounds every listing.
-  A repository with more files needs the manifest enumeration path instead, which the TUI does not expose.
+  A repository with more files is a job for `nxr down --ls`, which the TUI does not expose.
 - A group repository passes the raw filter, but the search API it needs may refuse on the server, which the status bar shows as an error with its hint.
 - TLS verification is always on. There is no `--insecure` flag.
 - The tree listing is best-effort: the search API must exist on the server.

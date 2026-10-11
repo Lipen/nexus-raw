@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{Error, Manifest, Summary};
+use nexus_raw_core::{Error, Summary};
 
 use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
@@ -135,10 +135,10 @@ async fn run_channel_set(ctx: &Ctx, url: &str, token: &str, if_forward: bool) ->
     Ok(())
 }
 
-pub(crate) async fn verify(cli: &Cli, dir: &Path, manifest: Option<&str>) -> Result<(), Error> {
+pub(crate) async fn verify(cli: &Cli, dir: &Path) -> Result<(), Error> {
     // verify needs no network: the base is only a placeholder for the client.
     let ctx = make_ctx(cli, "http://localhost/")?;
-    let result = run_verify(&ctx, dir, manifest).await;
+    let result = run_verify(&ctx, dir).await;
     // The verdict prints after the renderer drained: the summary line always
     // precedes it, in both failure and success, no task race.
     finish(ctx).await;
@@ -151,20 +151,9 @@ pub(crate) async fn verify(cli: &Cli, dir: &Path, manifest: Option<&str>) -> Res
     Ok(())
 }
 
-async fn run_verify(ctx: &Ctx, dir: &Path, manifest: Option<&str>) -> Result<Summary, Error> {
-    let names = match manifest {
-        Some(spec) => {
-            let m: Manifest = if spec == "-" {
-                Manifest::from_stdin()?
-            } else {
-                Manifest::from_file(Path::new(spec))?
-            };
-            Some(m.names)
-        }
-        None => None,
-    };
+async fn run_verify(ctx: &Ctx, dir: &Path) -> Result<Summary, Error> {
     // The verdict line is printed by the caller, after the renderer drained.
-    ctx.nxr.verify(dir, names).await
+    ctx.nxr.verify(dir, None).await
 }
 
 /// List the repositories of the server behind `url`: the service REST API, not storage protocol.

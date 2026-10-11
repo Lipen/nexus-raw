@@ -18,15 +18,18 @@ The mock keeps its own answers honest: a status answer that can reach a HEAD (40
 <title id="dg-table-t">One scenario table, many drivers</title>
 <desc id="dg-table-d">The Scenario enum in mock-nexus is the single source. The core suite, the CLI suite, the python suite and the mock binary all read or derive from it, and the python drift guard fails any scenario that lacks a test or a skip entry.</desc>
 <style>
-.dg-src { fill: color-mix(in oklch, var(--dg-accent) 10%, var(--md-default-bg-color)); stroke: var(--dg-accent); stroke-width: 1.5; }
-.dg-card2 { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5; }
-.dg-ttl { font-size: 14px; font-weight: 700; fill: var(--dg-ink); }
-.dg-sub { font-size: 11.5px; fill: var(--dg-muted); }
-.dg-edge { font-size: 11px; fill: var(--dg-muted); }
-.dg-ln4 { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; }
-.dg-ln4d { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
-.dg-head4 { fill: var(--dg-muted); }
-.dg-plate4 { fill: var(--md-default-bg-color); }
+.dg-src { fill: color-mix(in oklch, var(--dg-accent) 10%, var(--md-default-bg-color)); stroke: var(--dg-accent); stroke-width: 1.5;
+.dg-card2 { fill: var(--md-default-bg-color); stroke: var(--dg-line); stroke-width: 1.5;
+.dg-ttl { font-size: 14px; font-weight: 700; fill: var(--dg-ink);
+.dg-sub { font-size: 11.5px; fill: var(--dg-muted);
+.dg-edge { font-size: 11px; fill: var(--dg-muted);
+.dg-ln4 { stroke: var(--dg-muted); stroke-width: 1.5; fill: none;
+.dg-ln4d { stroke: var(--dg-muted); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4;
+.dg-head4 { fill: var(--dg-muted);
+.dg-plate4 {
+  fill: var(--md-default-bg-color);;
+}
+
 </style>
 <defs>
 <marker id="dg-arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

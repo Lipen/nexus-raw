@@ -48,7 +48,7 @@ type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + S
 #[cfg(target_arch = "wasm32")]
 type Attempt<'a, T> = Pin<Box<dyn Future<Output = Result<T, AttemptFailure>> + 'a>>;
 
-/// Upper bound for "small" GETs: siblings, manifests, channel tokens, search pages.
+/// Upper bound for "small" GETs: siblings, channel tokens, search pages.
 const SMALL_CAP: u64 = 16 * 1024 * 1024;
 
 /// Open options for files nxr writes under a server-name-derived path (`.part` files, local `.sha256` markers): create/truncate as asked, but never follow a symlink: a predictable name must not become a write into a different file.
@@ -295,7 +295,7 @@ impl NexusClient {
         Some(line.chars().take(BODY_DETAIL_CHARS).collect())
     }
 
-    /// The object a URL addresses, for callers that transfer by URL rather than by [`ArtifactName`]: markers, channel tokens, manifests, search pages.
+    /// The object a URL addresses, for callers that transfer by URL rather than by [`ArtifactName`]: markers, channel tokens, search pages.
     /// The label is the last path segment, which is the name these objects carry on the wire.
     /// Callers that know the artifact name pass it as a subject instead, so this only ever names small objects.
     fn object_label(url: &str) -> String {
@@ -341,7 +341,7 @@ impl NexusClient {
         .await
     }
 
-    /// GET a small object (sibling, manifest, channel): None on 404.
+    /// GET a small object (sibling, channel): None on 404.
     ///
     /// The response is capped at `SMALL_CAP`: these objects are KiB-scale by protocol, and an unbounded slurp would turn a runaway or hostile server into a memory event.
     ///

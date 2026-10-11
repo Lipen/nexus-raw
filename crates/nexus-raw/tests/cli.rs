@@ -1,6 +1,6 @@
 //! CLI conformance: the v0.3 command surface driven through the `nxr` binary against `mock-nexus`.
 //!
-//! Covers: up/down happy path and skip detection, marker generation (default, `--no-sha`), enumeration sources (`--name`, `--manifest`, none), Range resume, the put/get/sha/head primitives, channel refs, offline verify, auth gating, NDJSON events and the exit-code matrix.
+//! Covers: up/down happy path and skip detection, marker generation (default, `--no-sha`), enumeration sources (`--name`, none), Range resume, the put/get/sha/head primitives, channel refs, offline verify, auth gating, NDJSON events and the exit-code matrix.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -320,29 +320,22 @@ fn down_explicit_name() {
     assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
 }
 
-/// down --manifest with a local manifest file.
+/// A foreign manifest.json on the server is ignored: enumeration comes only from flags.
+/// down without --name/--ls refuses even when a manifest-looking file exists.
 #[test]
-fn down_manifest_from_local_file() {
+fn down_ignores_a_foreign_manifest() {
     let srv = server(Scenario::Atomic);
-    let src = TempDir::new().unwrap();
-    write_file(src.path(), "a.zip", ALPHA);
-    let base = dir_url(&srv);
-    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
-
-    let manifest = TempDir::new().unwrap();
-    let manifest_path = manifest.path().join("manifest.json");
-    std::fs::write(&manifest_path, r#"{"artifacts":["a.zip"]}"#).unwrap();
-
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert("1.14.0/manifest.json", br#"{"artifacts":["a.zip"]}"#);
     let dst = TempDir::new().unwrap();
-    let down = nxr(&[
-        "down",
-        &base,
-        dst.path().to_str().unwrap(),
-        "--manifest",
-        manifest_path.to_str().unwrap(),
-    ]);
-    expect_exit(&down, 0, "down --manifest <file>");
-    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+
+    let down = nxr(&["down", &dir_url(&srv), dst.path().to_str().unwrap()]);
+    expect_exit(
+        &down,
+        1,
+        "down ignores a manifest-shaped object without flags",
+    );
+    assert!(!dst.path().join("a.zip").exists());
 }
 
 /// resume: a pre-seeded part file continues through a Range request.
@@ -392,21 +385,16 @@ fn get_resumes_from_part_with_range() {
 /// The version document the mirror fixtures pour.
 const DOC: &[u8] = br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#;
 
-/// Seed a source repository the way a publisher leaves it: bytes, markers, the version document and the manifest enumerating all three.
+/// Seed a source repository the way a publisher leaves it: bytes, markers and the version document.
 fn seed_publish(base: &str) {
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.zip", ALPHA);
     write_file(src.path(), "version.json", DOC);
-    write_file(
-        src.path(),
-        "manifest.json",
-        br#"{"artifacts":["version.json","a.zip","manifest.json"]}"#,
-    );
     let up = nxr(&["up", src.path().to_str().unwrap(), base]);
     expect_exit(&up, 0, "seeding up");
 }
 
-/// mirror with the default enumeration pours the whole version, the version document first; a rerun is a pure skip with zero content GETs.
+/// mirror with explicit names pours exactly those names; a rerun is a pure skip with zero content GETs.
 #[test]
 fn mirror_pours_the_version_and_reruns_are_pure_skips() {
     let src_srv = server(Scenario::Atomic);
@@ -415,9 +403,17 @@ fn mirror_pours_the_version_and_reruns_are_pure_skips() {
     let dst_base = dir_url(&dst_srv);
     seed_publish(&src_base);
 
-    let first = nxr(&["mirror", &src_base, &dst_base]);
-    expect_exit(&first, 0, "mirror with the default enumeration");
-    for name in ["a.zip", "version.json", "manifest.json"] {
+    let first = nxr(&[
+        "mirror",
+        &src_base,
+        &dst_base,
+        "--name",
+        "a.zip",
+        "--name",
+        "version.json",
+    ]);
+    expect_exit(&first, 0, "mirror with explicit names");
+    for name in ["a.zip", "version.json"] {
         assert_eq!(
             dst_srv.store_get(&format!("1.14.0/{name}")),
             src_srv.store_get(&format!("1.14.0/{name}")),
@@ -429,26 +425,21 @@ fn mirror_pours_the_version_and_reruns_are_pure_skips() {
             "{name} keeps its marker"
         );
     }
-    // The enumeration led with the version document: it lands before the payloads.
-    let puts: Vec<String> = dst_srv
-        .requests()
-        .iter()
-        .filter(|r| r.method == "PUT")
-        .map(|r| r.path.clone())
-        .collect();
-    assert_eq!(
-        puts.first().map(String::as_str),
-        Some("1.14.0/version.json"),
-        "the version document is claimed first: {puts:?}"
-    );
-
     // The same command again: every name skipped, no content fetched, nothing rewritten.
     let after_first = src_srv.requests().len();
     let puts_after_first = dst_srv.put_count("1.14.0/a.zip");
-    let second = nxr(&["mirror", &src_base, &dst_base]);
+    let second = nxr(&[
+        "mirror",
+        &src_base,
+        &dst_base,
+        "--name",
+        "a.zip",
+        "--name",
+        "version.json",
+    ]);
     expect_exit(&second, 0, "the repeated mirror");
     assert!(
-        stdout(&second).contains("uploaded 0, downloaded 0, skipped 3"),
+        stdout(&second).contains("uploaded 0, downloaded 0, skipped 2"),
         "the rerun is a pure skip: {}",
         stdout(&second)
     );
@@ -1018,6 +1009,10 @@ fn alias_mirror_two_remotes() {
             "mirror",
             "1.14.0/",
             &format!("{}1.14.0/", dst_srv.base_url()),
+            "--name",
+            "a.zip",
+            "--name",
+            "version.json",
         ],
         &cfg,
         &[],
@@ -1820,8 +1815,9 @@ fn doctor_probe_rejects_rejected_credentials() {
 
 // ---- rm and point ---------------------------------------------------------
 
-/// Seed the version directory through `up` and install the enumeration manifest plus the version document.
-fn publish_for_rm(srv: &MockNexus, manifest: &str) -> String {
+/// Seed the version directory through `up` and install the version document.
+/// `names` are what the calling test passes to `rm --name`: the only enumeration a client has.
+fn publish_for_rm(srv: &MockNexus, names: &[&str]) -> String {
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.zip", ALPHA);
     write_file(src.path(), "b.bin", BETA);
@@ -1832,17 +1828,31 @@ fn publish_for_rm(srv: &MockNexus, manifest: &str) -> String {
         "up for rm",
     );
     srv.insert("1.14.0/version.json", br#"{"version":"1.14.0"}"#);
-    srv.insert("1.14.0/manifest.json", manifest.as_bytes());
+    let mut cmd = vec!["rm".to_string(), base.clone()];
+    for n in names {
+        cmd.push("--name".to_string());
+        cmd.push((*n).to_string());
+    }
+    let _ = cmd;
     base
 }
 
-/// rm deletes the whole enumerated version: names, markers and the version document, manifest excluded; a rerun sees only 404s and exits 0.
+/// rm deletes the enumerated version: names, markers and the version document; a rerun sees only 404s and exits 0.
 #[test]
 fn rm_removes_whole_version_and_reruns_clean() {
     let srv = server(Scenario::Atomic);
-    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin","version.json"]}"#);
+    let base = publish_for_rm(&srv, &["a.zip", "b.bin", "version.json"]);
 
-    let rm = nxr(&["rm", &base]);
+    let rm = nxr(&[
+        "rm",
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+        "--name",
+        "version.json",
+    ]);
     expect_exit(&rm, 0, "first rm");
     for name in [
         "a.zip",
@@ -1856,10 +1866,6 @@ fn rm_removes_whole_version_and_reruns_clean() {
             "{name} must be gone"
         );
     }
-    assert!(
-        srv.store_get("1.14.0/manifest.json").is_some(),
-        "the enumeration manifest survives: the rerun needs it"
-    );
     let out = stdout(&rm);
     assert!(out.contains("× a.zip removed"), "per-name lines: {out}");
     assert!(out.contains("removed 3, skipped 0"), "summary: {out}");
@@ -1878,7 +1884,16 @@ fn rm_removes_whole_version_and_reruns_clean() {
         assert!(marker_at < bytes_at, "{name}: marker first");
     }
 
-    let second = nxr(&["rm", &base]);
+    let second = nxr(&[
+        "rm",
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+        "--name",
+        "version.json",
+    ]);
     expect_exit(&second, 0, "the rerun is a normal 404 walk");
     assert!(
         stdout(&second).contains("○ version.json missing"),
@@ -1910,9 +1925,9 @@ fn rm_removes_whole_version_and_reruns_clean() {
 #[test]
 fn rm_readonly_refuses_and_keeps_bytes() {
     let srv = server(Scenario::ReadOnly);
-    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin"]}"#);
+    let base = publish_for_rm(&srv, &["a.zip", "b.bin"]);
 
-    let rm = nxr(&["rm", &base]);
+    let rm = nxr(&["rm", &base, "--name", "a.zip", "--name", "b.bin"]);
     expect_exit(&rm, 1, "read-only refusal is exit 1");
     let err = stderr(&rm);
     assert!(
@@ -1936,12 +1951,21 @@ fn rm_readonly_refuses_and_keeps_bytes() {
 #[test]
 fn rm_dry_run_touches_no_bytes() {
     let srv = server(Scenario::Atomic);
-    let base = publish_for_rm(
-        &srv,
-        r#"{"artifacts":["a.zip","b.bin","version.json","ghost.bin"]}"#,
-    );
+    let base = publish_for_rm(&srv, &["a.zip", "b.bin", "version.json", "ghost.bin"]);
 
-    let dry = nxr(&["rm", "--dry-run", &base]);
+    let dry = nxr(&[
+        "rm",
+        "--dry-run",
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+        "--name",
+        "version.json",
+        "--name",
+        "ghost.bin",
+    ]);
     expect_exit(&dry, 0, "rm --dry-run");
     let out = stdout(&dry);
     assert!(out.contains("rm a.zip"), "plan line: {out}");
@@ -1977,9 +2001,19 @@ fn rm_without_a_source_refuses() {
 #[test]
 fn rm_json_events_parse_and_summarize() {
     let srv = server(Scenario::Atomic);
-    let base = publish_for_rm(&srv, r#"{"artifacts":["a.zip","b.bin","version.json"]}"#);
+    let base = publish_for_rm(&srv, &["a.zip", "b.bin", "version.json"]);
 
-    let rm = nxr(&["--json", "rm", &base]);
+    let rm = nxr(&[
+        "--json",
+        "rm",
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+        "--name",
+        "version.json",
+    ]);
     expect_exit(&rm, 0, "rm --json");
     let events = ndjson(&rm);
     assert!(
@@ -2000,7 +2034,17 @@ fn rm_json_events_parse_and_summarize() {
     assert_eq!(summary["uploaded"], 0);
 
     // The second run emits missing events and still succeeds.
-    let second = nxr(&["--json", "rm", &base]);
+    let second = nxr(&[
+        "--json",
+        "rm",
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.bin",
+        "--name",
+        "version.json",
+    ]);
     expect_exit(&second, 0, "rm --json rerun");
     let events = ndjson(&second);
     assert_eq!(
@@ -2172,12 +2216,6 @@ fn seed_diff_fixture() -> (MockNexus, TempDir, TempDir) {
         marker_line("zzz.txt", b"local only\n").as_bytes(),
     );
 
-    // The explicit enumeration list, g.zip included, c.zip probed away.
-    write_file(
-        scratch.path(),
-        "list.json",
-        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip","b.zip","c.zip","d.zip","g.zip","manifest.json"]}"#,
-    );
     (srv, local, scratch)
 }
 
@@ -2199,7 +2237,15 @@ fn diff_equal_directory_exits_zero() {
         "seeding the equal directory",
     );
 
-    let out = nxr(&["diff", local.path().to_str().unwrap(), &base]);
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "manifest.json",
+    ]);
     expect_exit(&out, 0, "an equal directory is exit 0");
     assert_eq!(
         stdout(&out),
@@ -2223,14 +2269,26 @@ fn diff_equal_directory_exits_zero() {
 /// `diff` prints one line per entry and changes nothing on either side.
 #[test]
 fn diff_reports_the_sections_and_writes_nothing() {
-    let (srv, local, scratch) = seed_diff_fixture();
+    let (srv, local, _scratch) = seed_diff_fixture();
     let before = put_requests(&srv).len();
     let out = nxr(&[
         "diff",
         local.path().to_str().unwrap(),
         &dir_url(&srv),
-        "--manifest",
-        scratch.path().join("list.json").to_str().unwrap(),
+        "--name",
+        "a.zip",
+        "--name",
+        "b.zip",
+        "--name",
+        "c.zip",
+        "--name",
+        "d.zip",
+        "--name",
+        "g.zip",
+        "--name",
+        "manifest.json",
+        "--name",
+        "zzz.txt",
     ]);
     expect_exit(&out, 1, "a non-empty delta is exit 1");
     let text = stdout(&out);
@@ -2305,15 +2363,27 @@ fn diff_misuse_exits_two() {
 /// The `diff --json` surface is a contract, pinned byte-exact by fixtures in tests/golden/.
 #[test]
 fn golden_ndjson_diff_holds() {
-    let (srv, local, scratch) = seed_diff_fixture();
+    let (srv, local, _scratch) = seed_diff_fixture();
     let before = put_requests(&srv).len();
     let out = nxr(&[
         "--json",
         "diff",
         local.path().to_str().unwrap(),
         &dir_url(&srv),
-        "--manifest",
-        scratch.path().join("list.json").to_str().unwrap(),
+        "--name",
+        "a.zip",
+        "--name",
+        "b.zip",
+        "--name",
+        "c.zip",
+        "--name",
+        "d.zip",
+        "--name",
+        "g.zip",
+        "--name",
+        "manifest.json",
+        "--name",
+        "zzz.txt",
     ]);
     expect_exit(&out, 1, "the golden diff finds differences");
     assert_eq!(
@@ -2333,12 +2403,15 @@ fn golden_ndjson_diff_holds() {
 fn mirror_dry_run_prints_plan_without_writing() {
     let src = server(Scenario::Atomic);
     src.insert("1.14.0/a.zip", ALPHA);
-    src.insert(
-        "1.14.0/manifest.json",
-        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#,
-    );
     let dst = server(Scenario::Atomic);
-    let plan = nxr(&["mirror", &dir_url(&src), &dir_url(&dst), "--dry-run"]);
+    let plan = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--dry-run",
+        "--name",
+        "a.zip",
+    ]);
     expect_exit(&plan, 0, "mirror --dry-run");
     assert!(
         stdout(&plan).contains("copy a.zip"),
@@ -2359,10 +2432,6 @@ fn seed_mirror_source(srv: &MockNexus) {
         "1.14.0/a.zip.sha256",
         format!("{}  a.zip\n", hex_digest(ALPHA)).as_bytes(),
     );
-    srv.insert(
-        "1.14.0/manifest.json",
-        br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip"]}"#,
-    );
 }
 
 /// `--dst-user` authenticates only the destination: the source stays whatever it is.
@@ -2381,6 +2450,8 @@ fn mirror_dst_user_authenticates_the_destination() {
         &dir_url(&dst),
         "--dst-user",
         "nexus:secret",
+        "--name",
+        "a.zip",
     ]);
     expect_exit(&ok, 0, "destination credentials land the copy");
     assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
@@ -2390,7 +2461,7 @@ fn mirror_dst_user_authenticates_the_destination() {
         user: "nexus".into(),
         pass: "secret".into(),
     });
-    let bad = nxr(&["mirror", &dir_url(&src), &dir_url(&dst2)]);
+    let bad = nxr(&["mirror", &dir_url(&src), &dir_url(&dst2), "--name", "a.zip"]);
     expect_exit(&bad, 3, "no destination credentials is an auth failure");
     assert!(dst2.store_get("1.14.0/a.zip").is_none());
 }
@@ -2411,6 +2482,8 @@ fn mirror_src_user_authenticates_the_source() {
         &dir_url(&dst),
         "--src-user",
         "nexus:secret",
+        "--name",
+        "a.zip",
     ]);
     expect_exit(&ok, 0, "source credentials read the source");
     assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
@@ -2423,6 +2496,8 @@ fn mirror_src_user_authenticates_the_source() {
         &dir_url(&dst2),
         "--src-user",
         "nexus:wrong",
+        "--name",
+        "a.zip",
     ]);
     expect_exit(&bad, 3, "a wrong source secret fails the reads");
     assert!(dst2.store_get("1.14.0/a.zip").is_none());
@@ -2437,16 +2512,15 @@ fn mv_moves_and_empties_the_source() {
     seed_mirror_source(&src);
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
     expect_exit(&out, 0, "a converged move is exit 0");
 
     // The destination holds the whole poured name.
     assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
     assert!(dst.store_get("1.14.0/a.zip.sha256").is_some());
-    // The source lost the bytes and the marker; the manifest survives as the enumeration source.
+    // The source lost the bytes and the marker.
     assert!(src.store_get("1.14.0/a.zip").is_none());
     assert!(src.store_get("1.14.0/a.zip.sha256").is_none());
-    assert!(src.store_get("1.14.0/manifest.json").is_some());
 }
 
 /// `mv --dry-run` prints both plans and moves nothing.
@@ -2456,7 +2530,14 @@ fn mv_dry_run_prints_both_plans() {
     seed_mirror_source(&src);
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--dry-run"]);
+    let out = nxr(&[
+        "mv",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--dry-run",
+        "--name",
+        "a.zip",
+    ]);
     expect_exit(&out, 0, "a plan is exit 0");
     let text = stdout(&out);
     assert!(text.contains("will move:"), "{text}");
@@ -2478,7 +2559,7 @@ fn mv_failed_mirror_keeps_the_source() {
         pass: "secret".into(),
     });
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
     expect_exit(&out, 3, "the pour fails on destination auth");
 
     assert!(
@@ -2496,7 +2577,7 @@ fn mv_refused_delete_leaves_a_duplicate() {
     let src = MockNexus::start_group(&[&member, &server(Scenario::Atomic)]).unwrap();
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst)]);
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
     expect_exit(&out, 1, "the read-only source refuses the delete phase");
 
     // The pour converged before the delete was refused: both sides hold the bytes.
@@ -2613,6 +2694,8 @@ fn down_prefix_flag_filters_the_plan() {
         "down",
         &dir_url(&srv),
         dst.path().to_str().unwrap(),
+        "--name",
+        "bom/a.zip",
         "--prefix",
         "bom/",
         "--dry-run",
@@ -2626,6 +2709,8 @@ fn down_prefix_flag_filters_the_plan() {
         "down",
         &dir_url(&srv),
         dst.path().to_str().unwrap(),
+        "--name",
+        "bom/a.zip",
         "--prefix",
         "bom",
     ]);
@@ -2669,10 +2754,6 @@ fn seed_subtrees_cli(srv: &MockNexus) {
     srv.insert(
         "1.14.0/lib/c.bin.sha256",
         format!("{}  lib/c.bin\n", hex_digest(ALPHA)).as_bytes(),
-    );
-    srv.insert(
-        "1.14.0/manifest.json",
-        br#"{"schema_version":1,"version":"1.14.0","artifacts":["bom/a.zip","lib/c.bin"]}"#,
     );
 }
 

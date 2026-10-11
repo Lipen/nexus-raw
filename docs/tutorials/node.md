@@ -71,7 +71,7 @@ for (const entry of report.entries) {
 
 Every function maps one-to-one to an `nxr` command: `up`, `down`, `diff`, and the primitives `get`, `put`, `head`, `sha` with the URL in argv.
 Options carry the tuning, the credentials and the event stream: `auth: { user, pass }`, or `NXR_AUTH` and `NXR_USERNAME` + `NXR_PASSWORD` from the environment, exactly like the CLI, and `onEvent` for the NDJSON events.
-The manifest at the version URL names what `down` fetches and what `diff` compares.
+The explicit `--name` list decides what `down` fetches and what `diff` compares.
 
 ## Run it
 

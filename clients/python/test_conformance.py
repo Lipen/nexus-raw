@@ -333,7 +333,7 @@ class Conformance(unittest.TestCase):
             self.assertEqual(len(paths), 35)
 
     def test_assets_absent(self):
-        """A server without the search endpoint answers 404: the client refuses with the guidance to publish a manifest."""
+        """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""
         with mock_server("assets-absent") as mock:
             nx = self.client()
             with self.assertRaises(nxr.EnumerateError) as raised:

@@ -71,8 +71,6 @@ From a directory of files to a verified local copy:
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down needs a name list: manifest.json provides it
-printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 V=$(nxr channel get "$BASE/latest")
@@ -90,17 +88,17 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh] [--plan] [--prefix P]` | enumerate → diff → stream+hash → rename + local marker |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--prefix P]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written |
-| `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | enumerate at the source, diff at the destination, copy bytes + markers |
-| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run] [--prefix P]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
-| `nxr mv <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
+| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
+| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--ls] [--fresh] [--plan] [--prefix P]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--ls] [--prefix P]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written |
+| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | enumerate at the source, diff at the destination, copy bytes + markers |
+| `nxr rm <SRC_URL> [--name N]... [--ls] [--dry-run] [--prefix P]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
+| `nxr mv <SRC_URL> <DST_URL> [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
 | `nxr point --clear <URL>` | DELETE a pointer file (channel ref, absent is fine) |
 | `nxr ls <URL> [--assets]` | the raw-tree listing of a directory URL, any depth (folders `/`-marked). `--assets`: flat artifact names |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token (`--if-forward` accepts only forward moves in dotted-numeric order) |
-| `nxr verify <DIR> [--manifest F\|-]` | local bytes + marker + digest only, no network |
+| `nxr verify <DIR>` | local bytes + marker + digest only, no network |
 | `nxr doctor [URL]` | credentials, TLS, settings, reachability |
 | `nxr service repos <URL>` | list the repositories of a server (the service REST API, any URL of that server works) |
 | `nxr service status <URL>` | server liveness and writability behind the URL |
@@ -109,8 +107,8 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr service eula <URL> [--accept]` | the server's EULA gate. `--accept` opens it (nx-admin) |
 | `nxr complete <shell>` | print a shell completion script to stdout (bash, zsh, fish, powershell) |
 
-`down`, `diff`, `mirror`, `mv` and `rm` enumerate explicitly: a `manifest.json` at the version URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
-With none of them they refuse.
+`down`, `diff`, `mirror`, `mv` and `rm` enumerate explicitly: repeatable `--name`, or best-effort `--ls` when the server has the search API.
+With neither they refuse.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.

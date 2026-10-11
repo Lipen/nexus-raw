@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 
 use std::path::PathBuf;
 
-/// curl for a Nexus raw repository: primitives with retries and TLS on, verified directory transfers, channel refs and manifests.
+/// curl for a Nexus raw repository: primitives with retries and TLS on, verified directory transfers and channel refs.
 #[derive(Debug, Parser)]
 #[command(name = "nxr", version, about)]
 #[command(after_help = "\
@@ -113,9 +113,6 @@ pub(crate) enum Cmd {
         /// The remote directory URL.
         #[arg(value_name = "DST_URL")]
         dst: String,
-        /// Restrict the transfer to these names.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// Upload this file first, alone, before any other name (claim-first).
         #[arg(long, value_name = "NAME")]
         claim_first: Option<String>,
@@ -134,9 +131,6 @@ pub(crate) enum Cmd {
         /// The target directory.
         #[arg(value_name = "DST_DIR")]
         dst: PathBuf,
-        /// Enumeration source: a manifest file, URL or `-` for stdin.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
@@ -161,9 +155,6 @@ pub(crate) enum Cmd {
         /// The remote directory URL.
         #[arg(value_name = "SRC_URL")]
         src: String,
-        /// Enumeration source: a manifest file, URL or `-` for stdin.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
@@ -179,9 +170,6 @@ pub(crate) enum Cmd {
         /// The remote directory URL.
         #[arg(value_name = "SRC_URL")]
         src: String,
-        /// Enumeration source: a manifest file, URL or `-` for stdin.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
@@ -212,9 +200,6 @@ pub(crate) enum Cmd {
         /// The destination directory URL.
         #[arg(value_name = "DST_URL")]
         dst: String,
-        /// Enumeration source: a manifest file, URL or `-` for stdin.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
@@ -244,9 +229,6 @@ pub(crate) enum Cmd {
         /// The destination directory URL.
         #[arg(value_name = "DST_URL")]
         dst: String,
-        /// Enumeration source: a manifest file, URL or `-` for stdin.
-        #[arg(long, value_name = "FILE|URL|-")]
-        manifest: Option<String>,
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
@@ -285,9 +267,6 @@ pub(crate) enum Cmd {
         /// The directory to check.
         #[arg(value_name = "DIR")]
         dir: PathBuf,
-        /// Check exactly these names.
-        #[arg(long, value_name = "FILE|-")]
-        manifest: Option<String>,
     },
     /// Diagnose credentials, TLS and reachability.
     Doctor {

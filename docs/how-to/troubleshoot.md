@@ -23,8 +23,8 @@ The process exit code separates data problems from transport trouble.
 | `0` | ok | transferred, converged or verified | carry on |
 | `1` | `mismatch` | two sides disagree about a name's content | nobody overwrites: rebuild, or republish under a new version directory |
 | `1` | `incomplete` | local copies unfinished at `verify` | rebuild (the list names the offenders) |
-| `1` | `missing` | a requested name exists nowhere | check spelling, the manifest and the version directory |
-| `1` | `cannot enumerate` | `down` has no name list | ship `manifest.json`, or pass `--manifest` / `--name` / `--ls` |
+| `1` | `missing` | a requested name exists nowhere | check spelling, the `--name` list and the version directory |
+| `1` | `cannot enumerate` | `down` has no name list | pass `--name` or `--ls` |
 | `2` | `unsafe name` | a name fails the grammar | rename the artifact |
 | `2` | `misuse` | bad flags, missing directory, half-set credentials | fix the invocation |
 | `3` | `auth` | 401/403 or missing credentials | check `NXR_AUTH` / `NXR_USERNAME` + `NXR_PASSWORD`, or pass `-u` |
@@ -125,14 +125,14 @@ Nexus raw has no guaranteed listing, and `down` refuses to guess:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.3.0/ vendor/old/
-error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no manifest.json on the server and no --manifest/--name/--ls given
-hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--ls given
+hint: repeat --name, or use --ls when the server has the search API
 ```
 
 Three ways out, in order of preference:
 
-1. publish a `manifest.json` into the version directory (see [ship a manifest for consumers](publish.md#ship-a-manifest-for-consumers)), and plain `nxr down <ver-url>/ dst/` works.
-2. pass the names: `--manifest <file|url|->` or repeatable `--name`.
+1. keep a machine-readable list yourself if you need one: publish it as an ordinary artifact (see [give consumers a machine-readable name list](publish.md#give-consumers-a-machine-readable-name-list)).
+2. pass the names: repeatable `--name`.
 3. `--ls` for a best-effort walk through the server search API, which depends on the server release.
 
 The decision table for picking one: [choosing an enumeration source](consume.md#choosing-an-enumeration-source).

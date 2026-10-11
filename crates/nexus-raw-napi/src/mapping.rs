@@ -94,24 +94,6 @@ pub fn event_to_json(event: &Event) -> serde_json::Value {
     event.to_json()
 }
 
-/// Classify a `manifest` spec: `-` for stdin, http(s) through the server, everything else a local file: the CLI `load_manifest` rules.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ManifestSpec {
-    Stdin,
-    Url(String),
-    File(String),
-}
-
-pub fn classify_manifest_spec(spec: &str) -> ManifestSpec {
-    match spec {
-        "-" => ManifestSpec::Stdin,
-        u if u.starts_with("http://") || u.starts_with("https://") => {
-            ManifestSpec::Url(u.to_owned())
-        }
-        p => ManifestSpec::File(p.to_owned()),
-    }
-}
-
 /// Whether a `sha` target is a URL or a local path (CLI `sha` dispatch).
 pub fn is_url_target(target: &str) -> bool {
     target.starts_with("http://") || target.starts_with("https://")
@@ -223,7 +205,7 @@ mod tests {
         });
         assert_eq!(p.code, "NXR_EXIT_1");
         assert_eq!(p.exit_code, 1);
-        assert!(p.hint.unwrap().contains("--manifest"));
+        assert!(p.hint.unwrap().contains("--name"));
 
         let p = error_payload(&Error::Transport {
             url: "http://host/raw/".into(),
@@ -277,23 +259,6 @@ mod tests {
         assert_eq!(
             line,
             serde_json::json!({"event": "summary", "uploaded": 1, "downloaded": 2, "skipped": 3, "removed": 0, "failed": ["c"]})
-        );
-    }
-
-    #[test]
-    fn manifest_specs_classify_like_the_cli() {
-        assert_eq!(classify_manifest_spec("-"), ManifestSpec::Stdin);
-        assert_eq!(
-            classify_manifest_spec("https://host/repo/manifest.json"),
-            ManifestSpec::Url("https://host/repo/manifest.json".into())
-        );
-        assert_eq!(
-            classify_manifest_spec("http://host/repo/manifest.json"),
-            ManifestSpec::Url("http://host/repo/manifest.json".into())
-        );
-        assert_eq!(
-            classify_manifest_spec("./manifest.json"),
-            ManifestSpec::File("./manifest.json".into())
         );
     }
 

@@ -113,9 +113,9 @@ impl Error {
                     .into(),
             ),
             Error::Incomplete { .. } => Some("rerun the same command: finished names are skipped and the rest is retried".into()),
-            Error::Missing { .. } => Some("the name is absent on both sides: check spelling and the manifest".into()),
+            Error::Missing { .. } => Some("the name is absent on both sides: check spelling and the enumeration source".into()),
             Error::Enumerate { .. } => Some(
-                "pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API".into(),
+                "repeat --name, or use --ls when the server has the search API".into(),
             ),
             Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved".into()),
             Error::Auth { .. } => {
@@ -253,7 +253,7 @@ mod tests {
             },
             Error::Enumerate {
                 url: "http://x/".into(),
-                reason: "no manifest".into(),
+                reason: "no enumeration source".into(),
             },
             Error::Auth {
                 url: "http://x/".into(),

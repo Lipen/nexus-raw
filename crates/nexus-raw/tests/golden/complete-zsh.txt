@@ -134,7 +134,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (up)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Restrict the transfer to these names]:FILE|URL|-:_default' \
 '--claim-first=[Upload this file first, alone, before any other name (claim-first)]:NAME:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -161,7 +160,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (down)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -190,7 +188,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -216,7 +213,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (rm)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -264,7 +260,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (mirror)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
@@ -293,7 +288,6 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (mv)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Enumeration source\: a manifest file, URL or \`-\` for stdin]:FILE|URL|-:_default' \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
@@ -448,7 +442,6 @@ esac
 ;;
 (verify)
 _arguments "${_arguments_options[@]}" : \
-'--manifest=[Check exactly these names]:FILE|-:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \

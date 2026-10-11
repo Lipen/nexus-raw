@@ -12,21 +12,19 @@ The scenario behind every transcript here: your build needs the artifacts of ver
 ## Choosing an enumeration source
 
 `down` must know which names to fetch, and a Nexus raw repository has no guaranteed directory listing.
-Every `down` names its source, explicitly or through one convention:
+`down` names its source on every call, and there is no silent default:
 
 | Source | Invocation | Reach for it when |
 |:-------|:-----------|:------------------|
-| `manifest.json` at the version URL | `nxr down <ver-url>/ vendor/app/` | the publisher shipped one, the usual case |
-| a manifest file, URL or stdin | `nxr down <ver-url>/ vendor/app/ --manifest m.json` | you maintain your own name list or a subset of one |
-| explicit names, repeatable | `nxr down <ver-url>/ vendor/app/ --name app.zip` | a job needs one or two files from a large version |
-| server search API | `nxr down <ver-url>/ vendor/app/ --ls` | nothing else is available: best effort, experimental, needs a server with the search API and a repository-style URL |
+| explicit names, repeatable | `nxr down <ver-url>/ vendor/app/ --name app.zip` | a job needs one or two files, or a pipeline owns its list |
+| server search API | `nxr down <ver-url>/ vendor/app/ --ls` | best effort: needs a server with the search API and a repository-style URL |
 
-With no source and no server-side `manifest.json`, `down` refuses instead of guessing:
+Without a source, `down` refuses instead of guessing:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.3.0/ vendor/old/
-error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no manifest.json on the server and no --manifest/--name/--ls given
-hint: pass --manifest <file|url|->, repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--ls given
+hint: repeat --name, or use --ls when the server has the search API
 ```
 
 Every name a source lists must exist, locally or remotely.
@@ -54,8 +52,7 @@ plan: 0 to upload, 3 to download, 0 up to date
 uploaded 0, downloaded 3, skipped 0
 ```
 
-Three names listed in `manifest.json`, three fetched.
-`manifest.json` is the enumeration source, not an artifact: it is not copied into the target directory.
+Three `--name` flags, three fetched: the list is the caller's, and nothing you did not name arrives.
 
 ### What the pipeline guarantees
 
@@ -64,7 +61,7 @@ For every name, the same five steps run, in parallel across `--workers`:
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eef2f2", "primaryTextColor": "#243b3a", "primaryBorderColor": "#5f7470", "lineColor": "#5f7470", "noteBkgColor": "#f4f1e8", "noteTextColor": "#4a4636", "noteBorderColor": "#c9c2a6", "fontFamily": "inherit"}}}%%
 flowchart LR
-    E["enumerate: manifest.json,<br/>--manifest, --name or --ls"]
+    E["enumerate:<br/>--name or --ls"]
     P["stream into a part file<br/>(Range: bytes=N- on resume)"]
     H["hash while streaming"]
     V{"digest equals<br/>the remote marker?"}
@@ -112,8 +109,8 @@ plan: 0 to upload, 1 to download, 0 up to date
 uploaded 0, downloaded 1, skipped 0
 ```
 
-For longer lists, keep a manifest file in your own repository and point `--manifest` at it (a file, a URL, or `-` for stdin).
-The publisher-side rules apply unchanged: every listed name must exist, ghosts refuse the run.
+Keep the name list in your own pipeline: a shell array, a generated script, whatever the job owns.
+Every listed name must exist on the server, ghosts refuse the run.
 
 ## Verify without the network
 
@@ -136,7 +133,6 @@ hint: rerun the same command: finished names are skipped and the rest is retried
 ```
 
 Two repairs fit: delete the offending file and let the next `down` refill it, or rebuild the artifact and regenerate its marker with `sha256sum`, whichever matches why the digest drifted.
-Pass `--manifest` to check a subset instead of the whole directory.
 
 As the last gate of a consumer CI job, `verify` costs no network (see [a consumer job](ci.md#a-consumer-job)).
 

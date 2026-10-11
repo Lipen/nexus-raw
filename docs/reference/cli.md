@@ -227,7 +227,7 @@ $ echo $?
 ## nxr up
 
 ```
-nxr up <SRC_DIR> <DST_URL> [--manifest FILE|URL|-] [--no-sha] [--plan] [--claim-first <NAME>]
+nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first <NAME>]
 ```
 
 Upload a local directory.
@@ -237,7 +237,6 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|URL\|->` | restrict the transfer to these names, all of which must exist locally |
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
 | `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
@@ -318,14 +317,14 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, remote converged |
-| `1` | data refusal: `mismatch`, `missing` (a `--manifest` name absent locally), `incomplete`. local I/O failures |
+| `1` | data refusal: `mismatch`, `missing` (a `--name` absent locally), `incomplete`. local I/O failures |
 | `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
+nxr down <SRC_URL> <DST_DIR> [--name NAME]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
@@ -334,7 +333,6 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
@@ -346,7 +344,7 @@ A prefix without the trailing slash is misuse (exit 2).
 
 Resuming is the default: a rerun picks up the part files of a killed run through `Range` requests.
 `down` must know what to fetch, and Nexus raw has no guaranteed directory listing.
-Without flags it reads the convention first: a `manifest.json` at the directory URL.
+Without flags `down` refuses: there is no default enumeration source.
 If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the three explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
 
 ```console
@@ -360,11 +358,11 @@ $ echo $?
 0
 ```
 
-A manifest from stdin keeps the name list under the consumer's control:
+The name list stays under the consumer's control:
 
 ```console
-$ printf '{"artifacts":["app-1.4.0.zip","pinned.xml"]}' \
-    | nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ --manifest -
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ \
+    --name pinned.xml --name app-1.4.0.zip
 plan: 0 to upload, 2 to download, 0 up to date
 ↓ pinned.xml ok
 ↓ app-1.4.0.zip ok
@@ -400,11 +398,11 @@ A fresh download that still diverges refuses the run (exit 1), so nothing diverg
 ## nxr diff
 
 ```
-nxr diff <LOCAL_DIR> <SRC_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--prefix PREFIX]...
+nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--ls] [--prefix PREFIX]...
 ```
 
 Compare a local directory against a remote one and print the delta, changing nothing on either side.
-The enumeration is the one `down` uses: a `manifest.json` at the directory URL by convention, or `--manifest`, repeatable `--name`, best-effort `--ls`.
+The enumeration is the one `down` uses: repeatable `--name` or best-effort `--ls`.
 The name set is the union of the local scan and the enumeration, so a local-only name shows up as `missing-remote` even when the enumeration is restricted.
 
 | Section | Meaning |
@@ -429,7 +427,6 @@ $ echo $?
 ```
 
 A fully converged directory reports every name as `same` and exits 0.
-The conventional `manifest.json` lists artifacts only, so the diff reports the manifest itself as `missing-remote` unless the manifest lists it too.
 
 `--json` prints one object per entry, where `digest` and `size` are `null` when a side carries none:
 
@@ -450,17 +447,16 @@ The conventional `manifest.json` lists artifacts only, so the diff reports the m
 ## nxr mirror
 
 ```
-nxr mirror <SRC_URL> <DST_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--dry-run]
+nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--ls] [--dry-run]
 ```
 
 Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
-The enumeration lives at the source, with the same sources as `down`: a `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+The enumeration lives at the source, with the same sources as `down`: repeatable `--name` or best-effort `--ls`.
 Without any source the run refuses with `cannot enumerate` (exit 1).
 `--dry-run` probes both sides and prints the plan (`copy <name>` for names that would transfer, `skip <name>` for converged ones) without writing to the destination.
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--dry-run` | probe both sides and print the plan without writing to the destination |
@@ -498,21 +494,20 @@ When the enumeration leads with `version.json`, the conventional version documen
 ## nxr rm
 
 ```
-nxr rm <SRC_URL> [--manifest FILE|URL|-] [--name NAME]... [--ls] [--dry-run]
+nxr rm <SRC_URL> [--name NAME]... [--ls] [--dry-run]
 ```
 
 Delete a version, name by name: the `.sha256` marker of every enumerated name goes first, then the bytes, so nobody ever sees a complete object mid-delete ([the protocol](protocol.md#deletion)).
-The enumeration source is mandatory and shared with `down`: a `manifest.json` at the directory URL, `--manifest`, repeatable `--name`, or best-effort `--ls`.
+The enumeration source is mandatory and shared with `down`: repeatable `--name` or best-effort `--ls`.
 Without any source the run refuses with `cannot enumerate` (exit 1).
 
 Deletion is by name, not by content.
 Divergence is never checked: a diverging or broken remote copy is deleted like any other, because deletion is irreversible by definition.
 404 is a normal answer, so `rm` is idempotent: the rerun re-enumerates, collects only 404s and still exits 0.
-The `manifest.json` that named the list survives it, because it is the source that keeps the rerun working.
+Nothing is deleted beyond the enumerated names: a rerun passes the same `--name` list and sees only 404s.
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|URL\|->` | enumeration source: a local file, a URL, or `-` for stdin |
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
 | `--dry-run` | probe and print the plan: `rm <name>` for present names, `missing <name>` for absent ones, nothing deleted |
@@ -593,7 +588,7 @@ Move a version between repositories: `mirror` pours it into the destination, the
 $ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
 ```
 
-The enumeration lives at the source, with the same sources as `mirror`: a `manifest.json` by convention, or `--manifest`, repeatable `--name`, `--ls`, `--prefix`.
+The enumeration lives at the source, with the same sources as `mirror`: repeatable `--name`, `--ls`, `--prefix`.
 The conventional version document transfers first (the claim), exactly like `mirror`.
 Per-side credentials work here too: `--src-user` and `--dst-user` override the shared `-u`.
 
@@ -700,7 +695,7 @@ $ echo $?
 Its server request filters by path group, and on one measured Nexus release that parameter matched Maven coordinates rather than raw path prefixes, so nested `--assets` listings could come back empty there.
 The entry listing above does not use that parameter and does not have the problem.
 Treat both as conveniences only.
-`down` takes its names from manifests instead of from listings, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
+`down` takes its names from the flags, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
 
 | Exit | When |
 |:----:|:-----|
@@ -788,7 +783,7 @@ The comparison is dotted-numeric, so `1.10.0` is forward of `1.9.9` and a releas
 ## nxr verify
 
 ```
-nxr verify <DIR> [--manifest FILE|-]
+nxr verify <DIR>
 ```
 
 Check local bytes, markers and digests.
@@ -798,7 +793,6 @@ Markerless, broken or missing names are reported and the exit is 1.
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--manifest <FILE\|->` | check exactly these names instead of the whole directory |
 
 ```console
 $ nxr verify dist/1.4.0/
@@ -807,7 +801,7 @@ uploaded 0, downloaded 0, skipped 3
 $ echo $?
 0
 $ printf 'tampered' >> dist/1.4.0/pinned.xml
-$ nxr verify dist/1.4.0/ --manifest dist/1.4.0/manifest.json
+$ nxr verify dist/1.4.0/
 uploaded 0, downloaded 0, skipped 2
 failed: pinned.xml
 error: incomplete: pinned.xml
@@ -820,7 +814,6 @@ $ echo $?
 |:----:|:-----|
 | `0` | every checked name is complete |
 | `1` | at least one name is incomplete, or a local I/O failure such as a missing directory |
-| `2` | misuse: the manifest is not JSON |
 
 ## nxr service repos
 

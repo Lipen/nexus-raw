@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking**: the manifest convention is gone.
+  `down`, `diff`, `rm`, `mirror`, `mv`, `up` and `verify` lose the `--manifest` flag, and nothing reads a `manifest.json` at the directory URL anymore.
+  Enumeration is explicit: repeatable `--name`, or `--ls` where the server has the search API.
+  Without a source the run refuses with `cannot enumerate` and a hint.
+  A `manifest.json` on the server is now an ordinary artifact: `nxr` never fetches or parses it.
+  A pipeline that needs a machine-readable list publishes one and reads it itself.
+  Rationale: a reserved name with a reserved format contradicted the design rule that no name carries protocol meaning (the rule that removed reserved channel pointers in 0.3), and a list the client cannot authenticate is trust the protocol never justified.
+
 ### Changed
 
 - The small-object cap refusal and the unparseable server body are transport facts, not misuses: the new `SmallObjectCap` and `ServerBody` error variants exit 3 with their own hints, where `Misuse` (exit 2, check the command line) blamed the user for a hostile or broken server.

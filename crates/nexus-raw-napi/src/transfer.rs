@@ -7,7 +7,7 @@ use nexus_raw_core::{ArtifactName, Mode, Nxr};
 use tokio::sync::mpsc;
 
 use crate::error::js_error;
-use crate::input::{load_manifest, parse_names, resolve_enumeration};
+use crate::input::{parse_names, resolve_enumeration};
 use crate::mapping::{self, CommonOpts};
 use crate::opts::{
     split_common, NxrAuth, NxrDiffOpts, NxrDownOpts, NxrMirrorOpts, NxrRmOpts, NxrUpOpts,
@@ -49,18 +49,9 @@ pub async fn up(
         None => None,
     };
     let gen_markers = !o.no_sha.unwrap_or(false);
-    // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
+    // The pump starts before any network call: every early return from here drops the facade before draining the pump.
     let pump = spawn_pump(rx, on_event);
-    let names: Option<Vec<ArtifactName>> = match &o.manifest {
-        Some(spec) => match load_manifest(&nxr, spec).await {
-            Ok(m) => Some(m.names),
-            Err(e) => {
-                drop(nxr);
-                return Err(finish_pump_err(pump, e).await);
-            }
-        },
-        None => parsed_names,
-    };
+    let names: Option<Vec<ArtifactName>> = parsed_names;
     if o.dry_run.unwrap_or(false) {
         let scanned = match names {
             Some(n) => n,
@@ -101,7 +92,7 @@ pub async fn up(
 
 /// Download a remote directory into a local one.
 ///
-/// The enumeration source is mandatory: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// The enumeration source is mandatory: `ls` or explicit `names`.
 /// Otherwise the promise rejects like the CLI.
 #[napi]
 pub async fn down(
@@ -124,18 +115,14 @@ pub async fn down(
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     // Pure parsing first: no events can precede the pump.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
-    // The pump starts before any network call: events fired during the manifest fetch belong to JS as much as the later ones.
     // Every early return from here drops the facade before draining the pump: the pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
     let enum_src = match resolve_enumeration(
         &nxr,
-        &o.manifest,
         parsed_names,
         o.ls.unwrap_or(false),
-        "no manifest.json on the server and no manifest/names/ls given",
-    )
-    .await
-    {
+        "no names or ls given",
+    ) {
         Ok(v) => v,
         Err(e) => {
             drop(nxr);
@@ -158,7 +145,7 @@ pub async fn down(
 ///
 /// Read-only on both sides: the promise resolves to the report whatever the delta is, the verdict stays the caller's.
 /// Every scanned or enumerated name lands in exactly one entry: `same`, `missing-local`, `missing-remote` or `diverged`.
-/// The enumeration source is mandatory, like `down`: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// The enumeration source is mandatory, like `down`: `ls` or explicit `names`.
 #[napi]
 pub async fn diff(
     local_dir: String,
@@ -189,13 +176,10 @@ pub async fn diff(
     let pump = spawn_pump(rx, on_event);
     let enum_src = match resolve_enumeration(
         &nxr,
-        &o.manifest,
         parsed_names,
         o.ls.unwrap_or(false),
-        "no manifest.json on the server and no manifest/names/ls given",
-    )
-    .await
-    {
+        "no names or ls given",
+    ) {
         Ok(v) => v,
         Err(e) => {
             drop(nxr);
@@ -222,7 +206,7 @@ pub async fn diff(
 
 /// Delete the enumerated names from the remote directory.
 ///
-/// The enumeration source is mandatory, like `down`: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` at the directory URL.
+/// The enumeration source is mandatory, like `down`: `ls` or explicit `names`.
 /// Divergence is never checked: `rm` deletes names, not content.
 /// With `dryRun` the promise resolves to the plan instead of a summary and nothing is deleted, like `rm --dry-run`.
 #[napi]
@@ -245,13 +229,10 @@ pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSu
     let pump = spawn_pump(rx, on_event);
     let enum_src = match resolve_enumeration(
         &nxr,
-        &o.manifest,
         parsed_names,
         o.ls.unwrap_or(false),
-        "no manifest.json on the server and no manifest/names/ls given",
-    )
-    .await
-    {
+        "no names or ls given",
+    ) {
         Ok(v) => v,
         Err(e) => {
             drop(nxr);
@@ -283,7 +264,7 @@ pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSu
 /// Pour enumerated names from a source repository into a destination one.
 ///
 /// Two facades on one event stream: enumeration and bytes come from the source, the diff and the writes follow the destination.
-/// The enumeration source is mandatory and lives at the source: `ls`, `manifest`, explicit `names`, or the conventional `manifest.json` there.
+/// The enumeration source is mandatory and lives at the source: `ls` or explicit `names`.
 #[napi]
 pub async fn mirror(
     src_url: String,
@@ -319,13 +300,10 @@ pub async fn mirror(
     let pump = spawn_pump(rx, on_event);
     let enum_src = match resolve_enumeration(
         &src_nxr,
-        &o.manifest,
         parsed_names,
         o.ls.unwrap_or(false),
-        "no manifest.json at the source and no manifest/names/ls given",
-    )
-    .await
-    {
+        "no names or ls given",
+    ) {
         Ok(v) => v,
         Err(e) => {
             drop(src_nxr);
@@ -362,20 +340,10 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
     let cfg = mapping::build_config("http://localhost/", &common).map_err(js_error)?;
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
-    // Pure parsing first: the pump starts before any manifest fetch.
+    // Pure parsing first: no events can precede the pump.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
     let pump = spawn_pump(rx, on_event);
-    let names: Option<Vec<ArtifactName>> = match &o.manifest {
-        Some(spec) => match load_manifest(&nxr, spec).await {
-            Ok(m) => Some(m.names),
-            Err(e) => {
-                drop(nxr);
-                return Err(finish_pump_err(pump, e).await);
-            }
-        },
-        None => parsed_names,
-    };
-    let summary = nxr.verify(Path::new(&dir), names).await;
+    let summary = nxr.verify(Path::new(&dir), parsed_names).await;
     drop(nxr);
     let summary = match summary {
         Ok(v) => v,
@@ -407,7 +375,7 @@ mod tests {
 
     /// One name per delta state against an in-process mock-nexus.
     /// `a.zip` is same, `b.zip` missing-local, `c.zip` missing-remote, `d.zip` diverged.
-    /// The conventional `manifest.json` at the directory URL enumerates all four.
+    /// The tests enumerate through explicit names.
     fn seed_four_states() -> (MockNexus, tempfile::TempDir) {
         let srv = MockNexus::start(Scenario::Atomic).expect("mock nexus starts");
         let local = tempfile::tempdir().expect("tempdir");
@@ -437,10 +405,6 @@ mod tests {
             "1.14.0/d.zip.sha256",
             marker_line("d.zip", alpha).as_bytes(),
         );
-        srv.insert(
-            "1.14.0/manifest.json",
-            br#"{"schema_version":1,"version":"1.14.0","artifacts":["a.zip","b.zip","c.zip","d.zip"]}"#,
-        );
         (srv, local)
     }
 
@@ -448,9 +412,21 @@ mod tests {
     async fn diff_reports_the_four_states() {
         let (srv, local) = seed_four_states();
         let url = format!("{}1.14.0/", srv.base_url());
-        let report = diff(local.path().to_str().unwrap().to_owned(), url, None)
-            .await
-            .expect("the delta report resolves");
+        let report = diff(
+            local.path().to_str().unwrap().to_owned(),
+            url,
+            Some(crate::opts::NxrDiffOpts {
+                names: Some(vec![
+                    "a.zip".to_owned(),
+                    "b.zip".to_owned(),
+                    "c.zip".to_owned(),
+                    "d.zip".to_owned(),
+                ]),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("the delta report resolves");
         assert_eq!(report.count, 4, "one entry per name in the union");
         let shape: Vec<(&str, &str)> = report
             .entries

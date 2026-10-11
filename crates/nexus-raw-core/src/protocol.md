@@ -13,7 +13,7 @@ and [`primitive`] (`get`/`put`/`head`/`sha`), curl-grade, no verification.
 with the symmetric diff, sha-sibling markers, parallel workers and Range-resume
 (`.part` files).
 - **L2 layout helpers**: [`layout`], channels (token refs with any name),
-manifests (the enumeration source for down), search-based listings.
+search-based listings.
 - **L3 UX** lives in the CLI: doctor, logs, hints, NDJSON.
 
 ## The shape of a store
@@ -21,7 +21,6 @@ manifests (the enumeration source for down), search-based listings.
 ```text
 <base>/<name>             artifact bytes
 <base>/<name>.sha256      sha-sibling: "<hex>  <name>\n" (sha256sum -c)
-<base>/manifest.json      conventional name list (enumeration for down)
 <channel-url>             a token file: "<token>\n", any name
 ```
 
@@ -33,7 +32,7 @@ The symmetric diff decides what to transfer.
 
 `up` writes markers by default.
 `--no-sha` opts out.
-`down` requires an enumeration source: a manifest, explicit names, or the best-effort search API.
+`down` requires an enumeration source: explicit names, or the best-effort search API.
 
 Deletion (`rm`, `point --clear`) is the one deliberate extension (§5.4).
 DELETE is allowed for the objects of the enumerated version only: bytes, markers,

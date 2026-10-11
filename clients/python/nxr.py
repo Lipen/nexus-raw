@@ -45,7 +45,7 @@ MAX_JITTER = 0.25
 
 # A hostile endpoint can emit continuation tokens forever: the walk gives up instead of scrolling.
 MAX_SEARCH_PAGES = 100
-# Upper bound for small GETs: siblings, manifests, channel tokens, search pages.
+# Upper bound for small GETs: siblings, channel tokens, search pages.
 # Mirrors the rust core's SMALL_CAP (transport/client.rs).
 SMALL_CAP = 16 * 1024 * 1024
 
@@ -311,7 +311,7 @@ class Nxr:
                     raise EnumerateError(
                         f"cannot enumerate: {url}: the search endpoint answered 404",
                         status=404,
-                        hint="the server predates the search API: publish a manifest.json and read it instead",
+                        hint="the server predates the search API: enumerate through explicit names instead",
                     ) from None
                 raise
             try:
@@ -420,7 +420,7 @@ class Nxr:
             )
 
     def _send_small(self, method: str, url: str) -> tuple[int, http.client.HTTPMessage, bytes]:
-        """A small-object GET (sibling, manifest, channel token, search page).
+        """A small-object GET (sibling, channel token, search page).
 
         Mirrors the rust core's get_small (transport/client.rs): these objects are
         KiB-scale by protocol, so the response is capped at SMALL_CAP (Content-Length

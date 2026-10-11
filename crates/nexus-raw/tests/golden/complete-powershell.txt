@@ -142,7 +142,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;up' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Restrict the transfer to these names')
             [CompletionResult]::new('--claim-first', '--claim-first', [CompletionResultType]::ParameterName, 'Upload this file first, alone, before any other name (claim-first)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -166,7 +165,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;down' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -192,7 +190,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;diff' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -215,7 +212,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;rm' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -259,7 +255,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;mirror' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
             [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
@@ -285,7 +280,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;mv' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Enumeration source: a manifest file, URL or `-` for stdin')
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
             [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
@@ -407,7 +401,6 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;verify' {
-            [CompletionResult]::new('--manifest', '--manifest', [CompletionResultType]::ParameterName, 'Check exactly these names')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')

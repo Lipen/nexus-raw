@@ -102,7 +102,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -l json -d 'Emit one NDJSON
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand up" -l manifest -d 'Restrict the transfer to these names' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
@@ -117,7 +116,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -l json -d 'Emit one NDJSON 
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand down" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -134,7 +132,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -l json -d 'Emit one NDJSO
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand diff" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -149,7 +146,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -l json -d 'Emit one NDJSO
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand rm" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -177,7 +173,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand point" -l json -d 'Emit one NDJS
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
@@ -195,7 +190,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l json -d 'Emit one NDJ
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand mv" -l manifest -d 'Enumeration source: a manifest file, URL or `-` for stdin' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
@@ -265,7 +259,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "set" -d 'Write the token, optionally only forward in version order'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
-complete -c nxr -n "__fish_nxr_using_subcommand verify" -l manifest -d 'Check exactly these names' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l workers -d 'Parallel artifact transfers' -r

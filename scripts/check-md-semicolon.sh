@@ -10,9 +10,13 @@ hits=0
 while IFS= read -r -d '' file; do
   # Strip fenced code blocks first, then look for the splice pattern:
   # a lowercase/uppercase word, `; `, and another word on the same line.
+  # Inside a raw <figure> HTML block the semicolons are CSS or SVG syntax,
+  # not typography: skip those lines too.
   matches=$(awk '
     /^```/ { fence = !fence; next }
-    !fence && /; / && !/`[^`]*;[^`]*`/ { print FILENAME ":" FNR ": " $0 }
+    /<figure>/ { html = 1 }
+    /<\/figure>/ { html = 0 }
+    !fence && !html && /; / && !/`[^`]*;[^`]*`/ { print FILENAME ":" FNR ": " $0 }
   ' "$file")
   if [ -n "$matches" ]; then
     echo "$matches" >&2

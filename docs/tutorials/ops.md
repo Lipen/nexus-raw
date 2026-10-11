@@ -95,7 +95,7 @@ printf '{"artifacts":["app.zip","bom/sbom.json","manifest.json"]}\n' > "dist/$V/
 Compare before writing, then publish, then pull it back on another machine:
 
 ```bash
-nxr diff "dist/$V/" "$BASE/$V/" --manifest "dist/$V/manifest.json"   # both sides, nothing moves
+nxr diff "dist/$V/" "$BASE/$V/" --name app.zip --name bom/sbom.json   # both sides, nothing moves
 nxr up "dist/$V/" "$BASE/$V/" --plan                                 # the upload plan only
 nxr up "dist/$V/" "$BASE/$V/"                                        # the transfer
 nxr down "$BASE/$V/" "vendor/$V/"                                    # the same names, verified, resumable
@@ -103,7 +103,7 @@ nxr verify "vendor/$V/"                                              # digests a
 ```
 
 ```console
-$ nxr diff "dist/$V/" "$BASE/$V/" --manifest "dist/$V/manifest.json"
+$ nxr diff "dist/$V/" "$BASE/$V/" --name app.zip --name bom/sbom.json
 missing-remote app.zip
 missing-remote bom/sbom.json
 missing-remote manifest.json

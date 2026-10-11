@@ -26,7 +26,6 @@ dist/1.4.0/
 ├── app-1.4.0.zip              # bytes
 ├── bom/
 │   └── linux-x86_64.json      # subdirectories are names too
-├── manifest.json              # optional: the enumeration source for consumers
 └── pinned.xml
 ```
 
@@ -42,7 +41,6 @@ Before anything touches the network, every local file is classified against its 
 $ nxr up --plan dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 upload app-1.4.0.zip
 upload bom/linux-x86_64.json
-upload manifest.json
 upload pinned.xml
 ```
 
@@ -129,10 +127,10 @@ head: 200 80 -
 `--claim-first <NAME>` uploads one name first and alone, before any other name starts:
 
 ```bash
-nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --claim-first manifest.json
+nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --claim-first version.json
 ```
 
-The natural claim is `manifest.json`: the enumeration document becomes visible at the version URL before any byte it names, so a watcher sees the publish declare itself instead of a random artifact arriving first.
+A natural claim is your version document: it becomes visible at the version URL before any byte it names, so a watcher sees the publish declare itself instead of a random artifact arriving first.
 A failed claim aborts the run with nothing else sent.
 A claim name outside the scanned directory is misuse (exit 2):
 
@@ -169,34 +167,31 @@ Fix the cause (rebuild, or republish under a new version directory) and run agai
 A transfer never deletes and never overwrites a diverging object.
 Deletion is the explicit `nxr rm`.
 
-## Restrict the transfer with a manifest
+## Restrict the transfer with explicit names
 
-`--manifest` takes a file, a URL, or `-` for stdin and limits the run to the listed names.
+`--name` limits an `up` run to the listed names.
 Everything listed must exist locally, and one ghost name refuses the whole run:
 
 ```console
-$ echo '{"artifacts": ["app-1.4.0.zip", "ghost.zip"]}' | nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --manifest -
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --name app-1.4.0.zip --name ghost.zip
 error: missing: ghost.zip: exist nowhere
-hint: the name is absent on both sides: check spelling and the manifest
+hint: the name is absent on both sides: check spelling and the enumeration source
 ```
 
 Exit 1, nothing uploaded.
 A listed name that exists and matches on both sides is skipped like any other name in the plan.
 
-## Ship a manifest for consumers
+## Give consumers a machine-readable name list
 
-A `manifest.json` in the version directory is what lets consumers run `down` without extra flags:
+`nxr` does not read any list: enumeration is `--name` or `--ls`.
+If your consumers need one, publish a list file as an ordinary artifact and document its name:
 
 ```json
 {"artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json", "pinned.xml"]}
 ```
 
-Keep the file in the version directory before uploading.
 `up` ships it like any artifact, marker included.
-`down` reads it as the enumeration source and fetches the listed names.
-It does not pull `manifest.json` itself into the target directory.
-
-Without it, consumers must pass `--manifest`, `--name` or `--ls` (the decision table: [choosing an enumeration source](consume.md#choosing-an-enumeration-source)).
+It is your convention: `nxr` attaches no meaning to the name and never fetches it on its own (the consumer-side decision table: [choosing an enumeration source](consume.md#choosing-an-enumeration-source)).
 
 ## Name the version with a channel
 
@@ -227,8 +222,6 @@ Drop `--if-forward` only when you mean to force the token.
 V="nightly-$(date +%F)"
 BASE=https://nexus.example.com/repository/raw-main
 mkdir -p "dist/$V" && install out/* "dist/$V/"
-( cd "dist/$V" && printf '{"artifacts": [%s]}\n' \
-    "$(ls | sed 's/.*/"&"/' | paste -sd, -)" > manifest.json )
 nxr up "dist/$V/" "$BASE/$V/"                 # (1)!
 nxr channel set "$BASE/nightly" "$V"          # (2)!
 ```

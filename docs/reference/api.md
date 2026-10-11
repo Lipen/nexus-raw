@@ -11,7 +11,7 @@ The exhaustive type-level documentation is `cargo doc -p nexus-raw-core --open`.
 | L0 · transport | `transport` | one client: retries, backoff, stall detection, TLS, auth, Range-resume | nothing above |
 | L0 · primitive | `primitive` | `get`/`put`/`head`/`sha`: single-object, no verification | transport |
 | L1 · transfer | `sync` | directory up/down, the symmetric diff, sha-sibling markers, parallel workers | transport, primitive |
-| L2 · layout | `layout` | channels (token files with any name), manifests, search-based listings | transport |
+| L2 · layout | `layout` | channels (token files with any name), search-based listings | transport |
 | facade | `nxr` | `Nxr`, the single entry point that threads everything together | all of the above |
 | L3 · UX | the CLI crate | doctor, hints, human and NDJSON rendering, exit codes | the facade |
 
@@ -24,7 +24,7 @@ flowchart BT
     T["L0 transport<br/>retries · TLS · auth · stall"]
     P["L0 primitive<br/>get · put · head · sha"]
     S["L1 sync<br/>up · down · diff · scan"]
-    L["L2 layout<br/>channels · manifests · listings"]
+    L["L2 layout<br/>channels · listings"]
     F["Nxr facade"]
     C["L3 CLI<br/>flags · rendering · exit codes"]
     P --> T
@@ -109,15 +109,13 @@ Every method mirrors a CLI command one-to-one.
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
-| `manifest_at_base()` | `Option<Manifest>` | `down`'s default | the `manifest.json` convention at the facade's base |
-| `manifest_from(url)` | `Manifest` | `--manifest <url>` | fetch and parse a manifest from an arbitrary URL |
 | `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden |
 | `ls_versions()` | `Vec<String>` | - | the version view through the search API, experimental |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 
 One parameter deserves its one-liner:
 
-- `names: Option<Vec<ArtifactName>>` restricts a transfer to a manifest's names.
+- `names: Option<Vec<ArtifactName>>` restricts a transfer to an explicit name list.
 `None` scans the directory.
 
 Failures collect per name into `Summary.failed` while the rest of the transfer completes.
@@ -183,22 +181,7 @@ The digest inside an `Upload` action is present only when markers are enabled: k
 
 ## L2: layout
 
-`layout` reads and writes the conventional objects: channel refs, manifests, and search-based listings.
-Manifest parsing is pure and offline:
-
-```rust
-use nexus_raw_core::Manifest;
-
-fn parse_manifest(bytes: &[u8]) -> Result<(), nexus_raw_core::Error> {
-    let manifest = Manifest::from_slice(bytes)?;
-    for name in &manifest.names {
-        println!("{}", name);
-    }
-    Ok(())
-}
-```
-
-`Manifest::from_slice` tolerates the version-document fields (`schema_version` must be `1` when present, `version` is ignored), drops duplicates and grammar-checks every name: the exact rules the [protocol page](protocol.md#manifest) documents.
+`layout` reads and writes the conventional objects: channel refs and search-based listings.
 `channel_set` returns `ChannelOutcome::Written { from }` or `ChannelOutcome::Skipped { current }`, where the forward-only guard compares tokens in dotted-numeric order.
 
 ## Enumeration
@@ -208,7 +191,6 @@ The variants mirror the CLI's enumeration flags:
 
 | Variant | CLI flag | Semantics |
 |:--------|:---------|:----------|
-| `Enumeration::Manifest(Manifest)` | `--manifest <file\|url|->` | exact: the parsed name list |
 | `Enumeration::Names(Vec<ArtifactName>)` | `--name` (repeatable) | exact: every name grammar-checked at parse time |
 | `Enumeration::Search` | `--ls` | best-effort: walks the server search API with continuation tokens |
 | `Enumeration::Filtered { inner, prefixes }` | `--prefix` | the inner source, narrowed to whole-segment prefixes after resolution |

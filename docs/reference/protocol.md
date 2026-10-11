@@ -12,7 +12,6 @@ Everything `nxr` writes fits four object kinds:
 ```text
 <base>/<name>            artifact bytes
 <base>/<name>.sha256     sha-sibling: "<hex>  <name>\n" (sha256sum -c format)
-<base>/manifest.json     conventional name list, the enumeration source for down
 <base>/<channel>         a token file: "<token>\n", any name (latest, stable, …)
 ```
 
@@ -25,7 +24,6 @@ A version is just a directory, and a channel is just a file.
 |:------------|:-----|:-----------|:--------|:-----------|
 | bytes | `<base>/<name>` | `put`, `up`, `down` | `get`, `sha`, `head`, `down` | `rm` |
 | sha-sibling | `<base>/<name>.sha256` | `put --sha`, `up`, `down` | `up`, `down`, `verify` | `rm`, before the bytes |
-| manifest | `<base>/manifest.json` | `up` (as an ordinary artifact) | `down`, `up --manifest`, `rm` | enumerated by name, else it survives |
 | channel ref | `<base>/<channel>` | `channel set` | `channel get` | `point --clear` |
 
 Example: base `https://nexus.example.com/repository/raw-main/`, artifact `bom/linux-x86_64.json`:
@@ -87,30 +85,6 @@ The parse is strict, because a loose parse would bless foreign markers:
 
 An artifact is complete when bytes and sibling both exist and the digest matches.
 The sibling is the marker of its bytes and is never an artifact in its own right, so `nxr` never uploads a `.sha256` as a standalone name.
-
-### manifest
-
-```json
-{"artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json"]}
-```
-
-An ordinary file with a conventional role: the enumeration source for `down` and the optional name filter for `up`.
-It carries no digests.
-Each artifact's sibling does.
-
-| Rule | Behavior |
-|:-----|:---------|
-| top level | must be a JSON object |
-| `artifacts` | required array of strings, every entry passes the name grammar |
-| order | free: names may appear in any order |
-| duplicates | dropped, first occurrence wins |
-| `schema_version` | tolerated, must be `1` when present |
-| `version` | tolerated and ignored |
-
-Manifest and channel reads are capped at 16 MiB.
-A larger object is refused as a misuse error instead of being slurped into memory.
-A `manifest.json` sitting in a published directory is just a file that `up` uploads like any artifact.
-The version-document fields are tolerated so a version document and an enumeration manifest can be the same file.
 
 ### channel ref
 
@@ -250,7 +224,7 @@ DELETE is allowed for the objects of the enumerated version only:
 |:-------|:-----------|
 | `<base>/<name>` bytes | `rm`, one DELETE per enumerated name |
 | `<base>/<name>.sha256` marker | `rm`, before the bytes of the same name |
-| the version document | `rm`, when the manifest lists it: `version.json` is an ordinary name |
+| the version document | `rm --name version.json`: it is an ordinary name |
 | the pointer file | `point --clear <URL>` |
 
 The rules the protocol fixes:
@@ -266,7 +240,7 @@ The rules the protocol fixes:
   This is a deliberate simplification: the digest comparison belongs to transfers, which refuse instead of overwriting, while deletion is irreversible by definition.
 - `rm` removes exactly the enumerated names and their markers.
   Other versions, other names and other pointers are not touched.
-  The `manifest.json` that named the list survives it: it is the enumeration source that keeps a rerun idempotent, and deleting it is an explicit `--name manifest.json` decision.
+  A rerun passes the same `--name` list and sees only 404s: idempotent by construction.
 - A transport failure stops the run.
   The names already deleted stay deleted, and a rerun finishes the rest.
 
@@ -339,15 +313,16 @@ $ nxr put https://nexus.example.com/repository/raw-main/pp/app.bin -f dist/1.4.0
 
 | Source | Flag | Guarantee |
 |:-------|:-----|:----------|
-| manifest at the directory URL | *(default)* | exact, when `manifest.json` exists there |
-| manifest file, URL or stdin | `--manifest` | exact |
 | explicit names | `--name` (repeatable) | exact |
 | server search API | `--ls` | best-effort, depends on the server release |
 
-Without any source and without `manifest.json` at the directory URL, `down` and `rm` refuse with `cannot enumerate` and do no guessing or HEAD-probing for likely names.
+Without a source, `down` and `rm` refuse with `cannot enumerate` and do no guessing or HEAD-probing for likely names.
 The search API walks `/service/rest/v1/search/assets` with continuation tokens.
 It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
-Treat `--ls` output as a hint only, and take the plan of record from a manifest or from explicit names.
+Treat `--ls` output as a hint only.
+
+If your consumers need a machine-readable name list, publish one as an ordinary artifact.
+`nxr` itself does not read it: the list belongs to the pipeline that consumes it.
 
 ## Mirroring
 
@@ -369,7 +344,7 @@ The enumeration is the source's (the same table as above), and the destination d
 Reads are GETs: every copied name is staged through the `down` machinery (a Range-aware GET into a part file, hashed on the fly, verified against the source marker when one exists) and then pushed through the `up` machinery, so the write order is exactly up's and a refusal never reaches the destination.
 The staging parts live in a per-(source, destination) directory under the system temp dir.
 A rerun resumes them through `206`, and a clean run removes the directory.
-When the enumeration leads with the conventional version document `version.json`, it is claimed: it transfers first and alone, and a failed claim aborts the run with nothing else sent.
+On `up`, the conventional version document `version.json` is claimed: it transfers first and alone, and a failed claim aborts the run with nothing else sent.
 
 ## Transport
 

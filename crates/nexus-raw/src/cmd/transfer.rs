@@ -4,9 +4,7 @@ use std::path::Path;
 
 use nexus_raw_core::{ArtifactName, Enumeration, Error, Nxr};
 
-use crate::cmd::{
-    enumeration_source, finish, load_manifest, make_ctx, make_nxr_with, parse_names, Ctx,
-};
+use crate::cmd::{enumeration_source, finish, make_ctx, make_nxr_with, parse_names, Ctx};
 use crate::render::{Mode, Session};
 use crate::Cli;
 
@@ -22,14 +20,13 @@ pub(crate) async fn up(
     cli: &Cli,
     src: &Path,
     dst: &str,
-    manifest: Option<&str>,
     claim: Option<ArtifactName>,
     no_sha: bool,
     plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, manifest, claim, no_sha, plan).await;
+    let result = run_up(&ctx, src, claim, no_sha, plan).await;
     finish(ctx).await;
     result
 }
@@ -37,28 +34,15 @@ pub(crate) async fn up(
 async fn run_up(
     ctx: &Ctx,
     src: &Path,
-    manifest: Option<&str>,
     claim: Option<ArtifactName>,
     no_sha: bool,
     plan: bool,
 ) -> Result<(), Error> {
-    let names = match manifest {
-        Some(spec) => Some(load_manifest(&ctx.nxr, spec).await?.names),
-        None => None,
-    };
     if plan {
-        let names = match names {
-            Some(n) => Some(n),
-            None => Some(ctx.nxr.scan(src)?),
-        };
+        let names = ctx.nxr.scan(src)?;
         let actions = ctx
             .nxr
-            .diff(
-                src,
-                names.unwrap_or_default(),
-                nexus_raw_core::Mode::Up,
-                !no_sha,
-            )
+            .diff(src, names, nexus_raw_core::Mode::Up, !no_sha)
             .await?;
         for a in &actions {
             crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
@@ -67,7 +51,7 @@ async fn run_up(
     }
     // The Summary event is the single source for totals: the renderer prints it in both modes.
     // Printing a second copy here raced the renderer.
-    ctx.nxr.up(src, names, !no_sha, claim).await?;
+    ctx.nxr.up(src, None, !no_sha, claim).await?;
     Ok(())
 }
 
@@ -77,7 +61,6 @@ pub(crate) async fn down(
     cli: &Cli,
     src: &str,
     dst: &Path,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     fresh: bool,
@@ -85,7 +68,7 @@ pub(crate) async fn down(
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let enum_src = enumeration_source(&ctx, manifest, names, ls)
+    let enum_src = enumeration_source(&ctx, names, ls)
         .await?
         .with_prefixes(prefixes)?;
     let result = run_down(&ctx, dst, enum_src, fresh, plan).await;
@@ -122,7 +105,6 @@ pub(crate) async fn diff(
     cli: &Cli,
     local: &Path,
     src: &str,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     prefixes: &[String],
@@ -134,7 +116,7 @@ pub(crate) async fn diff(
         )));
     }
     let ctx = make_ctx(cli, src)?;
-    let result = run_diff(&ctx, local, manifest, names, ls, prefixes).await;
+    let result = run_diff(&ctx, local, names, ls, prefixes).await;
     finish(ctx).await;
     result
 }
@@ -142,12 +124,11 @@ pub(crate) async fn diff(
 async fn run_diff(
     ctx: &Ctx,
     local: &Path,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     prefixes: &[String],
 ) -> Result<u8, Error> {
-    let enum_src = enumeration_source(ctx, manifest, names, ls)
+    let enum_src = enumeration_source(ctx, names, ls)
         .await?
         .with_prefixes(prefixes)?;
     let entries = ctx.nxr.delta(local, enum_src).await?;
@@ -227,27 +208,25 @@ fn delta_json(d: &nexus_raw_core::Delta) -> serde_json::Value {
 pub(crate) async fn rm(
     cli: &Cli,
     src: &str,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let result = run_rm(&ctx, manifest, names, ls, dry_run, prefixes).await;
+    let result = run_rm(&ctx, names, ls, dry_run, prefixes).await;
     finish(ctx).await;
     result
 }
 
 async fn run_rm(
     ctx: &Ctx,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
-    let enum_src = enumeration_source(ctx, manifest, names, ls)
+    let enum_src = enumeration_source(ctx, names, ls)
         .await?
         .with_prefixes(prefixes)?;
     if dry_run {
@@ -307,7 +286,6 @@ fn action_json(a: &nexus_raw_core::Action) -> serde_json::Value {
 pub(crate) async fn mirror(
     cli: &Cli,
     args: MirrorArgs<'_>,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     dry_run: bool,
@@ -319,7 +297,7 @@ pub(crate) async fn mirror(
     // must not leak one server's secret to the other.
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
-    let enum_src = source_enumeration(&src_nxr, manifest, names, ls)
+    let enum_src = source_enumeration(&src_nxr, names, ls)
         .await?
         .with_prefixes(prefixes)?;
     let result = run_mirror(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
@@ -337,7 +315,6 @@ pub(crate) async fn mirror(
 pub(crate) async fn mv(
     cli: &Cli,
     args: MirrorArgs<'_>,
-    manifest: Option<&str>,
     names: &[String],
     ls: bool,
     dry_run: bool,
@@ -346,7 +323,7 @@ pub(crate) async fn mv(
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
-    let enum_src = source_enumeration(&src_nxr, manifest, names, ls)
+    let enum_src = source_enumeration(&src_nxr, names, ls)
         .await?
         .with_prefixes(prefixes)?;
     let result = run_mv(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
@@ -356,29 +333,19 @@ pub(crate) async fn mv(
     result
 }
 
-/// The enumeration of a source repository: `--ls`, `--manifest`, repeatable `--name`, or the conventional `manifest.json` at the source directory URL.
-async fn source_enumeration(
-    src: &Nxr,
-    manifest: Option<&str>,
-    names: &[String],
-    ls: bool,
-) -> Result<Enumeration, Error> {
+/// The enumeration of a source repository: repeatable `--name`, or `--ls`.
+async fn source_enumeration(src: &Nxr, names: &[String], ls: bool) -> Result<Enumeration, Error> {
+    let _ = src;
     if ls {
         return Ok(Enumeration::Search);
-    }
-    if let Some(spec) = manifest {
-        return Ok(Enumeration::Manifest(load_manifest(src, spec).await?));
     }
     if !names.is_empty() {
         return Ok(Enumeration::Names(parse_names(names)?));
     }
-    match src.manifest_at_base().await? {
-        Some(m) => Ok(Enumeration::Manifest(m)),
-        None => Err(Error::Enumerate {
-            url: src.base().to_owned(),
-            reason: "no manifest.json at the source and no --manifest/--name/--ls given".into(),
-        }),
-    }
+    Err(Error::Enumerate {
+        url: src.base().to_owned(),
+        reason: "no --name/--ls given".into(),
+    })
 }
 
 async fn run_mv(
