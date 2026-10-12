@@ -190,11 +190,25 @@ for i in 1 2 3 4 5 6; do
   [ -n "$run" ] && break
 done
 [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
-# A network hiccup mid-watch must not kill the report: the act is already
-# done, the watch only reads. Retry until the run settles, then judge it.
-until gh run watch "$run" --interval 30 --exit-status > /dev/null 2>&1; do
-  sleep 5
+# The watch streams progress and dies quietly on a network hiccup; the loop
+# below owns the verdict. It polls the run state, not the watch exit code:
+# a failed run exits nonzero too, and retrying that would spin forever.
+echo "watching https://github.com/Lipen/nexus-raw/actions/runs/$run"
+gh run watch "$run" --interval 30 > /dev/null 2>&1 || true
+while :; do
+  if out="$(gh run view "$run" --json status,conclusion 2>/dev/null)"; then
+    status="$(jq -r '.status' <<<"$out")"
+    case "$status" in
+      completed) break ;;
+      *) sleep 30 ;;
+    esac
+  else
+    sleep 10
+  fi
 done
-gh run view "$run" --json conclusion --jq '.conclusion' | grep -q '^success$' \
-    || { echo "release: the run failed, see https://github.com/Lipen/nexus-raw/actions/runs/$run" >&2; exit 1; }
+conclusion="$(jq -r '.conclusion' <<<"$out")"
+if [ "$conclusion" != success ]; then
+  echo "release: the run ended $conclusion, see https://github.com/Lipen/nexus-raw/actions/runs/$run" >&2
+  exit 1
+fi
 echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v$v"
