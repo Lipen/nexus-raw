@@ -44,6 +44,28 @@ fn nxr(args: &[&str]) -> Output {
         .expect("nxr binary runs")
 }
 
+/// The same hermetic run with `stdin` piped in: for `--names-from -`.
+fn nxr_stdin(args: &[&str], stdin: &str) -> Output {
+    use std::io::Write;
+    let mut child = Command::new(NXR)
+        .args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("nxr binary spawns");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin piped")
+        .write_all(stdin.as_bytes())
+        .expect("write stdin");
+    child.wait_with_output().expect("nxr binary runs")
+}
+
 /// The same hermetic run with extra environment variables set on top.
 fn nxr_env(args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut cmd = Command::new(NXR);
@@ -326,16 +348,158 @@ fn down_explicit_name() {
 fn down_ignores_a_foreign_manifest() {
     let srv = server(Scenario::Atomic);
     srv.insert("1.14.0/a.zip", ALPHA);
-    srv.insert("1.14.0/manifest.json", br#"{"artifacts":["a.zip"]}"#);
+    srv.insert("1.14.0/manifest.json", b"{\"artifacts\":[\"a.zip\"]}");
     let dst = TempDir::new().unwrap();
 
     let down = nxr(&["down", &dir_url(&srv), dst.path().to_str().unwrap()]);
-    expect_exit(
-        &down,
-        1,
-        "down ignores a manifest-shaped object without flags",
-    );
+    expect_exit(&down, 1, "down ignores a foreign manifest");
     assert!(!dst.path().join("a.zip").exists());
+}
+
+/// --names-from reads a file of names, one per line, and downloads exactly those.
+#[test]
+fn down_names_from_file() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(&srv);
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let list = TempDir::new().unwrap();
+    let list_path = list.path().join("names.txt");
+    std::fs::write(&list_path, "a.zip\n\nb.bin\n").unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--names-from",
+        list_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 0, "down --names-from file");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert_eq!(read_file(dst.path(), "b.bin"), BETA);
+}
+
+/// `--names-from -` reads the name list from stdin.
+#[test]
+fn down_names_from_stdin() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr_stdin(
+        &[
+            "down",
+            &base,
+            dst.path().to_str().unwrap(),
+            "--names-from",
+            "-",
+        ],
+        "a.zip\n",
+    );
+    expect_exit(&down, 0, "down --names-from -");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+}
+
+/// --name and --names-from combine, duplicates are the same name once.
+#[test]
+fn down_names_from_combines_with_argv() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    let base = dir_url(&srv);
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let list = TempDir::new().unwrap();
+    let list_path = list.path().join("names.txt");
+    std::fs::write(&list_path, "a.zip\n").unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "b.bin",
+        "--names-from",
+        list_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 0, "down --name plus --names-from");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert_eq!(read_file(dst.path(), "b.bin"), BETA);
+}
+
+/// An empty --names-from file is no enumeration source: the run refuses (exit 1).
+#[test]
+fn down_names_from_empty_refuses() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let list = TempDir::new().unwrap();
+    let list_path = list.path().join("names.txt");
+    std::fs::write(&list_path, "\n  \n").unwrap();
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--names-from",
+        list_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 1, "empty names file refuses");
+    let err = stderr(&down);
+    assert!(
+        err.contains("no --name/--names-from/--ls given"),
+        "the refusal names all three sources: {err}"
+    );
+}
+
+/// A line that fails the name grammar is a misuse (exit 2) naming the file and the line.
+#[test]
+fn down_names_from_bad_line_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let list = TempDir::new().unwrap();
+    let list_path = list.path().join("names.txt");
+    std::fs::write(&list_path, "a.zip\nbad//name\n").unwrap();
+    let dst = TempDir::new().unwrap();
+
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--names-from",
+        list_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 2, "bad file line is misuse");
+    let err = stderr(&down);
+    assert!(
+        err.contains("line 2") && err.contains("bad//name"),
+        "the error names the file line: {err}"
+    );
+}
+
+/// A missing --names-from file is a misuse (exit 2), not a transport error.
+#[test]
+fn down_names_from_missing_file_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--names-from",
+        "/definitely/not/a/file.txt",
+    ]);
+    expect_exit(&down, 2, "missing names file is misuse");
+    assert!(stderr(&down).contains("cannot read --names-from"));
 }
 
 /// resume: a pre-seeded part file continues through a Range request.

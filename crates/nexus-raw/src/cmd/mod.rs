@@ -22,11 +22,12 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
         local,
         src,
         name,
+        names_from,
         ls,
         prefix,
     } = &cli.command
     {
-        return transfer::diff(cli, local, src, name, *ls, prefix).await;
+        return transfer::diff(cli, local, src, name, names_from, *ls, prefix).await;
     }
     run(cli).await.map(|()| 0)
 }
@@ -54,18 +55,20 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             src,
             dst,
             name,
+            names_from,
             ls,
             fresh,
             plan,
             prefix,
-        } => transfer::down(cli, src, dst, name, *ls, *fresh, *plan, prefix).await,
+        } => transfer::down(cli, src, dst, name, names_from, *ls, *fresh, *plan, prefix).await,
         Cmd::Rm {
             src,
             name,
+            names_from,
             ls,
             dry_run,
             prefix,
-        } => transfer::rm(cli, src, name, *ls, *dry_run, prefix).await,
+        } => transfer::rm(cli, src, name, names_from, *ls, *dry_run, prefix).await,
         Cmd::Point { clear, url } => {
             if !clear {
                 return Err(Error::Misuse(
@@ -79,6 +82,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             src,
             dst,
             name,
+            names_from,
             ls,
             dry_run,
             src_user,
@@ -94,6 +98,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     dst_user: dst_user.as_deref(),
                 },
                 name,
+                names_from,
                 *ls,
                 *dry_run,
                 prefix,
@@ -104,6 +109,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             src,
             dst,
             name,
+            names_from,
             ls,
             dry_run,
             src_user,
@@ -119,6 +125,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     dst_user: dst_user.as_deref(),
                 },
                 name,
+                names_from,
                 *ls,
                 *dry_run,
                 prefix,
@@ -233,26 +240,65 @@ fn split_user(user: Option<&str>) -> Result<Option<(&str, &str)>, Error> {
 }
 
 /// Parse explicit `--name` values through the grammar (exit 2 on bad names).
+use std::io::Read;
+
 pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> {
     names.iter().map(|s| ArtifactName::parse(s)).collect()
 }
 
-/// Resolve the enumeration source of `down` and `rm`: repeatable `--name`, or `--ls`.
+/// Read one `--names-from` source: `-` is stdin, one name per line.
+/// Lines are trimmed; empty lines are skipped; anything else must parse
+/// through the same name grammar as `--name`.
+pub(crate) fn read_names_file(path: &str) -> Result<Vec<String>, Error> {
+    let text = if path == "-" {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| Error::Misuse(format!("cannot read --names-from -: {e}")))?;
+        buf
+    } else {
+        std::fs::read_to_string(path)
+            .map_err(|e| Error::Misuse(format!("cannot read --names-from {path}: {e}")))?
+    };
+    let mut out = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let name = line.trim();
+        if name.is_empty() {
+            continue;
+        }
+        if ArtifactName::parse(name).is_err() {
+            return Err(Error::Misuse(format!(
+                "--names-from {path} line {}: '{name}' is not a valid name",
+                n + 1
+            )));
+        }
+        out.push(name.to_owned());
+    }
+    Ok(out)
+}
+
+/// Resolve the enumeration source of `down`, `diff`, `rm`, `mirror` and `mv`:
+/// repeatable `--name`, repeatable `--names-from`, or `--ls`.
 /// Without any source the call refuses (exit 1) with the enumeration hint.
-pub(crate) async fn enumeration_source(
-    ctx: &Ctx,
+pub(crate) fn enumeration_source(
+    base: &str,
     names: &[String],
+    names_from: &[String],
     ls: bool,
 ) -> Result<Enumeration, Error> {
     if ls {
         return Ok(Enumeration::Search);
     }
-    if !names.is_empty() {
-        return Ok(Enumeration::Names(parse_names(names)?));
+    let mut all: Vec<String> = names.to_vec();
+    for path in names_from {
+        all.extend(read_names_file(path)?);
+    }
+    if !all.is_empty() {
+        return Ok(Enumeration::Names(parse_names(&all)?));
     }
     Err(Error::Enumerate {
-        url: ctx.nxr.base().to_owned(),
-        reason: "no --name/--ls given".into(),
+        url: base.to_owned(),
+        reason: "no --name/--names-from/--ls given".into(),
     })
 }
 

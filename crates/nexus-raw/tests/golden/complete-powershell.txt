@@ -166,6 +166,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;down' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -191,6 +192,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;diff' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -213,6 +215,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;rm' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
@@ -256,6 +259,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;mirror' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
             [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
             [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
@@ -281,6 +285,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;mv' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
+            [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
             [CompletionResult]::new('--src-user', '--src-user', [CompletionResultType]::ParameterName, 'Credentials for the source only, overriding the shared `-u`')
             [CompletionResult]::new('--dst-user', '--dst-user', [CompletionResultType]::ParameterName, 'Credentials for the destination only, overriding the shared `-u`')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')

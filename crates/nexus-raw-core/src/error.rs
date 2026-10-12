@@ -115,7 +115,7 @@ impl Error {
             Error::Incomplete { .. } => Some("rerun the same command: finished names are skipped and the rest is retried".into()),
             Error::Missing { .. } => Some("the name is absent on both sides: check spelling and the enumeration source".into()),
             Error::Enumerate { .. } => Some(
-                "repeat --name, or use --ls when the server has the search API".into(),
+                "repeat --name, use --names-from FILE, or use --ls when the server has the search API".into(),
             ),
             Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved".into()),
             Error::Auth { .. } => {

@@ -324,7 +324,7 @@ $ echo $?
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--name NAME]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
+nxr down <SRC_URL> <DST_DIR> [--name NAME]... [--names-from FILE]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
@@ -334,6 +334,7 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 | Flag | Meaning |
 |:-----|:--------|
 | `--name <NAME>` | one explicit name, repeat as needed |
+| `--names-from <FILE>` | read names from a file, one per line (`-` is stdin); repeatable, combines with `--name` |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
 | `--plan` | probe the server and print the plan without writing into `DST_DIR` (the `--dry-run` spelling works as an alias) |
@@ -345,7 +346,7 @@ A prefix without the trailing slash is misuse (exit 2).
 Resuming is the default: a rerun picks up the part files of a killed run through `Range` requests.
 `down` must know what to fetch, and Nexus raw has no guaranteed directory listing.
 Without flags `down` refuses: there is no default enumeration source.
-If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the three explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
+If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ \
@@ -398,7 +399,7 @@ A fresh download that still diverges refuses the run (exit 1), so nothing diverg
 ## nxr diff
 
 ```
-nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--ls] [--prefix PREFIX]...
+nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--prefix PREFIX]...
 ```
 
 Compare a local directory against a remote one and print the delta, changing nothing on either side.
@@ -447,7 +448,7 @@ A fully converged directory reports every name as `same` and exits 0.
 ## nxr mirror
 
 ```
-nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--ls] [--dry-run]
+nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run]
 ```
 
 Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
@@ -494,7 +495,7 @@ When the enumeration leads with `version.json`, the conventional version documen
 ## nxr rm
 
 ```
-nxr rm <SRC_URL> [--name NAME]... [--ls] [--dry-run]
+nxr rm <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run]
 ```
 
 Delete a version, name by name: the `.sha256` marker of every enumerated name goes first, then the bytes, so nobody ever sees a complete object mid-delete ([the protocol](protocol.md#deletion)).

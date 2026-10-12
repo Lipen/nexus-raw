@@ -161,6 +161,7 @@ _arguments "${_arguments_options[@]}" : \
 (down)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -189,6 +190,7 @@ _arguments "${_arguments_options[@]}" : \
 (diff)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -214,6 +216,7 @@ _arguments "${_arguments_options[@]}" : \
 (rm)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -261,6 +264,7 @@ _arguments "${_arguments_options[@]}" : \
 (mirror)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
@@ -289,6 +293,7 @@ _arguments "${_arguments_options[@]}" : \
 (mv)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
+'*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '--src-user=[Credentials for the source only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '--dst-user=[Credentials for the destination only, overriding the shared \`-u\`]:USER:PASS:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \

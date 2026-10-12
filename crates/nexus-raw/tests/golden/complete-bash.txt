@@ -492,13 +492,17 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__diff)
-            opts="-u -R -q -v -h --name --ls --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --names-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -592,13 +596,17 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__down)
-            opts="-u -R -q -v -h --name --ls --fresh --dry-run --plan --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --fresh --dry-run --plan --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --names-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -1156,13 +1164,17 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__mirror)
-            opts="-u -R -q -v -h --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --names-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -1218,13 +1230,17 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__mv)
-            opts="-u -R -q -v -h --name --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --names-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -1380,13 +1396,17 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__rm)
-            opts="-u -R -q -v -h --name --ls --dry-run --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --dry-run --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --names-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

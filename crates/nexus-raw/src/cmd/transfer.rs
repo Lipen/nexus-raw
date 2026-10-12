@@ -4,7 +4,7 @@ use std::path::Path;
 
 use nexus_raw_core::{ArtifactName, Enumeration, Error, Nxr};
 
-use crate::cmd::{enumeration_source, finish, make_ctx, make_nxr_with, parse_names, Ctx};
+use crate::cmd::{enumeration_source, finish, make_ctx, make_nxr_with, Ctx};
 use crate::render::{Mode, Session};
 use crate::Cli;
 
@@ -62,15 +62,15 @@ pub(crate) async fn down(
     src: &str,
     dst: &Path,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     fresh: bool,
     plan: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let enum_src = enumeration_source(&ctx, names, ls)
-        .await?
-        .with_prefixes(prefixes)?;
+    let enum_src =
+        enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     let result = run_down(&ctx, dst, enum_src, fresh, plan).await;
     finish(ctx).await;
     result
@@ -106,6 +106,7 @@ pub(crate) async fn diff(
     local: &Path,
     src: &str,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     prefixes: &[String],
 ) -> Result<u8, Error> {
@@ -116,7 +117,7 @@ pub(crate) async fn diff(
         )));
     }
     let ctx = make_ctx(cli, src)?;
-    let result = run_diff(&ctx, local, names, ls, prefixes).await;
+    let result = run_diff(&ctx, local, names, names_from, ls, prefixes).await;
     finish(ctx).await;
     result
 }
@@ -125,12 +126,12 @@ async fn run_diff(
     ctx: &Ctx,
     local: &Path,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     prefixes: &[String],
 ) -> Result<u8, Error> {
-    let enum_src = enumeration_source(ctx, names, ls)
-        .await?
-        .with_prefixes(prefixes)?;
+    let enum_src =
+        enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     let entries = ctx.nxr.delta(local, enum_src).await?;
     for e in &entries {
         crate::cmd::print_line(ctx.json, &delta_line(e), &delta_json(e));
@@ -209,12 +210,13 @@ pub(crate) async fn rm(
     cli: &Cli,
     src: &str,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let result = run_rm(&ctx, names, ls, dry_run, prefixes).await;
+    let result = run_rm(&ctx, names, names_from, ls, dry_run, prefixes).await;
     finish(ctx).await;
     result
 }
@@ -222,13 +224,13 @@ pub(crate) async fn rm(
 async fn run_rm(
     ctx: &Ctx,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
-    let enum_src = enumeration_source(ctx, names, ls)
-        .await?
-        .with_prefixes(prefixes)?;
+    let enum_src =
+        enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     if dry_run {
         for a in ctx.nxr.rm_plan(enum_src).await? {
             crate::cmd::print_line(ctx.json, &rm_plan_line(&a), &rm_action_json(&a));
@@ -287,6 +289,7 @@ pub(crate) async fn mirror(
     cli: &Cli,
     args: MirrorArgs<'_>,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
@@ -297,9 +300,8 @@ pub(crate) async fn mirror(
     // must not leak one server's secret to the other.
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
-    let enum_src = source_enumeration(&src_nxr, names, ls)
-        .await?
-        .with_prefixes(prefixes)?;
+    let enum_src =
+        enumeration_source(src_nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     let result = run_mirror(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
     // Both facades must die before the renderer drains: each holds a sender clone.
     drop(src_nxr);
@@ -316,6 +318,7 @@ pub(crate) async fn mv(
     cli: &Cli,
     args: MirrorArgs<'_>,
     names: &[String],
+    names_from: &[String],
     ls: bool,
     dry_run: bool,
     prefixes: &[String],
@@ -323,29 +326,13 @@ pub(crate) async fn mv(
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
-    let enum_src = source_enumeration(&src_nxr, names, ls)
-        .await?
-        .with_prefixes(prefixes)?;
+    let enum_src =
+        enumeration_source(src_nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     let result = run_mv(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
     drop(src_nxr);
     drop(dst_nxr);
     session.finish().await;
     result
-}
-
-/// The enumeration of a source repository: repeatable `--name`, or `--ls`.
-async fn source_enumeration(src: &Nxr, names: &[String], ls: bool) -> Result<Enumeration, Error> {
-    let _ = src;
-    if ls {
-        return Ok(Enumeration::Search);
-    }
-    if !names.is_empty() {
-        return Ok(Enumeration::Names(parse_names(names)?));
-    }
-    Err(Error::Enumerate {
-        url: src.base().to_owned(),
-        reason: "no --name/--ls given".into(),
-    })
 }
 
 async fn run_mv(

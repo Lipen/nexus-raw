@@ -153,8 +153,8 @@ Call `down` with neither `--name` nor `--ls` and it refuses to guess instead of 
 
 ```console
 $ nxr down http://127.0.0.1:8080/1.3.0/ vendor/old/
-error: cannot enumerate: http://127.0.0.1:8080/1.3.0/: no --name/--ls given
-hint: repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: http://127.0.0.1:8080/1.3.0/: no --name/--names-from/--ls given
+hint: repeat --name, use --names-from FILE, or use --ls when the server has the search API
 ```
 
 Every failure prints this way: the kind, the facts, and a `hint:` line naming the next check.

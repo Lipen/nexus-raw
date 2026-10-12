@@ -314,6 +314,7 @@ $ nxr put https://nexus.example.com/repository/raw-main/pp/app.bin -f dist/1.4.0
 | Source | Flag | Guarantee |
 |:-------|:-----|:----------|
 | explicit names | `--name` (repeatable) | exact |
+| explicit names from a file | `--names-from FILE` (repeatable, `-` is stdin) | exact, one name per line |
 | server search API | `--ls` | best-effort, depends on the server release |
 
 Without a source, `down` and `rm` refuse with `cannot enumerate` and do no guessing or HEAD-probing for likely names.

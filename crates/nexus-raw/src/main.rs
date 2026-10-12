@@ -134,6 +134,9 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
+        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        #[arg(long, value_name = "FILE")]
+        names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
@@ -158,6 +161,9 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
+        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        #[arg(long, value_name = "FILE")]
+        names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
@@ -173,6 +179,9 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
+        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        #[arg(long, value_name = "FILE")]
+        names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
@@ -203,6 +212,9 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
+        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        #[arg(long, value_name = "FILE")]
+        names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
@@ -232,6 +244,9 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
+        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        #[arg(long, value_name = "FILE")]
+        names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,

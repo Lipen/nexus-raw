@@ -125,8 +125,8 @@ Nexus raw has no guaranteed listing, and `down` refuses to guess:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.3.0/ vendor/old/
-error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--ls given
-hint: repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--names-from/--ls given
+hint: repeat --name, use --names-from FILE, or use --ls when the server has the search API
 ```
 
 Three ways out, in order of preference:

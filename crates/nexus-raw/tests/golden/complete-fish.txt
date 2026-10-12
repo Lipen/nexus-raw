@@ -117,6 +117,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -s q -l quiet -d 'Print only
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
@@ -133,6 +134,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print on
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
@@ -147,6 +149,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -s q -l quiet -d 'Print on
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
@@ -174,6 +177,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print o
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
@@ -191,6 +195,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print 
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l name -d 'One explicit name (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l src-user -d 'Credentials for the source only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dst-user -d 'Credentials for the destination only, overriding the shared `-u`' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r

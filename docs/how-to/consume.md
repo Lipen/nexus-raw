@@ -23,8 +23,8 @@ Without a source, `down` refuses instead of guessing:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.3.0/ vendor/old/
-error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--ls given
-hint: repeat --name, or use --ls when the server has the search API
+error: cannot enumerate: https://nexus.example.com/repository/raw-main/1.3.0/: no --name/--names-from/--ls given
+hint: repeat --name, use --names-from FILE, or use --ls when the server has the search API
 ```
 
 Every name a source lists must exist, locally or remotely.
