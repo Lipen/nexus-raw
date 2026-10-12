@@ -60,9 +60,12 @@ while :; do
   sleep "$POLL_SECS"
 done
 
-# One loop owns the wait: read the state, report transitions, stop when settled.
+# One loop owns the wait: read the state, report transitions, tick between them.
+# A tick every POLL_SECS keeps the terminal alive; a silent six-minute wait
+# on a long CI reads as a hang.
 last=""
 out=""
+ticks=0
 while :; do
   if out="$(gh run view "$run" --json status,conclusion 2>/dev/null)"; then
     status="$(jq -r '.status' <<<"$out")"
@@ -70,9 +73,13 @@ while :; do
     if [ "$status" != "$last" ]; then
       say "$short is $status (run $run)"
       last="$status"
+      ticks=0
+    elif [ "$quick" -ne 1 ] && [ $((ticks % 6)) -eq 0 ]; then
+      say "$short is still $status"
     fi
   fi
   [ "$quick" -eq 1 ] && { say "$short is $status (run $run)" >&2; exit 3; }
+  ticks=$((ticks + 1))
   sleep "$POLL_SECS"
 done
 
