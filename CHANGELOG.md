@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.13.0] - 2026-10-12
+
 ### Added
 
 - `--names-from <FILE>` on `down`, `diff`, `rm`, `mirror` and `mv`: read the name list from a file, one name per line, `-` for stdin.
@@ -258,7 +262,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/Lipen/nexus-raw/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Lipen/nexus-raw/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/Lipen/nexus-raw/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/Lipen/nexus-raw/compare/v0.10.0...v0.11.0
