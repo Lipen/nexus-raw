@@ -33,34 +33,21 @@ else
   B="" DIM="" G="" Y="" R="" N=""
 fi
 
-# One row: a dim label, then the payload.
-row() { printf '%s%-10s%s%s\n' "$DIM" "$1" "$N" "$2"; }
-# A row with a status mark: 0 ok, 1 note, 2 block.
-mark() {
-  local m
-  case "$2" in
-    0) m="${G}  ok${N}" ;;
-    1) m="${Y} note${N}" ;;
-    2) m="${R}block${N}" ;;
-  esac
-  printf '%s%-10s%s%s %s\n' "$DIM" "$1" "$N" "$m" "$3"
-}
+# An info row: a dim 9-char label, then the payload.
+row() { printf '%s%-9s%s %s\n' "$DIM" "$1" "$N" "$2"; }
+# A continuation line under a row.
+cont() { printf '%s%9s%s %s\n' "" "" "$N" "$1"; }
 
 blockers=0
+notes=0
 
-# ---- preview -----------------------------------------------------------
-# Every claim here mirrors what the act below really does.
-
-printf '%srelease %s%s %spreview: nothing is pushed or published%s\n\n' "$B" "$v" "$N" "$DIM" "$N"
+# ---- what moves --------------------------------------------------------
+printf '%srelease %s%s %s· preview, nothing is pushed or published%s\n\n' "$B" "$v" "$N" "$DIM" "$N"
 
 old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 [ -n "$old" ] || { echo "release: no workspace version in Cargo.toml" >&2; exit 1; }
-if [ "$old" = "$v" ]; then
-  row version "already $v, the bump is a no-op"
-else
-  row version "$old ${G}->${N} ${B}$v${N}"
-  row "" "${DIM}Cargo.toml · napi package.json · 2 dep pins · 3 lockfiles (examples/node follows the release)${N}"
-fi
+row version "${DIM}$old${N} ${G}→${N} ${B}$v${N}"
+cont "${DIM}Cargo.toml · napi package.json · 2 dep pins · 3 lockfiles${N}"
 
 cl="$(python3 - "$v" <<'PY'
 import datetime, pathlib, sys
@@ -84,60 +71,88 @@ total="$(cut -d'|' -f1 <<<"$cl")"
 parts="$(cut -d'|' -f2 <<<"$cl")"
 today="$(cut -d'|' -f3 <<<"$cl")"
 if [ "$total" -eq 0 ]; then
-  mark changelog 1 "[Unreleased] is empty: the notes would be empty"
+  row changelog "${Y}[Unreleased] is empty${N}"
+  notes=$((notes + 1))
 else
-  row changelog "[Unreleased] ${G}->${N} [$v] - $today"
-  row "" "${DIM}$parts${N}"
+  row changelog "${DIM}[Unreleased]${N} → ${B}[$v]${N} ${DIM}- $today${N}"
+  cont "${DIM}$parts${N}"
 fi
 
-if [ -n "$(git status --porcelain)" ]; then
-  n="$(git status --porcelain | wc -l | tr -d ' ')"
-  mark tree 2 "dirty: $n changed paths, --yes refuses (commit or stash first)"
-  blockers=$((blockers + 1))
-else
-  mark tree 0 "clean"
-fi
+# ---- the gates ---------------------------------------------------------
+# Green collapses to one line; a note or a block unfolds every row.
+gtree=0; gtag=0; gcrates=0; gpins=0
+gtree_msg="clean"
+gtag_msg=""
+gcrates_msg=""
+gpins_msg=""
+
+[ -z "$(git status --porcelain)" ] || { gtree=2; gtree_msg="$(git status --porcelain | wc -l | tr -d ' ') changed paths, --yes refuses"; blockers=$((blockers + 1)); }
 
 rc=0
 git ls-remote --exit-code origin "refs/tags/v$v" >/dev/null 2>&1 || rc=$?
 case "$rc" in
-  0) mark tag 2 "v$v exists on origin, the push would fail" ; blockers=$((blockers + 1)) ;;
-  2) mark tag 0 "v$v is free" ;;
-  *) mark tag 1 "origin unreachable, the check is skipped" ;;
+  0) gtag=2; gtag_msg="v$v already exists on origin"; blockers=$((blockers + 1)) ;;
+  2) gtag=0; gtag_msg="v$v is free" ;;
+  *) gtag=1; gtag_msg="origin unreachable, skipped"; notes=$((notes + 1)) ;;
 esac
 
 if body="$(curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" 2>/dev/null)"; then
   if grep -q "\"vers\":\"$v\"" <<<"$body"; then
-    mark crates 1 "$v is already published, the crates job skips it"
+    gcrates=1; gcrates_msg="$v already published, the crates job skips"; notes=$((notes + 1))
   else
-    mark crates 0 "$v is free"
+    gcrates=0; gcrates_msg="$v is free"
   fi
 else
-  mark crates 1 "crates.io unreachable, the check is skipped"
+  gcrates=1; gcrates_msg="crates.io unreachable, skipped"; notes=$((notes + 1))
 fi
 
 if scripts/version-check.sh >/dev/null 2>&1; then
-  mark pins 0 "the version agrees everywhere, no page pins a number"
+  gpins=0; gpins_msg="the version agrees everywhere"
 else
-  mark pins 2 "version-check fails, fix it before --yes"
-  blockers=$((blockers + 1))
+  gpins=2; gpins_msg="version-check fails"; blockers=$((blockers + 1))
 fi
 
-row pipeline "gate ${G}->${N} builds ${DIM}x5${N} ${G}->${N} crates ${DIM}x4${N} ${G}->${N} addons ${DIM}x5${N} ${G}->${N} npm ${DIM}x5${N} ${G}->${N} tag + release"
-row "" "${DIM}linux-x64 · linux-aarch64 · darwin-x64 · darwin-arm64 · windows-x64${N}"
+echo
+if [ "$blockers" -eq 0 ] && [ "$notes" -eq 0 ]; then
+  row checks "${G}all clear${N} ${DIM}· tree · tag · crates · pins${N}"
+else
+  first=1
+  for gate in "tree:$gtree:$gtree_msg" "tag:$gtag:$gtag_msg" "crates:$gcrates:$gcrates_msg" "pins:$gpins:$gpins_msg"; do
+    name="${gate%%:*}"; rest="${gate#*:}"; st="${rest%%:*}"; msg="${rest#*:}"
+    case "$st" in
+      0) m="${G}   ok${N}" ;;
+      1) m="${Y} note${N}" ;;
+      2) m="${R}block${N}" ;;
+    esac
+    if [ "$first" -eq 1 ]; then
+      printf '%s%-9s%s %s %s%s\n' "$DIM" checks "$N" "$m" "$msg"
+      first=0
+    else
+      printf '%9s %s %s%s\n' "" "$m" "$msg"
+    fi
+  done
+fi
 
+# ---- what runs ----------------------------------------------------------
+echo
+row pipeline "gate ${G}→${N} builds ${DIM}×5${N} ${G}→${N} crates ${DIM}×4${N} ${G}→${N} addons ${DIM}×5${N} ${G}→${N} npm ${DIM}×5${N} ${G}→${N} tag + release"
+cont "${DIM}linux-x64 · linux-aarch64 · darwin-x64 · darwin-arm64 · windows-x64${N}"
+
+# ---- verdict ------------------------------------------------------------
 echo
 if [ "$blockers" -eq 0 ]; then
-  row next "${B}${G}scripts/release.sh $v --yes${N}"
+  row next "${B}${G}just release $v --yes${N}"
+elif [ "$blockers" -eq 1 ]; then
+  row next "${R}resolve the block above, then rerun${N}"
 else
-  row next "resolve the ${R}blocks${N} above, then rerun"
+  row next "${R}resolve the $blockers blocks above, then rerun${N}"
 fi
 
 # ---- the act ------------------------------------------------------------
 [ -n "$yes" ] || exit 0
 
 echo
-printf '%srelease %s%s %sthe real act%s\n\n' "$B" "$v" "$N" "$DIM" "$N"
+printf '%srelease %s%s %s· the real act%s\n\n' "$B" "$v" "$N" "$DIM" "$N"
 
 # The same gates the preview drew, enforced this time.
 if [ -n "$(git status --porcelain)" ]; then
