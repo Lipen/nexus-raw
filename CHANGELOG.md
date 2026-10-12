@@ -5,7 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `--names-from <FILE>` on `down`, `diff`, `rm`, `mirror` and `mv`: read the name list from a file, one name per line, `-` for stdin.
+  Repeatable, combines with repeatable `--name` in flag order.
+  A line that fails the name grammar is a misuse naming the file and the line number.
+  For long lists that would bump into the argv limit: the wire protocol is unchanged, the file names the same artifacts `--name` would.
+  The napi surface stays as it is: JS callers pass `names` directly and have no argv limit to work around.
 
 ## [0.12.0] - 2026-10-12
 
