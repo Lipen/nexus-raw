@@ -48,6 +48,7 @@ old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 [ -n "$old" ] || { echo "release: no workspace version in Cargo.toml" >&2; exit 1; }
 row version "${DIM}$old${N} ${G}→${N} ${B}$v${N}"
 cont "${DIM}Cargo.toml · napi package.json · 2 dep pins · 3 lockfiles${N}"
+echo
 
 cl="$(python3 - "$v" <<'PY'
 import datetime, pathlib, sys
@@ -86,7 +87,12 @@ gtag_msg=""
 gcrates_msg=""
 gpins_msg=""
 
-[ -z "$(git status --porcelain)" ] || { gtree=2; gtree_msg="$(git status --porcelain | wc -l | tr -d ' ') changed paths, --yes refuses"; blockers=$((blockers + 1)); }
+[ -z "$(git status --porcelain)" ] || {
+  n="$(git status --porcelain | wc -l | tr -d ' ')"
+  gtree=2
+  [ "$n" -eq 1 ] && gtree_msg="1 changed path, --yes refuses" || gtree_msg="$n changed paths, --yes refuses"
+  blockers=$((blockers + 1))
+}
 
 rc=0
 git ls-remote --exit-code origin "refs/tags/v$v" >/dev/null 2>&1 || rc=$?
@@ -125,10 +131,10 @@ else
       2) m="${R}block${N}" ;;
     esac
     if [ "$first" -eq 1 ]; then
-      printf '%s%-9s%s %s %s%s\n' "$DIM" checks "$N" "$m" "$msg"
+      printf '%s%-9s%s %s %s %s%s\n' "$DIM" checks "$N" "$m" "$name" "$msg"
       first=0
     else
-      printf '%9s %s %s%s\n' "" "$m" "$msg"
+      printf '%9s %s %s %s%s\n' "" "$m" "$name" "$msg"
     fi
   done
 fi

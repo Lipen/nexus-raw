@@ -19,7 +19,7 @@ The pinned image is pulled on first use.
 
 - Covered: claim-first ordering, markers in the sha256sum format, resume
   (206/416), divergence refusal, channels, the search-backed listing, dry
-  runs, down by manifest, offline verify.
+  runs, down by name, offline verify.
 - With the mock: auth-401, flaky 5xx, dropped connections - scenarios a real
   server cannot be asked to produce on demand.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429

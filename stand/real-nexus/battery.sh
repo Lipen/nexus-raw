@@ -151,8 +151,8 @@ expect_ok "up --dry-run plans without sending" "$NXR" up "$WORK/src" "$VER" --dr
 after=$("$NXR" ls "$URL" 2> /dev/null | wc -l)
 if [ "$before" = "$after" ]; then ok "dry run sends nothing"; else no "dry run sends nothing"; fi
 
-# 21-22. Down by the manifest mirrors the version, markers included.
-expect_ok "down by manifest mirrors the version" "$NXR" down "$VER" "$WORK/dst" --manifest "$VER/m.json" --workers 4
+# 21-22. Down by explicit names mirrors the version, markers included.
+expect_ok "down by names mirrors the version" "$NXR" down "$VER" "$WORK/dst" --name m.json --name hello.txt --name big.bin --name nested/sub.bin --workers 4
 trees=1
 for f in m.json hello.txt big.bin nested/sub.bin; do
     cmp -s "$WORK/orig/$f" "$WORK/dst/$f" || trees=0
