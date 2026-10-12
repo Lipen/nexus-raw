@@ -15,10 +15,10 @@ set -eu
 usage() { echo "usage: release.sh X.Y.Z [--yes]" >&2; exit 2; }
 [ "$#" -ge 1 ] || usage
 v="$1"; shift
-case "$v" in
-  [0-9]*.[0-9]*.[0-9]*) ;;
-  *) echo "release: $v is not X.Y.Z" >&2; exit 2 ;;
-esac
+if ! grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+' <<<"$v"; then
+  echo "release: $v is not X.Y.Z" >&2
+  exit 2
+fi
 yes=""
 for a in "$@"; do
   case "$a" in
