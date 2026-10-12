@@ -167,23 +167,9 @@ Fix the cause (rebuild, or republish under a new version directory) and run agai
 A transfer never deletes and never overwrites a diverging object.
 Deletion is the explicit `nxr rm`.
 
-## Restrict the transfer with explicit names
-
-`--name` limits an `up` run to the listed names.
-Everything listed must exist locally, and one ghost name refuses the whole run:
-
-```console
-$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --name app-1.4.0.zip --name ghost.zip
-error: missing: ghost.zip: exist nowhere
-hint: the name is absent on both sides: check spelling and the enumeration source
-```
-
-Exit 1, nothing uploaded.
-A listed name that exists and matches on both sides is skipped like any other name in the plan.
-
 ## Give consumers a machine-readable name list
 
-`nxr` does not read any list: enumeration is `--name` or `--ls`.
+`nxr` never reads a list: `up` scans the whole source directory.
 If your consumers need one, publish a list file as an ordinary artifact and document its name:
 
 ```json

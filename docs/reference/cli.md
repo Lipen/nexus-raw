@@ -317,7 +317,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, remote converged |
-| `1` | data refusal: `mismatch`, `missing` (a `--name` absent locally), `incomplete`. local I/O failures |
+| `1` | data refusal: `mismatch`, `incomplete`. local I/O failures |
 | `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
@@ -448,7 +448,7 @@ A fully converged directory reports every name as `same` and exits 0.
 ## nxr mirror
 
 ```
-nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run]
+nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run] [--src-user USER:PASS] [--dst-user USER:PASS] [--prefix PREFIX]
 ```
 
 Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
@@ -495,7 +495,7 @@ When the enumeration leads with `version.json`, the conventional version documen
 ## nxr rm
 
 ```
-nxr rm <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run]
+nxr rm <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run] [--prefix PREFIX]
 ```
 
 Delete a version, name by name: the `.sha256` marker of every enumerated name goes first, then the bytes, so nobody ever sees a complete object mid-delete ([the protocol](protocol.md#deletion)).

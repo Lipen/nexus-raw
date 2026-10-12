@@ -1,65 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="860" height="693.8" viewBox="0 0 860 693.8" role="img" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15.9">
-<title>nxr 0.3.0 · against mock-nexus (slow)</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="717.7" viewBox="0 0 860 717.7" role="img" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15.9">
+<title>nxr 0.12.0 · against mock-nexus (slow)</title>
 <desc>An animated transcript of a real nxr session against the mock server.</desc>
 <style>
-  @keyframes l0 { 0% {opacity:0} 2.877% {opacity:1} 97.411% {opacity:0} }
-  @keyframes w0_0 { 0%, 2.877% {width:0} 4.780%, 100% {width: 735.0px} }
-  @keyframes o0_0 { 0%, 2.877% {opacity:0} 2.877% {opacity:1} 4.780% {opacity:0} 100% {opacity:0} }
-  @keyframes x0_0 { 0%, 2.877% {transform:translateX(0)} 4.780%, 100% {transform:translateX(725.5px)} }
-  @keyframes w0_1 { 0%, 4.780% {width:0} 6.683%, 100% {width: 105.0px} }
-  @keyframes o0_1 { 0%, 4.780% {opacity:0} 4.780% {opacity:1} 6.683% {opacity:0} 100% {opacity:0} }
-  @keyframes x0_1 { 0%, 4.780% {transform:translateX(0)} 6.683%, 100% {transform:translateX(95.5px)} }
-  @keyframes l1 { 0% {opacity:0} 8.314% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l2 { 0% {opacity:0} 10.788% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l3 { 0% {opacity:0} 12.975% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l4 { 0% {opacity:0} 15.161% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l5 { 0% {opacity:0} 17.348% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l6 { 0% {opacity:0} 19.534% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l7 { 0% {opacity:0} 21.720% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l8 { 0% {opacity:0} 24.310% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l9 { 0% {opacity:0} 27.129% {opacity:1} 97.411% {opacity:0} }
-  @keyframes w9_0 { 0%, 27.129% {width:0} 30.452%, 100% {width: 620.5px} }
-  @keyframes o9_0 { 0%, 27.129% {opacity:0} 27.129% {opacity:1} 30.452% {opacity:0} 100% {opacity:0} }
-  @keyframes x9_0 { 0%, 27.129% {transform:translateX(0)} 30.452%, 100% {transform:translateX(610.9px)} }
-  @keyframes l10 { 0% {opacity:0} 31.876% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l11 { 0% {opacity:0} 34.436% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l12 { 0% {opacity:0} 37.025% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l13 { 0% {opacity:0} 39.787% {opacity:1} 97.411% {opacity:0} }
-  @keyframes w13_0 { 0%, 39.787% {width:0} 43.110%, 100% {width: 620.5px} }
-  @keyframes o13_0 { 0%, 39.787% {opacity:0} 39.787% {opacity:1} 43.110% {opacity:0} 100% {opacity:0} }
-  @keyframes x13_0 { 0%, 39.787% {transform:translateX(0)} 43.110%, 100% {transform:translateX(610.9px)} }
-  @keyframes l14 { 0% {opacity:0} 44.534% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l15 { 0% {opacity:0} 47.008% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l16 { 0% {opacity:0} 49.194% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l17 { 0% {opacity:0} 51.381% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l18 { 0% {opacity:0} 53.567% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l19 { 0% {opacity:0} 55.754% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l20 { 0% {opacity:0} 58.343% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l21 { 0% {opacity:0} 60.644% {opacity:1} 97.411% {opacity:0} }
-  @keyframes w21_0 { 0%, 60.644% {width:0} 62.658%, 100% {width: 248.2px} }
-  @keyframes o21_0 { 0%, 60.644% {opacity:0} 60.644% {opacity:1} 62.658% {opacity:0} 100% {opacity:0} }
-  @keyframes x21_0 { 0%, 60.644% {transform:translateX(0)} 62.658%, 100% {transform:translateX(238.6px)} }
-  @keyframes l22 { 0% {opacity:0} 64.269% {opacity:1} 97.411% {opacity:0} }
-  @keyframes l23 { 0% {opacity:0} 66.456% {opacity:1} 97.411% {opacity:0} }
+  @keyframes l0 { 0% {opacity:0} 2.849% {opacity:1} 97.436% {opacity:0} }
+  @keyframes w0_0 { 0%, 2.849% {width:0} 4.734%, 100% {width: 735.0px} }
+  @keyframes o0_0 { 0%, 2.849% {opacity:0} 2.849% {opacity:1} 4.734% {opacity:0} 100% {opacity:0} }
+  @keyframes x0_0 { 0%, 2.849% {transform:translateX(0)} 4.734%, 100% {transform:translateX(725.5px)} }
+  @keyframes w0_1 { 0%, 4.734% {width:0} 6.618%, 100% {width: 105.0px} }
+  @keyframes o0_1 { 0%, 4.734% {opacity:0} 4.734% {opacity:1} 6.618% {opacity:0} 100% {opacity:0} }
+  @keyframes x0_1 { 0%, 4.734% {transform:translateX(0)} 6.618%, 100% {transform:translateX(95.5px)} }
+  @keyframes l1 { 0% {opacity:0} 8.234% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l2 { 0% {opacity:0} 10.684% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l3 { 0% {opacity:0} 12.849% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l4 { 0% {opacity:0} 15.014% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l5 { 0% {opacity:0} 17.179% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l6 { 0% {opacity:0} 19.345% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l7 { 0% {opacity:0} 21.510% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l8 { 0% {opacity:0} 24.074% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l9 { 0% {opacity:0} 26.866% {opacity:1} 97.436% {opacity:0} }
+  @keyframes w9_0 { 0%, 26.866% {width:0} 30.157%, 100% {width: 620.5px} }
+  @keyframes o9_0 { 0%, 26.866% {opacity:0} 26.866% {opacity:1} 30.157% {opacity:0} 100% {opacity:0} }
+  @keyframes x9_0 { 0%, 26.866% {transform:translateX(0)} 30.157%, 100% {transform:translateX(610.9px)} }
+  @keyframes l10 { 0% {opacity:0} 31.567% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l11 { 0% {opacity:0} 34.103% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l12 { 0% {opacity:0} 36.667% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l13 { 0% {opacity:0} 39.402% {opacity:1} 97.436% {opacity:0} }
+  @keyframes w13_0 { 0%, 39.402% {width:0} 41.386%, 100% {width: 630.0px} }
+  @keyframes o13_0 { 0%, 39.402% {opacity:0} 39.402% {opacity:1} 41.386% {opacity:0} 100% {opacity:0} }
+  @keyframes x13_0 { 0%, 39.402% {transform:translateX(0)} 41.386%, 100% {transform:translateX(620.5px)} }
+  @keyframes w13_1 { 0%, 41.386% {width:0} 43.370%, 100% {width: 305.5px} }
+  @keyframes o13_1 { 0%, 41.386% {opacity:0} 41.386% {opacity:1} 43.370% {opacity:0} 100% {opacity:0} }
+  @keyframes x13_1 { 0%, 41.386% {transform:translateX(0)} 43.370%, 100% {transform:translateX(295.9px)} }
+  @keyframes l14 { 0% {opacity:0} 45.071% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l15 { 0% {opacity:0} 47.521% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l16 { 0% {opacity:0} 49.687% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l17 { 0% {opacity:0} 51.852% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l18 { 0% {opacity:0} 54.017% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l19 { 0% {opacity:0} 56.182% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l20 { 0% {opacity:0} 58.746% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l21 { 0% {opacity:0} 61.026% {opacity:1} 97.436% {opacity:0} }
+  @keyframes w21_0 { 0%, 61.026% {width:0} 63.020%, 100% {width: 248.2px} }
+  @keyframes o21_0 { 0%, 61.026% {opacity:0} 61.026% {opacity:1} 63.020% {opacity:0} 100% {opacity:0} }
+  @keyframes x21_0 { 0%, 61.026% {transform:translateX(0)} 63.020%, 100% {transform:translateX(238.6px)} }
+  @keyframes l22 { 0% {opacity:0} 64.615% {opacity:1} 97.436% {opacity:0} }
+  @keyframes l23 { 0% {opacity:0} 66.781% {opacity:1} 97.436% {opacity:0} }
   .l { opacity: 0 }
   .caret { fill: #eef3f4 }
   @media (prefers-reduced-motion: reduce) { .l { opacity: 1; animation: none } .caret { display: none } }
 </style>
 <defs>
-  <clipPath id="cp0"><rect x="24.7" y="74.9" width="0" height="23.9" style="animation: w0_0 17.38s linear infinite"/><rect x="24.7" y="98.8" width="0" height="23.9" style="animation: w0_1 17.38s linear infinite"/></clipPath>
-  <clipPath id="cp9"><rect x="24.7" y="313.6" width="0" height="23.9" style="animation: w9_0 17.38s linear infinite"/></clipPath>
-  <clipPath id="cp13"><rect x="24.7" y="409.0" width="0" height="23.9" style="animation: w13_0 17.38s linear infinite"/></clipPath>
-  <clipPath id="cp21"><rect x="24.7" y="599.9" width="0" height="23.9" style="animation: w21_0 17.38s linear infinite"/></clipPath>
+  <clipPath id="cp0"><rect x="24.7" y="74.9" width="0" height="23.9" style="animation: w0_0 17.55s linear infinite"/><rect x="24.7" y="98.8" width="0" height="23.9" style="animation: w0_1 17.55s linear infinite"/></clipPath>
+  <clipPath id="cp9"><rect x="24.7" y="313.6" width="0" height="23.9" style="animation: w9_0 17.55s linear infinite"/></clipPath>
+  <clipPath id="cp13"><rect x="24.7" y="409.0" width="0" height="23.9" style="animation: w13_0 17.55s linear infinite"/><rect x="24.7" y="432.9" width="0" height="23.9" style="animation: w13_1 17.55s linear infinite"/></clipPath>
+  <clipPath id="cp21"><rect x="24.7" y="623.8" width="0" height="23.9" style="animation: w21_0 17.55s linear infinite"/></clipPath>
 </defs>
-<rect x="0.5" y="0.5" width="859" height="692.8" rx="18.75" fill="#0e181a" stroke="#273638"/>
+<rect x="0.5" y="0.5" width="859" height="716.7" rx="18.75" fill="#0e181a" stroke="#273638"/>
 <path d="M0 52.8 h860" stroke="#273638"/>
 <rect x="0.5" y="0.5" width="859" height="52.8" rx="18.75" fill="#172426"/>
 <circle cx="30.2" cy="26.4" r="7.4" fill="#f97770"/><circle cx="53.1" cy="26.4" r="7.4" fill="#eebc4a"/><circle cx="75.9" cy="26.4" r="7.4" fill="#67d283"/>
-<text x="92.3" y="31.3" fill="#9aa7aa" font-size="14.8">nxr 0.3.0 · against mock-nexus (slow)</text>
-<text class="l" x="24.7" y="90.0" fill="#eef3f4" font-weight="600" clip-path="url(#cp0)" style="animation: l0 17.38s step-end infinite">$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first manifest.json</text><text class="l" x="24.7" y="113.9" fill="#eef3f4" font-weight="600" clip-path="url(#cp0)" style="animation: l0 17.38s step-end infinite">--workers 1</text><text class="l" x="24.7" y="137.8" fill="#b6c8c9" style="animation: l1 17.38s step-end infinite">plan: 4 to upload, 0 to download, 0 up to date</text><text class="l" x="24.7" y="161.6" fill="#51cec7" style="animation: l2 17.38s step-end infinite">↑ manifest.json ok</text><text class="l" x="24.7" y="185.5" fill="#51cec7" style="animation: l3 17.38s step-end infinite">↑ app-1.4.0.zip ok</text><text class="l" x="24.7" y="209.4" fill="#51cec7" style="animation: l4 17.38s step-end infinite">↑ bom/linux-x86_64.json ok</text><text class="l" x="24.7" y="233.2" fill="#51cec7" style="animation: l5 17.38s step-end infinite">↑ pinned.xml ok</text><text class="l" x="24.7" y="257.1" fill="#d0d9db" style="animation: l6 17.38s step-end infinite">uploaded 4, downloaded 0, skipped 0</text><text class="l" x="24.7" y="280.9" fill="#d0d9db" style="animation: l7 17.38s step-end infinite"></text><text class="l" x="24.7" y="304.8" fill="#889597" font-style="italic" style="animation: l8 17.38s step-end infinite"># give the version a name, so consumers never hard-code it</text><text class="l" x="24.7" y="328.7" fill="#eef3f4" font-weight="600" clip-path="url(#cp9)" style="animation: l9 17.38s step-end infinite">$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward</text><text class="l" x="24.7" y="352.5" fill="#b6c8c9" style="animation: l10 17.38s step-end infinite">channel: set http://127.0.0.1:8734/latest → 1.4.0</text><text class="l" x="24.7" y="376.4" fill="#d0d9db" style="animation: l11 17.38s step-end infinite"></text><text class="l" x="24.7" y="400.3" fill="#889597" font-style="italic" style="animation: l12 17.38s step-end infinite"># fetch that version back, digests checked on the way in</text><text class="l" x="24.7" y="424.1" fill="#eef3f4" font-weight="600" clip-path="url(#cp13)" style="animation: l13 17.38s step-end infinite">$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --workers 1</text><text class="l" x="24.7" y="448.0" fill="#b6c8c9" style="animation: l14 17.38s step-end infinite">plan: 0 to upload, 3 to download, 0 up to date</text><text class="l" x="24.7" y="471.9" fill="#51cec7" style="animation: l15 17.38s step-end infinite">↓ app-1.4.0.zip ok</text><text class="l" x="24.7" y="495.7" fill="#51cec7" style="animation: l16 17.38s step-end infinite">↓ bom/linux-x86_64.json ok</text><text class="l" x="24.7" y="519.6" fill="#51cec7" style="animation: l17 17.38s step-end infinite">↓ pinned.xml ok</text><text class="l" x="24.7" y="543.5" fill="#d0d9db" style="animation: l18 17.38s step-end infinite">uploaded 0, downloaded 3, skipped 0</text><text class="l" x="24.7" y="567.3" fill="#d0d9db" style="animation: l19 17.38s step-end infinite"></text><text class="l" x="24.7" y="591.2" fill="#889597" font-style="italic" style="animation: l20 17.38s step-end infinite"># check every digest offline, no network</text><text class="l" x="24.7" y="615.1" fill="#eef3f4" font-weight="600" clip-path="url(#cp21)" style="animation: l21 17.38s step-end infinite">$ nxr verify vendor/1.4.0/</text><text class="l" x="24.7" y="638.9" fill="#b6c8c9" style="animation: l22 17.38s step-end infinite">verify: 3 ok, FAILED: none</text><text class="l" x="24.7" y="662.8" fill="#d0d9db" style="animation: l23 17.38s step-end infinite">uploaded 0, downloaded 0, skipped 3</text>
-<rect class="caret" x="24.7" y="74.9" width="9.5" height="19.9" style="animation: o0_0 17.38s step-end infinite, x0_0 17.38s linear infinite"/>
-<rect class="caret" x="24.7" y="98.8" width="9.5" height="19.9" style="animation: o0_1 17.38s step-end infinite, x0_1 17.38s linear infinite"/>
-<rect class="caret" x="24.7" y="313.6" width="9.5" height="19.9" style="animation: o9_0 17.38s step-end infinite, x9_0 17.38s linear infinite"/>
-<rect class="caret" x="24.7" y="409.0" width="9.5" height="19.9" style="animation: o13_0 17.38s step-end infinite, x13_0 17.38s linear infinite"/>
-<rect class="caret" x="24.7" y="599.9" width="9.5" height="19.9" style="animation: o21_0 17.38s step-end infinite, x21_0 17.38s linear infinite"/>
+<text x="92.3" y="31.3" fill="#9aa7aa" font-size="14.8">nxr 0.12.0 · against mock-nexus (slow)</text>
+<text class="l" x="24.7" y="90.0" fill="#eef3f4" font-weight="600" clip-path="url(#cp0)" style="animation: l0 17.55s step-end infinite">$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first app-1.4.0.zip</text><text class="l" x="24.7" y="113.9" fill="#eef3f4" font-weight="600" clip-path="url(#cp0)" style="animation: l0 17.55s step-end infinite">--workers 1</text><text class="l" x="24.7" y="137.8" fill="#b6c8c9" style="animation: l1 17.55s step-end infinite">plan: 4 to upload, 0 to download, 0 up to date</text><text class="l" x="24.7" y="161.6" fill="#51cec7" style="animation: l2 17.55s step-end infinite">↑ app-1.4.0.zip ok</text><text class="l" x="24.7" y="185.5" fill="#51cec7" style="animation: l3 17.55s step-end infinite">↑ bom/linux-x86_64.json ok</text><text class="l" x="24.7" y="209.4" fill="#51cec7" style="animation: l4 17.55s step-end infinite">↑ names.txt ok</text><text class="l" x="24.7" y="233.2" fill="#51cec7" style="animation: l5 17.55s step-end infinite">↑ pinned.xml ok</text><text class="l" x="24.7" y="257.1" fill="#d0d9db" style="animation: l6 17.55s step-end infinite">uploaded 4, downloaded 0, skipped 0</text><text class="l" x="24.7" y="280.9" fill="#d0d9db" style="animation: l7 17.55s step-end infinite"></text><text class="l" x="24.7" y="304.8" fill="#889597" font-style="italic" style="animation: l8 17.55s step-end infinite"># give the version a name, so consumers never hard-code it</text><text class="l" x="24.7" y="328.7" fill="#eef3f4" font-weight="600" clip-path="url(#cp9)" style="animation: l9 17.55s step-end infinite">$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward</text><text class="l" x="24.7" y="352.5" fill="#b6c8c9" style="animation: l10 17.55s step-end infinite">channel: set http://127.0.0.1:8734/latest → 1.4.0</text><text class="l" x="24.7" y="376.4" fill="#d0d9db" style="animation: l11 17.55s step-end infinite"></text><text class="l" x="24.7" y="400.3" fill="#889597" font-style="italic" style="animation: l12 17.55s step-end infinite"># fetch that version back, digests checked on the way in</text><text class="l" x="24.7" y="424.1" fill="#eef3f4" font-weight="600" clip-path="url(#cp13)" style="animation: l13 17.55s step-end infinite">$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --names-from</text><text class="l" x="24.7" y="448.0" fill="#eef3f4" font-weight="600" clip-path="url(#cp13)" style="animation: l13 17.55s step-end infinite">dist/1.4.0/names.txt --workers 1</text><text class="l" x="24.7" y="471.9" fill="#b6c8c9" style="animation: l14 17.55s step-end infinite">plan: 0 to upload, 3 to download, 0 up to date</text><text class="l" x="24.7" y="495.7" fill="#51cec7" style="animation: l15 17.55s step-end infinite">↓ app-1.4.0.zip ok</text><text class="l" x="24.7" y="519.6" fill="#51cec7" style="animation: l16 17.55s step-end infinite">↓ bom/linux-x86_64.json ok</text><text class="l" x="24.7" y="543.5" fill="#51cec7" style="animation: l17 17.55s step-end infinite">↓ pinned.xml ok</text><text class="l" x="24.7" y="567.3" fill="#d0d9db" style="animation: l18 17.55s step-end infinite">uploaded 0, downloaded 3, skipped 0</text><text class="l" x="24.7" y="591.2" fill="#d0d9db" style="animation: l19 17.55s step-end infinite"></text><text class="l" x="24.7" y="615.1" fill="#889597" font-style="italic" style="animation: l20 17.55s step-end infinite"># check every digest offline, no network</text><text class="l" x="24.7" y="638.9" fill="#eef3f4" font-weight="600" clip-path="url(#cp21)" style="animation: l21 17.55s step-end infinite">$ nxr verify vendor/1.4.0/</text><text class="l" x="24.7" y="662.8" fill="#d0d9db" style="animation: l22 17.55s step-end infinite">uploaded 0, downloaded 0, skipped 3</text><text class="l" x="24.7" y="686.7" fill="#b6c8c9" style="animation: l23 17.55s step-end infinite">verify: 3 ok, FAILED: none</text>
+<rect class="caret" x="24.7" y="74.9" width="9.5" height="19.9" style="animation: o0_0 17.55s step-end infinite, x0_0 17.55s linear infinite"/>
+<rect class="caret" x="24.7" y="98.8" width="9.5" height="19.9" style="animation: o0_1 17.55s step-end infinite, x0_1 17.55s linear infinite"/>
+<rect class="caret" x="24.7" y="313.6" width="9.5" height="19.9" style="animation: o9_0 17.55s step-end infinite, x9_0 17.55s linear infinite"/>
+<rect class="caret" x="24.7" y="409.0" width="9.5" height="19.9" style="animation: o13_0 17.55s step-end infinite, x13_0 17.55s linear infinite"/>
+<rect class="caret" x="24.7" y="432.9" width="9.5" height="19.9" style="animation: o13_1 17.55s step-end infinite, x13_1 17.55s linear infinite"/>
+<rect class="caret" x="24.7" y="623.8" width="9.5" height="19.9" style="animation: o21_0 17.55s step-end infinite, x21_0 17.55s linear infinite"/>
 </svg>
