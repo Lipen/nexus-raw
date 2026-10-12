@@ -8,6 +8,6 @@
     "start": "node publish-and-consume.mjs"
   },
   "dependencies": {
-    "@nexus-raw/nxr": "0.12.0"
+    "@nexus-raw/nxr": "0.13.0"
   }
 }
