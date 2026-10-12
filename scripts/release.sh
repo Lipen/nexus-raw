@@ -190,6 +190,8 @@ for i in 1 2 3 4 5 6; do
   [ -n "$run" ] && break
 done
 [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
+echo "the run appeared: https://github.com/Lipen/nexus-raw/actions/runs/$run"
+echo "watching it until it settles (progress streams below)"
 # The watch streams progress and dies quietly on a network hiccup; the loop
 # below owns the verdict. It polls the run state, not the watch exit code:
 # a failed run exits nonzero too, and retrying that would spin forever.

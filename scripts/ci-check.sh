@@ -12,24 +12,22 @@ set -eu
 # so this is a courtesy to the API, not a guess about timing.
 POLL_SECS=5
 
+die() { echo "ci-check: $*" >&2; exit 2; }
+
 sha="$(git rev-parse --verify --quiet HEAD^{commit} 2>/dev/null || true)"
-if [ -z "$sha" ]; then
-  echo "ci-check: not a git repository or no HEAD commit" >&2
-  exit 2
-fi
+[ -n "$sha" ] || die "not a git repository or no HEAD commit"
+
 quick=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --sha)
-      [ -n "${2:-}" ] || { echo "usage: ci-check.sh [--sha X] [--quick]" >&2; exit 2; }
-      if ! sha="$(git rev-parse --verify --quiet "$2^{commit}" 2>/dev/null)"; then
-        echo "ci-check: unknown commit '$2'" >&2
-        exit 2
-      fi
+      [ -n "${2:-}" ] || die "usage: ci-check.sh [--sha X] [--quick]"
+      sha="$(git rev-parse --verify --quiet "$2^{commit}" 2>/dev/null)" \
+          || die "unknown commit '$2'"
       shift 2
       ;;
     --quick) quick=1; shift ;;
-    *) echo "usage: ci-check.sh [--sha X] [--quick]" >&2; exit 2 ;;
+    *) die "usage: ci-check.sh [--sha X] [--quick]" ;;
   esac
 done
 short="$(git rev-parse --short "$sha")"
@@ -39,6 +37,15 @@ if [ -t 1 ]; then
 else
   G="" R="" DIM="" N=""
 fi
+say() { printf '%sci-check:%s %s\n' "$DIM" "$N" "$1"; }
+verdict() { # $1 = conclusion, $2 = run id
+  if [ "$1" = success ]; then
+    printf '%sci-check:%s %s is %sGREEN%s\n' "$DIM" "$N" "$short" "$G" "$N"
+    return 0
+  fi
+  printf '%sci-check:%s %s is %s%s%s (run %s)%s\n' "$DIM" "$N" "$short" "$R" "${1:-unknown}" "$2" "$N" >&2
+  return 1
+}
 
 # Find the check run of this commit: not a nightly, not a release.
 run=""
@@ -49,7 +56,7 @@ while :; do
     echo "ci-check: no CI run found for $short" >&2
     exit 1
   fi
-  printf '%sci-check:%s %s: waiting for the run to appear%s\n' "$DIM" "$N" "$short" "$N"
+  say "$short: waiting for the run to appear"
   sleep "$POLL_SECS"
 done
 
@@ -59,23 +66,15 @@ out=""
 while :; do
   if out="$(gh run view "$run" --json status,conclusion 2>/dev/null)"; then
     status="$(jq -r '.status' <<<"$out")"
-    if [ "$status" = completed ]; then break; fi
+    [ "$status" = completed ] && break
     if [ "$status" != "$last" ]; then
-      printf '%sci-check:%s %s is %s (run %s)%s\n' "$DIM" "$N" "$short" "$status" "$run" "$N"
+      say "$short is $status (run $run)"
       last="$status"
     fi
   fi
-  if [ "$quick" -eq 1 ]; then
-    printf '%sci-check:%s %s is %s (run %s)%s\n' "$DIM" "$N" "$short" "$status" "$run" "$N" >&2
-    exit 3
-  fi
+  [ "$quick" -eq 1 ] && { say "$short is $status (run $run)" >&2; exit 3; }
   sleep "$POLL_SECS"
 done
 
 conclusion="$(jq -r '.conclusion' <<<"$out")"
-if [ "$conclusion" = success ]; then
-  printf '%sci-check:%s %s is %sGREEN%s\n' "$DIM" "$N" "$short" "$G" "$N"
-else
-  printf '%sci-check:%s %s is %s%s%s (run %s)%s\n' "$DIM" "$N" "$short" "$R" "${conclusion:-unknown}" "$run" "$N" >&2
-  exit 1
-fi
+verdict "$conclusion" "$run" || exit 1
