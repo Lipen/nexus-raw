@@ -39,6 +39,9 @@ fi
 # Find the run for this commit: the check run, not a nightly or a release.
 run=""
 i=0
+if [ "$quick" -ne 1 ]; then
+  printf '%sci-check:%s %s: looking for the CI run%s\n' "$DIM" "$N" "$short" "$N"
+fi
 while [ "$i" -lt 30 ]; do
   run="$(gh run list --workflow CI --commit "$sha" --limit 1 --json databaseId,status --jq '.[0].databaseId' 2>/dev/null || true)"
   [ -n "$run" ] && break
@@ -63,9 +66,11 @@ else
   # gh versions: judge the state first, watch only a run still in flight.
   out="$(gh run view "$run" --json status,conclusion 2>/dev/null || true)"
   if [ "$(jq -r '.status' <<<"$out")" != completed ]; then
-    gh run watch "$run" --interval 10 >/dev/null 2>&1 || true
+    # Stream the progress: a silent ten-minute terminal reads as a hang.
+    gh run watch "$run" --interval 10 --exit-status >/dev/null 2>&1 || true
     out="$(gh run view "$run" --json status,conclusion 2>/dev/null || true)"
     while [ "$(jq -r '.status' <<<"$out")" != completed ]; do
+      printf '%sci-check:%s still waiting on run %s%s\n' "$DIM" "$N" "$run" "$N"
       sleep 10
       out="$(gh run view "$run" --json status,conclusion 2>/dev/null || true)"
     done
