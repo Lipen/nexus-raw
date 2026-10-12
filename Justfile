@@ -171,50 +171,7 @@ bump part:
 release v *mode:
     #!/bin/sh
     set -eu
-    case "{{v}}" in
-      [0-9]*.[0-9]*.[0-9]*) ;;
-      *) echo "release: {{v}} is not X.Y.Z" >&2; exit 2 ;;
-    esac
-    yes=""
-    for m in {{mode}}; do
-      case "$m" in
-        --yes) yes=1 ;;
-        *) echo "release: unknown mode '$m' (want --yes)" >&2; exit 2 ;;
-      esac
-    done
-    if [ -z "$yes" ]; then
-      exec scripts/release-preview.sh "{{v}}"
-    fi
-    if [ -n "$(git status --porcelain)" ]; then
-      echo "release {{v}}: the tree is dirty, commit or stash first (a --yes run commits only its own bump)" >&2
-      exit 1
-    fi
-    just version "{{v}}"
-    python3 scripts/changelog-finalize.py "{{v}}"
-    # Every lockfile follows the bump inside the same commit: the post-release
-    # `just lock` only refreshes examples/node against the now-published registry.
-    just lock
-    git add -u
-    if git diff --cached --quiet; then
-      echo "release {{v}}: the bump produced no changes, the version is already {{v}}?" >&2
-      exit 1
-    fi
-    git commit -m "chore: bump the workspace to {{v}}"
-    git push origin master
-    sha="$(git rev-parse origin/master)"
-    # The dispatch API takes a branch, not a raw SHA: master is the ref, and
-    # the gate validates whatever HEAD it gets.
-    echo "dispatching the release on $sha"
-    gh workflow run release.yml --ref master
-    run=""
-    for i in 1 2 3 4 5 6; do
-      sleep 5
-      run="$(gh run list --workflow=Release --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-      [ -n "$run" ] && break
-    done
-    [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
-    gh run watch "$run" --interval 30 --exit-status
-    echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v{{v}}"
+    exec scripts/release.sh "{{v}}" {{mode}}
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('release')]
