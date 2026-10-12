@@ -234,14 +234,14 @@ The [CLI output section](cli.md#output) shows where each shape appears.
 
 ## Errors
 
-`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `ReadOnly`, `Transport`, `Http`, `ServiceMissing`, `SearchRepoMissing`, `Misuse`, `Io`.
+`nexus_raw_core::Error` is the whole taxonomy: `Mismatch`, `Incomplete`, `UnsafeName`, `Missing`, `Enumerate`, `Auth`, `Transport`, `Http`, `ServiceMissing`, `SearchRepoMissing`, `ReadOnly`, `Misuse`, `Io`, `SmallObjectCap`, `ServerBody`.
 `Error::exit_code()` maps it to the CLI's exit classes and `Error::hint()` returns the human hint.
 Both are covered variant by variant in [errors and exit codes](errors.md).
 `Verdict` (diff refusals: `Mismatch`, `Missing`) converts into `Error` with `From`, so a refused plan and a refused transfer look identical to a caller.
 
 ## Node bindings
 
-The npm package `nexus-raw` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
+The npm package `@nexus-raw/nxr` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
 Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
 Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.

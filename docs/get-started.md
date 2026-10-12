@@ -166,8 +166,9 @@ Run a second mock in its `slow` scenario, which writes response bodies in small 
 ```console
 $ mock-nexus slow --chunk-delay-ms 300 --chunk-size 2048 --port 8095 &
 listening http://127.0.0.1:8095
+$ printf 'app-1.4.0.zip\npinned.xml\nbom/linux-x86_64.json\n' > names.txt
 $ nxr up dist/1.4.0/ http://127.0.0.1:8095/1.4.0/ >/dev/null
-$ timeout 3 nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
+$ timeout 3 nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/ --names-from names.txt
 plan: 0 to upload, 3 to download, 0 up to date
 ↓ pinned.xml ok
 ↓ bom/linux-x86_64.json ok
@@ -186,7 +187,7 @@ Repeat the same command: resume is the default, so no flag is needed.
 Finished names are skipped, and the part file continues through a `Range: bytes=N-` request:
 
 ```console
-$ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/
+$ nxr down http://127.0.0.1:8095/1.4.0/ vendor/resume/ --names-from names.txt
 plan: 0 to upload, 1 to download, 2 up to date
 ○ bom/linux-x86_64.json skipped
 ○ pinned.xml skipped

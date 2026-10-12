@@ -57,7 +57,7 @@ One binary, nothing to install on the server: the URL in argv, credentials from 
 
 What the recording shows, one beat per command:
 
-1. **Publish**: `nxr up --claim-first manifest.json` puts a version directory on the server, the enumeration document first, then the bytes and their `.sha256` markers.
+1. **Publish**: `nxr up` puts a version directory on the server, the claim name first, then the bytes and their `.sha256` markers.
 2. **Name**: `nxr channel set --if-forward` points `latest` at it, and a pointer only moves forward.
 3. **Fetch**: `nxr down` pulls that version back, and an interrupted pull resumes by repeating the same command.
 4. **Verify**: `nxr verify` checks every digest offline, no network.
@@ -74,7 +74,7 @@ The full tour: [run the demo](how-to/demo.md).
 - [:material-language-rust: **First transfer in Rust** *The facade, one transfer, the local mock.* `cargo add nexus-raw-core`](tutorials/rust/)
 - [:material-language-typescript: **First transfer in Node** *Promises over the same surface, a diff before any write.* `pnpm add nexus-raw`](tutorials/node/)
 - [:material-console: **First transfer in a terminal** *The release binary and the one-liners.* `nxr up`](tutorials/ops/)
-- [:material-upload: **Publish a version** *The manifest lands first, bytes and markers follow.* `nxr up --claim-first`](how-to/publish/)
+- [:material-upload: **Publish a version** *The claim lands first, bytes and markers follow.* `nxr up --claim-first`](how-to/publish/)
 - [:material-download: **Fetch artifacts** *Named files come down verified, an interrupted pull resumes.* `nxr down`](how-to/consume/)
 - [:material-play-circle: **See it run** *The full session against the mock, then on your machine.* `just demo`](how-to/demo/)
 - [:material-robot: **Use it in CI** *Exit codes, NDJSON events, credentials from the environment.* `nxr --json`](how-to/ci/)

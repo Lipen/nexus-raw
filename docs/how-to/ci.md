@@ -137,7 +137,7 @@ fetch:
     - export NXR_USERNAME=ci-bot NXR_PASSWORD="$SECRET_TOKEN"
     - BASE=https://nexus.example.com/repository/raw-main
     - V=$(nxr channel get "$BASE/latest")
-    - nxr down "$BASE/$V/" vendor/app/ --json | jq -e 'select(.event=="summary") | .failed == []'
+    - nxr down "$BASE/$V/" vendor/app/ --names-from names.txt --json | jq -e 'select(.event=="summary") | .failed == []'
     - nxr verify vendor/app/
 ```
 

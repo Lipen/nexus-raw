@@ -2,7 +2,7 @@
 
 Every failure names its kind, the object and both sides of a disagreement.
 Every error also prints one `hint:` line on stderr telling you what to check next.
-The taxonomy has thirteen variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+The taxonomy has sixteen variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 
 ## The taxonomy
 
@@ -14,8 +14,8 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 |:--------|:--------|:----:|:----------------|:--------------|
 | `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | `the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object` | the same name was published twice with different content, or a sibling belongs to a foreign object |
 | `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command: finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written |
-| `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the enumeration source` | a typo, or a manifest entry for something never published |
-| `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `repeat --name, use --names-from FILE, or use --ls when the server has the search API` | no `manifest.json` at the directory URL and no flag naming a source |
+| `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the enumeration source` | a typo, or a name list that drifted from what was published |
+| `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `repeat --name, use --names-from FILE, or use --ls when the server has the search API` | no `--name`, `--names-from` or `--ls` on the call |
 | `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
 | `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |

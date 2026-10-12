@@ -1,7 +1,7 @@
 # Node quickstart
 
 From an empty directory to a verified transfer in Node, in about five minutes.
-The npm package `nexus-raw` exposes the `nxr` command surface as promises: one function per command, the URL as an argument, no config file.
+The npm package `@nexus-raw/nxr` exposes the `nxr` command surface as promises: one function per command, the URL as an argument, no config file.
 
 Prebuilt native addons ship for Linux x64, Linux arm64, macOS x64 and macOS arm64.
 
@@ -16,7 +16,7 @@ From a shell instead of a library: [the terminal quickstart](ops.md).
 
 ## Start the mock
 
-From the `nexus-raw` repository checkout:
+From the repository checkout:
 
 ```bash
 cargo run -p mock-nexus -- atomic --port 8080
@@ -32,7 +32,7 @@ Everything below talks to `http://127.0.0.1:8080`.
 mkdir first-transfer-js
 cd first-transfer-js
 pnpm init
-pnpm add nexus-raw
+pnpm add @nexus-raw/nxr
 ```
 
 ## The script
@@ -41,16 +41,12 @@ Write `quickstart.mjs`:
 
 ```js
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { up, down, diff } from 'nexus-raw'
+import { up, down, diff } from '@nexus-raw/nxr'
 
-// A version directory: the bytes plus the manifest that names them.
+// A version directory: plain artifacts, no reserved names.
 mkdirSync('dist/bom', { recursive: true })
 writeFileSync('dist/app.bin', Buffer.alloc(4096, 7))
 writeFileSync('dist/bom/deps.json', '{"webpack":"5"}')
-writeFileSync(
-  'dist/manifest.json',
-  JSON.stringify({ artifacts: ['app.bin', 'bom/deps.json', 'manifest.json'] }),
-)
 
 const repo = 'http://127.0.0.1:8080/demo/2.0.0/'
 
@@ -58,8 +54,8 @@ const repo = 'http://127.0.0.1:8080/demo/2.0.0/'
 const upSummary = await up('dist', repo)
 console.log(`up: uploaded ${upSummary.uploaded}`)
 
-// Fetch the version back: the manifest at the directory URL names what comes down.
-const downSummary = await down(repo, 'vendor')
+// Fetch the version back: the names you pass decide what comes down.
+const downSummary = await down(repo, 'vendor', { names: ['app.bin', 'bom/deps.json'] })
 console.log(`down: downloaded ${downSummary.downloaded}`)
 
 // Compare before writing anything: the local tree against the storage.
@@ -80,11 +76,10 @@ node quickstart.mjs
 ```
 
 ```console
-up: uploaded 3
-down: downloaded 3
+up: uploaded 2
+down: downloaded 2
 same app.bin
 same bom/deps.json
-same manifest.json
 ```
 
 ## Compare before you upload

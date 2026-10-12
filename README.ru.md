@@ -71,12 +71,12 @@ cargo install --path crates/nexus-raw --locked
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down нужен перечень имён: manifest.json его и даёт
-printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
+# down берёт перечень имён из флагов
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 V=$(nxr channel get "$BASE/latest")
-nxr down "$BASE/$V/" vendor/prebuilt
+printf 'app-1.4.0.zip\n' > names.txt
+nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt --name app-1.4.0.zip
 nxr verify vendor/prebuilt
 ```
 
@@ -90,23 +90,23 @@ nxr verify vendor/prebuilt
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--manifest F] [--no-sha] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
-| `nxr down <SRC_URL> <DST_DIR> [--manifest F\|URL\|-] [--name N]... [--ls] [--fresh] [--plan]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет |
-| `nxr mirror <SRC_URL> <DST_URL> [--manifest F\|URL\|-] [--name N]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
-| `nxr rm <SRC_URL> [--manifest F\|URL\|-] [--name N]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
+| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
+| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--plan]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет |
+| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
+| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror в приёмник, затем удаление в источнике (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point --clear <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
 | `nxr ls <URL> [--assets]` | листинг raw-дерева каталога на любой глубине (папки с `/`). `--assets`: плоские имена артефактов |
 | `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена (`--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке) |
-| `nxr verify <DIR> [--manifest F\|-]` | локально байты + маркер + digest, без сети |
+| `nxr verify <DIR>` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 | `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
 | `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
 
-`down`, `diff`, `mirror` и `rm` берут перечисление явно: `manifest.json` в каталоге версии, `--manifest`, повторяемый `--name` или best-effort `--ls`.
-Без любого из них команда отказывает.
+`down`, `diff`, `mirror` и `rm` берут перечисление явно: повторяемый `--name`, `--names-from FILE` (по одному имени в строке, `-` это stdin) или best-effort `--ls` при наличии на сервере search API.
+Без источника команда отказывает.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.

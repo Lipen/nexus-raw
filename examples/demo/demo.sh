@@ -127,11 +127,7 @@ build_payloads() {
   fill "$DIST/app-1.4.0.zip" 98304 "application bytes for the 1.4.0 release"
   fill "$DIST/bom/linux-x86_64.json" 8192 '{"component":"demo","platform":"linux-x86_64"}'
   fill "$DIST/pinned.xml" 512 '<pinned><component name="demo"/></pinned>'
-  cat > "$DIST/manifest.json" <<'JSON'
-{
-  "artifacts": ["app-1.4.0.zip", "bom/linux-x86_64.json", "pinned.xml"]
-}
-JSON
+  printf 'app-1.4.0.zip\nbom/linux-x86_64.json\npinned.xml\n' > "$DIST/names.txt"
 }
 
 # ---- the mock ------------------------------------------------------------
@@ -202,7 +198,7 @@ start_mock "$SCENARIO" "$@"
 REPO="${MOCK_URL%/}"
 
 note "--- publish a version directory ----------------------------------"
-run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first manifest.json --workers 1
+run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first app-1.4.0.zip --workers 1
 say ""
 
 note "--- name it, so consumers never hard-code a version --------------"
@@ -222,7 +218,7 @@ say ""
 
 note "--- consume exactly that version ---------------------------------"
 say "# fetch that version back, digests checked on the way in"
-run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
+run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 say ""
 
 note "--- verify offline, no network -----------------------------------"
@@ -237,12 +233,12 @@ printf 'edited by hand\n' >> "$VENDOR/app-1.4.0.zip"
 run_expecting_failure "$NXR" verify "$VENDOR/"
 say ""
 say "# the command that fetched it refuses to overwrite a diverged file"
-run_expecting_failure "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
+run_expecting_failure "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 say ""
 say "# delete the bad copy; a re-run fetches exactly what is missing"
 say "\$ rm -f vendor/1.4.0/app-1.4.0.zip vendor/1.4.0/app-1.4.0.zip.sha256"
 rm -f "$VENDOR/app-1.4.0.zip" "$VENDOR/app-1.4.0.zip.sha256"
-run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --workers 1
+run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 run "$NXR" verify "$VENDOR/"
 say ""
 fi
@@ -251,7 +247,7 @@ if [ "$SCOPE" = "full" ]; then
   say ""
   say "# the same publish, over a server that fails the first request per path"
   start_mock flaky --flaky 1
-  run "$NXR" up "$DIST/" "${MOCK_URL%/}/$VERSION/" --claim-first manifest.json --workers 1
+  run "$NXR" up "$DIST/" "${MOCK_URL%/}/$VERSION/" --claim-first app-1.4.0.zip --workers 1
   say ""
   say "# a server that wants credentials: wrong ones are transport, exit 3"
   start_mock auth-401 --auth ci:secret

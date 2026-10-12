@@ -37,14 +37,16 @@ Resolve it, then download the directory it names:
 
 ```bash
 V=$(nxr channel get https://nexus.example.com/repository/raw-main/latest)   # (1)!
-nxr down "https://nexus.example.com/repository/raw-main/$V/" vendor/app/    # (2)!
+printf 'app-1.4.0.zip\npinned.xml\nbom/linux-x86_64.json\n' > names.txt     # (2)!
+nxr down "https://nexus.example.com/repository/raw-main/$V/" vendor/app/ --names-from names.txt   # (3)!
 ```
 
 1. Prints the bare token, so `$(…)` captures exactly the version.
-2. The trailing slash matters: everything under this URL is the version.
+2. The list is yours: a file in your pipeline, one name per line.
+3. Everything under this URL that you named arrives, nothing else.
 
 ```console
-$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ --names-from names.txt
 plan: 0 to upload, 3 to download, 0 up to date
 ↓ app-1.4.0.zip ok
 ↓ pinned.xml ok
@@ -52,7 +54,7 @@ plan: 0 to upload, 3 to download, 0 up to date
 uploaded 0, downloaded 3, skipped 0
 ```
 
-Three `--name` flags, three fetched: the list is the caller's, and nothing you did not name arrives.
+Three names in the list, three fetched: the list is the caller's, and nothing you did not name arrives.
 
 ### What the pipeline guarantees
 

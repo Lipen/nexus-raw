@@ -74,7 +74,8 @@ BASE=https://nexus.example.com/repository/raw-main
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 V=$(nxr channel get "$BASE/latest")
-nxr down "$BASE/$V/" vendor/prebuilt
+printf 'app-1.4.0.zip\n' > names.txt
+nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt
 nxr verify vendor/prebuilt
 ```
 
@@ -89,11 +90,11 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
 | `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
-| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--ls] [--fresh] [--plan] [--prefix P]` | enumerate → diff → stream+hash → rename + local marker |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--ls] [--prefix P]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written |
-| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | enumerate at the source, diff at the destination, copy bytes + markers |
-| `nxr rm <SRC_URL> [--name N]... [--ls] [--dry-run] [--prefix P]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
-| `nxr mv <SRC_URL> <DST_URL> [--name N]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
+| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from F]... [--ls] [--fresh] [--plan] [--prefix P]` | enumerate → diff → stream+hash → rename + local marker |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written |
+| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | enumerate at the source, diff at the destination, copy bytes + markers |
+| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--prefix P]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
+| `nxr mv <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
 | `nxr point --clear <URL>` | DELETE a pointer file (channel ref, absent is fine) |
 | `nxr ls <URL> [--assets]` | the raw-tree listing of a directory URL, any depth (folders `/`-marked). `--assets`: flat artifact names |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
@@ -107,7 +108,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr service eula <URL> [--accept]` | the server's EULA gate. `--accept` opens it (nx-admin) |
 | `nxr complete <shell>` | print a shell completion script to stdout (bash, zsh, fish, powershell) |
 
-`down`, `diff`, `mirror`, `mv` and `rm` enumerate explicitly: repeatable `--name`, or best-effort `--ls` when the server has the search API.
+`down`, `diff`, `mirror`, `mv` and `rm` enumerate explicitly: repeatable `--name`, `--names-from FILE` (one name per line, `-` is stdin), or best-effort `--ls` when the server has the search API.
 With neither they refuse.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.

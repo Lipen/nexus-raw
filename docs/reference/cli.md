@@ -589,7 +589,7 @@ Move a version between repositories: `mirror` pours it into the destination, the
 $ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
 ```
 
-The enumeration lives at the source, with the same sources as `mirror`: repeatable `--name`, `--ls`, `--prefix`.
+The enumeration lives at the source, with the same sources as `mirror`: repeatable `--name`, `--names-from`, `--ls`, `--prefix`.
 The conventional version document transfers first (the claim), exactly like `mirror`.
 Per-side credentials work here too: `--src-user` and `--dst-user` override the shared `-u`.
 

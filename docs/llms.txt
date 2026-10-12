@@ -30,12 +30,12 @@ Intent to command:
 | server refuses writes | `nxr service eula <url> --accept` |
 | raw dir listing | `nxr ls <dir-url>` (`--json` for NDJSON) |
 | fetch one file | `nxr get <url> -o <file>` |
-| fetch a directory | `nxr down <dir-url> --dest <dir>` |
+| fetch a directory | `nxr down <dir-url> --names-from list.txt` |
 | push a directory | `nxr up <dir> <dir-url>` |
 | compare local vs remote | `nxr diff <dir> <dir-url>` |
 | move a version | `nxr mv <src-url> <dst-url>` |
 | copy a version | `nxr mirror <src-url> <dst-url>` |
-| delete a version | `nxr rm --version <ver-url>` |
+| delete a version | `nxr rm <dir-url> --names-from list.txt` |
 | local sanity check | `nxr verify <dir>` |
 | access diagnostics | `nxr doctor <url>` |
 

@@ -83,51 +83,50 @@ get: 14 bytes → notes.back
 ```
 
 A version directory, prepared once.
-The `manifest.json` at the version root names what consumers may fetch, and `down` and `diff` read it by convention:
+Two artifacts and nothing reserved: the meaning of a name belongs to the publisher.
 
 ```bash
 mkdir -p "dist/$V/bom"
 printf 'payload\n' > "dist/$V/app.zip"
 printf '{"dep":"x"}\n' > "dist/$V/bom/sbom.json"
-printf '{"artifacts":["app.zip","bom/sbom.json","manifest.json"]}\n' > "dist/$V/manifest.json"
 ```
 
-Compare before writing, then publish, then pull it back on another machine:
+Keep the name list next to the artifacts, then compare, publish and pull it back on another machine:
+
+```bash
+printf 'app.zip\nbom/sbom.json\n' > "dist/$V/list.txt"
+```
 
 ```bash
 nxr diff "dist/$V/" "$BASE/$V/" --name app.zip --name bom/sbom.json   # both sides, nothing moves
 nxr up "dist/$V/" "$BASE/$V/" --plan                                 # the upload plan only
 nxr up "dist/$V/" "$BASE/$V/"                                        # the transfer
-nxr down "$BASE/$V/" "vendor/$V/"                                    # the same names, verified, resumable
+nxr down "$BASE/$V/" "vendor/$V/" --names-from "dist/$V/list.txt"    # the same names, verified, resumable
 nxr verify "vendor/$V/"                                              # digests again, offline
 ```
 
 ```console
-$ nxr diff "dist/$V/" "$BASE/$V/" --name app.zip --name bom/sbom.json
+$ nxr diff "dist/$V/" "$BASE/$V/" --names-from "dist/$V/list.txt"
 missing-remote app.zip
 missing-remote bom/sbom.json
-missing-remote manifest.json
 $ echo $?
 1
 $ nxr up "dist/$V/" "$BASE/$V/" --plan
 upload app.zip
 upload bom/sbom.json
-upload manifest.json
 $ nxr up "dist/$V/" "$BASE/$V/"
-plan: 3 to upload, 0 to download, 0 up to date
+plan: 2 to upload, 0 to download, 0 up to date
 ↑ app.zip ok
-↑ manifest.json ok
 ↑ bom/sbom.json ok
-uploaded 3, downloaded 0, skipped 0
-$ nxr down "$BASE/$V/" "vendor/$V/"
-plan: 0 to upload, 3 to download, 0 up to date
-↓ manifest.json ok
+uploaded 2, downloaded 0, skipped 0
+$ nxr down "$BASE/$V/" "vendor/$V/" --names-from "dist/$V/list.txt"
+plan: 0 to upload, 2 to download, 0 up to date
 ↓ app.zip ok
 ↓ bom/sbom.json ok
-uploaded 0, downloaded 3, skipped 0
+uploaded 0, downloaded 2, skipped 0
 $ nxr verify "vendor/$V/"
-verify: 3 ok, FAILED: none
-uploaded 0, downloaded 0, skipped 3
+verify: 2 ok, FAILED: none
+uploaded 0, downloaded 0, skipped 2
 ```
 
 The diff verdict rides the exit code: `0` when every name is `same`, `1` when the report holds a difference.

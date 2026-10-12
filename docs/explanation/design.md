@@ -76,7 +76,7 @@ Dependencies point one way, from UX down to transport, and no layer ever imports
 <path d="M9 4h6m-6 8h12m-12 8h8"/><circle cx="4" cy="4" r="1.8"/><circle cx="4" cy="12" r="1.8"/><circle cx="4" cy="20" r="1.8"/>
 </g></g>
 <text x="152" y="176" class="dg-name">L2 · layout helpers</text>
-<text x="152" y="196" class="dg-knows">channels · manifests · search listings</text>
+<text x="152" y="196" class="dg-knows">channels · listings · pointers</text>
 <text x="152" y="218" class="dg-blind">may not know the CLI exists</text>
 <!-- link L2 -> L1 -->
 <line x1="360" y1="240" x2="360" y2="264" class="dg-link" marker-end="url(#dg-arrow)"/>
@@ -118,7 +118,7 @@ Dependencies point one way, from UX down to transport, and no layer ever imports
 Each layer is blind on purpose.
 L0 knows HTTP, retries, stall detection, TLS and auth, and does not know that directories or markers exist.
 L1 knows scans, diffs, markers, workers and Range-resume, and does not know that versions or channels exist.
-L2 knows channels, manifests and listings, and does not know the CLI exists.
+L2 knows channels and listings, and does not know the CLI exists.
 L3 is the only layer allowed to talk to a human.
 
 The point of the blindness: a wrapper that wants raw PUT-with-retry embeds L0 and nothing above it.
@@ -127,7 +127,7 @@ Both enter through the [Rust facade](../reference/api.md).
 
 ## Completion is bytes plus a marker
 
-Checksum catalogs, manifests and lockfiles share one flaw: the catalog and the content are two objects with two lifecycles, and every divergence between them is a bug class.
+Checksum catalogs, name lists and lockfiles share one flaw: the catalog and the content are two objects with two lifecycles, and every divergence between them is a bug class.
 The sha-sibling puts the proof next to the bytes, in `sha256sum -c` format Unix tools already speak.
 A name is complete exactly when bytes and sibling both exist and the digest matches.
 
@@ -325,11 +325,10 @@ That makes the quirk upstream behavior worth knowing rather than a client contra
 
 A raw repository has no guaranteed directory listing.
 The search API varies between server releases, and HEAD-probing for likely names is guessing with extra requests.
-So `down` requires an enumeration source (a manifest, explicit names, or an explicitly requested best-effort `--ls`) and refuses with a hint when it has none.
+So `down` requires an enumeration source (explicit names, a name file, or an explicitly requested best-effort `--ls`) and refuses with a hint when it has none.
 
-The recommended convention closes the loop.
-Each version directory ships a `manifest.json`, which `up` publishes as an ordinary artifact.
-The publisher already knows the name list, so encoding it costs one file, and the consumer gets exact enumeration with no server cooperation.
+The caller owns the name list: repeat `--name`, or write the list to a file and pass `--names-from`.
+Nothing is reserved: a publisher who wants a machine-readable index ships one as an ordinary artifact and documents its name, and `nxr` never reads it.
 A name list the client cannot know stays a hard refusal, the same philosophy as the exit codes: when the client cannot know, it says so and asks.
 
 ## Channels generalize pointers
