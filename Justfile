@@ -333,17 +333,4 @@ check-docs *args:
 [doc('Wait for the CI on HEAD and report green or red.')]
 [group('check')]
 ci:
-    #!/bin/sh
-    set -eu
-    sha="$(git rev-parse HEAD)"
-    run=""
-    i=0
-    while [ "$i" -lt 30 ]; do
-      run="$(gh run list --branch master --commit "$sha" --limit 1 --json databaseId,status --jq '.[0].databaseId' 2>/dev/null || true)"
-      [ -n "$run" ] && break
-      i=$((i + 1))
-      sleep 2
-    done
-    [ -n "$run" ] || { echo "ci: no run found for $sha" >&2; exit 1; }
-    gh run watch "$run" --interval 10 --exit-status >/dev/null 2>&1 && \
-        echo "ci: $sha is GREEN" || echo "ci: $sha is RED"
+    scripts/ci-check.sh
