@@ -11,7 +11,7 @@ prek := "uvx prek"
 # Usage example: `just cargo test -p nexus-raw-core`.
 [doc('Run any cargo subcommand with flags.')]
 cargo *args:
-    {{cargo}} {{args}}
+    {{ cargo }} {{ args }}
 
 # Runs the binary: `just nxr -- up --base http://127.0.0.1:8080/ --dir dist/`.
 # A leading `--` is the habit cargo and curl teach; one of those is swallowed
@@ -21,22 +21,22 @@ cargo *args:
 # with spaces need `cargo run -p nexus-raw --` directly.
 [doc('Run the nxr CLI against your base URL.')]
 nxr *args:
-    @set -- {{args}} && { [ "${1:-}" = -- ] && shift || :; } && \
-        exec {{cargo}} run -p nexus-raw --quiet -- "$@"
+    @set -- {{ args }} && { [ "${1:-}" = -- ] && shift || :; } && \
+        exec {{ cargo }} run -p nexus-raw --quiet -- "$@"
 
 # The same passthrough for the terminal browser: `just tui http://127.0.0.1:8081/`,
 # `just tui -- --smoke http://127.0.0.1:8081/`, `just tui -- --init-config`.
 [doc('Run the nxr-tui browser against your base URL.')]
 tui *args:
-    @set -- {{args}} && { [ "${1:-}" = -- ] && shift || :; } && \
-        exec {{cargo}} run -p nexus-raw-tui --quiet -- "$@"
+    @set -- {{ args }} && { [ "${1:-}" = -- ] && shift || :; } && \
+        exec {{ cargo }} run -p nexus-raw-tui --quiet -- "$@"
 
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
 [doc('Serve the mock Nexus.')]
 [group('mock')]
 mock scenario='atomic' *args:
-    {{cargo}} run -p mock-nexus --quiet -- {{scenario}} {{args}}
+    {{ cargo }} run -p mock-nexus --quiet -- {{ scenario }} {{ args }}
 
 # The real-Nexus stand: a dockerized Nexus3, bootstrapped, driven by the same
 # battery the nightly job runs. Needs docker; the recipe dumps the server log
@@ -45,29 +45,29 @@ mock scenario='atomic' *args:
 [doc('Run the real-Nexus stand against a local docker Nexus.')]
 [group('stand')]
 stand *args:
-    stand/real-nexus/run.sh {{args}}
+    stand/real-nexus/run.sh {{ args }}
 
 [doc('Format all crates.')]
 [group('check')]
 fmt *args:
-    {{cargo}} fmt --all {{args}}
+    {{ cargo }} fmt --all {{ args }}
 
 # The lint contract: warnings are errors, same as the prek hook.
 [doc('Clippy over the workspace, warnings are errors.')]
 [group('check')]
 clippy *args:
-    {{cargo}} clippy --workspace --all-targets -- -D warnings {{args}}
+    {{ cargo }} clippy --workspace --all-targets -- -D warnings {{ args }}
 
 # Runs the same hooks the git hook runs (prek.toml).
 [doc('Lint, format-check and hygiene hooks through prek.')]
 [group('check')]
 lint *args:
-    {{prek}} run --all-files {{args}}
+    {{ prek }} run --all-files {{ args }}
 
 [doc('Unit and conformance tests (cargo test).')]
 [group('check')]
 test *args:
-    {{cargo}} test --workspace {{args}}
+    {{ cargo }} test --workspace {{ args }}
 
 # The full gate a change must pass before it lands: fmt, clippy, prek, tests.
 [doc('The whole gate: fmt + clippy + prek + tests + version agreement.')]
@@ -115,20 +115,20 @@ bench *args:
 version v:
     #!/bin/sh
     set -eu
-    case "{{v}}" in
+    case "{{ v }}" in
       [0-9]*.[0-9]*.[0-9]*) ;;
-      *) echo "version {{v}} is not X.Y.Z" >&2; exit 2 ;;
+      *) echo "version {{ v }} is not X.Y.Z" >&2; exit 2 ;;
     esac
     old="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
     [ -n "$old" ] || { echo "no workspace version in Cargo.toml" >&2; exit 1; }
-    perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{v}}\"/" Cargo.toml
-    perl -pi -e "s/\Q$old\E/{{v}}/g" crates/nexus-raw-napi/package.json
-    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw/Cargo.toml
-    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{v}}\"/" crates/nexus-raw-tui/Cargo.toml
+    perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{ v }}\"/" Cargo.toml
+    perl -pi -e "s/\Q$old\E/{{ v }}/g" crates/nexus-raw-napi/package.json
+    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw/Cargo.toml
+    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw-tui/Cargo.toml
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
-    grep -q "version = \"{{v}}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
-    grep -q "version = \"{{v}}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
-    grep -q "\"version\": \"{{v}}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
+    grep -q "version = \"{{ v }}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
+    grep -q "version = \"{{ v }}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
+    grep -q "\"version\": \"{{ v }}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
     # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.
     # examples/node waits for the registry: `just lock` refreshes it after the release.
     cargo metadata --format-version 1 >/dev/null
@@ -137,7 +137,7 @@ version v:
     # Assert after resolving: the example locks agree only once their own resolution has run.
     # The workspace pins are already asserted above, so a drifted pin still fails before any resolver does.
     scripts/version-check.sh
-    echo "version {{v}} set (was $old)"
+    echo "version {{ v }} set (was $old)"
 
 # The manifest is the source of truth for the current number; this only does
 # the arithmetic and hands the result to `just version`.
@@ -152,11 +152,11 @@ bump part:
     IFS=.
     set -- $cur
     [ "$#" -eq 3 ] || { echo "bump: '$cur' is not X.Y.Z" >&2; exit 2; }
-    case "{{part}}" in
+    case "{{ part }}" in
       patch) next="$1.$2.$(($3 + 1))" ;;
       minor) next="$1.$(($2 + 1)).0" ;;
       major) next="$(($1 + 1)).0.0" ;;
-      *) echo "bump: '{{part}}' is not patch, minor or major" >&2; exit 2 ;;
+      *) echo "bump: '{{ part }}' is not patch, minor or major" >&2; exit 2 ;;
     esac
     echo "bumping $cur -> $next"
     exec just version "$next"
@@ -171,23 +171,23 @@ bump part:
 release v *mode:
     #!/bin/sh
     set -eu
-    exec scripts/release.sh "{{v}}" {{mode}}
+    exec scripts/release.sh "{{ v }}" {{ mode }}
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
-[group('release')]
 [group('check')]
+[group('release')]
 version-check:
     scripts/version-check.sh
 
 [doc('Debug build of the workspace.')]
 [group('build')]
 build *args:
-    {{cargo}} build --workspace {{args}}
+    {{ cargo }} build --workspace {{ args }}
 
 [doc('Release build of the nxr binary (static-friendly, stripped).')]
 [group('build')]
 build-release:
-    {{cargo}} build --release -p nexus-raw
+    {{ cargo }} build --release -p nexus-raw
 
 # Links the npm package, then claim-first up, channel, down and verify.
 [doc('Run the Node example against the mock.')]
@@ -231,7 +231,7 @@ panel *args:
     target/debug/nxr put http://127.0.0.1:8099/service/rest/v1/search/assets -f /tmp/search-page.json
     cd examples/panel
     pnpm install
-    node server.mjs --url http://127.0.0.1:8099/ {{args}}
+    node server.mjs --url http://127.0.0.1:8099/ {{ args }}
 
 # The wasm sandbox: the read surface of the core compiled for the browser.
 # The first build needs the wasm32 target and wasm-bindgen-cli.
@@ -241,7 +241,7 @@ panel *args:
 wasm *args:
     cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
     cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
-    cd examples/wasm-sandbox && node serve.mjs {{args}}
+    cd examples/wasm-sandbox && node serve.mjs {{ args }}
 
 # Build the sandbox and run its smoke: the fake module, the wasm listing under
 # node and the ServiceWorker page in a headless browser when one is around.
@@ -293,7 +293,7 @@ example-rust:
 [group('examples')]
 demo scenario='slow' *args:
     cargo build -q -p mock-nexus -p nexus-raw
-    examples/demo/demo.sh {{scenario}} {{args}}
+    examples/demo/demo.sh {{ scenario }} {{ args }}
 
 # The landing animation is a recording of that same stand, not a mock-up.
 # The port is pinned so the recorded URLs stay comparable between recordings;
@@ -307,7 +307,7 @@ demo scenario='slow' *args:
 demo-cast *args:
     cargo build -q -p mock-nexus -p nexus-raw
     NXR_DEMO_SCOPE=core NXR_DEMO_CAST=docs/assets/cast/session.json \
-        examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 5 {{args}}
+        examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 5 {{ args }}
     test -s docs/assets/cast/session.json
     python3 examples/demo/stage.py docs/assets/cast/session.json
     python3 examples/demo/svg.py docs/assets/cast/session.json docs/assets/img/session.svg
@@ -319,7 +319,7 @@ demo-cast *args:
 [doc('Serve the docs site with live reload (http://localhost:8000).')]
 [group('docs')]
 docs *args:
-    uvx zensical serve {{args}}
+    uvx zensical serve {{ args }}
 
 # A docs link or config typo fails the build instead of shipping broken pages.
 [doc('Build the docs, check hints, llms.txt and fail on issues.')]
@@ -327,4 +327,23 @@ docs *args:
 check-docs *args:
     scripts/check-hints.sh
     scripts/llms-check.sh
-    uvx zensical build --strict {{args}}
+    uvx zensical build --strict {{ args }}
+
+# The HEAD commit is green on CI: a push without a red tail.
+[doc('Wait for the CI on HEAD and report green or red.')]
+[group('check')]
+ci:
+    #!/bin/sh
+    set -eu
+    sha="$(git rev-parse HEAD)"
+    run=""
+    i=0
+    while [ "$i" -lt 30 ]; do
+      run="$(gh run list --branch master --commit "$sha" --limit 1 --json databaseId,status --jq '.[0].databaseId' 2>/dev/null || true)"
+      [ -n "$run" ] && break
+      i=$((i + 1))
+      sleep 2
+    done
+    [ -n "$run" ] || { echo "ci: no run found for $sha" >&2; exit 1; }
+    gh run watch "$run" --interval 10 --exit-status >/dev/null 2>&1 && \
+        echo "ci: $sha is GREEN" || echo "ci: $sha is RED"
