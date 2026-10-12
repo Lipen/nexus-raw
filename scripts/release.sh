@@ -190,5 +190,11 @@ for i in 1 2 3 4 5 6; do
   [ -n "$run" ] && break
 done
 [ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
-gh run watch "$run" --interval 30 --exit-status
+# A network hiccup mid-watch must not kill the report: the act is already
+# done, the watch only reads. Retry until the run settles, then judge it.
+until gh run watch "$run" --interval 30 --exit-status > /dev/null 2>&1; do
+  sleep 5
+done
+gh run view "$run" --json conclusion --jq '.conclusion' | grep -q '^success$' \
+    || { echo "release: the run failed, see https://github.com/Lipen/nexus-raw/actions/runs/$run" >&2; exit 1; }
 echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v$v"
