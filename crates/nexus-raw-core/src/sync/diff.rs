@@ -222,6 +222,92 @@ pub fn classify(
     Ok(actions)
 }
 
+/// The `--if-changed` plan: like [`classify`] for up, but divergence re-PUTs instead of refusing.
+/// A skip still demands evidence: only a complete local copy whose digest equals the remote marker's digest skips.
+/// Everything else uploads (or refuses where even the relaxed rule must), so nothing is assumed equal without a verified remote copy (§5.2).
+///
+/// # Errors
+///
+/// Returns the first [`Verdict`] refusal in name order: a broken local or remote object, or a collected [`Verdict::Missing`] when nothing exists to transfer.
+pub fn classify_if_changed(
+    dir: &Path,
+    markers: bool,
+    locals: Vec<(ArtifactName, LocalStatus)>,
+    remotes: BTreeMap<ArtifactName, RemoteStatus>,
+) -> Result<Vec<Action>, Verdict> {
+    // `markers` decides whether Up actions carry a marker digest, exactly as in [`classify`].
+    let up_digest = |d: Digest| markers.then_some(d);
+    let upload = |dir: &Path, name: &ArtifactName, d: Digest| {
+        let size = std::fs::metadata(bytes_path(dir, name)).map_or(0, |m| m.len());
+        Action::Upload {
+            name: name.clone(),
+            size,
+            digest: up_digest(d),
+        }
+    };
+    let mut actions = Vec::with_capacity(locals.len());
+    let mut missing: Vec<String> = Vec::new();
+    for (name, local) in locals {
+        let remote = remotes.get(&name).cloned().unwrap_or(RemoteStatus::Absent);
+        // A broken local or remote object refuses the name before any relaxation:
+        // `--if-changed` relaxes the divergence rule, never the never-overwrite rule.
+        if let LocalStatus::Broken(detail) = &local {
+            return Err(Verdict::Mismatch {
+                name: name.to_string(),
+                detail: format!("local object is broken and must not be overwritten: {detail}"),
+            });
+        }
+        if let RemoteStatus::Broken(detail) = &remote {
+            return Err(Verdict::Mismatch {
+                name: name.to_string(),
+                detail: format!("remote sibling is foreign/unparseable: {detail}"),
+            });
+        }
+        match (&local, &remote) {
+            // The only skip: the remote marker vouches for exactly these bytes.
+            (LocalStatus::Complete(ld), RemoteStatus::Complete { digest: rd, .. }) => {
+                if ld == rd {
+                    actions.push(Action::Skip {
+                        name,
+                        digest: ld.clone(),
+                    });
+                } else {
+                    // The core `--if-changed` case: the remote copy is stale, the local bytes re-PUT over it.
+                    actions.push(upload(dir, &name, ld.clone()));
+                }
+            }
+            // No remote marker: nothing vouches for the remote bytes, so the local copy wins.
+            // `Markerless` re-PUTs bytes + marker, which also repairs a half-finished remote copy.
+            (LocalStatus::Complete(d), _) => actions.push(upload(dir, &name, d.clone())),
+            // Local bytes without a marker: only a remote marker naming the same digest skips.
+            (LocalStatus::Markerless, RemoteStatus::Complete { digest: rd, .. }) => {
+                let actual = local_digest(dir, &name)?;
+                if &actual == rd {
+                    actions.push(Action::Skip {
+                        name,
+                        digest: actual,
+                    });
+                } else {
+                    actions.push(upload(dir, &name, actual));
+                }
+            }
+            // No evidence anywhere on one side: hash-and-upload still publishes the local truth.
+            (LocalStatus::Markerless, _) => {
+                let actual = local_digest(dir, &name)?;
+                actions.push(upload(dir, &name, actual));
+            }
+            // Locally absent names stay refused: `--if-changed` never deletes and never invents bytes.
+            (LocalStatus::Absent, _) => missing.push(name.to_string()),
+            // Unreachable: the broken-local guard above already returned.
+            (LocalStatus::Broken(_), _) => {}
+        }
+    }
+    if !missing.is_empty() {
+        return Err(Verdict::Missing { names: missing });
+    }
+    Ok(actions)
+}
+
 /// The digest of a local file that has no marker yet.
 fn local_digest(dir: &Path, name: &ArtifactName) -> Result<Digest, Verdict> {
     digest::sha256_file(&bytes_path(dir, name)).map_err(|e| Verdict::Mismatch {
