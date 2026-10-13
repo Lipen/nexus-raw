@@ -364,6 +364,9 @@ mod tests {
         }
         let on_disk = std::fs::read_to_string(&page)
             .unwrap_or_else(|e| panic!("cannot read {}: {e}", page.display()));
+        // A checkout with `core.autocrlf` hands the page over with CRLF line endings:
+        // the drift verdict is about content, not about the checkout's EOL convention.
+        let on_disk = on_disk.replace("\r\n", "\n");
         assert_eq!(
             on_disk, rendered,
             "docs/reference/invariants.md drifted from the scenario table; regenerate with `UPDATE_INVARIANTS=1 cargo test -p mock-nexus invariant`"
