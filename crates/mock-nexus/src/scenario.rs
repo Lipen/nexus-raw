@@ -127,7 +127,7 @@ pub enum Scenario {
     /// Later PUT attempts on that path are read fully and stored.
     PartialPut { first_attempt_bytes: usize },
     /// The first success (200) GET per path writes honest status and headers, then only `after_bytes` body bytes and closes the connection.
-    /// With `fake_length` the `Content-Length` header lies [`FAKE_LENGTH_LIE`] bytes high, so the honest-looking answer still breaks mid-body.
+    /// With `fake_length` the `Content-Length` header lies `FAKE_LENGTH_LIE` bytes high, so the honest-looking answer still breaks mid-body.
     /// Later GETs serve the object whole, so a retry resuming from the part file completes the download.
     CutBody {
         after_bytes: usize,

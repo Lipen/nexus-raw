@@ -25,8 +25,8 @@ impl MockNexus {
         Self::start_on(scenario, SocketAddr::from(([127, 0, 0, 1], 0)))
     }
 
-    /// Start a hosted instance from a composable [`Spec`] instead of a named
-    /// [`Scenario`] preset.
+    /// Start a hosted instance from a composable [`Spec`](crate::Spec) instead
+    /// of a named [`Scenario`] preset.
     ///
     /// The spec layers stack: `Spec::atomic().with_auth(..).with_flaky(3)` is
     /// an auth-gated server that also answers the first three requests per

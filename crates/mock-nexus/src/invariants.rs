@@ -5,7 +5,7 @@
 
 /// One scenario's row on the wire-invariants page: the id, the human name, the wire behavior and the invariant it pins.
 pub struct ScenarioDoc {
-    /// The scenario id, exactly the string [`SCENARIOS`] carries.
+    /// The scenario id, exactly the string [`SCENARIOS`](crate::SCENARIOS) carries.
     pub id: &'static str,
     /// The human name, a sentence.
     pub name: &'static str,
@@ -28,7 +28,7 @@ A group repository is a separate deployment kind, not a scenario.
 The per-suite test matrix and the design reasoning: [conformance](../explanation/conformance.md).
 ";
 
-/// One row per [`SCENARIOS`] entry, in the same order.
+/// One row per [`SCENARIOS`](crate::SCENARIOS) entry, in the same order.
 /// A unit test in this module pins the alignment.
 pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
     ScenarioDoc {
