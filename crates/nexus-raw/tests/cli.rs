@@ -1708,7 +1708,13 @@ fn golden_ndjson_doctor_holds() {
 /// A platform-flavored render (an `.exe` in the program name, a path separator) fails here
 /// with the first differing lines printed, so the flavor is visible from the CI log alone.
 fn assert_golden(actual: &str, fixture: &str, what: &str) {
-    let expected = include_str!(concat!("golden/", fixture));
+    let expected = match fixture {
+        "complete-bash.txt" => include_str!("golden/complete-bash.txt"),
+        "complete-zsh.txt" => include_str!("golden/complete-zsh.txt"),
+        "complete-fish.txt" => include_str!("golden/complete-fish.txt"),
+        "complete-powershell.txt" => include_str!("golden/complete-powershell.txt"),
+        _ => unreachable!("the golden table and the fixture name drift together"),
+    };
     if actual == expected {
         return;
     }
@@ -1719,7 +1725,7 @@ fn assert_golden(actual: &str, fixture: &str, what: &str) {
         .iter()
         .zip(expected_lines.iter())
         .enumerate()
-        .filter(|(a, e)| a != e)
+        .filter(|(_, (a, e))| a != e)
         .take(6)
     {
         diffs.push_str(&format!("line {}: actual {a:?} != expected {e:?}\n", i + 1));
