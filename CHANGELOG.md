@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.14.0] - 2026-10-13
+
 ### Added
 
 - `nxr get --segments N`: fetch a file through `N` concurrent byte-range requests, assembled positionally and verified against the `.sha256` sibling before the atomic rename.
@@ -279,7 +283,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/Lipen/nexus-raw/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Lipen/nexus-raw/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Lipen/nexus-raw/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/Lipen/nexus-raw/compare/v0.11.0...v0.11.1
