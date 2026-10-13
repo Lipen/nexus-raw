@@ -366,9 +366,7 @@ async fn assemble(
         .open(part)
         .await
         .map_err(|e| Error::io(part, e))?;
-    out.set_len(total)
-        .await
-        .map_err(|e| Error::io(part, e))?;
+    out.set_len(total).await.map_err(|e| Error::io(part, e))?;
     for (i, &(start, _)) in bounds.iter().enumerate() {
         let file = staging.join(format!("segment-{i:04}.part"));
         let mut seg = tokio::fs::File::open(&file)

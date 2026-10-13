@@ -147,7 +147,17 @@ pub(crate) async fn diff(
         ));
     }
     let ctx = make_ctx(cli, src)?;
-    let result = run_diff(&ctx, local, names, names_from, ls, prefixes, via.is_some(), fallback).await;
+    let result = run_diff(
+        &ctx,
+        local,
+        names,
+        names_from,
+        ls,
+        prefixes,
+        via.is_some(),
+        fallback,
+    )
+    .await;
     finish(ctx).await;
     result
 }
@@ -203,13 +213,9 @@ async fn run_diff(
                 // The degraded run prefers explicit names: a search that just
                 // refused once would only refuse again as the name source.
                 let explicit = !names.is_empty() || !names_from.is_empty();
-                let enum_src = enumeration_source(
-                    ctx.nxr.base(),
-                    names,
-                    names_from,
-                    ls && !explicit,
-                )?
-                .with_prefixes(prefixes)?;
+                let enum_src =
+                    enumeration_source(ctx.nxr.base(), names, names_from, ls && !explicit)?
+                        .with_prefixes(prefixes)?;
                 let entries = ctx.nxr.delta(local, enum_src).await?;
                 return print_delta(ctx, &entries);
             }

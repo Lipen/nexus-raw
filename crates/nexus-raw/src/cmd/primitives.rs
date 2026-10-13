@@ -22,8 +22,7 @@ pub(crate) async fn get(
     }
     if segments.is_some() && out.is_none() {
         return Err(Error::Misuse(
-            "--segments writes a file, not a stream: pass -o FILE, or drop --segments"
-                .to_owned(),
+            "--segments writes a file, not a stream: pass -o FILE, or drop --segments".to_owned(),
         ));
     }
     if segments.is_some() && cont {
@@ -47,10 +46,15 @@ async fn run_get(
     segments: Option<usize>,
 ) -> Result<(), Error> {
     let outcome = match segments {
-        Some(n) => ctx
-            .nxr
-            .get_segmented(url, out.expect("segments require a file target").to_owned(), n)
-            .await?,
+        Some(n) => {
+            ctx.nxr
+                .get_segmented(
+                    url,
+                    out.expect("segments require a file target").to_owned(),
+                    n,
+                )
+                .await?
+        }
         None => ctx.nxr.get(url, out.map(Path::to_owned), cont).await?,
     };
     report_get(ctx, url, out, &outcome);

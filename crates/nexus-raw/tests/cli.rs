@@ -3083,11 +3083,26 @@ fn via_search_matches_plain_diff_and_needs_one_listing() {
     let srv = server(Scenario::Atomic);
     let (base, local) = seed_via_search_fixture(&srv);
 
-    let plain = nxr(&["diff", local.path().to_str().unwrap(), &base, "--name", "a.zip", "--name", "b.zip"]);
+    let plain = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.zip",
+    ]);
     expect_exit(&plain, 0, "the converged directory is equal");
     assert_eq!(stdout(&plain), "same a.zip\nsame b.zip\n");
 
-    let searched = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    let searched = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
     expect_exit(&searched, 0, "the search-side delta agrees");
     assert_eq!(
         stdout(&searched),
@@ -3122,7 +3137,15 @@ fn via_search_matches_plain_diff_and_needs_one_listing() {
     // O(pages), not O(names): the search path fetches the listing once and
     // never HEADs or GETs the two artifacts.
     let before = srv.requests().len();
-    let _ = nxr(&["--json", "diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    let _ = nxr(&[
+        "--json",
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
     let reqs = srv.requests();
     let storage = reqs
         .iter()
@@ -3155,7 +3178,14 @@ fn via_search_digestless_entry_is_not_same() {
     );
     srv.insert("service/rest/v1/search/assets", page.as_bytes());
 
-    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
     expect_exit(&out, 1, "an unverifiable name is a difference");
     assert!(
         stdout(&out).contains("diverged b.zip"),
@@ -3180,17 +3210,20 @@ fn via_search_on_search_400_refuses_then_falls_back() {
     write_file(local.path(), "a.zip", ALPHA);
     write_file(local.path(), "b.zip", BETA);
     expect_exit(
-        &nxr(&[
-            "up",
-            local.path().to_str().unwrap(),
-            &repo_dir_url(&srv),
-        ]),
+        &nxr(&["up", local.path().to_str().unwrap(), &repo_dir_url(&srv)]),
         0,
         "seeding the served repo",
     );
     let ghost = repo_dir_url(&srv).replace("raw-main", "raw-ghost");
 
-    let refused = nxr(&["diff", local.path().to_str().unwrap(), &ghost, "--via", "search", "--ls"]);
+    let refused = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &ghost,
+        "--via",
+        "search",
+        "--ls",
+    ]);
     expect_exit(&refused, 1, "the honest refusal is the enumeration class");
     let err = stderr(&refused);
     assert!(err.contains("cannot enumerate"), "{err}");
@@ -3205,11 +3238,7 @@ fn via_search_on_search_400_refuses_then_falls_back() {
     // A served repo whose search endpoint is absent (404) refuses the same way.
     let absent = server(Scenario::AssetsAbsent);
     expect_exit(
-        &nxr(&[
-            "up",
-            local.path().to_str().unwrap(),
-            &repo_dir_url(&absent),
-        ]),
+        &nxr(&["up", local.path().to_str().unwrap(), &repo_dir_url(&absent)]),
         0,
         "seeding the search-absent repo",
     );
@@ -3239,7 +3268,11 @@ fn via_search_on_search_400_refuses_then_falls_back() {
         "--name",
         "b.zip",
     ]);
-    expect_exit(&downgraded, 0, "the fallback reports the same converged truth");
+    expect_exit(
+        &downgraded,
+        0,
+        "the fallback reports the same converged truth",
+    );
     let text = stdout(&downgraded);
     let lines: Vec<&str> = text.lines().collect();
     assert!(lines.contains(&"same a.zip"), "{text}");
@@ -3260,11 +3293,23 @@ fn via_flag_misuse_is_refused() {
     let local = tempfile::TempDir::new().unwrap();
     write_file(local.path(), "a.zip", ALPHA);
 
-    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "tea-leaves"]);
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "tea-leaves",
+    ]);
     expect_exit(&out, 2, "an unknown --via source is misuse");
     assert!(stderr(&out).contains("unknown --via source"));
 
-    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search"]);
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+    ]);
     expect_exit(&out, 2, "--via search without --ls is misuse");
     assert!(stderr(&out).contains("--ls"));
 
@@ -3282,7 +3327,11 @@ fn via_flag_misuse_is_refused() {
         "--name",
         "a.zip",
     ]);
-    expect_exit(&out, 2, "--name fights the search listing as the name source");
+    expect_exit(
+        &out,
+        2,
+        "--name fights the search listing as the name source",
+    );
     assert!(stderr(&out).contains("--name"));
 }
 
@@ -3300,7 +3349,12 @@ fn get_segments_matches_the_single_stream() {
     let url = format!("{}big.bin", root_url(&srv));
 
     let single = TempDir::new().unwrap();
-    let got = nxr(&["get", &url, "-o", single.path().join("big.bin").to_str().unwrap()]);
+    let got = nxr(&[
+        "get",
+        &url,
+        "-o",
+        single.path().join("big.bin").to_str().unwrap(),
+    ]);
     expect_exit(&got, 0, "single-stream get");
     let want = std::fs::read(single.path().join("big.bin")).unwrap();
     assert_eq!(want, content);
@@ -3357,8 +3411,7 @@ fn get_segments_falls_back_when_range_is_ignored() {
     assert_eq!(std::fs::read(&target).unwrap(), content);
     // No ranged answer ever came back: the server answered every GET with 200.
     assert!(
-        !srv
-            .requests()
+        !srv.requests()
             .iter()
             .any(|r| r.method == "GET" && r.outcome == Outcome::Status(206)),
         "an ignore-range server never answers 206: {:?}",
@@ -3403,9 +3456,10 @@ fn get_segments_with_stdout_is_misuse() {
     let got = nxr(&["get", &url]);
     expect_exit(&got, 0, "plain stdout get");
     assert_eq!(stdout(&got), "payload");
-    assert!(srv.requests().iter().any(|r| r.method == "GET"
-        && r.path == "big.bin"
-        && r.outcome == Outcome::Status(200)));
+    assert!(srv
+        .requests()
+        .iter()
+        .any(|r| r.method == "GET" && r.path == "big.bin" && r.outcome == Outcome::Status(200)));
 }
 
 /// A failing segment fails the whole get: no partial file under the output name.

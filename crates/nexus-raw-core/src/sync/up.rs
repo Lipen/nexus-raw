@@ -76,7 +76,8 @@ pub async fn execute(
                 let dir_url = dir_url.clone();
                 let workers = workers.clone();
                 set.spawn(async move {
-                    let result = upload_one(&client, &dir, &dir_url, &name, size, digest, true).await;
+                    let result =
+                        upload_one(&client, &dir, &dir_url, &name, size, digest, true).await;
                     // The permit is dropped first, so a decrease that landed
                     // mid-task reclaims it in `release_*` as owed.
                     drop(permit);

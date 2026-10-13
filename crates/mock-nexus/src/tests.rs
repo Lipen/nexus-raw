@@ -867,9 +867,14 @@ fn get_closed_range_serves_the_exact_span() {
     let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
     server.insert("big.bin", &content);
 
-    let (status, headers, body) =
-        exchange(server.addr(), "GET", "/big.bin", b"", &[("Range", "bytes=25000-49999")])
-            .unwrap();
+    let (status, headers, body) = exchange(
+        server.addr(),
+        "GET",
+        "/big.bin",
+        b"",
+        &[("Range", "bytes=25000-49999")],
+    )
+    .unwrap();
     assert_eq!(status, 206);
     assert_eq!(
         header_value(&headers, "content-range"),
@@ -878,9 +883,14 @@ fn get_closed_range_serves_the_exact_span() {
     assert_eq!(body, &content[25000..50000]);
 
     // A closed range ending past the object's end clips to the stored bytes.
-    let (status, headers, body) =
-        exchange(server.addr(), "GET", "/big.bin", b"", &[("Range", "bytes=99990-999999")])
-            .unwrap();
+    let (status, headers, body) = exchange(
+        server.addr(),
+        "GET",
+        "/big.bin",
+        b"",
+        &[("Range", "bytes=99990-999999")],
+    )
+    .unwrap();
     assert_eq!(status, 206);
     assert_eq!(
         header_value(&headers, "content-range"),

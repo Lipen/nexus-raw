@@ -89,7 +89,6 @@ impl Aimd {
     pub(crate) fn min_limit(&self) -> usize {
         self.min
     }
-
 }
 
 /// One run's shared worker budget: the AIMD controller over a real semaphore.

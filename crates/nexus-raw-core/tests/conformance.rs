@@ -986,7 +986,10 @@ async fn second_concurrent_mirror_refuses_on_the_staging_lock() {
     // `flock` it, as the unix arm does when it wins a leftover file.
     {
         use std::os::unix::io::AsRawFd;
-        assert_eq!(unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0);
+        assert_eq!(
+            unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
     }
 
     let err = src
@@ -2429,11 +2432,15 @@ async fn segmented_get_falls_back_when_the_server_ignores_range() {
     // The fallback logs through the events channel, no error anywhere.
     let events = collect_events(&mut rx);
     assert!(
-        events.iter().any(|e| matches!(e, Event::Retrying { reason, .. } if reason.contains("falling back"))),
+        events.iter().any(
+            |e| matches!(e, Event::Retrying { reason, .. } if reason.contains("falling back"))
+        ),
         "the fallback announces itself: {events:?}"
     );
     assert!(
-        events.iter().any(|e| matches!(e, Event::ArtifactStarted { name, .. } if name == "seg.bin")),
+        events
+            .iter()
+            .any(|e| matches!(e, Event::ArtifactStarted { name, .. } if name == "seg.bin")),
         "the single stream restarts the transfer: {events:?}"
     );
 }
@@ -2528,4 +2535,3 @@ async fn segmented_get_refuses_one_segment() {
     );
     assert_eq!(err.exit_code(), 2);
 }
-
