@@ -48,7 +48,8 @@ let server = MockNexus::start_spec(
 )?;
 ```
 
-Presets stay canonical and guarded; specs are code-level composition and never enter the contract tables.
+Presets stay canonical and guarded.
+Specs are code-level composition and never enter the contract tables.
 
 ## The drift guards
 
