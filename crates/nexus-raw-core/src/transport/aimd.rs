@@ -71,6 +71,10 @@ impl Aimd {
         if self.limit < self.max && self.debt == 0 {
             self.limit += 1;
             self.streak = 0;
+            // Every step pays the full slope again: the recovery stays one
+            // step per four consecutive successes, not one slow step and a
+            // sprint after it.
+            self.debt = SUCCESS_PER_STEP;
         }
     }
 
@@ -272,7 +276,15 @@ mod tests {
         assert_eq!(a.limit(), 2, "three successes alone must not recover");
         a.on_success();
         assert_eq!(a.limit(), 3);
-        for _ in 0..4 {
+        // Every step pays the slope again: three successes alone never
+        // take the second step either.
+        for _ in 0..3 {
+            a.on_success();
+        }
+        assert_eq!(a.limit(), 3, "the second step needs its own full slope");
+        a.on_success();
+        assert_eq!(a.limit(), 4);
+        for _ in 0..100 {
             a.on_success();
         }
         assert_eq!(a.limit(), 4);
