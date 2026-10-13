@@ -164,6 +164,28 @@ hint: check the network: transfers are resumable, rerunning is safe
 With the default `--retry 4` the same blips are absorbed and surface as `retrying` events under `--json` (see [NDJSON events](ci.md#ndjson-events)).
 Repeat the command when you see exit 3: finished names are skipped, part files resume, nothing starts from zero.
 
+## The server fights back: 429 and the breathing workers
+
+A throttling server answers `429 Too Many Requests` with a `Retry-After` header.
+The retry loop honors it (the attempt waits for the header's duration), and since this release the worker pool also **breathes**:
+
+- a directory transfer (`up`, `down`, `mirror`, `mv`) starts with `--workers` in flight;
+- every `Retry-After` halves the in-flight capacity at once, so the storm of retries dies down instead of compounding;
+- a streak of successes recovers the capacity one worker at a time, never above the configured maximum;
+- the floor is one worker: some transfer always goes on.
+
+You never configure this: the breathing is automatic, and `--workers` stays the ceiling, not a fixed pressure.
+On a well-behaved server you will never see a 429, and the pool never moves.
+Under `--json`, the throttling shows up as a burst of `retrying` events followed by a quieter stream: that is the pool shrinking and politely re-growing.
+
+```console
+$ nxr --json down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/ --name big.bin
+{"event":"retrying","name":"big.bin","in":"1.2s","cause":"http 429"}
+...
+```
+
+If a server answers 429 to everything, the run ends as transport (exit 3) after the retries: the fix belongs to the server's rate-limit config, and rerunning later is safe.
+
 ## Unsafe names
 
 Names are rejected before any request when they fail the grammar:

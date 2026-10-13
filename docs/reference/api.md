@@ -98,6 +98,9 @@ Every method mirrors a CLI command one-to-one.
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --plan` | the symmetric plan without transferring |
 | `delta(dir, enum_src)` | `Vec<Delta>` | `nxr diff` | the local-against-storage report: `Same`, `MissingLocal`, `MissingRemote`, `Diverged` (size and/or sha), nothing written |
 | `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
+| `up_if_changed(dir, names, gen_markers, claim)` | `Summary` | `nxr up --if-changed` | the same upload with the skip rule: only a verified remote digest skips, divergence re-PUTs |
+| `delta_search(dir, prefixes)` | `Vec<Delta>` | `nxr diff --via search --ls` | the delta report built from the search index in O(pages) requests, a digestless asset never reads `Same` |
+| `get_segmented(url, out, segments)` | `GetOutcome` | `nxr get --segments N` | `N` concurrent byte-range spans assembled positionally, verified and renamed atomically, degraded to the single stream when `Range` is ignored |
 | `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `mirror_plan(dst, enum_src)` | `Vec<MirrorAction>` | `mirror --dry-run` | probe both sides and classify, emit the plan, move nothing |
 | `mirror(dst, enum_src)` | `Summary` | `nxr mirror` | pour the enumerated names into a second facade's base: staged through the `down` machinery, written in `up`'s order |
@@ -178,6 +181,10 @@ fn what_would_up_scan(nxr: &Nxr) -> Result<(), nexus_raw_core::Error> {
 An `Action` is one name's line of a plan and has exactly three shapes: `Upload { name, size, digest }`, `Download { name, size, digest }` and `Skip { name, digest }`.
 `Mode::Up` and `Mode::Down` select which side wins a single-completed-copy name, per the [symmetric diff matrix](protocol.md#the-symmetric-diff).
 The digest inside an `Upload` action is present only when markers are enabled: knowing the digest and writing the marker are separate concerns.
+
+Every directory transfer runs under an adaptive worker budget: it starts at the configured maximum, halves in-flight capacity on every `Retry-After` failure (a 429), and recovers one worker per success streak, never above the maximum.
+The budget lives on the facade for the duration of a run; `last_run_limit()` reports the trajectory (current limit, the lowest it reached) for tests and dashboards.
+The wire behavior is unchanged: a polite client on a throttling server, byte-for-byte the same protocol.
 
 ## L2: layout
 

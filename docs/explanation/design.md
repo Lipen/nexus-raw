@@ -349,6 +349,10 @@ A stall timeout replaces a total timeout: a 100 MB artifact over a slow link may
 Auth failures bypass the retry loop entirely, because hammering a 401 is never useful.
 Exact numbers live in the [protocol reference](../reference/protocol.md), and the recovery story in [Conformance](conformance.md).
 
+A `429` with `Retry-After` gets the additive-increase, multiplicative-decrease treatment: retries honor the header's wait, and the worker pool halves in flight at once, then re-grows one worker per success streak.
+The design separates two clocks: the retry loop is per-request patience, the worker budget is per-run pressure, and a polite client under throttle needs both.
+The pool never exceeds `--workers` and never reaches zero, so a throttled transfer converges to the pace the server allows instead of failing or hammering.
+
 ## Exit codes encode the operator's decision
 
 Data problems (exit 1) need a human, invocation problems (exit 2) need a pipeline fix, and transport problems (exit 3) need another attempt later.

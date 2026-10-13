@@ -114,6 +114,25 @@ uploaded 0, downloaded 1, skipped 0
 Keep the name list in your own pipeline: a shell array, a generated script, whatever the job owns.
 Every listed name must exist on the server, ghosts refuse the run.
 
+## Heavy artifacts: `get --segments`
+
+A multi-gigabyte archive through one connection is one slow pipe, and a single stalled socket restarts the wait.
+`get --segments N` splits the object into `N` contiguous byte-range spans and fetches them concurrently, then assembles, digest-checks and renames exactly like the plain download:
+
+```console
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4
+↓ app-1.4.0.zip ok (4 segments)
+```
+
+The rules it plays by:
+
+- the object needs a `Content-Length` (a HEAD answers it) and a server that honors `Range`: both are true for stock Nexus.
+- a server or proxy that silently strips `Range` (the answer is `200`, not `206`) degrades the download to the single-stream path automatically, logged through the events: the artifact still lands, verified.
+- an object smaller than the segment count just gets smaller segments, down to one byte each, still exact.
+- `--segments` is a file-target flag: piped stdout stays a single stream, and `--continue` does not combine with it.
+
+Pick `N` roughly by the pipe, not by the size: `4` wakes up a single-threaded remote, `8-16` fills a fat pipe.
+
 ## Verify without the network
 
 Before building against the result, or after any manual fiddling, check every artifact against its marker, entirely offline:

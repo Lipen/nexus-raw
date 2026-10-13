@@ -99,6 +99,37 @@ plan: 0 to upload, 0 to download, 4 up to date
 uploaded 0, downloaded 0, skipped 4
 ```
 
+### Republishing a live tree: `up --if-changed`
+
+A version directory is rarely frozen: a hotfix replaces `app-1.4.0.zip`, a manifest gains a line, a log file grows.
+Plain `up` already skips what matches, but it refuses a name whose remote copy **diverges**, and it demands an untouched tree.
+`--if-changed` relaxes exactly that one rule and turns re-publishing into a heartbeat:
+
+```console
+$ nxr up --if-changed dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+plan: 0 to upload, 0 to download, 4 up to date
+○ app-1.4.0.zip skipped
+...
+$ # a hotfix lands in dist/, then:
+
+$ nxr up --if-changed dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+plan: 1 to upload, 0 to download, 3 up to date
+↑ app-1.4.0.zip ok
+○ bom/linux-x86_64.json skipped
+○ manifest.json skipped
+○ pinned.xml skipped
+uploaded 1, downloaded 0, skipped 3
+```
+
+What the flag promises, precisely:
+
+- a name whose remote marker digest equals the local copy is skipped, and the skip is free: nothing is fetched beyond the facts `up` already needs.
+- a changed name re-uploads as the usual pair, bytes then marker.
+- a name the server cannot vouch for (a missing or foreign marker) re-uploads too: a skip demands evidence, never hope.
+- everything else refuses as before: a broken local pair, a missing local file, a diverging complete copy at the destination that `--if-changed` has no local truth to overwrite with.
+
+A cron that re-runs `up --if-changed` every minute publishes changes within a minute, costs nothing when nothing changed, and never corrupts: it is the same verified upload, just without the refusal for honest changes.
+
 ### Markers: against `--no-sha`
 
 | | default (`up`, `put --sha`) | `up --no-sha` |
