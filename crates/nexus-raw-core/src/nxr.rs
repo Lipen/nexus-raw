@@ -556,6 +556,8 @@ impl Nxr {
                 .create(&staging)
                 .map_err(|e| Error::io(&staging, e))?;
         }
+        // No mode knob off unix: the dir inherits the privacy of the user's
+        // own temp location, which is where it lives anyway.
         #[cfg(not(unix))]
         tokio::fs::create_dir_all(&staging)
             .await
@@ -563,50 +565,7 @@ impl Nxr {
         // Two concurrent mirrors of one pair would interleave the same part files:
         // an advisory lock refuses the second run instead of corrupting the first.
         // The guard lives to the end of the run, the lock dies with it.
-        #[cfg(unix)]
-        let _staging_guard = {
-            use std::os::unix::io::AsRawFd;
-            // The lock sits inside the 0700 staging directory, not next to it:
-            // a predictable name in a world-writable temp dir is a symlink
-            // plant, and File::create follows symlinks. OpenOptions with
-            // create_new (O_CREAT|O_EXCL) refuses an existing entry outright.
-            let lock_path = staging.join(".lock");
-            let lock = match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&lock_path)
-            {
-                // Fresh lock: ours, guarded against a symlink plant by the
-                // exclusive create.
-                Ok(file) => Some(file),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    // A lock from a dead run (a crash never unlocked): take
-                    // over only when the flock comes free. A live run keeps
-                    // holding it, and the refusal names the path.
-                    match std::fs::File::open(&lock_path) {
-                        Ok(existing) => {
-                            let rc = unsafe {
-                                libc::flock(existing.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB)
-                            };
-                            if rc == 0 {
-                                Some(existing)
-                            } else {
-                                return Err(Error::misuse(format!(
-                                    "another mirror is already running for this pair (lock: {})",
-                                    lock_path.display()
-                                )));
-                            }
-                        }
-                        Err(io_err) => return Err(Error::io(&lock_path, io_err)),
-                    }
-                }
-                Err(e) => return Err(Error::io(&lock_path, e)),
-            };
-            // `_`-prefixed on purpose: the warning is silenced, the lock is not dropped.
-            Some(lock)
-        };
-        #[cfg(not(unix))]
-        let staging_guard: Option<std::fs::File> = None;
+        let _staging_guard = acquire_staging_lock(&staging)?;
         let result = mirror::execute(
             self.client.clone(),
             dst.client.clone(),
@@ -763,4 +722,70 @@ impl Nxr {
             .map(|s| s.expect("all slots filled"))
             .collect())
     }
+}
+
+/// Take the exclusive staging lock of a `mirror` run.
+///
+/// The lock is the file handle itself, so it dies with the run and a crashed
+/// run leaves nothing to clean up: the file is never unlinked while held.
+/// A live twin's open fails, and the refusal is misuse naming the lock path.
+///
+/// Platform arms:
+/// - unix: an exclusive `flock`. The first create is exclusive (`create_new`),
+///   which also refuses a symlink plant at the predictable temp name; a dead
+///   run's leftover file is taken over once the flock comes free.
+/// - windows: the file is opened with read and write sharing denied, so a
+///   second open for writing fails while this run lives. Share-delete stays
+///   granted, otherwise the clean run's staging cleanup could not unlink the
+///   file this very handle still holds.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when another run holds the lock and [`Error::Io`] when the lock file cannot be managed.
+#[cfg(not(target_arch = "wasm32"))]
+fn acquire_staging_lock(staging: &Path) -> Result<std::fs::File, Error> {
+    let path = staging.join(".lock");
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        // The lock sits inside the 0700 staging directory, not next to it:
+        // a predictable name in a world-writable temp dir is a symlink
+        // plant, and File::create follows symlinks. create_new
+        // (O_CREAT|O_EXCL) refuses an existing entry outright.
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok(file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(Error::io(&path, e)),
+        }
+        // A lock from a dead run (a crash never unlocked): take over only
+        // when the flock comes free. A live run keeps holding it.
+        let existing = std::fs::File::open(&path).map_err(|e| Error::io(&path, e))?;
+        let rc = unsafe { libc::flock(existing.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if rc == 0 {
+            return Ok(existing);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        let opened = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .share_mode(0x4) // FILE_SHARE_DELETE: see the arm doc above.
+            .open(&path);
+        match opened {
+            Ok(file) => return Ok(file),
+            // 32: ERROR_SHARING_VIOLATION, a live holder of the lock file.
+            Err(e) if e.raw_os_error() == Some(32) => {}
+            Err(e) => return Err(Error::io(&path, e)),
+        }
+    }
+    Err(Error::misuse(format!(
+        "another mirror is already running for this pair (lock: {})",
+        path.display()
+    )))
 }

@@ -226,6 +226,9 @@ async fn drop_connection_is_retried_through_the_client() {
     );
 }
 
+// The three symlink tests below create real symlinks, which the fixture needs:
+// windows cannot create one without privileges, so the refusal they pin has no
+// fixture there (the production NOFOLLOW flag itself stays unix-only for now).
 #[cfg(unix)]
 #[tokio::test]
 async fn symlinked_part_is_never_followed_on_resume() {
@@ -321,7 +324,6 @@ async fn symlinked_local_marker_is_never_followed_on_up() {
     );
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn oversized_small_get_refuses_with_the_cap() {
     // A sibling is a "small" GET: past the 16 MiB cap the read refuses (exit 2) instead of slurping an unbounded body into memory.
@@ -959,6 +961,56 @@ async fn mirror_resumes_staged_part_with_range() {
     assert!(dst_mock
         .store_get(&format!("{VERSION}/a.zip.sha256"))
         .is_some());
+}
+
+/// The lock must refuse a second live run for the same pair, on every platform the pair can run on.
+/// The fixture plays the first run by holding the lock file open itself: whatever the platform arm is, holding the handle is what keeps the lock.
+/// Gated to unix: the fixture flocks the lock file, and the windows arm of the lock refuses on share violation instead.
+#[cfg(unix)]
+#[tokio::test]
+async fn second_concurrent_mirror_refuses_on_the_staging_lock() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let dst_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let src = seed_source(&src_mock).await;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config(&dst_mock, None), tx).unwrap();
+
+    // Simulate the first run: the staging dir exists and its lock is held.
+    let staging = staging_dir(src.base(), dst.base());
+    std::fs::create_dir_all(&staging).unwrap();
+    let held = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(staging.join(".lock"))
+        .unwrap();
+    // `flock` it, as the unix arm does when it wins a leftover file.
+    {
+        use std::os::unix::io::AsRawFd;
+        assert_eq!(unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0);
+    }
+
+    let err = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Misuse(_)), "got {err:?}");
+    assert_eq!(err.exit_code(), 2, "the twin run is a misuse, got {err}");
+    assert!(
+        err.to_string().contains("already running"),
+        "the refusal names the twin: {err}"
+    );
+    assert_eq!(
+        dst_mock.put_count(&format!("{VERSION}/a.zip")),
+        0,
+        "the refused run touched nothing"
+    );
+    // Dropping the fixture handle releases the lock and the pair becomes runnable.
+    drop(held);
+    let summary = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap();
+    assert_eq!(summary.uploaded, 1);
 }
 
 #[tokio::test]

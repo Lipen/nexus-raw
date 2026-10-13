@@ -472,6 +472,7 @@ Without the overrides the shared `-u` (or env) applies to both sides.
 Every name travels through a staging directory: a Range-aware GET from the source, a digest check against the source marker, then a PUT of the bytes and of the `<name>.sha256` marker on the destination.
 The destination diff follows `up`'s rules: an identical complete copy is skipped, a diverging complete copy refuses the run, an unfinished copy is completed.
 When the enumeration leads with `version.json`, the conventional version document, that name is claimed: it transfers alone before any other name starts, and a failed claim aborts the run with nothing else sent.
+The staging directory carries a lock: a second concurrent `mirror` for the same source-destination pair refuses with a hint (exit 2) instead of interleaving the `.part` writes, on unix through an exclusive `flock`, on windows through a share-denied open of the lock file.
 
 `--json` prints the transfer event stream, a `downloading` and an `uploading` sequence for every moved name:
 
@@ -489,7 +490,7 @@ When the enumeration leads with `version.json`, the conventional version documen
 |:----:|:-----|
 | `0` | plan executed, the destination holds every enumerated name |
 | `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`). local I/O around the staging directory |
-| `2` | misuse: an unsafe `--name` |
+| `2` | misuse: an unsafe `--name`, a second `mirror` already running for this pair |
 | `3` | transport or auth failure, on either side |
 
 ## nxr rm

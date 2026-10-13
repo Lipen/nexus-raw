@@ -36,7 +36,9 @@ tokio = { workspace = true, features = ["fs", "io-std"] }
 gloo-timers = { version = "0.3", default-features = false, features = ["futures"] }
 js-sys = "0.3"
 
-# Part files and local markers are opened without following symlinks.
+# Part files and local markers are opened without following symlinks, and the
+# mirror staging lock takes an exclusive flock. Windows answers both ports
+# without libc: share-denied opens cover the lock, and no flag covers NOFOLLOW.
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 

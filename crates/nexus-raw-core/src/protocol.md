@@ -34,6 +34,11 @@ The symmetric diff decides what to transfer.
 `--no-sha` opts out.
 `down` requires an enumeration source: explicit names, or the best-effort search API.
 
+`mirror` moves enumerated names between two repositories through a staging directory derived from both bases.
+Two concurrent `mirror` runs over one pair would interleave `.part` writes, so the staging directory holds a lock: the second run refuses with a hint (misuse, exit 2) and touches nothing.
+The lock is portable: unix guards the lock file with an exclusive `flock`, windows opens it with file sharing denied, so any second open fails while the first run lives.
+The handle is the lock: the file is never unlinked while held, and a crashed run leaves nothing to clean up.
+
 Deletion (`rm`, `point --clear`) is the one deliberate extension (§5.4).
 DELETE is allowed for the objects of the enumerated version only: bytes, markers,
 the version document, the pointer file.

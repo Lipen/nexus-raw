@@ -5,7 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Windows joins as a first-class platform: the `mirror` staging lock works there (the lock file is opened with sharing disabled, so a concurrent run for the same pair refuses exactly as on unix), and CI builds and tests the workspace on `windows-latest` next to the ubuntu leg.
 
 ## [0.13.0] - 2026-10-12
 

@@ -67,6 +67,9 @@ pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     #[cfg(unix)]
     {
         // tokio::fs::OpenOptions mirrors the unix extension natively.
+        // Windows has no equivalent flag: the parts live under the user's own
+        // temp dir and the name grammar blocks traversal (see the blocking
+        // variant below), so the plain options are the accepted answer there.
         options.custom_flags(libc::O_NOFOLLOW);
     }
     options
