@@ -123,6 +123,9 @@ pub(crate) enum Cmd {
         /// Skip marker generation and marker uploads.
         #[arg(long = "no-sha")]
         no_sha: bool,
+        /// Skip names whose remote marker digest already equals the local copy, re-upload the changed rest.
+        #[arg(long)]
+        if_changed: bool,
         /// Print the plan without transferring anything.
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,

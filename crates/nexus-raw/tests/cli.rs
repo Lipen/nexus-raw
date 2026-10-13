@@ -17,6 +17,7 @@ const NXR: &str = env!("CARGO_BIN_EXE_nxr");
 /// Two distinct artifact payloads shared by most tests.
 const ALPHA: &[u8] = b"alpha payload: the quick brown fox\n";
 const BETA: &[u8] = b"beta payload: 0123456789\n";
+const GAMMA: &[u8] = b"gamma payload: the mutated successor\n";
 
 fn server(scenario: Scenario) -> MockNexus {
     MockNexus::start(scenario).expect("mock nexus starts")
@@ -3431,4 +3432,87 @@ fn get_segments_failure_leaves_no_output() {
     expect_exit(&got, 3, "segment failure is transport");
     assert!(!target.exists(), "nothing partial is renamed");
     assert!(stderr(&got).contains("transport"), "{}", stderr(&got));
+}
+||||||| parent of 73bfd3b (cli: up --if-changed skips the names the remote marker vouches for)
+=======
+
+/// up --if-changed twice: the second run PUTs nothing, a mutated file re-PUTs, a markerless remote name re-PUTs.
+#[test]
+fn up_if_changed_skips_verified_and_reups_the_rest() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+
+    // The first run is a plain full upload.
+    let first = nxr(&["up", "--if-changed", src.path().to_str().unwrap(), &base]);
+    expect_exit(&first, 0, "the first if-changed run uploads everything");
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+
+    // The second run: every name has a verified remote marker, nothing is PUT.
+    let puts_before = srv.put_count("1.14.0/a.zip");
+    let second = nxr(&["up", "--if-changed", src.path().to_str().unwrap(), &base]);
+    expect_exit(&second, 0, "the converged rerun is a clean skip");
+    assert!(
+        stdout(&second).contains("uploaded 0, downloaded 0, skipped 2"),
+        "the rerun skips both names: {}",
+        stdout(&second)
+    );
+    assert_eq!(
+        srv.put_count("1.14.0/a.zip"),
+        puts_before,
+        "a converged rerun writes nothing"
+    );
+
+    // One local file mutates: exactly that name re-PUTs (bytes then marker).
+    // The stale sibling goes with it: a marker that no longer matches the bytes
+    // is a broken local copy, which `up` refuses no matter the flag.
+    write_file(src.path(), "b.bin", GAMMA);
+    std::fs::remove_file(src.path().join("b.bin.sha256")).unwrap();
+    let puts_b_before = srv.put_count("1.14.0/b.bin");
+    let puts_marker_before = srv.put_count("1.14.0/b.bin.sha256");
+    let puts_a_before = srv.put_count("1.14.0/a.zip");
+    let third = nxr(&["up", "--if-changed", src.path().to_str().unwrap(), &base]);
+    expect_exit(&third, 0, "the mutated name re-uploads");
+    assert_eq!(
+        srv.put_count("1.14.0/b.bin"),
+        puts_b_before + 1,
+        "the change is exactly one bytes PUT for b.bin"
+    );
+    assert_eq!(
+        srv.put_count("1.14.0/b.bin.sha256"),
+        puts_marker_before + 1,
+        "and exactly one marker PUT beside it"
+    );
+    assert_eq!(
+        srv.put_count("1.14.0/a.zip"),
+        puts_a_before,
+        "the unchanged name never re-uploads"
+    );
+    assert_eq!(srv.store_get("1.14.0/b.bin").as_deref(), Some(GAMMA));
+}
+
+/// up --if-changed over a markerless remote copy: no evidence, the name re-PUTs (the repair path).
+#[test]
+fn up_if_changed_reups_when_the_remote_marker_is_missing() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    // Seed the server with bytes but no marker: `up --no-sha` does exactly that.
+    let seed = nxr(&["up", "--no-sha", src.path().to_str().unwrap(), &base]);
+    expect_exit(&seed, 0, "the seed run leaves the remote markerless");
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_none());
+
+    // --if-changed cannot verify the remote copy, so it re-PUTs and repairs the marker.
+    let run = nxr(&["up", "--if-changed", src.path().to_str().unwrap(), &base]);
+    expect_exit(&run, 0, "the markerless name is re-uploaded, not skipped");
+    assert_eq!(
+        srv.store_get("1.14.0/a.zip.sha256").as_deref(),
+        Some(marker_line("a.zip", ALPHA).as_bytes()),
+        "the run leaves the marker present"
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
 }

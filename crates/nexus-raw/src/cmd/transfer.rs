@@ -22,11 +22,12 @@ pub(crate) async fn up(
     dst: &str,
     claim: Option<ArtifactName>,
     no_sha: bool,
+    if_changed: bool,
     plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, claim, no_sha, plan).await;
+    let result = run_up(&ctx, src, claim, no_sha, if_changed, plan).await;
     finish(ctx).await;
     result
 }
@@ -36,6 +37,7 @@ async fn run_up(
     src: &Path,
     claim: Option<ArtifactName>,
     no_sha: bool,
+    if_changed: bool,
     plan: bool,
 ) -> Result<(), Error> {
     if plan {
@@ -47,6 +49,10 @@ async fn run_up(
         for a in &actions {
             crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
         }
+        return Ok(());
+    }
+    if if_changed {
+        ctx.nxr.up_if_changed(src, None, !no_sha, claim).await?;
         return Ok(());
     }
     // The Summary event is the single source for totals: the renderer prints it in both modes.

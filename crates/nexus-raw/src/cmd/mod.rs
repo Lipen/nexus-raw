@@ -61,13 +61,14 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             dst,
             claim_first,
             no_sha,
+            if_changed,
             plan,
         } => {
             let claim = match claim_first {
                 Some(raw) => Some(ArtifactName::parse(raw)?),
                 None => None,
             };
-            transfer::up(cli, src, dst, claim, *no_sha, *plan).await
+            transfer::up(cli, src, dst, claim, *no_sha, *if_changed, *plan).await
         }
         Cmd::Down {
             src,

@@ -111,6 +111,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -l retry -d 'Attempts per HT
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l no-sha -d 'Skip marker generation and marker uploads'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l if-changed -d 'Skip names whose remote marker digest already equals the local copy, re-upload the changed rest'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l plan -l dry-run -d 'Print the plan without transferring anything'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l json -d 'Emit one NDJSON event per line on stdout'

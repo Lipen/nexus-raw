@@ -153,6 +153,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--no-sha', '--no-sha', [CompletionResultType]::ParameterName, 'Skip marker generation and marker uploads')
+            [CompletionResult]::new('--if-changed', '--if-changed', [CompletionResultType]::ParameterName, 'Skip names whose remote marker digest already equals the local copy, re-upload the changed rest')
             [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
