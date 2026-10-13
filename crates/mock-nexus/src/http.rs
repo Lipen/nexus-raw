@@ -14,7 +14,6 @@ use super::support::{
 };
 use crate::group;
 use crate::scenario::Scenario;
-use crate::scenario::IO_TIMEOUT;
 use crate::server::{self, BodyError, BodyPlan, Request, Resp};
 use crate::store::{lock, Outcome, Shared};
 
@@ -27,6 +26,9 @@ const FAKE_LENGTH_LIE: usize = 1024;
 
 /// How far the oversized-head drain may read before giving the peer no further courtesy.
 const DRAIN_CAP: usize = 256 * 1024;
+
+/// A single read or write may stall at most this long before we drop the peer.
+pub(crate) const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Serve exactly one request on `stream`, then close the connection.
 pub(crate) fn serve(shared: &Shared, stream: TcpStream) {

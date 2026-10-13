@@ -7,9 +7,11 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 
+use crate::http;
 use crate::scenario;
 use crate::server::{self, Request};
 use crate::store::{Outcome, Shared};
+use crate::support::{log_request, plain};
 
 /// Forward the request along `shared.members` in order and relay the first `2xx` answer.
 /// A member's `404`, `5xx` or broken connection is skipped without a retry and without reaching the client.
@@ -18,13 +20,13 @@ pub(crate) fn get_first(shared: &Shared, stream: &mut TcpStream, req: &Request, 
     let request = forward_bytes(req);
     for addr in &shared.members {
         if let Some((status, response)) = relay_member(*addr, &request) {
-            scenario::log_request(shared, &req.method, path, Outcome::Status(status));
+            log_request(shared, &req.method, path, Outcome::Status(status));
             // The member bytes already carry status line, headers, `Content-Length` and `Connection: close`.
             let _ = stream.write_all(&response);
             return;
         }
     }
-    scenario::log_request(shared, &req.method, path, Outcome::Status(404));
+    log_request(shared, &req.method, path, Outcome::Status(404));
     // A HEAD response never carries a body (RFC 9110 §9.3.2): the miss keeps the single-repo
     // Content-Length of 10 but puts nothing on the wire.
     let resp = if req.method == "HEAD" {
@@ -38,7 +40,7 @@ pub(crate) fn get_first(shared: &Shared, stream: &mut TcpStream, req: &Request, 
             hide_length: false,
         }
     } else {
-        scenario::plain(404, b"not found\n", None)
+        plain(404, b"not found\n", None)
     };
     let _ = server::write_response(stream, &resp);
 }
@@ -46,8 +48,8 @@ pub(crate) fn get_first(shared: &Shared, stream: &mut TcpStream, req: &Request, 
 /// Refuse a write through the group before any member is contacted.
 /// The wire shape follows real Nexus: `405`, `Allow: GET,HEAD` (joined without a space) and no body.
 pub(crate) fn refuse_writes(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
-    scenario::log_request(shared, &req.method, path, Outcome::Status(405));
-    let mut resp = scenario::plain(405, b"", None);
+    log_request(shared, &req.method, path, Outcome::Status(405));
+    let mut resp = plain(405, b"", None);
     resp.extra_headers.push(("Allow", "GET,HEAD".to_owned()));
     let _ = server::write_response(stream, &resp);
 }
@@ -56,8 +58,8 @@ pub(crate) fn refuse_writes(shared: &Shared, stream: &mut TcpStream, req: &Reque
 /// A transport failure or any non-2xx answer yields `None`: the member is skipped.
 fn relay_member(addr: SocketAddr, request: &[u8]) -> Option<(u16, Vec<u8>)> {
     let mut member = TcpStream::connect(addr).ok()?;
-    let _ = member.set_read_timeout(Some(scenario::IO_TIMEOUT));
-    let _ = member.set_write_timeout(Some(scenario::IO_TIMEOUT));
+    let _ = member.set_read_timeout(Some(http::IO_TIMEOUT));
+    let _ = member.set_write_timeout(Some(http::IO_TIMEOUT));
     member.write_all(request).ok()?;
     // Members answer one request per connection and close, so EOF ends the answer.
     let mut response = Vec::new();

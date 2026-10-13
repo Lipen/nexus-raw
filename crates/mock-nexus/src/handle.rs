@@ -5,6 +5,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::http;
 use crate::scenario::{self, Scenario};
 use crate::store::{lock, Outcome, ReqLog, Shared};
 
@@ -185,7 +186,7 @@ fn spawn_acceptor(listener: TcpListener, shared: Arc<Shared>, stop: Arc<AtomicBo
                     break;
                 }
                 let conn_shared = Arc::clone(&shared);
-                std::thread::spawn(move || scenario::serve(&conn_shared, conn));
+                std::thread::spawn(move || http::serve(&conn_shared, conn));
             }
             // A burst of short-lived connections lets some abort between the
             // handshake and this accept (ConnectionReset covers the Windows

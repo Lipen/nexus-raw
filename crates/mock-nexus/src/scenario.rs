@@ -244,23 +244,3 @@ pub enum Scenario {
     /// Every other request behaves like [`Scenario::Atomic`].
     IgnoreRange,
 }
-
-/// A single read or write may stall at most this long before we drop the peer.
-pub(crate) const IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-
-use super::http;
-use super::support;
-use crate::server::{Drip, Resp};
-use crate::store::{Outcome, Shared};
-
-pub(crate) fn serve(shared: &Shared, stream: std::net::TcpStream) {
-    http::serve(shared, stream)
-}
-
-pub(crate) fn plain(status: u16, body: &[u8], drip: Option<Drip>) -> Resp {
-    support::plain(status, body, drip)
-}
-
-pub(crate) fn log_request(shared: &Shared, method: &str, path: &str, outcome: Outcome) {
-    support::log_request(shared, method, path, outcome)
-}
