@@ -45,6 +45,8 @@ pub const SCENARIOS: &[&str] = &[
     "eula-absent",
     "detail-in-hint",
     "ignore-range",
+    // wave-150 tail
+    "audit-litter",
 ];
 
 /// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
@@ -110,6 +112,10 @@ pub enum Scenario {
     /// GET and HEAD requests answer `301 Moved Permanently` with `Location: <location_path>` (same host, the path from the repository root) and an empty body.
     /// Every other method behaves like [`Scenario::Atomic`].
     Redirect { location_path: String },
+    /// The store carries one clean pair (`clean/app.bin` + an honest marker), an orphan (`orphan/app.bin` without a marker), a dangling marker (`dangling/app.bin.sha256` without bytes) and an unparseable marker (`broken/app.bin.sha256` with a body outside the `sha256sum -c` format).
+    /// GET/HEAD/PUT behave like [`Scenario::Atomic`]: the litter is seeded data, not wire behavior.
+    /// The `nxr audit` structural mode classifies all three classes and never refuses; `--bytes` still verifies the clean pair.
+    AuditLitter,
     /// Every DELETE is refused with `403 Forbidden`: the read-only repository.
     /// Nothing is ever removed from the store.
     /// GET/HEAD/PUT behave like [`Scenario::Atomic`].

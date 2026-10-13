@@ -174,6 +174,29 @@ fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>
             );
             store.insert("service/rest/v1/repositories".to_owned(), rich.into_bytes());
         }
+        Scenario::AuditLitter => {
+            // One clean pair, one orphan, one dangling marker and one
+            // unparseable marker: the three structural finding classes plus
+            // the control the audit must not flag.
+            // The clean marker carries the true sha256 of `clean bytes`
+            // (precomputed: the mock is std-only, no hasher here).
+            const CLEAN_DIGEST: &str =
+                "a22ae4f83248fb43415404da410560378910398baf65f234d8de8cde3538351d";
+            store.insert("repository/raw-main/1.0.0/clean/app.bin".to_owned(), b"clean bytes".to_vec());
+            store.insert(
+                "repository/raw-main/1.0.0/clean/app.bin.sha256".to_owned(),
+                format!("{}  clean/app.bin\n", CLEAN_DIGEST).into_bytes(),
+            );
+            store.insert("repository/raw-main/1.0.0/orphan/app.bin".to_owned(), b"orphan bytes".to_vec());
+            store.insert(
+                "repository/raw-main/1.0.0/dangling/app.bin.sha256".to_owned(),
+                b"aa  dangling/app.bin\n".to_vec(),
+            );
+            store.insert(
+                "repository/raw-main/1.0.0/broken/app.bin.sha256".to_owned(),
+                b"this line is not a digest line\n".to_vec(),
+            );
+        }
         _ => {}
     }
     store

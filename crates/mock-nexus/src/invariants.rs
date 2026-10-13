@@ -307,6 +307,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         ],
         invariant: "A server that ignores `Range` is answered with a single-stream download: the client detects the full-body answer and degrades without an error.",
     },
+    ScenarioDoc {
+        id: "audit-litter",
+        name: "Integrity litter seeded.",
+        behavior: &[
+            "The store carries one clean pair, an orphan (bytes without marker), a dangling marker (marker without bytes) and an unparseable marker, plus the usual service documents.",
+            "GET, HEAD and PUT behave like `atomic`.",
+        ],
+        invariant: "The audit structural mode classifies orphan, dangling marker and unparseable marker from the metadata and exits 1 with the report; the clean pair is never flagged.",
+    },
 ];
 
 /// Render `docs/reference/invariants.md` from [`SCENARIO_DOCS`].
