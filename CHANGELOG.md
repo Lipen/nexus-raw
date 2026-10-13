@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Windows joins as a first-class platform: the `mirror` staging lock works there (the lock file is opened with sharing disabled, so a concurrent run for the same pair refuses exactly as on unix), and CI builds and tests the workspace on `windows-latest` next to the ubuntu leg.
+- `nxr diff --via search --ls`: the remote side of the delta report is built from the search API's per-asset facts (name, digest, size) in one paged listing, instead of a HEAD/sibling probe pair per name.
+  `--prefix` filters the facts client-side; the report shape and exit codes are the plain `diff` ones.
+  A searched asset without a search-reported digest counts as changed, never equal.
+  A search refusal (400/404) refuses with the `cannot enumerate` hint naming the search API, or with `--fallback` degrades explicitly: a warning line, then the probe-based report over `--ls` or explicit names.
 
 ## [0.13.0] - 2026-10-12
 

@@ -399,7 +399,7 @@ A fresh download that still diverges refuses the run (exit 1), so nothing diverg
 ## nxr diff
 
 ```
-nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--prefix PREFIX]...
+nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--prefix PREFIX]... [--via search [--fallback]]
 ```
 
 Compare a local directory against a remote one and print the delta, changing nothing on either side.
@@ -444,6 +444,26 @@ A fully converged directory reports every name as `same` and exits 0.
 | `1` | differences found, or a data refusal: `cannot enumerate` |
 | `2` | misuse: the local path is not a directory, an unsafe `--name` or `--prefix`, an unscannable local name |
 | `3` | transport or auth failure while enumerating or probing |
+
+### diff --via search
+
+`--via search --ls` builds the remote side of the report from the search API's per-asset facts (name, digest, size), the same listing `nxr service assets` reads.
+One paged listing replaces the HEAD-and-sibling pair per name, so a big tree is compared in O(pages) requests.
+The report shape, the sections and the exit codes are the plain `diff` ones.
+`--prefix` filters the search facts client-side; `--name`/`--names-from` are refused (they would fight the listing as the name source) unless `--fallback` names them as the degraded source.
+
+The honesty rules, enforced in code:
+A searched asset that lacks a search-reported digest counts as changed (`diverged` with `sha: false`), never as `same`: there is nothing to verify against.
+A search refusal (400 for an unknown repository, 404 for a missing endpoint) refuses the run with `cannot enumerate ... the server refused it (… the search API)`, exit 1 with the enumeration hint: no false clean delta.
+With `--fallback` the run degrades explicitly: a warning line announces the refusal on stderr, then the report is rebuilt from the probe-based enumeration (`--ls` again, or the explicit `--name`/`--names-from` list).
+
+```console
+$ nxr diff dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --via search --ls
+same app-1.4.0.zip
+missing-local pinned.xml
+$ echo $?
+1
+```
 
 ## nxr mirror
 
