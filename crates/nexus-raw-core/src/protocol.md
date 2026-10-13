@@ -78,3 +78,11 @@ Segmented download (`get --segments N`) is a client-side strategy on top of that
 The client HEADs the URL for `Content-Length`, splits the object into N contiguous closed spans (`bytes=start-end`), fetches them concurrently, and assembles the answers positionally into one file that the usual digest check and atomic rename complete.
 A server that answers a ranged GET with the whole body (`200`) ignores `Range`: the client detects the full-body answer and degrades to the single-stream download, logged through the events channel, never an error.
 Any segment that fails after retries fails the whole download: the segment files stay in the staging area for inspection, and nothing partial is ever renamed to the output name.
+
+## Audit
+
+`audit` is read-only: every request it makes is a GET or a HEAD, and no request mutates the repository.
+The structural pass enumerates the raw tree through the search API, markers included, fetches every listed marker body with a small GET, and classifies the metadata over four finding classes: an orphan (bytes without a marker), a dangling marker (a marker without bytes), an unparseable marker (a body outside the `sha256sum -c` format) and a diverged fact (a marker digest that disagrees with the search fact for the same name).
+The search facts are a cross-check, never the existence truth: the listing lags behind uploads, so the tree and the markers decide what exists, and a missing fact is never a finding.
+The byte pass (`audit --bytes`) downloads every asset and hashes it against its marker: it is the only pass that sees silent bitrot, because no metadata moves when a byte changes on disk.
+Findings are data, not errors: a run that finds and reports exits 1, a clean run exits 0.
