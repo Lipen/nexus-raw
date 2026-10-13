@@ -9,63 +9,63 @@ importers:
   .:
     dependencies:
       '@nexus-raw/nxr':
-        specifier: 0.13.0
-        version: 0.13.0
+        specifier: 0.14.0
+        version: 0.14.0
 
 packages:
 
-  '@nexus-raw/nxr-darwin-arm64@0.13.0':
-    resolution: {integrity: sha512-TTMI+FIcUk+ujJ2lfellF13UItqNDY1H0bSylsQ6MnDZK04XzvDtRVunXAQyR2+MocaXBRJ0S9NBR0YUFreC5w==}
+  '@nexus-raw/nxr-darwin-arm64@0.14.0':
+    resolution: {integrity: sha512-CzEJ+XAOdsiTOjw4/ZAU2bFMH6nB6py/kEf4B+8jLnmFZvwYRnyCbezUYgXXca1BmKhfCqnsRHqNidv7op42/Q==}
     cpu: [arm64]
     os: [darwin]
 
-  '@nexus-raw/nxr-darwin-x64@0.13.0':
-    resolution: {integrity: sha512-/mUCnJbZmnz/258kfoUphdHyDhnv01u4n8W8o/FutCXvHyysHFz1nSOp03J1nAAihA/GJTRbJtLtGG9PU/aJsw==}
+  '@nexus-raw/nxr-darwin-x64@0.14.0':
+    resolution: {integrity: sha512-QzCqPuPr9MePIrmErEem1BVzzeh/gMyvMFb7OKSMC1L+E9bFo8jyE8WLUhqIBd4QwhTzSJoqbjUpklnmkNCUaA==}
     cpu: [x64]
     os: [darwin]
 
-  '@nexus-raw/nxr-linux-arm64-gnu@0.13.0':
-    resolution: {integrity: sha512-jZVALwy/QqVbvEsa1/KfvgEm/t1x4Vk3XeUfdWAJkns6ff/JHMmEFlJjIjvjPcqNLFVKpKjHUMnc+FD2PaAApg==}
+  '@nexus-raw/nxr-linux-arm64-gnu@0.14.0':
+    resolution: {integrity: sha512-1J5zzmGmRPRG8/anAEYlgoeG70I8unH7e4DP4JwT+3uj5lqrL5FJDg9reRfZZjDgkJfz4rTMTlVWz+zCf3OcJQ==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@nexus-raw/nxr-linux-x64-gnu@0.13.0':
-    resolution: {integrity: sha512-BRZPodqzI9g9upImEyHoOQ9ihZiiENEQWaKJ9Rhl20U9UHXzyl0xXsUmrnoHCrXvuj99ua9WsBFqSDT7j8Zf3g==}
+  '@nexus-raw/nxr-linux-x64-gnu@0.14.0':
+    resolution: {integrity: sha512-lZTM/2GoCE1Mc+VCLArrflyXoDujyb2ImaCnuB5ignPFOT434itjI2qgdSEjp2U+uODWhWulzRelpv6dzBGkCw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@nexus-raw/nxr-win32-x64-msvc@0.13.0':
-    resolution: {integrity: sha512-IcFcitaKSPqYJHAxOSK9gmZHEWkUAugXeBhWL+WAjQz4hBmY8Ky+eC2hi+Qutt7Gy3gppqeeCsafOf65I7rlLA==}
+  '@nexus-raw/nxr-win32-x64-msvc@0.14.0':
+    resolution: {integrity: sha512-0B0pxgPbky3emXNF8zQONcxWiy3UEFMDNxb8lcaS+i506iDZGzoY0HJYNpRrlwp49XX31M5IMwLGshv4aKW6lA==}
     cpu: [x64]
     os: [win32]
 
-  '@nexus-raw/nxr@0.13.0':
-    resolution: {integrity: sha512-0EBLlAkWRNxMYIyErVZk0dkX6a5l0Rs0yvLe9D+LA3xXBi946nPcLIT/3eBkg2cOwwmrriTDYuiE2p6E9Qxwfg==}
+  '@nexus-raw/nxr@0.14.0':
+    resolution: {integrity: sha512-x7j79hwdF0UFx3LmCO8UsmWyBUPgZ3lL2hJG3FcyedWe2guKQ54YEfntpL5OwNS7+0d7jCwp5gY/HEAvpUkAzQ==}
     engines: {node: '>= 18'}
 
 snapshots:
 
-  '@nexus-raw/nxr-darwin-arm64@0.13.0':
+  '@nexus-raw/nxr-darwin-arm64@0.14.0':
     optional: true
 
-  '@nexus-raw/nxr-darwin-x64@0.13.0':
+  '@nexus-raw/nxr-darwin-x64@0.14.0':
     optional: true
 
-  '@nexus-raw/nxr-linux-arm64-gnu@0.13.0':
+  '@nexus-raw/nxr-linux-arm64-gnu@0.14.0':
     optional: true
 
-  '@nexus-raw/nxr-linux-x64-gnu@0.13.0':
+  '@nexus-raw/nxr-linux-x64-gnu@0.14.0':
     optional: true
 
-  '@nexus-raw/nxr-win32-x64-msvc@0.13.0':
+  '@nexus-raw/nxr-win32-x64-msvc@0.14.0':
     optional: true
 
-  '@nexus-raw/nxr@0.13.0':
+  '@nexus-raw/nxr@0.14.0':
     optionalDependencies:
-      '@nexus-raw/nxr-darwin-arm64': 0.13.0
-      '@nexus-raw/nxr-darwin-x64': 0.13.0
-      '@nexus-raw/nxr-linux-arm64-gnu': 0.13.0
-      '@nexus-raw/nxr-linux-x64-gnu': 0.13.0
-      '@nexus-raw/nxr-win32-x64-msvc': 0.13.0
+      '@nexus-raw/nxr-darwin-arm64': 0.14.0
+      '@nexus-raw/nxr-darwin-x64': 0.14.0
+      '@nexus-raw/nxr-linux-arm64-gnu': 0.14.0
+      '@nexus-raw/nxr-linux-x64-gnu': 0.14.0
+      '@nexus-raw/nxr-win32-x64-msvc': 0.14.0
