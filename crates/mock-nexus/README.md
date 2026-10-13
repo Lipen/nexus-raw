@@ -55,4 +55,5 @@ Specs are code-level composition and never enter the contract tables.
 
 The scenario table is a contract held in four places: the Rust enum, the binary's name table, the generated invariants page, and the Python suite's classification table.
 Four drift tests refuse a change that updates one place and not the others.
-Adding a scenario is a documented, mechanical procedure; changing one means touching all four in the same commit.
+Adding a scenario is a documented, mechanical procedure.
+Changing one means touching all four in the same commit.
