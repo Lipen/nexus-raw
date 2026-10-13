@@ -3,7 +3,7 @@
 A mock Sonatype Nexus raw server with a failure-scenario table: the shared conformance fixture of this repository.
 The Rust test suites, the Python reference suite, a human debugging a client, and external harnesses all drive the same list of scenarios, so a behavior pinned against the mock is pinned against one contract, not against whoever ran the test.
 
-Std-only: one dependency (`serde_json`), one request per connection, `Connection: close` everywhere.
+Std-only: the runtime has one dependency (`serde_json`), one request per connection, `Connection: close` everywhere.
 No keep-alive, no chunked responses, no async runtime: every byte on the wire is either storage contract or a named failure mode, and nothing else competes for attention.
 
 ## Quick starts
