@@ -42,6 +42,10 @@ SKIP = {
         "the scenario answers a ranged GET with the whole body, and the reference client is single-stream:"
         " it never sends Range, so the degradation the scenario pins is not observable here"
     ),
+    "audit-litter": (
+        "the scenario seeds integrity litter for the CLI audit command:"
+        " the reference client has no audit surface, and the seeded objects behave like atomic storage"
+    ),
     "doc-drift": (
         "the drift toggle is a library-only knob (MockNexus::enable_drift), so the binary serves plain storage"
         " and the client-side half, version.json being an ordinary name, is already pinned under atomic"
