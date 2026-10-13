@@ -207,6 +207,38 @@ pub(crate) async fn search_assets_facts(
     Ok(out)
 }
 
+/// The audit listing: every repository object as served, markers included,
+/// with the search facts per object.
+///
+/// Unlike [`search_assets`] nothing is filtered or grammar-checked here: the
+/// audit needs the raw truth of what the storage lists, and a marker name
+/// (which the artifact grammar refuses by the reserved suffix) is exactly the
+/// kind of object the audit must see.
+///
+/// # Errors
+///
+/// Returns [`Error::Enumerate`] when the search endpoint is unavailable or
+/// unparseable and [`Error::SearchRepoMissing`] on a search 400.
+pub(crate) async fn audit_tree(
+    client: &NexusClient,
+    dir_url: &str,
+) -> Result<Vec<(String, Option<Digest>)>, Error> {
+    let parts = split_base(dir_url)?;
+    let assets = walk(client, dir_url, &parts.repo).await?;
+    let version_prefix = format!("{}/", parts.version);
+    let mut out: Vec<(String, Option<Digest>)> = assets
+        .into_iter()
+        .filter_map(|a| {
+            let rel = drop_segments(&a.path, parts.group.len());
+            let rel = rel.strip_prefix(&version_prefix)?;
+            Some((rel.to_owned(), a.sha256))
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.dedup_by(|a, b| a.0 == b.0);
+    Ok(out)
+}
+
 struct BaseParts {
     repo: String,
     group: Vec<String>,

@@ -107,7 +107,7 @@ pub struct AuditVerdict {
 /// Everything else is clean: the audit reports problems, not inventories.
 pub fn classify(input: &AuditInput) -> AuditVerdict {
     let mut findings = Vec::new();
-    let mut facts_available = !input.facts.is_empty();
+    let facts_available = !input.facts.is_empty();
     // The tree splits into assets and markers, and each side checks the other.
     let markers: Vec<&String> = input
         .tree
@@ -211,6 +211,15 @@ pub enum ByteCheck {
         /// The digest the downloaded bytes hash to.
         actual: Digest,
     },
+}
+
+/// One full audit run: the structural verdict plus the byte pass when asked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditRun {
+    /// The structural verdict over tree, markers and facts.
+    pub verdict: AuditVerdict,
+    /// The byte pass result per checked asset, when `bytes_mode` ran.
+    pub byte_checks: BTreeMap<ArtifactName, ByteCheck>,
 }
 
 #[cfg(test)]

@@ -317,8 +317,165 @@ impl Nxr {
             .map_err(|e| Error::misuse(format!("task panicked: {e}")))
     }
 
-    /// Upload a local directory (§5.2).
+    /// Audit the repository at the facade base (§11).
     ///
+    /// The structural pass lists the raw tree through the search API (markers
+    /// included), fetches every listed marker body (small GETs, worker-paced)
+    /// and classifies the integrity classes over the metadata; asset bytes are
+    /// never read. The search facts double as the independent cross-check of
+    /// every parsed marker (`diverged_fact`), so a run over a live index both
+    /// proves existence and cross-checks content.
+    ///
+    /// `bytes_mode` additionally downloads and hashes every asset against its
+    /// marker: the only pass that sees silent bitrot. `sample` limits the byte
+    /// pass to a deterministic subset of that size; `None` or `Some(0)` checks
+    /// everything.
+    ///
+    /// The repository is only read: no audit request mutates it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the search enumeration errors ([`Error::SearchRepoMissing`],
+    /// [`Error::Enumerate`]), the first transport/auth failure from the marker
+    /// or byte fetches, and [`Error::Misuse`] when a task panicked.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn audit(
+        &self,
+        bytes_mode: bool,
+        sample: Option<usize>,
+    ) -> Result<sync::audit::AuditRun, Error> {
+        use sync::audit::{AuditInput, ByteCheck};
+
+        // 1. Discovery: the whole-tree search walk, markers included.
+        let tree_list = layout::ls::audit_tree(&self.client, &self.base).await?;
+        let facts: BTreeMap<ArtifactName, Option<Digest>> = tree_list
+            .iter()
+            .filter_map(|(p, d)| {
+                // Grammar-clean, non-marker names carry a cross-check fact.
+                (d.is_some() && !p.ends_with(".sha256"))
+                    .then(|| ArtifactName::parse(p).ok().map(|n| (n, d.clone())))
+                    .flatten()
+            })
+            .collect();
+
+        // 2. Marker bodies for every listed marker, worker-paced.
+        let marker_keys: Vec<String> = tree_list
+            .iter()
+            .filter(|(p, _)| p.ends_with(".sha256"))
+            .map(|(p, _)| p.clone())
+            .collect();
+        let mut set = tokio::task::JoinSet::new();
+        for (i, key) in marker_keys.iter().enumerate() {
+            let permit = self
+                .workers
+                .clone()
+                .acquire_owned()
+                .await
+                .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+            let client = self.client.clone();
+            let base = self.base.clone();
+            let key = key.clone();
+            set.spawn(async move {
+                let _permit = permit;
+                let marker_url = format!("{base}{}", encode_rel(&key));
+                let body = client.get_small(&marker_url).await;
+                (i, body.map(|b| b.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())))
+            });
+        }
+        let mut bodies: Vec<Option<Option<String>>> = (0..marker_keys.len()).map(|_| None).collect();
+        while let Some(res) = set.join_next().await {
+            let (i, inner) = res.map_err(|e| Error::misuse(format!("task panicked: {e}")))?;
+            bodies[i] = Some(inner?);
+        }
+        let _ = &mut bodies;
+
+        // 3. Fold the bodies into the tree map the classifier reads.
+        let mut tree: BTreeMap<String, Option<String>> = tree_list
+            .iter()
+            .map(|(p, _)| (p.clone(), None))
+            .collect();
+        for (i, key) in marker_keys.iter().enumerate() {
+            if let Some(slot) = tree.get_mut(key) {
+                *slot = bodies[i].clone().flatten();
+            }
+        }
+
+        // 4. The structural classification (pure).
+        let input = AuditInput { tree, facts };
+        let verdict = sync::audit::classify(&input);
+
+        // 5. The byte pass: download and hash against the parsed marker.
+        let mut byte_checks: BTreeMap<ArtifactName, ByteCheck> = BTreeMap::new();
+        if bytes_mode {
+            let asset_keys: Vec<String> = tree_list
+                .iter()
+                .filter(|(p, _)| !p.ends_with(".sha256"))
+                .map(|(p, _)| p.clone())
+                .collect();
+            let chosen: Vec<String> = match sample {
+                Some(n) if n > 0 && n < asset_keys.len() => {
+                    // Deterministic stride sample: sort is stable above.
+                    let step = asset_keys.len() / n;
+                    asset_keys.iter().step_by(step.max(1)).take(n).cloned().collect()
+                }
+                _ => asset_keys,
+            };
+            let mut bset = tokio::task::JoinSet::new();
+            for (i, key) in chosen.iter().enumerate() {
+                let permit = self
+                    .workers
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+                let client = self.client.clone();
+                let base = self.base.clone();
+                let key = key.clone();
+                bset.spawn(async move {
+                    let _permit = permit;
+                    let url = format!("{base}{}", encode_rel(&key));
+                    let actual = crate::primitive::sha(&client, crate::primitive::ShaSource::Url(url)).await;
+                    (i, actual)
+                });
+            }
+            let mut slots: Vec<Option<Result<Digest, Error>>> =
+                (0..chosen.len()).map(|_| None).collect();
+            while let Some(res) = bset.join_next().await {
+                let (i, inner) = res.map_err(|e| Error::misuse(format!("task panicked: {e}")))?;
+                slots[i] = Some(inner);
+            }
+            for (i, key) in chosen.iter().enumerate() {
+                let actual = slots[i].take().expect("slot filled")?;
+                let marker_key = format!("{}.sha256", key);
+                let parsed = input
+                    .tree
+                    .get(&marker_key)
+                    .cloned()
+                    .flatten()
+                    .as_deref()
+                    .and_then(sync::audit::parse_marker_body);
+                let Ok(asset_name) = ArtifactName::parse(key) else {
+                    continue;
+                };
+                let check = match parsed {
+                    Some((marker, _)) if marker == actual => ByteCheck::Match,
+                    Some((marker, _)) => ByteCheck::Mismatch {
+                        marker,
+                        actual,
+                    },
+                    None => continue,
+                };
+                byte_checks.insert(asset_name, check);
+            }
+        }
+
+        Ok(sync::audit::AuditRun {
+            verdict,
+            byte_checks,
+        })
+    }
+
+    /// Upload a local directory (§5.2).
     /// `names` restricts the transfer to the explicit list.
     /// `None` scans the directory.
     /// Markers are written by default.
@@ -985,4 +1142,26 @@ fn acquire_staging_lock(staging: &Path) -> Result<std::fs::File, Error> {
         "another mirror is already running for this pair (lock: {})",
         path.display()
     )))
+}
+
+/// Percent-encode a repository-relative path for a URL: safe characters pass,
+/// everything else goes percent-hex per segment (separators kept).
+/// Marker names cannot go through [`ArtifactName::encoded`](crate::model::name::ArtifactName::encoded),
+/// because the grammar refuses the reserved suffix.
+fn encode_rel(rel: &str) -> String {
+    rel.split('/')
+        .map(|seg| {
+            let mut out = String::with_capacity(seg.len());
+            for b in seg.bytes() {
+                match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-' | b'~' => {
+                        out.push(b as char)
+                    }
+                    other => out.push_str(&format!("%{other:02X}")),
+                }
+            }
+            out
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
