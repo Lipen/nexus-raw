@@ -7,7 +7,7 @@
 //!                       [--location PATH] [--auth user:pass]
 //! ```
 
-use mock_nexus::{MockNexus, Scenario};
+use mock_nexus::{MockNexus, Scenario, Spec};
 use std::io::Write;
 use std::net::SocketAddr;
 
@@ -26,6 +26,8 @@ struct Flags {
     location: String,
     user: String,
     pass: String,
+    seed_dir: Option<std::path::PathBuf>,
+    config: Option<std::path::PathBuf>,
 }
 
 impl Default for Flags {
@@ -43,6 +45,8 @@ impl Default for Flags {
             location: "/relocated".to_owned(),
             user: "ci".to_owned(),
             pass: "secret".to_owned(),
+            seed_dir: None,
+            config: None,
         }
     }
 }
@@ -71,13 +75,105 @@ fn main() {
     };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], flags.port));
-    let server = match MockNexus::start_on(scenario, addr) {
-        Ok(server) => server,
-        Err(e) => {
-            eprintln!("mock-nexus: cannot bind {addr}: {e}");
-            std::process::exit(1);
+
+    // --config: a JSON manifest layers behavior overrides on the preset scenario.
+    // The spec path bypasses the preset-only flag mapping: the manifest owns the knobs.
+    let server = if let Some(config_path) = &flags.config {
+        let raw = std::fs::read_to_string(config_path)
+            .unwrap_or_else(|e| die(format!("cannot read {}: {e}", config_path.display())));
+        let value: serde_json::Value = serde_json::from_str(&raw)
+            .unwrap_or_else(|e| die(format!("{}: {e}", config_path.display())));
+        let mut spec = Spec::from(&scenario);
+        if let Some(auth) = value["auth"].as_object() {
+            spec = spec.with_auth(
+                auth["user"].as_str().unwrap_or_default(),
+                auth["pass"].as_str().unwrap_or_default(),
+            );
+        }
+        if let Some(n) = value["flaky"]["first"].as_u64() {
+            spec = spec.with_flaky(n as u32);
+        }
+        if let (Some(n), Some(after)) = (
+            value["rate"]["first"].as_u64(),
+            value["rate"]["retry_after_secs"].as_u64(),
+        ) {
+            spec = spec.with_rate_limit(n as usize, after);
+        }
+        if value["sizeless"].as_bool() == Some(true) {
+            spec = spec.with_sizeless();
+        }
+        if value["ignore_range"].as_bool() == Some(true) {
+            spec = spec.with_ignore_range();
+        }
+        if value["read_only"].as_bool() == Some(true) {
+            spec = spec.with_read_only();
+        }
+        if value["markerless"].as_bool() == Some(true) {
+            spec = spec.with_markerless();
+        }
+        if value["foreign_marker"].as_bool() == Some(true) {
+            spec = spec.with_foreign_marker();
+        }
+        if let (Some(bytes), Some(fake)) = (
+            value["cut_body"]["after_bytes"].as_u64(),
+            value["cut_body"]["fake_length"].as_bool(),
+        ) {
+            spec = spec.with_cut_body(bytes as usize, fake);
+        }
+        if let Some(bytes) = value["partial_put"]["first_attempt_bytes"].as_u64() {
+            spec = spec.with_partial_put(bytes as usize);
+        }
+        if let (Some(delay), Some(chunk)) = (
+            value["slow"]["chunk_delay_ms"].as_u64(),
+            value["slow"]["chunk_size"].as_u64(),
+        ) {
+            spec = spec.with_drip(delay, chunk as usize);
+        }
+        if let Some(path) = value["redirect"]["location_path"].as_str() {
+            spec = spec.with_redirect(path);
+        }
+        MockNexus::start_spec_on(spec, addr).unwrap_or_else(|e| die(format!("bind: {e}")))
+    } else {
+        match MockNexus::start_on(scenario, addr) {
+            Ok(server) => server,
+            Err(e) => {
+                eprintln!("mock-nexus: cannot bind {addr}: {e}");
+                std::process::exit(1);
+            }
         }
     };
+
+    // --seed-dir: every file under the directory becomes an object at its
+    // relative path (directories map to path segments), recursively.
+    if let Some(dir) = &flags.seed_dir {
+        let mut stack = vec![dir.clone()];
+        let mut seeded = 0usize;
+        while let Some(d) = stack.pop() {
+            for entry in std::fs::read_dir(&d)
+                .unwrap_or_else(|e| die(format!("cannot read {}: {e}", d.display())))
+            {
+                let entry = entry.unwrap_or_else(|e| die(format!("readdir: {e}")));
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    let rel = path
+                        .strip_prefix(dir)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    let bytes = std::fs::read(&path)
+                        .unwrap_or_else(|e| die(format!("cannot read {}: {e}", path.display())));
+                    server.insert(&rel, &bytes);
+                    seeded += 1;
+                }
+            }
+        }
+        if seeded > 0 {
+            eprintln!("seeded {seeded} object(s) from {}", dir.display());
+        }
+    }
+
     println!("listening http://127.0.0.1:{}", server.addr().port());
     let _ = std::io::stdout().flush();
 
@@ -86,6 +182,12 @@ fn main() {
     loop {
         std::thread::park();
     }
+}
+
+/// Print and exit: the one-liner error path of the binary.
+fn die(msg: String) -> ! {
+    eprintln!("mock-nexus: {msg}");
+    std::process::exit(2);
 }
 
 /// Map a scenario name from [`mock_nexus::SCENARIOS`] to its variant.
@@ -180,6 +282,8 @@ fn parse_flags(args: &[String], flags: &mut Flags) -> Result<(), String> {
             "--rate-429s" => flags.rate_429s = parse_num(flag, value)?,
             "--retry-after-secs" => flags.retry_after_secs = parse_num(flag, value)?,
             "--location" => flags.location = value.to_owned(),
+            "--seed-dir" => flags.seed_dir = Some(std::path::PathBuf::from(value)),
+            "--config" => flags.config = Some(std::path::PathBuf::from(value)),
             "--auth" => {
                 let Some((user, pass)) = value.split_once(':') else {
                     return Err(format!("--auth expects user:pass, got '{value}'"));
@@ -212,9 +316,10 @@ fn print_scenarios<W: std::io::Write>(mut out: W) -> std::io::Result<()> {
 
 fn fail_usage() -> ! {
     eprintln!(
-        "usage: mock-nexus <scenario> [--port N] [--chunk-delay-ms N] [--chunk-size N] \
-         [--partial-bytes N] [--cut-after N] [--fake-length] [--flaky K] \
-         [--rate-429s N] [--retry-after-secs N] [--location PATH] [--auth user:pass]"
+        "usage: mock-nexus <scenario> [--port N] [--seed-dir DIR] [--config FILE] \
+         [--chunk-delay-ms N] [--chunk-size N] [--partial-bytes N] [--cut-after N] \
+         [--fake-length] [--flaky K] [--rate-429s N] [--retry-after-secs N] \
+         [--location PATH] [--auth user:pass]"
     );
     eprintln!("       mock-nexus --print-scenarios");
     eprintln!("scenarios: {}", mock_nexus::SCENARIOS.join(", "));
