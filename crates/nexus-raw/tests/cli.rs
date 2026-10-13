@@ -1737,9 +1737,14 @@ fn assert_golden(actual: &str, fixture: &str, what: &str) {
             expected_lines.len()
         ));
     }
-    panic!(
-        "{what} changed: update tests/golden/{fixture} deliberately\nplatform flavor:\n{diffs}"
-    );
+    if diffs.is_empty() {
+        diffs.push_str(&format!(
+            "lines are pairwise equal: the difference is at the tail\nactual ends with {:?}, expected ends with {:?}\n",
+            actual.get(actual.len().saturating_sub(4)..),
+            expected.get(expected.len().saturating_sub(4)..)
+        ));
+    }
+    panic!("{what} changed: update tests/golden/{fixture} deliberately\nplatform flavor:\n{diffs}");
 }
 
 #[test]
