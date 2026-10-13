@@ -1,6 +1,6 @@
-//! The scenario contract: the enum, the canonical name table, and the docs table.
-//! The behavior itself lives in `http` (pipeline), `service_api` (REST pages) and
-//! `storage` (store-side transforms); this module is what the drift guards pin.
+//! The scenario contract: the enum and the canonical name table.
+//! The behavior itself lives in `http` (the request pipeline), `service_api` (the REST pages) and `storage` (the store-side transforms).
+//! This module is what the drift guards pin.
 
 /// Scenario names understood by the `mock-nexus` binary and by test harnesses.
 impl Scenario {

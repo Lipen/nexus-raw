@@ -1,5 +1,5 @@
-//! Small shared helpers: canned responses, counters, path and header parsing.
-//! The one-request-per-response glue both the pipeline and the scenario arms read.
+//! Small shared helpers: canned responses, request logging, counters, path and header parsing.
+//! The request pipeline in `http` and the REST pages in `service_api` read them.
 
 use std::collections::HashMap;
 use std::net::TcpStream;

@@ -1,7 +1,6 @@
-//! The service REST surface: status, repositories, EULA and search pages.
-//!
-//! Pure `(Shared, Request) -> Option<Resp>` probes: `None` means "this path is
-//! not mine", and the caller falls through to the storage handling.
+//! The service REST surface: the repositories document, the generated asset search pages, the audit-litter facts and the EULA disclaimer.
+//! The dispatch over the `/service/rest/...` paths (including the inline status answers) lives in `http`.
+//! These helpers build the bodies those endpoints answer with.
 
 use super::support::{lock, plain, query_param};
 use crate::server::{Request, Resp};
