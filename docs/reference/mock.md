@@ -60,7 +60,8 @@ The handle is the test's window into the server: `base_url()`, `addr()`, `insert
 
 ## Compose a custom behavior: `Spec`
 
-Presets are named points in a behavior space; [`Spec`](https://docs.rs/mock-nexus) is the space.
+Presets are named points in a behavior space.
+[`Spec`](https://docs.rs/mock-nexus) is the space.
 Layers stack, so a server that is both auth-gated and flaky - which no single preset expresses - is one chain:
 
 ```rust
