@@ -25,9 +25,22 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
         names_from,
         ls,
         prefix,
+        via,
+        fallback,
     } = &cli.command
     {
-        return transfer::diff(cli, local, src, name, names_from, *ls, prefix).await;
+        return transfer::diff(
+            cli,
+            local,
+            src,
+            name,
+            names_from,
+            *ls,
+            prefix,
+            via.as_deref(),
+            *fallback,
+        )
+        .await;
     }
     run(cli).await.map(|()| 0)
 }

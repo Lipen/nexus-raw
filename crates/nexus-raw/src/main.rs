@@ -170,6 +170,13 @@ pub(crate) enum Cmd {
         /// Keep only names under this whole-segment prefix (repeatable).
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
+        /// Build the remote side from the search API's per-asset facts (one paged listing) instead of per-name probes.
+        /// Requires `--ls`; a server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration.
+        #[arg(long, value_name = "SOURCE")]
+        via: Option<String>,
+        /// With `--via`: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run.
+        #[arg(long, requires = "via")]
+        fallback: bool,
     },
     /// Delete the enumerated names from a remote directory (§5.4).
     Rm {

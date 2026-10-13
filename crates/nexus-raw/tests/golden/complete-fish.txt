@@ -136,6 +136,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print hel
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -l via -d 'Build the remote side from the search API\'s per-asset facts (one paged listing) instead of per-name probes. Requires `--ls`; a server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l workers -d 'Parallel artifact transfers' -r
@@ -143,6 +144,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -l retry -d 'Attempts per 
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l ls -d 'Best-effort enumeration through the server search API'
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -l fallback -d 'With `--via`: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s q -l quiet -d 'Print only the final summary line'

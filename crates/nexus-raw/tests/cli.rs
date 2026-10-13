@@ -3039,3 +3039,248 @@ fn ls_unknown_repository_prints_the_repository_hint() {
         stderr(&out)
     );
 }
+
+// ---- diff --via search ------------------------------------------------------
+
+/// The version-directory URL in repository shape: the search walk needs `/repository/<name>/`.
+fn repo_dir_url(srv: &MockNexus) -> String {
+    format!("{}repository/raw-main/1.14.0/", srv.base_url())
+}
+
+/// Seed a store and the matching search page for one version directory:
+/// what the probes see and what the search index reports stay the same facts.
+fn seed_via_search_fixture(srv: &MockNexus) -> (String, tempfile::TempDir) {
+    let local = tempfile::TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+    write_file(local.path(), "b.zip", BETA);
+    let base = repo_dir_url(srv);
+    expect_exit(
+        &nxr(&["up", local.path().to_str().unwrap(), &base]),
+        0,
+        "seeding the via-search fixture",
+    );
+    // The search index reports the two uploaded assets with their digests and
+    // sizes, the shape a real Nexus serves. Paths are repository-absolute.
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/a.zip","size":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/b.zip","size":{},"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        ALPHA.len(),
+        hex_digest(ALPHA),
+        BETA.len(),
+        hex_digest(BETA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+    (base, local)
+}
+
+/// Same seed: `diff` and `diff --via search --ls` agree on the delta report, JSON normalized.
+/// The search path must not fall back to per-name probes: one listing instead.
+#[test]
+fn via_search_matches_plain_diff_and_needs_one_listing() {
+    let srv = server(Scenario::Atomic);
+    let (base, local) = seed_via_search_fixture(&srv);
+
+    let plain = nxr(&["diff", local.path().to_str().unwrap(), &base, "--name", "a.zip", "--name", "b.zip"]);
+    expect_exit(&plain, 0, "the converged directory is equal");
+    assert_eq!(stdout(&plain), "same a.zip\nsame b.zip\n");
+
+    let searched = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    expect_exit(&searched, 0, "the search-side delta agrees");
+    assert_eq!(
+        stdout(&searched),
+        stdout(&plain),
+        "the search facts must read the same verdict as the probes"
+    );
+
+    // The JSON shapes agree too, normalized.
+    let plain_json = nxr(&[
+        "--json",
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a.zip",
+        "--name",
+        "b.zip",
+    ]);
+    expect_exit(&plain_json, 0, "the plain json delta");
+    let search_json = nxr(&[
+        "--json",
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
+    expect_exit(&search_json, 0, "the search-side json delta");
+    assert_eq!(stdout(&search_json), stdout(&plain_json));
+
+    // O(pages), not O(names): the search path fetches the listing once and
+    // never HEADs or GETs the two artifacts.
+    let before = srv.requests().len();
+    let _ = nxr(&["--json", "diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    let reqs = srv.requests();
+    let storage = reqs
+        .iter()
+        .skip(before)
+        .filter(|r| {
+            (r.method == "GET" || r.method == "HEAD")
+                && (r.path.ends_with("/a.zip") || r.path.ends_with("/b.zip"))
+        })
+        .count();
+    assert_eq!(
+        storage, 0,
+        "the via-search diff probes no artifact: the search page carries the facts"
+    );
+}
+
+/// A digestless search entry can never read as `same`: the missing fact reports as a divergence.
+#[test]
+fn via_search_digestless_entry_is_not_same() {
+    let srv = server(Scenario::Atomic);
+    let (base, local) = seed_via_search_fixture(&srv);
+    // b.zip loses its checksum line: nothing to verify against anymore.
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/a.zip","size":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/b.zip","size":{}}}
+        ]}}"#,
+        ALPHA.len(),
+        hex_digest(ALPHA),
+        BETA.len(),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search", "--ls"]);
+    expect_exit(&out, 1, "an unverifiable name is a difference");
+    assert!(
+        stdout(&out).contains("diverged b.zip"),
+        "the digestless name reports as diverged: {}",
+        stdout(&out)
+    );
+    assert!(
+        stdout(&out).contains("same a.zip"),
+        "the digest-backed name stays same: {}",
+        stdout(&out)
+    );
+}
+
+/// On search-400 the command refuses with the enumeration-family hint and never
+/// prints a false clean delta. With `--fallback` it degrades to the probe-based
+/// report and says so.
+#[test]
+fn via_search_on_search_400_refuses_then_falls_back() {
+    // A ghost repository: the scenario refuses its repository-scoped search with 400, like a real Nexus.
+    let srv = server(Scenario::Search400);
+    let local = tempfile::TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+    write_file(local.path(), "b.zip", BETA);
+    expect_exit(
+        &nxr(&[
+            "up",
+            local.path().to_str().unwrap(),
+            &repo_dir_url(&srv),
+        ]),
+        0,
+        "seeding the served repo",
+    );
+    let ghost = repo_dir_url(&srv).replace("raw-main", "raw-ghost");
+
+    let refused = nxr(&["diff", local.path().to_str().unwrap(), &ghost, "--via", "search", "--ls"]);
+    expect_exit(&refused, 1, "the honest refusal is the enumeration class");
+    let err = stderr(&refused);
+    assert!(err.contains("cannot enumerate"), "{err}");
+    assert!(err.contains("search API"), "{err}");
+    assert!(err.contains("hint:"), "every error carries a hint: {err}");
+    assert!(
+        !stdout(&refused).contains("same"),
+        "no false clean delta on a refused listing: {}",
+        stdout(&refused)
+    );
+
+    // A served repo whose search endpoint is absent (404) refuses the same way.
+    let absent = server(Scenario::AssetsAbsent);
+    expect_exit(
+        &nxr(&[
+            "up",
+            local.path().to_str().unwrap(),
+            &repo_dir_url(&absent),
+        ]),
+        0,
+        "seeding the search-absent repo",
+    );
+    let refused2 = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &repo_dir_url(&absent),
+        "--via",
+        "search",
+        "--ls",
+    ]);
+    expect_exit(&refused2, 1, "a search 404 refuses instead of pretending");
+    assert!(stderr(&refused2).contains("cannot enumerate"));
+
+    // --fallback degrades explicitly: a warning line, then the probe-based
+    // report over explicit names (a dead search cannot name anything anymore).
+    let downgraded = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &repo_dir_url(&absent),
+        "--via",
+        "search",
+        "--ls",
+        "--fallback",
+        "--name",
+        "a.zip",
+        "--name",
+        "b.zip",
+    ]);
+    expect_exit(&downgraded, 0, "the fallback reports the same converged truth");
+    let text = stdout(&downgraded);
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(lines.contains(&"same a.zip"), "{text}");
+    assert!(lines.contains(&"same b.zip"), "{text}");
+    assert!(
+        stderr(&downgraded).contains("falling back"),
+        "the degradation is announced: {}",
+        stderr(&downgraded)
+    );
+}
+
+/// Misuse matrix for the new flags: an unknown source, `--via` without `--ls`,
+/// `--fallback` without `--via`.
+#[test]
+fn via_flag_misuse_is_refused() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let local = tempfile::TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "tea-leaves"]);
+    expect_exit(&out, 2, "an unknown --via source is misuse");
+    assert!(stderr(&out).contains("unknown --via source"));
+
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--via", "search"]);
+    expect_exit(&out, 2, "--via search without --ls is misuse");
+    assert!(stderr(&out).contains("--ls"));
+
+    let out = nxr(&["diff", local.path().to_str().unwrap(), &base, "--fallback"]);
+    expect_exit(&out, 2, "--fallback without --via is misuse");
+    assert!(stderr(&out).contains("--via"));
+
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&out, 2, "--name fights the search listing as the name source");
+    assert!(stderr(&out).contains("--name"));
+}

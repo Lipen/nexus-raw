@@ -101,6 +101,8 @@ async fn run_down(
 /// The delta of a local directory against a remote one (`nxr diff`).
 ///
 /// Read-only on both sides: the verdict travels as the exit code, not as an error.
+// The signature is the CLI surface: every argument is a user flag of `nxr diff`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn diff(
     cli: &Cli,
     local: &Path,
@@ -109,6 +111,8 @@ pub(crate) async fn diff(
     names_from: &[String],
     ls: bool,
     prefixes: &[String],
+    via: Option<&str>,
+    fallback: bool,
 ) -> Result<u8, Error> {
     if !local.is_dir() {
         return Err(Error::Misuse(format!(
@@ -116,12 +120,45 @@ pub(crate) async fn diff(
             local.display()
         )));
     }
+    let via = match via {
+        None => None,
+        Some("search") => Some(()),
+        Some(other) => {
+            return Err(Error::Misuse(format!(
+                "unknown --via source: {other} (only `search` is defined)"
+            )));
+        }
+    };
+    if via.is_some() && !ls {
+        return Err(Error::Misuse(
+            "--via search builds the remote side from the search listing: pass --ls or drop --via"
+                .into(),
+        ));
+    }
+    if via.is_some() && (!names.is_empty() || !names_from.is_empty()) && !fallback {
+        return Err(Error::Misuse(
+            "--via search takes its names from the search listing: --name/--names-from only make sense as the --fallback source".into(),
+        ));
+    }
     let ctx = make_ctx(cli, src)?;
-    let result = run_diff(&ctx, local, names, names_from, ls, prefixes).await;
+    let result = run_diff(&ctx, local, names, names_from, ls, prefixes, via.is_some(), fallback).await;
     finish(ctx).await;
     result
 }
 
+/// The search-side refusal: the same `cannot enumerate` family `down` uses, naming the search API as the missing part.
+/// Exit 1 (data): the run itself was well-formed, the server just cannot answer the listing.
+fn search_unavailable(err: &Error) -> Error {
+    Error::Enumerate {
+        url: String::new(),
+        reason: format!(
+            "cannot enumerate: the delta needs the search API and the server refused it ({err}); retry without --via search, or with --fallback to accept the probe-based report"
+        ),
+    }
+}
+
+// The signature is the CLI surface: every argument is a user flag of `nxr diff`.
+#[allow(clippy::too_many_arguments)]
 async fn run_diff(
     ctx: &Ctx,
     local: &Path,
@@ -129,11 +166,62 @@ async fn run_diff(
     names_from: &[String],
     ls: bool,
     prefixes: &[String],
+    via_search: bool,
+    fallback: bool,
 ) -> Result<u8, Error> {
+    if via_search {
+        // `--via search` compares against the search index. `--prefix` filters
+        // the search facts client-side; `--name`/`--names-from` name the
+        // fallback's own source instead.
+        if !fallback && (!names.is_empty() || !names_from.is_empty()) {
+            return Err(Error::Misuse(
+                "--via search takes its names from the search listing: --name/--names-from only make sense with --fallback".into(),
+            ));
+        }
+        let parsed_prefixes = prefixes
+            .iter()
+            .map(|p| nexus_raw_core::NamePrefix::parse(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        match ctx.nxr.delta_search(local, &parsed_prefixes).await {
+            Ok(entries) => return print_delta(ctx, &entries),
+            Err(err)
+                if fallback
+                    && matches!(
+                        err,
+                        Error::SearchRepoMissing { .. } | Error::Enumerate { .. }
+                    ) =>
+            {
+                eprintln!(
+                    "warning: cannot enumerate: the server refused the search API ({err}); falling back to the probe-based delta"
+                );
+                // The degraded run prefers explicit names: a search that just
+                // refused once would only refuse again as the name source.
+                let explicit = !names.is_empty() || !names_from.is_empty();
+                let enum_src = enumeration_source(
+                    ctx.nxr.base(),
+                    names,
+                    names_from,
+                    ls && !explicit,
+                )?
+                .with_prefixes(prefixes)?;
+                let entries = ctx.nxr.delta(local, enum_src).await?;
+                return print_delta(ctx, &entries);
+            }
+            Err(err @ (Error::SearchRepoMissing { .. } | Error::Enumerate { .. })) => {
+                return Err(search_unavailable(&err));
+            }
+            Err(err) => return Err(err),
+        }
+    }
     let enum_src =
         enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
     let entries = ctx.nxr.delta(local, enum_src).await?;
-    for e in &entries {
+    print_delta(ctx, &entries)
+}
+
+/// Print the delta lines and return the diff verdict: 0 when every entry is `same`.
+fn print_delta(ctx: &Ctx, entries: &[nexus_raw_core::Delta]) -> Result<u8, Error> {
+    for e in entries {
         crate::cmd::print_line(ctx.json, &delta_line(e), &delta_json(e));
     }
     let differs = entries
