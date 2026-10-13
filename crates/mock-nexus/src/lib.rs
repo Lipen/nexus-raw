@@ -26,10 +26,14 @@
 mod base64;
 mod group;
 mod handle;
+mod http;
 mod invariants;
 mod scenario;
 mod server;
+mod service_api;
+mod storage;
 mod store;
+mod support;
 #[cfg(test)]
 mod tests;
 
