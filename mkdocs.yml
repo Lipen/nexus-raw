@@ -61,6 +61,7 @@ nav:
       - reference/tui.md
       - Wire protocol: reference/protocol.md
       - Wire invariants: reference/invariants.md
+      - The mock server: reference/mock.md
       - Errors and exit codes: reference/errors.md
       - Rust API: reference/api.md
   - Explanation:

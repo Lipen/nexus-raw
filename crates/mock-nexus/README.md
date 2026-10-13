@@ -1,59 +1,57 @@
 # mock-nexus
 
-A mock Sonatype Nexus raw server with a failure-scenario table.
-It is the shared conformance fixture: the Rust test suites, a human debugging a client and external test suites all drive the exact same list of scenarios.
+A mock Sonatype Nexus raw server with a failure-scenario table: the shared conformance fixture of this repository.
+The Rust test suites, the Python reference suite, a human debugging a client, and external harnesses all drive the same list of scenarios, so a behavior pinned against the mock is pinned against one contract, not against whoever ran the test.
 
-## Run
+Std-only: one dependency (`serde_json`), one request per connection, `Connection: close` everywhere.
+No keep-alive, no chunked responses, no async runtime: every byte on the wire is either storage contract or a named failure mode, and nothing else competes for attention.
 
-```bash
-cargo run -p mock-nexus -- atomic --port 8080
-# prints: listening http://127.0.0.1:8080
-```
+## Quick starts
 
-Point any client at the printed address: `nxr`, your own code, a curl loop.
-
-## Scenarios
-
-| Scenario | Behavior |
-|:---------|:---------|
-| `atomic` | the correct server: PUT/GET/HEAD, DELETE with 204/404, `Range: bytes=N-` resume (206/416), 404 on unknown paths |
-| `partial-put` | cuts the first PUT body short and closes the connection |
-| `cut-body` | the first success GET per path ships honest status and headers, then only `--cut-after` body bytes and closes. `--fake-length` makes the declared `Content-Length` lie 1024 bytes high |
-| `drop-connection` | resets the first request per path right after its request line and headers are read: the body is never read, nothing is answered or stored |
-| `freeze-upload` | accepts a PUT connection and then never reads or answers, so the client's stall detection must fire. The hold is bounded (about 15 minutes), then the connection is dropped |
-| `sizeless` | omits `Content-Length` on success (200) GET and HEAD answers for present objects. 206, 416 and misses keep it |
-| `slow` | writes response bodies in small delayed chunks |
-| `foreign-marker` | stores markers with a foreign digest |
-| `markerless` | accepts markers but silently drops them |
-| `auth-401` | requires `Authorization: Basic <base64 user:pass>`, refuses the rest with 401 and a `WWW-Authenticate` challenge |
-| `auth-403` | requires `Authorization: Basic <base64 user:pass>`, refuses the rest with 403 and a `forbidden` body, on any method |
-| `doc-drift` | diverges `GET version.json` once drift is enabled by the test |
-| `flaky` | answers 503 for the first K requests per path |
-| `rate-limit` | answers 429 with a `Retry-After: <secs>` header and an empty body for the first N requests per path, then serves like atomic |
-| `redirect` | answers GET and HEAD with 301 and `Location: <path>` (same host, the path from the repository root). Writes stay atomic |
-| `readonly` | answers 403 to every DELETE: the read-only repository, the store never shrinks |
-| `no-service` | the service REST endpoint (`/service/rest/v1/repositories`) answers 404 like a store miss: an installation without the management API; storage behaves like `atomic` |
-| `search-400` | the search API (`/service/rest/v1/search/assets`) answers 400 when the `repository` parameter names an unknown repository, like a real Nexus refusing a repository-scoped search. served repositories and other requests behave like `atomic` |
-
-Scenario-specific flags: `--partial-bytes N`, `--cut-after N`, `--fake-length`, `--chunk-delay-ms N`, `--chunk-size N`, `--flaky K`, `--rate-429s N`, `--retry-after-secs N`, `--location PATH`, `--auth user:pass` (default `ci:secret`).
-
-## As a library
-
-The same server is a lib, so Rust tests start it in-process:
+As a library in a Rust test:
 
 ```rust
 use mock_nexus::{MockNexus, Scenario};
 
-let server = MockNexus::start(Scenario::Flaky { first_failures: 2 })?;
-// ... run the client against server.base_url(), assert on server.requests()
+let server = MockNexus::start(Scenario::Atomic)?;
+let url = format!("{}repository/raw-main/1.0.0/app.bin", server.base_url());
+server.insert("repository/raw-main/1.0.0/app.bin", b"bytes")?;
 ```
 
-The `SCENARIOS` list in `src/scenario.rs` is the conformance contract: a new scenario lands in the same change as the client behavior that needs it.
+As a binary in a terminal or a script:
 
-A group repository is a separate deployment kind, not a scenario: `MockNexus::start_group(&[&first, &second])?` builds one over two or more running members.
-Reads are forwarded to the members in order and the first `2xx` is relayed, writes are refused with `405` and `Allow: GET,HEAD`.
+```bash
+cargo run -p mock-nexus -- atomic --port 8080
+# listening http://127.0.0.1:8080
+```
 
-## More
+As a seeded instance with composed behavior:
 
-- User-facing documentation: [docs/](../../docs/)
-- The conformance matrix in action: [docs/explanation/conformance](../../docs/explanation/conformance.md)
+```bash
+cargo run -p mock-nexus -- atomic --seed-dir ./fixture --config rate-limit.json
+```
+
+The full surface: the [mock server reference](mock.md) (scenario table, flags, `--seed-dir`, `--config`, the library API, and how to add a scenario), and the generated [wire invariants](invariants.md) page.
+
+## Presets and composition
+
+Thirty-three named scenarios cover the failure modes a correct client must survive: transport cuts, framing lies, pacing, auth gates, service-API shapes, integrity litter.
+Each is one `Scenario` variant, one name in `--print-scenarios`, one row on the invariants page.
+
+When a test needs a combination no preset expresses, compose a `Spec` instead:
+
+```rust
+use mock_nexus::{MockNexus, Spec};
+
+let server = MockNexus::start_spec(
+    Spec::atomic().with_auth("ci", "secret").with_flaky(1),
+)?;
+```
+
+Presets stay canonical and guarded; specs are code-level composition and never enter the contract tables.
+
+## The drift guards
+
+The scenario table is a contract held in four places: the Rust enum, the binary's name table, the generated invariants page, and the Python suite's classification table.
+Four drift tests refuse a change that updates one place and not the others.
+Adding a scenario is a documented, mechanical procedure; changing one means touching all four in the same commit.

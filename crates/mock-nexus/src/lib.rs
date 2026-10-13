@@ -16,6 +16,11 @@
 //! let url = format!("{}1.14.0/version.json", server.base_url());
 //! ```
 //!
+//! Presets are named points in a behavior space; a [`Spec`] composes the space itself:
+//! layers stack (`Spec::atomic().with_auth(..).with_flaky(3)`), and `MockNexus::start_spec`
+//! runs a composed instance. A composed instance never enters the contract tables:
+//! presets and their drift guards are the contract, specs are code-level composition.
+//!
 //! A group repository is a separate deployment kind, not a scenario:
 //! [`MockNexus::start_group`] aggregates two or more running members, forwarding reads in member order and refusing writes.
 //! On a group handle the store mutators ([`MockNexus::insert`], [`MockNexus::enable_drift`]) are no-ops: a group stores nothing.
