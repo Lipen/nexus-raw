@@ -44,6 +44,7 @@ pub const SCENARIOS: &[&str] = &[
     "eula-gate",
     "eula-absent",
     "detail-in-hint",
+    "ignore-range",
 ];
 
 /// Failure scenario a [`MockNexus`](crate::MockNexus) server simulates.
@@ -164,6 +165,9 @@ pub enum Scenario {
     /// Writes answer `403` with a short `please ask the administrator` body, so the client hint carries the server detail.
     /// Storage reads behave like [`Scenario::Atomic`].
     DetailInHint,
+    /// Ranged GETs are answered like plain GETs: `200` with the whole body, the proxy that strips `Range`.
+    /// Every other request behaves like [`Scenario::Atomic`].
+    IgnoreRange,
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
@@ -587,24 +591,30 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         "GET" => {
             if let Some(payload) = drift_or_store(shared, path) {
                 let total = payload.len();
-                match range_start(req.header("Range")) {
-                    // Start at or past the end: nothing to resume from.
-                    Some(start) if start >= total => {
+                let range = if matches!(shared.scenario, Scenario::IgnoreRange) {
+                    None
+                } else {
+                    range_span(req.header("Range"))
+                };
+                match range {
+                    // Start at or past the end: nothing to serve from.
+                    Some((start, _)) if start >= total => {
                         log_request(shared, &req.method, path, Outcome::Status(416));
                         let mut resp = plain(416, b"range not satisfiable\n", shared.drip);
                         resp.extra_headers
                             .push(("Content-Range", format!("bytes */{total}")));
                         let _ = server::write_response(stream, &resp);
                     }
-                    // Single open range: serve the suffix as Partial Content.
-                    Some(start) => {
-                        let body = payload[start..].to_vec();
+                    // A recognized range (open or closed): serve the span as Partial Content.
+                    Some((start, end)) => {
+                        let stop = end.map_or(total - 1, |e| e.min(total - 1));
+                        let body = payload[start..=stop].to_vec();
                         log_request(shared, &req.method, path, Outcome::Status(206));
                         let resp = Resp {
                             status: 206,
                             extra_headers: vec![(
                                 "Content-Range",
-                                format!("bytes {start}-{}/{total}", total - 1),
+                                format!("bytes {start}-{stop}/{total}"),
                             )],
                             content_length: body.len(),
                             body,
@@ -818,10 +828,10 @@ fn query_param<'a>(target: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
-/// Parse a `Range` header for resumable GETs.
-/// Only the single open form `bytes=N-` (from byte `N` to the end) is recognized.
-/// Anything else, whether another unit, multiple ranges, the closed `N-M` or suffix `-N` forms, or malformed values, yields `None` and the response is served in full.
-fn range_start(header: Option<&str>) -> Option<usize> {
+/// Parse a `Range` header for resumable and segmented GETs.
+/// Recognized: the single open form `bytes=N-` (from byte `N` to the end) and the closed form `bytes=N-M` (bytes `N` through `M` inclusive).
+/// Anything else, whether another unit, multiple ranges, the suffix `-N` form or malformed values, yields `None` and the response is served in full.
+fn range_span(header: Option<&str>) -> Option<(usize, Option<usize>)> {
     let value = header?;
     let (unit, spec) = value.split_once('=')?;
     if !unit.trim().eq_ignore_ascii_case("bytes") {
@@ -831,10 +841,12 @@ fn range_start(header: Option<&str>) -> Option<usize> {
         return None;
     }
     let (start, end) = spec.split_once('-')?;
-    if !end.trim().is_empty() {
-        return None;
+    let start = start.trim().parse().ok()?;
+    let end = end.trim();
+    if end.is_empty() {
+        return Some((start, None));
     }
-    start.trim().parse().ok()
+    Some((start, Some(end.parse::<usize>().ok()?)))
 }
 
 /// True when the path designates a version document (`<version>/version.json`).
@@ -880,7 +892,7 @@ fn auth_decision(header: Option<&str>, expected_b64: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        auth_decision, drift_doc, first_segment, is_version_path, normalize_path, range_start,
+        auth_decision, drift_doc, first_segment, is_version_path, normalize_path, range_span,
         zero_digest,
     };
 
@@ -933,18 +945,22 @@ mod tests {
     }
 
     #[test]
-    fn range_start_accepts_only_single_open_bytes_range() {
-        assert_eq!(range_start(Some("bytes=5-")), Some(5));
-        assert_eq!(range_start(Some("bytes=0-")), Some(0));
+    fn range_span_accepts_open_and_closed_bytes_ranges() {
+        assert_eq!(range_span(Some("bytes=5-")), Some((5, None)));
+        assert_eq!(range_span(Some("bytes=0-")), Some((0, None)));
         // Unit comparison is case-insensitive.
-        assert_eq!(range_start(Some("Bytes=12-")), Some(12));
-        // Closed, suffix and multi-range forms are not supported.
-        assert_eq!(range_start(Some("bytes=0-4")), None);
-        assert_eq!(range_start(Some("bytes=-5")), None);
-        assert_eq!(range_start(Some("bytes=0-4,10-")), None);
-        assert_eq!(range_start(Some("items=5-")), None);
-        assert_eq!(range_start(Some("bytes=")), None);
-        assert_eq!(range_start(Some("bytes=q-")), None);
-        assert_eq!(range_start(None), None);
+        assert_eq!(range_span(Some("Bytes=12-")), Some((12, None)));
+        // The closed form carries bytes start through end inclusive.
+        assert_eq!(range_span(Some("bytes=0-4")), Some((0, Some(4))));
+        assert_eq!(range_span(Some("bytes=10-19")), Some((10, Some(19))));
+        // A closed range with start past the end stays parseable: the handler answers 416.
+        assert_eq!(range_span(Some("bytes=99-104")), Some((99, Some(104))));
+        // Suffix and multi-range forms are not supported.
+        assert_eq!(range_span(Some("bytes=-5")), None);
+        assert_eq!(range_span(Some("bytes=0-4,10-19")), None);
+        assert_eq!(range_span(Some("items=5-")), None);
+        assert_eq!(range_span(Some("bytes=")), None);
+        assert_eq!(range_span(Some("bytes=q-")), None);
+        assert_eq!(range_span(None), None);
     }
 }

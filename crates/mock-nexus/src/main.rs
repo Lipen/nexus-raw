@@ -149,6 +149,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "eula-gate" => Some(Scenario::EulaGate),
         "eula-absent" => Some(Scenario::EulaAbsent),
         "detail-in-hint" => Some(Scenario::DetailInHint),
+        "ignore-range" => Some(Scenario::IgnoreRange),
         _ => None,
     }
 }

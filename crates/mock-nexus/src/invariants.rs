@@ -298,6 +298,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         behavior: &["Every write answers `403` with a `please ask the administrator` body. Reads behave like `atomic`."],
         invariant: "The server body rides the hint after `server says:`, so the user reads the refusal in the server's own words.",
     },
+    ScenarioDoc {
+        id: "ignore-range",
+        name: "Range headers ignored.",
+        behavior: &[
+            "Ranged GETs are answered like plain GETs: `200` with the whole object body.",
+            "Every other request behaves like `atomic`.",
+        ],
+        invariant: "A server that ignores `Range` is answered with a single-stream download: the client detects the full-body answer and degrades without an error.",
+    },
 ];
 
 /// Render `docs/reference/invariants.md` from [`SCENARIO_DOCS`].
