@@ -1,9 +1,6 @@
-//! Per-scenario behavior: the scenario table, connection handling, per-path state machines and the pure transforms (marker zeroing, document drift, auth decision).
-
-use std::time::Duration;
-
-use crate::server::{Drip, Resp};
-use crate::store::{Outcome, Shared};
+//! The scenario contract: the enum, the canonical name table, and the docs table.
+//! The behavior itself lives in `http` (pipeline), `service_api` (REST pages) and
+//! `storage` (store-side transforms); this module is what the drift guards pin.
 
 /// Scenario names understood by the `mock-nexus` binary and by test harnesses.
 impl Scenario {
@@ -249,10 +246,12 @@ pub enum Scenario {
 }
 
 /// A single read or write may stall at most this long before we drop the peer.
-pub(crate) const IO_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 use super::http;
 use super::support;
+use crate::server::{Drip, Resp};
+use crate::store::{Outcome, Shared};
 
 pub(crate) fn serve(shared: &Shared, stream: std::net::TcpStream) {
     http::serve(shared, stream)
