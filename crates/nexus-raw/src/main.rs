@@ -80,6 +80,10 @@ pub(crate) enum Cmd {
         /// Resume from an existing `<out>`.part through a Range request.
         #[arg(long = "continue")]
         cont: bool,
+        /// Fetch through N concurrent byte-range requests (2 or more).
+        /// File output only: `--segments` with a stdout target is a misuse.
+        #[arg(long, value_name = "N")]
+        segments: Option<usize>,
     },
     /// PUT a file, optionally with its sha-sibling marker.
     Put {

@@ -73,6 +73,10 @@ pub enum Error {
     /// Not a divergent object: the wire shape itself is broken, so the class is transport, not data.
     #[error("server body: {url}: {detail}")]
     ServerBody { url: String, detail: String },
+    /// The server answered a ranged GET with the whole body: `Range` is ignored, and a segmented download cannot proceed.
+    /// A signal to the caller, not a verdict: the single-stream fallback answers it.
+    #[error("range ignored: {url}: the server answered a ranged GET with the whole body")]
+    RangeIgnored { url: String },
 }
 
 impl Error {
@@ -98,6 +102,7 @@ impl Error {
             // user's command line either.
             Error::SmallObjectCap { .. } => 3,
             Error::ServerBody { .. } => 3,
+            Error::RangeIgnored { .. } => 3,
             Error::Io { .. } => 1,
         }
     }
@@ -140,6 +145,9 @@ impl Error {
                 format!("the server answered {status}: check the URL path and the server health"),
             ),
             Error::Misuse(_) => Some("check the command line arguments".into()),
+            Error::RangeIgnored { .. } => Some(
+                "the server does not honor range requests: the download fell back to a single stream".into(),
+            ),
             Error::Io { .. } => {
                 Some("check the local filesystem: permissions, space, symlinks. Transfers are resumable, rerunning is safe".into())
             }
@@ -289,6 +297,9 @@ mod tests {
                 detail: "disk".into(),
             },
             Error::Misuse("bad flag".into()),
+            Error::RangeIgnored {
+                url: "http://x/".into(),
+            },
         ];
         for e in &classes {
             let hint = e.hint().unwrap_or_else(|| panic!("no hint for {e}"));

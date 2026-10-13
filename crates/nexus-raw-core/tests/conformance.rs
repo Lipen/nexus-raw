@@ -2360,3 +2360,172 @@ async fn ls_unknown_repository_hinted_on_400_not_on_404() {
     assert!(hint.contains("--name"), "{hint}");
     assert!(!hint.contains("not a raw repository"), "{hint}");
 }
+
+// ---------------------------------------------------------------- segmented get
+
+/// The byte-exactness proof: 4 segments land the same bytes and digest as one stream.
+#[tokio::test]
+async fn segmented_get_matches_the_single_stream_byte_for_byte() {
+    let mock = MockNexus::start(Scenario::Slow {
+        chunk_delay_ms: 1,
+        chunk_size: 64,
+    })
+    .unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    mock.insert(&format!("{VERSION}/seg.bin"), &content);
+    let url = format!("{}{VERSION}/seg.bin", mock.base_url());
+
+    let plain_dir = TempDir::new().unwrap();
+    let seg_dir = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let plain = nxr
+        .get(&url, Some(plain_dir.path().join("seg.bin")), false)
+        .await
+        .unwrap();
+    let seg = nxr
+        .get_segmented(&url, seg_dir.path().join("seg.bin"), 4)
+        .await
+        .unwrap();
+
+    assert_eq!(seg.size, content.len() as u64);
+    assert_eq!(seg.digest, plain.digest, "same bytes, same digest");
+    assert_eq!(
+        std::fs::read(seg_dir.path().join("seg.bin")).unwrap(),
+        content,
+        "byte-exact against the seeded payload"
+    );
+    assert_eq!(seg.resumed_from, 0);
+    // The staging area only outlives a failed run.
+    assert!(!seg_dir.path().join("seg.bin.segments").exists());
+}
+
+/// A ranged GET answered with the whole body degrades to the single-stream path, no error.
+#[tokio::test]
+async fn segmented_get_falls_back_when_the_server_ignores_range() {
+    let mock = MockNexus::start(Scenario::IgnoreRange).unwrap();
+    let content: Vec<u8> = (0..50_000u32).map(|i| (i % 199) as u8).collect();
+    mock.insert(&format!("{VERSION}/seg.bin"), &content);
+    let url = format!("{}{VERSION}/seg.bin", mock.base_url());
+
+    let out = TempDir::new().unwrap();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let outcome = nxr
+        .get_segmented(&url, out.path().join("seg.bin"), 4)
+        .await
+        .unwrap();
+    assert_eq!(outcome.size, content.len() as u64);
+    assert_eq!(
+        std::fs::read(out.path().join("seg.bin")).unwrap(),
+        content,
+        "the fallback is byte-exact too"
+    );
+    // The degraded path went through the single-stream machinery: the segments staging area never appeared.
+    assert!(!out.path().join("seg.bin.segments").exists());
+
+    // The fallback logs through the events channel, no error anywhere.
+    let events = collect_events(&mut rx);
+    assert!(
+        events.iter().any(|e| matches!(e, Event::Retrying { reason, .. } if reason.contains("falling back"))),
+        "the fallback announces itself: {events:?}"
+    );
+    assert!(
+        events.iter().any(|e| matches!(e, Event::ArtifactStarted { name, .. } if name == "seg.bin")),
+        "the single stream restarts the transfer: {events:?}"
+    );
+}
+
+/// The 416 boundary: an object smaller than the segment count degrades to one byte per segment, still exact.
+#[tokio::test]
+async fn segmented_get_degrades_when_the_object_is_smaller_than_the_segment_count() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let content: Vec<u8> = (0..6u32).map(|i| 0x40 + i as u8).collect();
+    mock.insert(&format!("{VERSION}/tiny.bin"), &content);
+    let url = format!("{}{VERSION}/tiny.bin", mock.base_url());
+
+    let out = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let outcome = nxr
+        .get_segmented(&url, out.path().join("tiny.bin"), 16)
+        .await
+        .unwrap();
+    assert_eq!(outcome.size, 6);
+    assert_eq!(
+        std::fs::read(out.path().join("tiny.bin")).unwrap(),
+        content,
+        "tiny objects survive the split byte-exactly"
+    );
+}
+
+/// A sibling present on the server verifies the assembled bytes: a tampered store answer is a data error.
+#[tokio::test]
+async fn segmented_get_verifies_against_the_sibling_marker() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let content: Vec<u8> = (0..20_000u32).map(|i| (i % 97) as u8).collect();
+    mock.insert(&format!("{VERSION}/marked.bin"), &content);
+    let digest = nexus_raw_core::Digest::of_bytes(&content);
+    mock.insert(
+        &format!("{VERSION}/marked.bin.sha256"),
+        sibling::format_line("marked.bin", &digest).as_bytes(),
+    );
+    let url = format!("{}{VERSION}/marked.bin", mock.base_url());
+
+    let good = TempDir::new().unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let outcome = nxr
+        .get_segmented(&url, good.path().join("marked.bin"), 3)
+        .await
+        .unwrap();
+    assert_eq!(outcome.digest, Some(digest.clone()));
+
+    // A sibling that names another object (the foreign-marker wire shape, seeded as stored bytes):
+    // the divergence is exit-1 data.
+    let drifted = MockNexus::start(Scenario::Atomic).unwrap();
+    drifted.insert(&format!("{VERSION}/marked.bin"), &content);
+    let foreign = nexus_raw_core::Digest::of_bytes(b"a foreign object");
+    drifted.insert(
+        &format!("{VERSION}/marked.bin.sha256"),
+        sibling::format_line("marked.bin", &foreign).as_bytes(),
+    );
+    let bad_url = format!("{}{VERSION}/marked.bin", drifted.base_url());
+    let bad_out = TempDir::new().unwrap();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let nxr2 = Nxr::new(config(&drifted, None), tx2).unwrap();
+    let err = nxr2
+        .get_segmented(&bad_url, bad_out.path().join("marked.bin"), 3)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, nexus_raw_core::Error::Mismatch { .. }),
+        "got {err:?}"
+    );
+    assert_eq!(err.exit_code(), 1);
+    // Nothing partial is renamed.
+    assert!(!bad_out.path().join("marked.bin").exists());
+}
+
+/// Fewer than two segments is a misuse.
+#[tokio::test]
+async fn segmented_get_refuses_one_segment() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}{VERSION}/a.bin", mock.base_url());
+    let out = TempDir::new().unwrap();
+    let err = nxr
+        .get_segmented(&url, out.path().join("a.bin"), 1)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, nexus_raw_core::Error::Misuse(ref m) if m.contains("at least 2")),
+        "got {err:?}"
+    );
+    assert_eq!(err.exit_code(), 2);
+}
+

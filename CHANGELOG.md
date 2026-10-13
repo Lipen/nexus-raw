@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- `nxr get --segments N`: fetch a file through `N` concurrent byte-range requests, assembled positionally and verified against the `.sha256` sibling before the atomic rename.
+  A server that answers a ranged GET with the whole body degrades the download to the single-stream path (logged through the events channel, never an error), and an object smaller than the span count degrades to smaller segments.
+  `--segments` requires `-o FILE`: a stdout target is a misuse (exit 2), and stdout streaming stays single-stream.
+  The wire contract is unchanged: segmented reads are a client-side strategy over `Range: bytes=start-end`.
 - Windows joins as a first-class platform: the `mirror` staging lock works there (the lock file is opened with sharing disabled, so a concurrent run for the same pair refuses exactly as on unix), and CI builds and tests the workspace on `windows-latest` next to the ubuntu leg.
 - `nxr diff --via search --ls`: the remote side of the delta report is built from the search API's per-asset facts (name, digest, size) in one paged listing, instead of a HEAD/sibling probe pair per name.
   `--prefix` filters the facts client-side; the report shape and exit codes are the plain `diff` ones.

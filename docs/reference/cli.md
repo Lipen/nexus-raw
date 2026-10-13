@@ -76,7 +76,7 @@ All flags are global: they may appear before or after the subcommand.
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE] [--continue]
+nxr get <URL> [-o FILE] [--continue] [--segments N]
 ```
 
 GET a URL to a file or stdout.
@@ -87,6 +87,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 |:-----|:--------|
 | `-o, --out <FILE>` | output file. stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
+| `--segments <N>` | fetch through `N` concurrent byte-range requests (2 or more). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
@@ -109,11 +110,23 @@ $ echo $?
 0
 ```
 
+`--segments 4` fetches the object through 4 concurrent byte-range requests.
+The HEAD gives the size, the spans stream into a staging area beside the output, the assembled file verifies against the `.sha256` sibling when one exists and is renamed only when whole.
+A server that answers a ranged GET with the whole body gets a plain single-stream download instead: the fallback is announced on the events channel, never an error.
+An object smaller than the span count degrades to smaller segments, still byte-exact.
+
+```console
+$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4
+get: 45 bytes → app.zip
+$ echo $?
+0
+```
+
 | Exit | When |
 |:----:|:-----|
 | `0` | body delivered |
 | `1` | the URL answered 404 (the object is absent), or local I/O failure around the part file |
-| `2` | misuse: a non-http URL |
+| `2` | misuse: a non-http URL, or `--segments` with a stdout target |
 | `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:

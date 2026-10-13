@@ -85,7 +85,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 
 | Command | Does |
 |:--------|:-----|
-| `nxr get <URL> [-o FILE] [--continue]` | GET to a file (via `.part`, resume through Range) or stdout |
+| `nxr get <URL> [-o FILE] [--continue] [--segments N]` | GET to a file (via `.part`, resume through Range, or `N` concurrent spans) or stdout |
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |

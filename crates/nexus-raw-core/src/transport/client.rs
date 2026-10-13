@@ -726,6 +726,118 @@ impl NexusClient {
         .await
     }
 
+    /// GET one closed byte span into a fresh file (segmented download).
+    ///
+    /// Sends `Range: bytes=start-end` (inclusive on both ends) and requires the
+    /// `206` + `Content-Range` answer: the whole-span body streams into `file`,
+    /// which must not exist yet, so a retried attempt never mixes two fetches.
+    /// A `416` means the span is empty on the server side (an object that shrank
+    /// between HEAD and GET): a retryable transport failure, the caller's retries
+    /// re-HEAD and re-split through a fresh call.
+    ///
+    /// Returns the exact byte count written.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted, and [`Error::Io`] when `file` cannot be written.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn fetch_range(
+        &self,
+        subject: (&str, Dir),
+        url: &str,
+        start: u64,
+        end_incl: u64,
+        file: &Path,
+    ) -> Result<u64, Error> {
+        let stall = self.stall;
+        let progress = self.events.clone();
+        let subject_name = subject.0.to_owned();
+        let file: PathBuf = file.to_owned();
+        let expected = end_incl - start + 1;
+        self.with_retries(Some(subject), url, |this: &Self, url| {
+            let file = file.clone();
+            let progress = progress.clone();
+            let subject_name = subject_name.clone();
+            Box::pin(async move {
+                // A leftover from a failed attempt must never mix with a fresh fetch.
+                let _ = tokio::fs::remove_file(&file).await;
+                let req = this.authorize(this.http.get(url));
+                let req = req
+                    .header(
+                        reqwest::header::RANGE,
+                        format!("bytes={start}-{end_incl}"),
+                    )
+                    // Byte offsets are only meaningful against the stored representation.
+                    .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status().as_u16();
+                match status {
+                    206 => {}
+                    // The whole-body answer: the server ignored the Range header.
+                    200 => return Err(AttemptFailure::stop(Error::RangeIgnored { url: url.to_owned() })),
+                    // The span starts at or past the object's end: the object changed size under us.
+                    416 => {
+                        return Err(AttemptFailure::again(Error::transport(
+                            url,
+                            format!("HTTP 416 for bytes={start}-{end_incl}: the object changed size under the segmented download"),
+                        )));
+                    }
+                    _ => return Err(this.status_failure(url, resp).await),
+                }
+                // A 206 without a length cannot be positioned: refuse instead of assembling short.
+                let Some(length) = resp.content_length() else {
+                    return Err(AttemptFailure::stop(Error::transport(
+                        url,
+                        "the 206 answer carries no Content-Length: the span cannot be staged",
+                    )));
+                };
+                if length != expected {
+                    return Err(AttemptFailure::stop(Error::transport(
+                        url,
+                        format!(
+                            "the 206 answer carries {length} bytes, the span asks for {expected}"
+                        ),
+                    )));
+                }
+                progress.started(&subject_name, Dir::Down, Some(length)).await;
+                let mut body = resp.bytes_stream();
+                let mut out = write_options(false)
+                    .open(&file)
+                    .await
+                    .map_err(|e| AttemptFailure::stop(Error::io(&file, e)))?;
+                let mut done: u64 = 0;
+                loop {
+                    let chunk = tokio::time::timeout(stall, body.next()).await;
+                    let chunk = match chunk {
+                        Ok(Some(c)) => c,
+                        Ok(None) => break,
+                        Err(_) => {
+                            let e = format!("stalled: no bytes for {}s", stall.as_secs_f64());
+                            return Err(AttemptFailure::again(Error::transport(url, e)));
+                        }
+                    };
+                    let chunk = chunk.map_err(|e| this.wrap_send_err(url, e))?;
+                    out.write_all(&chunk)
+                        .await
+                        .map_err(|e| AttemptFailure::stop(Error::io(&file, e)))?;
+                    done += chunk.len() as u64;
+                    progress.bytes(&subject_name, Dir::Down, done, Some(length)).await;
+                }
+                out.flush()
+                    .await
+                    .map_err(|e| AttemptFailure::stop(Error::io(&file, e)))?;
+                if done != expected {
+                    return Err(AttemptFailure::again(Error::transport(
+                        url,
+                        format!("the body broke after {done} of {expected} bytes"),
+                    )));
+                }
+                Ok(done)
+            })
+        })
+        .await
+    }
+
     /// PUT the bytes of a file: streamed body with Content-Length.
     /// Stall detection is attempt-level: no chunk pulled for `stall` fails the attempt as retryable transport, so a frozen socket surfaces even after the producer has finished reading the file.
     ///

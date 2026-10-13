@@ -64,3 +64,15 @@ The floor is 1 worker: some transfer always goes on.
 On a streak of successes (one step per four consecutive successes) the limit recovers one worker at a time, never exceeding the configured maximum.
 A single success after a 429 does not restore the limit: the recovery slope must fill first.
 The wire behavior is unchanged: only how many transfers run at once.
+
+## Range and segmented reads
+
+The wire contract is one open span per request.
+A GET with `Range: bytes=N-` that the server honors answers `206` with `Content-Range` and the suffix body.
+A span that starts at or past the object's end answers `416` with `Content-Range: bytes */<total>`.
+Any other `Range` form is the server's business: the client never sends it on the resume path.
+
+Segmented download (`get --segments N`) is a client-side strategy on top of that contract, not a wire extension.
+The client HEADs the URL for `Content-Length`, splits the object into N contiguous closed spans (`bytes=start-end`), fetches them concurrently, and assembles the answers positionally into one file that the usual digest check and atomic rename complete.
+A server that answers a ranged GET with the whole body (`200`) ignores `Range`: the client detects the full-body answer and degrades to the single-stream download, logged through the events channel, never an error.
+Any segment that fails after retries fails the whole download: the segment files stay in the staging area for inspection, and nothing partial is ever renamed to the output name.

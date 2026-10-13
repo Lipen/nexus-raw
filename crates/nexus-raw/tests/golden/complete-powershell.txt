@@ -62,6 +62,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         'nxr;get' {
             [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part')
             [CompletionResult]::new('--out', '--out', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part')
+            [CompletionResult]::new('--segments', '--segments', [CompletionResultType]::ParameterName, 'Fetch through N concurrent byte-range requests (2 or more). File output only: `--segments` with a stdout target is a misuse')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')

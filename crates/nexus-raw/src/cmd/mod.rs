@@ -47,7 +47,12 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
 
 async fn run(cli: &Cli) -> Result<(), Error> {
     match &cli.command {
-        Cmd::Get { url, out, cont } => primitives::get(cli, url, out.as_deref(), *cont).await,
+        Cmd::Get {
+            url,
+            out,
+            cont,
+            segments,
+        } => primitives::get(cli, url, out.as_deref(), *cont, *segments).await,
         Cmd::Put { url, file, sha } => primitives::put(cli, url, file, *sha).await,
         Cmd::Head { url } => primitives::head(cli, url).await,
         Cmd::Sha { target } => primitives::sha(cli, target).await,

@@ -152,6 +152,49 @@ impl Nxr {
         primitive::get(&self.client, url, out, cont).await
     }
 
+    /// GET a URL in `segments` concurrent byte-range pieces (spec §5.1 `get --segments`).
+    ///
+    /// Falls back to the single-stream [`Nxr::get`] result shape when the server ignores `Range`
+    /// (the caller reruns the plain path; the error here is [`Error::RangeIgnored`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors of [`Nxr::get`] plus any segment failure (transport, auth, HTTP),
+    /// [`Error::Mismatch`] on a sibling digest divergence, and [`Error::Misuse`] for `segments < 2`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn get_segmented(
+        &self,
+        url: &str,
+        out: PathBuf,
+        segments: usize,
+    ) -> Result<GetOutcome, Error> {
+        if segments < 2 {
+            return Err(Error::misuse(format!(
+                "segments must be at least 2, got {segments}: a single span is the plain get"
+            )));
+        }
+        match primitive::get_segmented(&self.client, url, &out, segments, &self.events).await {
+            // The server answers ranged GETs with the whole body: the plain path is the answer,
+            // and the fallback is progress, never an error. The switch travels the events channel.
+            Err(Error::RangeIgnored { .. }) => {
+                self.events
+                    .sender()
+                    .send(Event::Retrying {
+                        name: out
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default(),
+                        attempt: 1,
+                        reason: "the server ignores Range: falling back to a single stream"
+                            .to_owned(),
+                    })
+                    .ok();
+                primitive::get(&self.client, url, Some(out), false).await
+            }
+            other => other,
+        }
+    }
+
     /// PUT a file, optionally with its sha-sibling (spec §5.1).
     ///
     /// # Errors

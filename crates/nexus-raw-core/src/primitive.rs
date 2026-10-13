@@ -234,6 +234,217 @@ pub async fn sha(client: &NexusClient, src: ShaSource) -> Result<Digest, Error> 
     }
 }
 
+/// GET a URL in `segments` concurrent byte-range pieces (spec §5.1 `get --segments`).
+///
+/// A HEAD gives the size, the span splits into `segments` contiguous closed ranges,
+/// and each range streams into its own staging file under `dir` (retries included).
+/// A server that answers a ranged GET with the whole body (`Range` ignored) fails one
+/// segment with [`Error::RangeIgnored`]: the caller answers it with the plain single-stream path.
+/// The staging files assemble positionally into `<out>.part`, one read pass hashes the result,
+/// a `.sha256` sibling (local first, then remote) verifies it when present, and the rename to
+/// `out` is the usual atomic completion.
+/// Nothing partial is ever renamed: a failure leaves the staging files for inspection.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors from any segment, [`Error::Io`] when staging, assembly or the rename fail, and [`Error::Mismatch`] when a sibling digest diverges.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn get_segmented(
+    client: &NexusClient,
+    url: &str,
+    out: &Path,
+    segments: usize,
+    events: &crate::events::Progress,
+) -> Result<GetOutcome, Error> {
+    // The name carries progress events, the URL does not: one label for the whole fan-out.
+    let name = out
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let info = client.head_info(url).await?;
+    if !(200..300).contains(&info.status) {
+        return Err(Error::Http {
+            status: info.status,
+            url: url.to_owned(),
+        });
+    }
+    let Some(total) = info.size else {
+        return Err(Error::transport(
+            url,
+            "the HEAD answer carries no Content-Length: the object cannot be split into ranges",
+        ));
+    };
+    // Every segment spans at least one byte; spans are `total / segments` sized with
+    // the remainder spread over the leading segments.
+    let base = total / segments as u64;
+    let rem = total % segments as u64;
+    if base == 0 {
+        // The object is smaller than the segment count: degrade to one segment per byte,
+        // the exact download either way.
+        let eff = total as usize;
+        return Box::pin(get_segmented(client, url, out, eff, events)).await;
+    }
+    let staging = temp_staging_dir(out).await?;
+    let part = part_of(out);
+    let mut bounds: Vec<(u64, u64)> = Vec::with_capacity(segments);
+    let mut start: u64 = 0;
+    for i in 0..segments {
+        let len = base + u64::from(i < rem as usize);
+        bounds.push((start, start + len - 1));
+        start += len;
+    }
+    debug_assert_eq!(start, total, "the spans must tile the object exactly");
+
+    // Each segment streams into its own staging file, concurrently, retries included.
+    let fetches: Vec<_> = bounds
+        .iter()
+        .enumerate()
+        .map(|(i, &(start, end_incl))| {
+            let file = staging.join(format!("segment-{i:04}.part"));
+            let url = url.to_owned();
+            let name = name.clone();
+            async move {
+                let done = client
+                    .fetch_range((&name, Dir::Down), &url, start, end_incl, &file)
+                    .await
+                    .map_err(|e| (i, e))?;
+                Ok::<(usize, u64), (usize, Error)>((i, done))
+            }
+        })
+        .collect();
+    let staged: Vec<Result<(usize, u64), (usize, Error)>> =
+        futures_util::future::join_all(fetches).await;
+    // Any segment failure fails the whole get: the staging files stay for inspection.
+    // The per-segment counts rode the progress events already, nothing to aggregate.
+    for r in staged {
+        match r {
+            Ok(_) => {}
+            Err((_, e)) => {
+                if matches!(e, Error::RangeIgnored { .. }) {
+                    // The whole-body answer to a ranged GET: the caller falls back
+                    // to the single-stream path. The staging dir is empty here
+                    // (the 200 arrived before any byte was written), so it cleans up.
+                    let _ = tokio::fs::remove_dir_all(&staging).await;
+                    return Err(e);
+                }
+                return Err(e);
+            }
+        }
+    }
+
+    // Positional assembly into the part file: each segment streams in at its offset.
+    assemble(&bounds, &staging, &part, total).await?;
+    // One read pass over the assembled file: the digest, then the sibling verdict.
+    let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
+    verify_sibling(client, url, out, &part, &digest).await?;
+    tokio::fs::rename(&part, out)
+        .await
+        .map_err(|e| Error::io(out, e))?;
+    // The staging area only outlives a failed run.
+    let _ = tokio::fs::remove_dir_all(&staging).await;
+    events
+        .done(&name, Dir::Down, false, total, Some(total))
+        .await;
+    Ok(GetOutcome {
+        size: total,
+        digest: Some(digest),
+        resumed_from: 0,
+    })
+}
+
+/// Assemble the staged segments positionally into `part`: every segment file opens,
+/// seeks to its start offset and streams its bytes in one pass, no full-file buffer.
+#[cfg(not(target_arch = "wasm32"))]
+async fn assemble(
+    bounds: &[(u64, u64)],
+    staging: &Path,
+    part: &Path,
+    total: u64,
+) -> Result<(), Error> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+    let mut out = crate::transport::client::write_options(false)
+        .open(part)
+        .await
+        .map_err(|e| Error::io(part, e))?;
+    out.set_len(total)
+        .await
+        .map_err(|e| Error::io(part, e))?;
+    for (i, &(start, _)) in bounds.iter().enumerate() {
+        let file = staging.join(format!("segment-{i:04}.part"));
+        let mut seg = tokio::fs::File::open(&file)
+            .await
+            .map_err(|e| Error::io(&file, e))?;
+        out.seek(std::io::SeekFrom::Start(start))
+            .await
+            .map_err(|e| Error::io(part, e))?;
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            let n = seg.read(&mut buf).await.map_err(|e| Error::io(&file, e))?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n])
+                .await
+                .map_err(|e| Error::io(part, e))?;
+        }
+    }
+    out.flush().await.map_err(|e| Error::io(part, e))?;
+    Ok(())
+}
+
+/// The completion digest check of the segmented path: a local `.sha256` sibling wins,
+/// the remote one answers when the local is absent, and a divergence is a data error
+/// (exit 1) that also removes the part, so nothing partial is ever renamed.
+#[cfg(not(target_arch = "wasm32"))]
+async fn verify_sibling(
+    client: &NexusClient,
+    url: &str,
+    out: &Path,
+    part: &Path,
+    digest: &Digest,
+) -> Result<(), Error> {
+    let mut sibling = out.as_os_str().to_os_string();
+    sibling.push(".sha256");
+    let sibling = PathBuf::from(sibling);
+    let expected = if tokio::fs::try_exists(&sibling).await.unwrap_or(false) {
+        tokio::fs::read_to_string(&sibling)
+            .await
+            .ok()
+            .and_then(|t| digest_hex(&t))
+    } else {
+        let remote = format!("{url}.sha256");
+        match client.get_small(&remote).await {
+            Ok(Some(bytes)) => String::from_utf8(bytes).ok().and_then(|t| digest_hex(&t)),
+            _ => None,
+        }
+    };
+    if let Some(expected) = expected {
+        if *digest != expected {
+            tokio::fs::remove_file(part).await.ok();
+            return Err(Error::Mismatch {
+                name: out.display().to_string(),
+                detail: format!(
+                    "segmented content diverges: the .sha256 sibling says {expected}, the bytes hash {digest}"
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The staging directory for a segmented get: `<out>.segments/` beside the output.
+/// Created on demand; a failure leaves its files for inspection.
+#[cfg(not(target_arch = "wasm32"))]
+async fn temp_staging_dir(out: &Path) -> Result<PathBuf, Error> {
+    let mut s = out.as_os_str().to_os_string();
+    s.push(".segments");
+    let dir = PathBuf::from(s);
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| Error::io(&dir, e))?;
+    Ok(dir)
+}
+
 /// `<out>.part` next to the output file.
 #[cfg(not(target_arch = "wasm32"))]
 fn part_of(out: &Path) -> PathBuf {

@@ -7,22 +7,52 @@ use nexus_raw_core::{Error, ShaSource};
 use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
 
-pub(crate) async fn get(cli: &Cli, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
+pub(crate) async fn get(
+    cli: &Cli,
+    url: &str,
+    out: Option<&Path>,
+    cont: bool,
+    segments: Option<usize>,
+) -> Result<(), Error> {
     if out.is_none() && cli.json {
         return Err(Error::Misuse(
             "--json with stdout body would corrupt the artifact: pass -o FILE, or drop --json"
                 .to_owned(),
         ));
     }
+    if segments.is_some() && out.is_none() {
+        return Err(Error::Misuse(
+            "--segments writes a file, not a stream: pass -o FILE, or drop --segments"
+                .to_owned(),
+        ));
+    }
+    if segments.is_some() && cont {
+        return Err(Error::Misuse(
+            "--continue resumes the single-stream part file: --segments stages its own spans, pass --continue or --segments, not both"
+                .to_owned(),
+        ));
+    }
     let ctx = make_ctx(cli, url)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_get(&ctx, url, out, cont).await;
+    let result = run_get(&ctx, url, out, cont, segments).await;
     finish(ctx).await;
     result
 }
 
-async fn run_get(ctx: &Ctx, url: &str, out: Option<&Path>, cont: bool) -> Result<(), Error> {
-    let outcome = ctx.nxr.get(url, out.map(Path::to_owned), cont).await?;
+async fn run_get(
+    ctx: &Ctx,
+    url: &str,
+    out: Option<&Path>,
+    cont: bool,
+    segments: Option<usize>,
+) -> Result<(), Error> {
+    let outcome = match segments {
+        Some(n) => ctx
+            .nxr
+            .get_segmented(url, out.expect("segments require a file target").to_owned(), n)
+            .await?,
+        None => ctx.nxr.get(url, out.map(Path::to_owned), cont).await?,
+    };
     report_get(ctx, url, out, &outcome);
     Ok(())
 }

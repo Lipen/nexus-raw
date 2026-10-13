@@ -3284,3 +3284,151 @@ fn via_flag_misuse_is_refused() {
     expect_exit(&out, 2, "--name fights the search listing as the name source");
     assert!(stderr(&out).contains("--name"));
 }
+
+// ---- segmented get ---------------------------------------------------------
+
+/// 4 segments land the same bytes and digest as the single stream, over the slow scenario.
+#[test]
+fn get_segments_matches_the_single_stream() {
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 1,
+        chunk_size: 64,
+    });
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let single = TempDir::new().unwrap();
+    let got = nxr(&["get", &url, "-o", single.path().join("big.bin").to_str().unwrap()]);
+    expect_exit(&got, 0, "single-stream get");
+    let want = std::fs::read(single.path().join("big.bin")).unwrap();
+    assert_eq!(want, content);
+
+    let seg = TempDir::new().unwrap();
+    let target = seg.path().join("big.bin");
+    let got = nxr(&[
+        "get",
+        "--segments",
+        "4",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "segmented get");
+    let have = std::fs::read(&target).unwrap();
+    assert_eq!(have, content, "byte-exact against the seeded payload");
+    assert_eq!(
+        Sha256::digest(&have),
+        Sha256::digest(&want),
+        "same digest either way"
+    );
+    // The staging area only outlives a failed run.
+    assert!(!seg.path().join("big.bin.segments").exists());
+    // The fan-out went over ranged GETs.
+    assert!(
+        srv.requests()
+            .iter()
+            .any(|r| r.method == "GET" && r.outcome == Outcome::Status(206)),
+        "segments must ride Range requests: {:?}",
+        srv.requests()
+    );
+}
+
+/// A server that ignores Range degrades to the single stream: the summary line is the plain get's.
+#[test]
+fn get_segments_falls_back_when_range_is_ignored() {
+    let srv = server(Scenario::IgnoreRange);
+    let content: Vec<u8> = (0..50_000u32).map(|i| (i % 199) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("big.bin");
+    let got = nxr(&[
+        "get",
+        "--segments",
+        "4",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "fallback get");
+    assert_eq!(std::fs::read(&target).unwrap(), content);
+    // No ranged answer ever came back: the server answered every GET with 200.
+    assert!(
+        !srv
+            .requests()
+            .iter()
+            .any(|r| r.method == "GET" && r.outcome == Outcome::Status(206)),
+        "an ignore-range server never answers 206: {:?}",
+        srv.requests()
+    );
+    assert!(!out.path().join("big.bin.segments").exists());
+}
+
+/// An object smaller than the segment count still lands byte-exact.
+#[test]
+fn get_segments_degrades_on_a_tiny_object() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("tiny.bin", b"012345");
+    let url = format!("{}tiny.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("tiny.bin");
+    let got = nxr(&[
+        "get",
+        "--segments",
+        "16",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "tiny segmented get");
+    assert_eq!(std::fs::read(&target).unwrap(), b"012345");
+}
+
+/// `--segments` with a stdout target is a misuse, and stdout streaming stays single-stream.
+#[test]
+fn get_segments_with_stdout_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("big.bin", b"payload");
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let got = nxr(&["get", "--segments", "4", &url]);
+    expect_exit(&got, 2, "segments with stdout target");
+    assert!(stderr(&got).contains("--segments"), "{}", stderr(&got));
+
+    // A stdout get carries no segments: the body arrives raw through one 200.
+    let got = nxr(&["get", &url]);
+    expect_exit(&got, 0, "plain stdout get");
+    assert_eq!(stdout(&got), "payload");
+    assert!(srv.requests().iter().any(|r| r.method == "GET"
+        && r.path == "big.bin"
+        && r.outcome == Outcome::Status(200)));
+}
+
+/// A failing segment fails the whole get: no partial file under the output name.
+#[test]
+fn get_segments_failure_leaves_no_output() {
+    let srv = server(Scenario::DropConnection);
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("big.bin");
+    // DropConnection resets the first request per path: with retry 1 the first segment dies.
+    let got = nxr(&[
+        "get",
+        "--segments",
+        "4",
+        "--retry",
+        "1",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 3, "segment failure is transport");
+    assert!(!target.exists(), "nothing partial is renamed");
+    assert!(stderr(&got).contains("transport"), "{}", stderr(&got));
+}

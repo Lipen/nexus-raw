@@ -658,7 +658,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__get)
-            opts="-o -u -R -q -v -h --out --continue --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-o -u -R -q -v -h --out --continue --segments --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -669,6 +669,10 @@ _nxr() {
                     return 0
                     ;;
                 -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --segments)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
