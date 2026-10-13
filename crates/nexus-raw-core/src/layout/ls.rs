@@ -5,6 +5,7 @@
 //! Every refusal is an error with a hint, never a silent empty list: a missing endpoint is an [`Error::Enumerate`], a refused repository is an [`Error::SearchRepoMissing`].
 
 use crate::error::Error;
+use crate::model::digest::Digest;
 use crate::model::name::percent_decode;
 use crate::model::name::validate_version;
 use crate::model::name::ArtifactName;
@@ -159,6 +160,53 @@ pub async fn search_assets(
     Ok(names)
 }
 
+/// The same walk as [`search_assets`], carrying the search-reported facts per name:
+/// the digest and size the server's index holds, so a comparison runs without
+/// a single per-name HEAD or sibling GET.
+///
+/// A name the search reports without a digest still lists: the comparison sees
+/// the missing fact, never a fake equality.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `dir_url` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
+// The fact type lives in the native-only sync family.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn search_assets_facts(
+    client: &NexusClient,
+    dir_url: &str,
+) -> Result<Vec<(ArtifactName, crate::sync::delta::Side)>, Error> {
+    let parts = split_base(dir_url)?;
+    let assets = walk(client, dir_url, &parts.repo).await?;
+    let version_prefix = format!("{}/", parts.version);
+    let mut out = Vec::new();
+    for asset in assets {
+        let rel = drop_segments(&asset.path, parts.group.len());
+        let Some(rel) = rel.strip_prefix(&version_prefix) else {
+            continue;
+        };
+        if rel.is_empty() {
+            continue;
+        }
+        // The search sees markers too, and a marker name carries the reserved
+        // suffix: it is not an artifact, so skip it instead of failing the
+        // whole listing on it.
+        let Ok(name) = ArtifactName::parse(rel) else {
+            continue;
+        };
+        out.push((
+            name,
+            crate::sync::delta::Side {
+                size: asset.size,
+                digest: asset.sha256,
+            },
+        ));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.dedup_by(|a, b| a.0 == b.0);
+    Ok(out)
+}
+
 struct BaseParts {
     repo: String,
     group: Vec<String>,
@@ -226,6 +274,31 @@ fn drop_segments(path: &str, n: usize) -> String {
 /// matches Maven coordinates, not raw path prefixes, which emptied deep
 /// listings. Scoping is the caller's client-side filter.
 async fn paginate(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<String>, Error> {
+    Ok(walk(client, base, repo)
+        .await?
+        .into_iter()
+        .map(|a| a.path)
+        .collect())
+}
+
+/// One search-API asset, reduced to the facts a digest comparison needs.
+#[derive(Debug, Clone)]
+pub(crate) struct SearchAsset {
+    /// Asset path inside the repository, without the leading slash (percent-encoded as served).
+    pub path: String,
+    /// The sha256 digest, when the server reports one.
+    pub sha256: Option<Digest>,
+    /// Asset size in bytes, when the server reports it.
+    pub size: Option<u64>,
+}
+
+/// Walk the search pages, collecting per-asset facts: path, digest, size.
+///
+/// The same scoping rules as [`paginate`]: the `group` parameter is never sent,
+/// the caller filters client-side.
+/// The page cap, the 400 → [`Error::SearchRepoMissing`] mapping and the
+/// 404 → [`Error::Enumerate`] mapping are shared with every listing helper.
+async fn walk(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<SearchAsset>, Error> {
     let url = reqwest::Url::parse(base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;
     let mut origin = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
     if let Some(port) = url.port() {
@@ -234,7 +307,7 @@ async fn paginate(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<St
     let mut endpoint = reqwest::Url::parse(&format!("{origin}/service/rest/v1/search/assets"))
         .map_err(|e| Error::misuse(format!("search endpoint: {e}")))?;
     endpoint.query_pairs_mut().append_pair("repository", repo);
-    let mut paths = Vec::new();
+    let mut assets = Vec::new();
     let mut next: Option<String> = None;
     // A hostile or broken endpoint can emit continuation tokens forever.
     // The page cap turns an endless scroll into an Enumerate refusal.
@@ -273,9 +346,18 @@ async fn paginate(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<St
             })?;
         if let Some(items) = value.get("items").and_then(|i| i.as_array()) {
             for item in items {
-                if let Some(p) = item.get("path").and_then(|p| p.as_str()) {
-                    paths.push(p.to_owned());
-                }
+                let Some(p) = item.get("path").and_then(|p| p.as_str()) else {
+                    continue;
+                };
+                assets.push(SearchAsset {
+                    path: p.to_owned(),
+                    sha256: item
+                        .get("checksum")
+                        .and_then(|c| c.get("sha256"))
+                        .and_then(|s| s.as_str())
+                        .and_then(|s| Digest::from_hex(s).ok()),
+                    size: item.get("size").and_then(|s| s.as_u64()),
+                });
             }
         }
         next = value
@@ -286,7 +368,7 @@ async fn paginate(client: &NexusClient, base: &str, repo: &str) -> Result<Vec<St
             break;
         }
     }
-    Ok(paths)
+    Ok(assets)
 }
 
 #[cfg(test)]

@@ -152,6 +152,86 @@ fn remote_side(status: &RemoteStatus) -> Side {
     }
 }
 
+/// The delta of a local scan against the search API's per-asset facts (`diff --via search`).
+///
+/// The remote side is the server's index, not the HEAD/sibling probes: a big
+/// tree is compared in O(pages) requests.
+/// The name set is the union, exactly like [`compare`]: a scanned-only name is
+/// [`Delta::MissingRemote`], a search-reported name the local directory lacks is
+/// [`Delta::MissingLocal`].
+///
+/// Honesty rule: a searched name without a search-reported digest can never be
+/// [`Delta::Same`], because the search page carries nothing to verify against.
+/// It reports as [`Delta::Diverged`] with `sha: false` (the digest contrast is
+/// unknown, not different), so the report stays an instruction to re-check, and
+/// never a fake clean bill.
+pub fn compare_search(
+    dir: &Path,
+    locals: Vec<(ArtifactName, LocalStatus)>,
+    remotes: Vec<(ArtifactName, Side)>,
+) -> Vec<Delta> {
+    let locals: BTreeMap<ArtifactName, LocalStatus> = locals.into_iter().collect();
+    let remotes: BTreeMap<ArtifactName, Side> = remotes.into_iter().collect();
+    let mut names: BTreeSet<&ArtifactName> = locals.keys().collect();
+    names.extend(remotes.keys());
+    let mut out = Vec::with_capacity(names.len());
+    for name in names {
+        let local = match locals.get(name) {
+            Some(status) => local_side(dir, name, status),
+            // A name the search lists but the local scan never saw: no local facts.
+            None => Side::default(),
+        };
+        let remote = remotes.get(name).cloned().unwrap_or_default();
+        let entry = if !remotes.contains_key(name) {
+            Delta::MissingRemote {
+                name: name.clone(),
+                local,
+            }
+        } else if !locals.contains_key(name) {
+            Delta::MissingLocal {
+                name: name.clone(),
+                remote,
+            }
+        } else {
+            match (&local.digest, &remote.digest) {
+                // Two digests on the table decide: equal is equal.
+                (Some(a), Some(b)) if a == b => Delta::Same {
+                    name: name.clone(),
+                    digest: a.clone(),
+                },
+                (Some(_), Some(_)) => {
+                    let size = matches!((local.size, remote.size), (Some(x), Some(y)) if x != y);
+                    let sha = matches!(
+                        (&local.digest, &remote.digest),
+                        (Some(x), Some(y)) if x != y
+                    );
+                    Delta::Diverged {
+                        name: name.clone(),
+                        local,
+                        remote,
+                        size,
+                        sha,
+                    }
+                }
+                // Nothing to verify against on one side: the name counts as
+                // changed, never as equal, whatever the sizes claim.
+                _ => {
+                    let size = matches!((local.size, remote.size), (Some(x), Some(y)) if x != y);
+                    Delta::Diverged {
+                        name: name.clone(),
+                        local,
+                        remote,
+                        size,
+                        sha: false,
+                    }
+                }
+            }
+        };
+        out.push(entry);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,4 +435,87 @@ mod tests {
             other => panic!("unexpected delta: {other:?}"),
         }
     }
+
+    /// The search-side compare agrees with the probe-based one on a converged
+    /// fixture: equal digests are `Same`, both-only names line up.
+    #[test]
+    fn compare_search_matches_compare_on_converged_fixture() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let mut locals = Vec::new();
+        for (file, bytes) in [("a.zip", ALPHA), ("b.zip", BETA)] {
+            locals.push(local(dir, file, bytes, true));
+        }
+        let remotes: Vec<(ArtifactName, Side)> = locals
+            .iter()
+            .map(|(n, _)| {
+                (
+                    n.clone(),
+                    Side {
+                        size: None,
+                        digest: Some(Digest::of_bytes(if n.as_str() == "a.zip" {
+                            ALPHA
+                        } else {
+                            BETA
+                        })),
+                    },
+                )
+            })
+            .collect();
+        let via_search = compare_search(dir, locals, remotes);
+        assert_eq!(via_search.len(), 2);
+        assert!(via_search.iter().all(|d| matches!(d, Delta::Same { .. })));
+    }
+
+    /// P4 honesty: a searched name without a search-reported digest counts as
+    /// changed, never equal, even when the sizes agree.
+    #[test]
+    fn compare_search_digestless_remote_is_never_same() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let locals = vec![local(dir, "a.zip", ALPHA, true)];
+        let remotes = vec![(
+            name("a.zip"),
+            Side {
+                size: Some(ALPHA.len() as u64),
+                digest: None,
+            },
+        )];
+        match &compare_search(dir, locals, remotes)[..] {
+            [Delta::Diverged { size, sha, .. }] => {
+                assert!(!*sha, "the digest contrast is unknown, not different");
+                assert!(!*size, "equal sizes must not fake a size divergence");
+            }
+            other => panic!("a digestless search fact must diverge, got: {other:?}"),
+        }
+    }
+
+    /// The union rule on the search path: local-only is `MissingRemote`,
+    /// search-only is `MissingLocal`, with the searched facts on the report.
+    #[test]
+    fn compare_search_union_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let locals = vec![local(dir, "a.zip", ALPHA, true)];
+        let remotes = vec![(
+            name("b.zip"),
+            Side {
+                size: Some(3),
+                digest: Some(Digest::of_bytes(b"bbb")),
+            },
+        )];
+        match &compare_search(dir, locals, remotes)[..] {
+            [Delta::MissingRemote { local, .. }, Delta::MissingLocal { remote, .. }] => {
+                assert_eq!(
+                    remote.digest.as_ref().map(Digest::as_str),
+                    Some(Digest::of_bytes(b"bbb").as_str())
+                );
+                assert!(local.digest.is_some(), "the local side hashes on the fly");
+            }
+            other => panic!("unexpected delta: {other:?}"),
+        }
+    }
+
+    const ALPHA: &[u8] = b"alpha payload: the quick brown fox\n";
+    const BETA: &[u8] = b"beta payload: 0123456789\n";
 }

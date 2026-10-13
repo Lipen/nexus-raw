@@ -220,6 +220,37 @@ impl Nxr {
             .map_err(|e| Error::misuse(format!("task panicked: {e}")))
     }
 
+    /// The delta report built from the search API's per-asset facts (`diff --via search`).
+    ///
+    /// The remote side comes from the search index: name, digest and size per
+    /// asset, O(pages) requests instead of a HEAD/sibling pair per name.
+    /// The report shape is the plain [`Self::delta`] one.
+    /// Honesty: a searched name without a search-reported digest reports as
+    /// [`Delta::Diverged`] with `sha: false`, never as `Same`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the local scan,
+    /// [`Error::SearchRepoMissing`] on a search 400 and [`Error::Enumerate`] on a
+    /// search 404 or an unparseable page, and [`Error::Misuse`] if a task panicked.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn delta_search(
+        &self,
+        dir: &Path,
+        prefixes: &[crate::model::name::NamePrefix],
+    ) -> Result<Vec<Delta>, Error> {
+        let local_names = sync::scan_dir(dir)?;
+        let locals = sync::local_statuses(dir, local_names).await;
+        let mut remotes = layout::ls::search_assets_facts(&self.client, &self.base).await?;
+        if !prefixes.is_empty() {
+            remotes.retain(|(n, _)| prefixes.iter().any(|p| p.matches(n)));
+        }
+        let d = dir.to_owned();
+        tokio::task::spawn_blocking(move || delta::compare_search(&d, locals, remotes))
+            .await
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))
+    }
+
     /// Upload a local directory (§5.2).
     ///
     /// `names` restricts the transfer to the explicit list.

@@ -39,6 +39,11 @@ Two concurrent `mirror` runs over one pair would interleave `.part` writes, so t
 The lock is portable: unix guards the lock file with an exclusive `flock`, windows opens it with file sharing denied, so any second open fails while the first run lives.
 The handle is the lock: the file is never unlinked while held, and a crashed run leaves nothing to clean up.
 
+`diff --via search` is a read-side helper, not a new wire format.
+The remote side of the delta report comes from the search API's per-asset facts (name, digest, size) instead of a HEAD/sibling pair per name, so a big tree is compared in O(pages) requests.
+A searched asset that lacks a search-reported digest counts as changed, never equal: there is nothing to verify against.
+A search refusal (400 for an unknown repository, 404 for a missing endpoint) degrades honestly: the run refuses with the enumeration-family error, or with `--fallback` it announces the degradation and rebuilds the report from the probe-based enumeration.
+
 Deletion (`rm`, `point --clear`) is the one deliberate extension (§5.4).
 DELETE is allowed for the objects of the enumerated version only: bytes, markers,
 the version document, the pointer file.
