@@ -240,7 +240,7 @@ $ echo $?
 ## nxr up
 
 ```
-nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first <NAME>]
+nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first <NAME>]
 ```
 
 Upload a local directory.
@@ -251,6 +251,7 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 | Flag | Meaning |
 |:-----|:--------|
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
+| `--if-changed` | skip names whose remote marker digest equals the local copy, re-upload the changed rest (a missing or foreign remote marker re-uploads the name) |
 | `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
 

@@ -3433,8 +3433,6 @@ fn get_segments_failure_leaves_no_output() {
     assert!(!target.exists(), "nothing partial is renamed");
     assert!(stderr(&got).contains("transport"), "{}", stderr(&got));
 }
-||||||| parent of 73bfd3b (cli: up --if-changed skips the names the remote marker vouches for)
-=======
 
 /// up --if-changed twice: the second run PUTs nothing, a mutated file re-PUTs, a markerless remote name re-PUTs.
 #[test]

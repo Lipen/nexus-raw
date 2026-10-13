@@ -89,7 +89,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr put <URL> -f FILE [--sha]` | PUT bytes: `--sha` also PUTs the `.sha256` sibling |
 | `nxr head <URL>` | status, size, content type |
 | `nxr sha <FILE\|URL>` | streaming sha256 of a file or a remote object |
-| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
+| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first NAME]` | scan → diff → PUT bytes + markers in parallel workers |
 | `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from F]... [--ls] [--fresh] [--plan] [--prefix P]` | enumerate → diff → stream+hash → rename + local marker |
 | `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--via search [--fallback]]` | compare a local directory against the storage: `same` / `missing-local` / `missing-remote` / `diverged` (size, sha). Exit 1 when different, nothing written. `--via search` reads the remote facts from the search listing |
 | `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | enumerate at the source, diff at the destination, copy bytes + markers |

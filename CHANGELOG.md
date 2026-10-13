@@ -20,6 +20,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   On a streak of successes the limit recovers one worker per step, never above the configured maximum.
   A lone success after a 429 does not snap the limit back: the recovery slope must fill first.
   The floor is 1 worker and the wire behavior is unchanged.
+- `nxr up --if-changed`: names whose remote marker digest equals the local copy skip without a single PUT, changed or markerless names re-upload.
+  A skip demands evidence: a missing or foreign remote marker never counts as equal.
+  Diverging complete copies re-upload instead of refusing, every other guard (broken local or remote objects, `Missing`) refuses exactly as the plain `up`.
 
 ## [0.13.0] - 2026-10-12
 

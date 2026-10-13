@@ -33,6 +33,8 @@ The symmetric diff decides what to transfer.
 `up` writes markers by default.
 `--no-sha` opts out.
 `down` requires an enumeration source: explicit names, or the best-effort search API.
+`up --if-changed` relaxes exactly one refusal: a complete local copy whose digest differs from the remote marker re-PUTs instead of refusing.
+Every other rule holds, and a skip still demands evidence: only a verified digest equality skips, a missing or foreign remote marker re-PUTs the name.
 
 `mirror` moves enumerated names between two repositories through a staging directory derived from both bases.
 Two concurrent `mirror` runs over one pair would interleave `.part` writes, so the staging directory holds a lock: the second run refuses with a hint (misuse, exit 2) and touches nothing.
