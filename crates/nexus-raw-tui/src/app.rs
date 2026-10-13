@@ -4802,6 +4802,10 @@ mod tests {
         let _ = rx;
     }
 
+    // The fixtures feed absolute unix paths (`/tmp/...`) into the picker:
+    // windows canonicalizes them onto the current drive (`D:/tmp/...`), so
+    // the history assertions below are a unix-shape contract.
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_picker_histories_cycle_and_stay_separate() {
         let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
@@ -4908,6 +4912,7 @@ mod tests {
         app.handle(Msg::Key(key(KeyCode::Esc)));
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_picker_history_holds_sixteen_values() {
         let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("app", EntryKind::Dir)])], false);
