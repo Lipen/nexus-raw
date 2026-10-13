@@ -851,6 +851,62 @@ $ echo $?
 | `0` | every checked name is complete |
 | `1` | at least one name is incomplete, or a local I/O failure such as a missing directory |
 
+## nxr audit
+
+```
+nxr audit <REPO_URL> [--bytes] [--sample N] [--name NAME]... [--prefix PREFIX]... [--json] [--workers N]
+```
+
+Check a repository for integrity and print what it finds: one line per finding, then the summary.
+The default structural mode reads metadata only: the raw tree (the authoritative listing, markers included), one small GET per marker, and the search facts as an independent cross-check when the index is alive.
+Asset bytes are never read.
+It classifies `orphan` (bytes without marker), `dangling_marker` (marker without bytes), `unparseable_marker` (a marker outside the `sha256sum -c` format) and `diverged_fact` (marker digest and search fact disagree).
+A dead search index degrades honestly: the run continues on tree and markers, the cross-check is skipped, and the summary says `facts: unavailable` instead of staying silent.
+A fresh upload missing from the not-yet-caught-up index is not a finding: the tree and the markers are the truth, not the index.
+
+`--bytes` adds a download and sha256 check of every asset against its marker: the only mode that catches silent bitrot, at the price of reading every object.
+`--sample N` byte-checks a deterministic sample of N objects instead, with the seed printed in the summary, so a sampled run is reproducible.
+`--sample` without `--bytes` is misuse (exit 2).
+`audit` only reads: no request it makes mutates the repository (see [read-only diagnostics](../explanation/design.md#read-only-diagnostics)).
+
+| Flag | Meaning |
+|:-----|:--------|
+| `--bytes` | download every asset and sha256-check it against its marker: catches silent bitrot, costs a full read of the repository |
+| `--sample <N>` | byte-check a deterministic sample of N objects instead of all; the seed prints in the summary. Requires `--bytes` |
+| `--name <NAME>` | audit only this name, repeatable |
+| `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
+| `--json` | NDJSON: one `finding` event per finding, then a final `summary` |
+| `--workers <N>` | ceiling of the transfer worker pool, the same pacing `up` and `down` use |
+
+```console
+$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/
+orphan releases/2.0.0/big.bin: bytes without marker
+dangling_marker releases/2.0.0/app.zip: marker without bytes
+audited 412, findings: orphan 1, dangling_marker 1
+$ echo $?
+1
+$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned
+audited 2, findings: none
+$ echo $?
+0
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | clean: no findings |
+| `1` | findings exist: they are data, the report on stdout is the payload |
+| `2` | misuse: `--sample` without `--bytes`, a non-http URL |
+| `3` | transport or auth failure |
+
+`--json` prints one `finding` event per finding and the summary last, with `facts` set to `"unavailable"` when the search cross-check could not run:
+
+```json
+{"class":"dangling_marker","detail":"marker without bytes","event":"finding","name":"releases/2.0.0/app.zip"}
+{"audited":412,"event":"summary","facts":"unavailable","findings":{"dangling_marker":1,"orphan":1}}
+```
+
+The workflow around the two modes: [audit a repository for integrity](../how-to/audit.md).
+
 ## nxr service repos
 
 List the repositories of a Nexus server: `GET <server-root>/service/rest/v1/repositories`, the same service REST API the web console uses.
@@ -979,7 +1035,7 @@ When a write fails with the EULA body, the error hint prescribes the command: `r
 ## nxr doctor
 
 ```
-nxr doctor [URL]
+nxr doctor [URL] [--deep] [--probe-name NAME] [--json]
 ```
 
 Diagnose the setup before a pipeline runs.
@@ -991,6 +1047,18 @@ Any status below 500 passes, except 401 and 403: the server rejected the credent
 A 5xx or a connection failure fails the probe as transport.
 
 Missing credentials are a warning, not a failure: the run reports `none found` and still exits 0, because anonymous requests are a legitimate setup against a read-open repository.
+
+| Flag | Meaning |
+|:-----|:--------|
+| `--deep` | add read-only probes of the server itself: auth, range, content-length, search, repo-type, tls, version |
+| `--probe-name <NAME>` | the object the targeted probes (range, content-length) examine; without it, one is found by a single listing of the repository root |
+
+With `--deep` every probe is independent: one probe refusing never stops the others, because doctor is a diagnosis, not a gate.
+A probe that needs an object (range, content-length) reports `skipped` with the reason when none exists: an empty repository before the first `up` is a normal case, and the verdict is then `skipped`, never `ok` and never `fail`.
+A warn is advice, not a failure: a stripped `Range`, an absent `Content-Length` and a dead search index each print a hint that names the how-to section, and the exit stays `0`.
+Exit 3 is reserved for probes that physically failed (transport), exit 2 for misuse and failed local checks.
+`--deep` reads only: no probe mutates the repository, and write rights are deliberately not probed (see [read-only diagnostics](../explanation/design.md#read-only-diagnostics)).
+Retry-After honesty is not probed either: it is observable only under a real transfer, in the `retrying` events of `--json`.
 
 A passing run, probe included, is shown in [credentials and URLs](#credentials-and-urls).
 A probe that cannot connect is a transport failure:
@@ -1008,8 +1076,27 @@ $ echo $?
 3
 ```
 
+With `--deep` the report grows one line per server probe, and warns still exit 0:
+
+```console
+$ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/raw-main/ --deep
+doctor:
+  [  ok  ] credentials: resolved from NXR_AUTH
+  [  ok  ] tls: verification is ON
+  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] auth: repository answers your credentials
+  [ WARN ] range: range-stripped: a ranged GET answered 200 with the whole body, --segments degrades to single-stream
+  [  ok  ] content-length: present (45 bytes)
+  [ WARN ] search: search-dead: HTTP 400, diff --via search refuses here, --fallback degrades explicitly
+  [  ok  ] repo-type: hosted
+  [  ok  ] version: 3.84.0-01
+  2 warning(s), all checks passed
+$ echo $?
+0
+```
+
 The report prints one line per check.
-`--json` replaces the human report with one object per check on stdout:
+`--json` replaces the human report with one object per check on stdout, plus one `probe` object per server probe under `--deep`:
 
 ```json
 {"check":"credentials","detail":"resolved from NXR_AUTH","ok":true}
@@ -1017,9 +1104,9 @@ The report prints one line per check.
 
 | Exit | When |
 |:----:|:-----|
-| `0` | all checks passed, warnings included |
-| `2` | a local check failed: TLS verification off, settings out of range |
-| `3` | the probe failed: unreachable, a 5xx, or the server rejected the credentials (401/403) |
+| `0` | all checks passed, warns included: a warn is advice, never a failure |
+| `2` | misuse, or a local check failed: TLS verification off, settings out of range |
+| `3` | probes physically failed: unreachable, a 5xx, or the server rejected the credentials (401/403) |
 
 ## nxr complete
 
@@ -1131,8 +1218,8 @@ Four codes cover every failure, and the mapping from error to code has one home,
 | Code | Class | Representative causes |
 |:----:|:------|:----------------------|
 | `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
-| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent. a retry cannot change it) |
-| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o` |
+| `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent. a retry cannot change it), the findings of `audit` |
+| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o`, `audit --sample` without `--bytes` |
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, other unexpected statuses |
 
 `verify` is offline and cannot produce `3`.

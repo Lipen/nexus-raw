@@ -359,6 +359,13 @@ Data problems (exit 1) need a human, invocation problems (exit 2) need a pipelin
 Every error carries a `hint:` line so the decision is cheap at 3 a.m.
 The full mapping is in [errors and exit codes](../reference/errors.md), and [when it breaks](../how-to/troubleshoot.md) turns it into a procedure.
 
+## Read-only diagnostics
+
+`audit` and `doctor --deep` are read-only by contract: no request either command makes mutates the repository.
+The guarantee is enforced by construction, not by politeness: the diagnostics run on the same transport as everything else, but their probe and finding paths contain only GET and HEAD, and the conformance tests assert that a full audit or deep-doctor run against `mock-nexus` issues no other method.
+Write rights are deliberately not probed by doctor: a PUT probe would itself be a mutation, so the absence of write access surfaces on the first real `up`, with its usual exit code and hint.
+The one deliberate extension to reading is `audit --bytes`, which downloads and hashes asset bytes: it reads more, and it still writes nothing.
+
 ## What was deliberately left out
 
 Config files and profiles, repacking, unarchiving, a daemon, a server component.

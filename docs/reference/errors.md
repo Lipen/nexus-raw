@@ -211,6 +211,15 @@ In short: `0` continue the pipeline, `1` stop and show stderr to a human, `2` fi
 
 `doctor` reuses the same classes: a failed local check such as TLS verification off or settings out of range exits `2`, a failed reachability probe exits `3`, a 401 or 403 probe included.
 
+Two outcomes look like failures and are not:
+
+| Case | Exit | Why |
+|:--|:--:|:--|
+| `audit` findings | `1` | findings are data: the instrument worked when it found and reported them, the report is the payload |
+| `doctor --deep` warn | `0` | a warn is advice: a stripped `Range`, an absent `Content-Length` and a dead search index each print a hint and still exit `0`, exit `3` is for probes that physically failed |
+
+Neither `audit` nor `doctor --deep` mutates the repository: both only read (see [read-only diagnostics](../explanation/design.md#read-only-diagnostics)).
+
 ## The refusal rule
 
 `Mismatch`, `Incomplete` and `Missing` are refusals, not failed attempts.

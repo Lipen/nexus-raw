@@ -265,6 +265,80 @@ Verified against Nexus Community Edition 3.79.1-04: the same shapes ride the moc
 - Anonymous and authenticated users see different repository lists.
   A 403 from a service endpoint usually means the account lacks nx-admin, not that the server is broken.
 
+## Check the server before the transfer
+
+`nxr doctor <URL> --deep` probes how the server behaves before a transfer depends on it.
+Without `--deep` doctor checks the invocation (credentials, TLS, settings, one reachability probe).
+With `--deep` it adds read-only probes of the server itself, each independent: one probe refusing never stops the others.
+
+| Probe | What it checks | Verdicts |
+|:------|:---------------|:---------|
+| auth | a GET of the repository root (or the probe target) with your credentials | `ok`, or 401/403 named as a credential verdict |
+| range | HEAD for the size, then GET `Range: bytes=0-0` | `206` ok, `200` is `range-stripped` (warn: `--segments` degrades), a refusal is named |
+| content-length | the HEAD answer | present, or absent (warn: resume and `--segments` are limited) |
+| search | one page of the search API for the repository | `ok`, or `search-dead` on 400/404 (warn: `diff --via search` refuses there, `--fallback` saves it) |
+| repo-type | the service REST API, read-only | `hosted`, `group` or `proxy`, with the group members in order for a group |
+| tls | the existing checks, plus how `--tls-insecure` is reflected | as always |
+| version | `GET /service/rest/v1/status` when alive | the version string, diagnostic only, no gate |
+
+Every probe with a target (range, content-length) needs an object to probe.
+An empty repository is a normal case, not an error: doctor before the first `up` is exactly when you want it.
+With no target available (the repository is empty, the soft autolookup finds nothing, `--probe-name` names a 404), the probe verdict is `skipped` with the reason, never `ok` and never `fail`.
+
+```console
+$ nxr doctor https://nexus.example.com/repository/raw-main/ --deep
+doctor:
+  [  ok  ] credentials: resolved from NXR_AUTH
+  [  ok  ] tls: verification is ON
+  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] auth: repository answers your credentials
+  [  ok  ] range: 206 partial answer
+  [  ok  ] content-length: present (45 bytes)
+  [  ok  ] search: alive
+  [  ok  ] repo-type: hosted
+  [  ok  ] version: 3.84.0-01
+  all checks passed
+$ echo $?
+0
+```
+
+An empty repository skips the targeted probes and still passes:
+
+```console
+$ nxr doctor https://nexus.example.com/repository/raw-fresh/ --deep
+doctor:
+  [  ok  ] credentials: resolved from NXR_AUTH
+  [  ok  ] tls: verification is ON
+  [  ok  ] auth: repository answers your credentials
+  [ SKIP ] range: skipped: no object to probe (empty repository)
+  [ SKIP ] content-length: skipped: no object to probe (empty repository)
+  [  ok  ] search: alive
+  [  ok  ] repo-type: hosted
+  [  ok  ] version: 3.84.0-01
+  all checks passed
+$ echo $?
+0
+```
+
+A warn is advice, not a failure: doctor never falls over a warn, and exit 0 with warns is the designed outcome.
+Every warn maps to a concrete hint and a section of this page:
+
+| Warn | Hint | Where to read on |
+|:-----|:-----|:-----------------|
+| `range-stripped` | `--segments` degrades to single-stream there: transfers still land, verified | [heavy artifacts](consume.md#heavy-artifacts-get-segments) |
+| `content-length` absent | resume and `--segments` are limited on this server | [interrupted transfers](#interrupted-transfers) |
+| `search-dead` | `diff --via search` refuses against this server, `--fallback` degrades explicitly | [the refusal](#down-refuses-with-cannot-enumerate) |
+| auth 401/403 | fix credentials before the run, the transfer would die mid-flight | [auth failures](#auth-failures) |
+
+Two honest boundaries of `--deep`:
+Retry-After honesty is not probed, because a read-only doctor cannot trigger a 429: that is observable only under a real transfer, in the `retrying` events of `--json`.
+Write rights are not probed either: a PUT trial would mutate the repository, which is against the doctoring contract.
+Missing write rights surface on the first `up` with its own error and hint.
+Doctor exits 0 with warns, 3 only when probes physically failed (transport), 2 for misuse.
+
+The full probe list with flags: [the CLI reference](../reference/cli.md#nxr-doctor).
+Why doctor and audit only ever read: [the invariant row](../reference/invariants.md).
+
 ## Next steps
 
 - The producer's view of the same refusals: [publish a version](publish.md).
