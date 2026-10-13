@@ -217,6 +217,31 @@ _arguments "${_arguments_options[@]}" : \
 ':src -- The remote directory URL:_default' \
 && ret=0
 ;;
+(audit)
+_arguments "${_arguments_options[@]}" : \
+'--sample=[Byte-check a deterministic sample of N assets instead of all (requires --bytes)]:N:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'*--name=[One explicit name (repeatable)]:NAME:_default' \
+'--workers=[Ceiling of the worker pool for the marker and byte fetches]:N:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--bytes[Download every asset and hash it against its marker\: the only pass that catches silent bitrot]' \
+'--json[Emit NDJSON events instead of the human report]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':repo -- The repository directory URL to audit:_default' \
+&& ret=0
+;;
 (rm)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
@@ -735,6 +760,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(audit)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (rm)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -850,6 +879,7 @@ _nxr_commands() {
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
 'diff:Compare a local directory against a remote one\: the delta report' \
+'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
@@ -863,6 +893,11 @@ _nxr_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__audit_commands] )) ||
+_nxr__subcmd__audit_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr audit commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__channel_commands] )) ||
 _nxr__subcmd__channel_commands() {
@@ -947,6 +982,7 @@ _nxr__subcmd__help_commands() {
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
 'diff:Compare a local directory against a remote one\: the delta report' \
+'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
@@ -960,6 +996,11 @@ _nxr__subcmd__help_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'nxr help commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__audit_commands] )) ||
+_nxr__subcmd__help__subcmd__audit_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help audit commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__channel_commands] )) ||
 _nxr__subcmd__help__subcmd__channel_commands() {
