@@ -59,7 +59,7 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     // freeze-upload: a PUT connection is held without reading the body or answering, so the write side must detect the stall.
     // The handler parks in one-second steps for a bounded window, then drops the socket: a long-lived hosted instance must not leak threads and file descriptors forever.
     // Parked handlers die with the test process long before the horizon.
-    if matches!(shared.scenario, Scenario::FreezeUpload) && req.method == "PUT" {
+    if shared.spec.freeze_upload && req.method == "PUT" {
         log_request(shared, &req.method, &path, Outcome::Stalled);
         for _ in 0..FREEZE_HORIZON_SECS {
             std::thread::sleep(Duration::from_secs(1));
@@ -71,7 +71,7 @@ pub(crate) fn serve(shared: &Shared, stream: TcpStream) {
     // The head reader left the terminator's final byte unread on the socket, so dropping the stream now makes the kernel send RST instead of FIN.
     {
         let mut seq = lock(&shared.first_request);
-        if matches!(shared.scenario, Scenario::DropConnection) && bump(&mut seq, &path) == 0 {
+        if shared.spec.drop_connection && bump(&mut seq, &path) == 0 {
             log_request(shared, &req.method, &path, Outcome::Reset);
             return;
         }
@@ -372,7 +372,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         "GET" => {
             if let Some(payload) = drift_or_store(shared, path) {
                 let total = payload.len();
-                let range = if matches!(shared.scenario, Scenario::IgnoreRange) {
+                let range = if shared.spec.ignore_range {
                     None
                 } else {
                     range_span(req.header("Range"))
@@ -461,7 +461,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         }
         "DELETE" => {
             // readonly: the repository refuses every deletion before the store is touched.
-            if matches!(shared.scenario, Scenario::ReadOnly) {
+            if shared.spec.read_only {
                 log_request(shared, &req.method, path, Outcome::Status(403));
                 let _ = server::write_response(stream, &plain(403, b"read-only\n", None));
                 return;

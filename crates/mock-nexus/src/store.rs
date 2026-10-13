@@ -35,6 +35,10 @@ pub struct ReqLog {
 /// State shared by the accept loop and every connection thread.
 #[derive(Debug)]
 pub(crate) struct Shared {
+    /// The composable behavior layers the runtime reads.
+    pub(crate) spec: crate::spec::Spec,
+    /// True when the instance was composed from a spec rather than a preset.
+    pub(crate) spec_driven: bool,
     pub(crate) scenario: Scenario,
     pub(crate) store: Mutex<HashMap<String, Vec<u8>>>,
     pub(crate) log: Mutex<Vec<ReqLog>>,
@@ -68,42 +72,37 @@ pub(crate) struct Shared {
 
 impl Shared {
     /// Shared state for a hosted instance running `scenario`: an empty store plus every scenario-derived knob.
-    pub(crate) fn hosted(scenario: Scenario, base_url: String) -> Self {
-        let auth_b64 = match &scenario {
-            Scenario::Auth401 { user, pass } | Scenario::Auth403 { user, pass } => {
-                Some(crate::base64::encode(format!("{user}:{pass}").as_bytes()))
-            }
-            _ => None,
-        };
-        let drip = match &scenario {
-            Scenario::Slow {
-                chunk_delay_ms,
-                chunk_size,
-            } => Some(Drip {
-                delay_ms: *chunk_delay_ms,
-                chunk_size: *chunk_size,
-            }),
-            _ => None,
-        };
-        let sizeless = matches!(&scenario, Scenario::Sizeless);
-        let (partial_first_put, cut_first_get, rate_first, flaky_first) = match &scenario {
-            Scenario::PartialPut {
-                first_attempt_bytes,
-            } => (Some(*first_attempt_bytes), None, None, None),
-            Scenario::CutBody {
-                after_bytes,
-                fake_length,
-            } => (None, Some((*after_bytes, *fake_length)), None, None),
-            Scenario::RateLimit {
-                first_429s,
-                retry_after_secs,
-            } => (None, None, Some((*first_429s, *retry_after_secs)), None),
-            Scenario::Flaky { first_failures } => (None, None, None, Some(*first_failures)),
-            _ => (None, None, None, None),
-        };
+    /// A preset instance reports its scenario name; a composed one reports `"spec"`.
+    pub(crate) fn hosted_explicit(
+        spec: crate::spec::Spec,
+        scenario: Scenario,
+        spec_driven: bool,
+        base_url: String,
+    ) -> Self {
+        Self::hosted_spec(spec, scenario, base_url, spec_driven)
+    }
+
+    /// The spec-driven constructor: the runtime knobs come from the spec, the
+    /// scenario rides along for the content arms (service documents, seeded
+    /// litter) and the request log's provenance.
+    pub(crate) fn hosted_spec(
+        spec: crate::spec::Spec,
+        scenario: Scenario,
+        base_url: String,
+        spec_driven: bool,
+    ) -> Self {
+        let auth_b64 = spec.auth_b64.clone();
+        let drip = spec.drip;
+        let sizeless = spec.sizeless;
+        let partial_first_put = spec.partial_first_put;
+        let cut_first_get = spec.cut_first_get;
+        let rate_first = spec.rate_first;
+        let flaky_first = spec.flaky_first;
         Self {
             store: Mutex::new(initial_store(&scenario, &base_url)),
+            spec,
             scenario,
+            spec_driven,
             log: Mutex::new(Vec::new()),
             first_request: Mutex::new(HashMap::new()),
             first_put: Mutex::new(HashMap::new()),
@@ -126,7 +125,12 @@ impl Shared {
     pub(crate) fn group(members: &[&MockNexus]) -> Self {
         Self {
             members: members.iter().map(|m| m.addr()).collect(),
-            ..Self::hosted(Scenario::Atomic, String::new())
+            ..Self::hosted_spec(
+                crate::spec::Spec::default(),
+                Scenario::Atomic,
+                String::new(),
+                false,
+            )
         }
     }
 }

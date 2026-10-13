@@ -3,7 +3,6 @@
 use std::sync::atomic::Ordering::Relaxed;
 
 use super::support::lock;
-use crate::scenario::Scenario;
 use crate::store::Shared;
 
 /// Parse a `Range` header for resumable and segmented GETs.
@@ -64,11 +63,13 @@ pub(super) fn transform_put(shared: &Shared, path: &str, body: &[u8]) -> Option<
     if !path.ends_with(".sha256") {
         return Some(body.to_vec());
     }
-    match shared.scenario {
-        Scenario::Markerless => None,
-        Scenario::ForeignMarker => Some(zero_digest(body)),
-        _ => Some(body.to_vec()),
+    if shared.spec.markerless {
+        return None;
     }
+    if shared.spec.foreign_marker {
+        return Some(zero_digest(body));
+    }
+    Some(body.to_vec())
 }
 
 /// GET payload: the synthesized drifting version document once drift is enabled, otherwise whatever is in the store.

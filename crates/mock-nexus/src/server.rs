@@ -71,7 +71,7 @@ pub(crate) struct Resp {
 
 /// Slow-drip parameters simulating a low-bandwidth link.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Drip {
+pub struct Drip {
     pub(crate) delay_ms: u64,
     pub(crate) chunk_size: usize,
 }

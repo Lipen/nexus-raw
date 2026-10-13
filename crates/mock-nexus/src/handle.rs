@@ -24,11 +24,48 @@ impl MockNexus {
         Self::start_on(scenario, SocketAddr::from(([127, 0, 0, 1], 0)))
     }
 
+    /// Start a hosted instance from a composable [`Spec`] instead of a named
+    /// [`Scenario`] preset.
+    ///
+    /// The spec layers stack: `Spec::atomic().with_auth(..).with_flaky(3)` is
+    /// an auth-gated server that also answers the first three requests per
+    /// path with 503, which no single preset expresses.
+    /// Content arms (the service documents, the seeded litter) are preset
+    /// territory and stay on the enum: a spec-driven instance serves the plain
+    /// atomic service surface.
+    /// A composed instance reports `scenario_name() == "spec"`.
+    pub fn start_spec(spec: crate::spec::Spec) -> std::io::Result<Self> {
+        Self::start_spec_on(spec, SocketAddr::from(([127, 0, 0, 1], 0)))
+    }
+
+    /// Like [`MockNexus::start_spec`] but bound to `addr`.
+    pub fn start_spec_on(spec: crate::spec::Spec, addr: SocketAddr) -> std::io::Result<Self> {
+        Self::start_generic(Some(spec), None, addr)
+    }
+
     /// Like [`MockNexus::start`] but bound to `addr` (the binary's `--port`).
     pub fn start_on(scenario: Scenario, addr: SocketAddr) -> std::io::Result<Self> {
+        Self::start_generic(None, Some(scenario), addr)
+    }
+
+    /// The one hosted constructor: a spec, a preset scenario, or both.
+    /// `None, None` is the group base (an atomic spec over an empty store).
+    fn start_generic(
+        spec: Option<crate::spec::Spec>,
+        scenario: Option<Scenario>,
+        addr: SocketAddr,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(addr)?;
         let bound = listener.local_addr()?;
-        let shared = Arc::new(Shared::hosted(scenario, format!("http://{bound}/")));
+        let spec_driven = spec.is_some();
+        let scenario = scenario.unwrap_or(Scenario::Atomic);
+        let spec = spec.unwrap_or_else(|| crate::spec::Spec::from(&scenario));
+        let shared = Arc::new(Shared::hosted_explicit(
+            spec,
+            scenario,
+            spec_driven,
+            format!("http://{bound}/"),
+        ));
         let stop = Arc::new(AtomicBool::new(false));
         spawn_acceptor(listener, Arc::clone(&shared), Arc::clone(&stop));
         Ok(Self {
@@ -36,6 +73,15 @@ impl MockNexus {
             addr: bound,
             stop,
         })
+    }
+
+    /// The scenario preset this instance runs, or `"spec"` for a composed one.
+    pub fn scenario_name(&self) -> &str {
+        if self.shared.spec_driven {
+            "spec"
+        } else {
+            self.shared.scenario.as_str()
+        }
     }
 
     /// Start a group repository over `members` (two or more running instances), listening on its own port on 127.0.0.1.

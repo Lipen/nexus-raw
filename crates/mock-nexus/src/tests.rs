@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 
-use crate::{MockNexus, Outcome, Scenario};
+use crate::{MockNexus, Outcome, Scenario, Spec};
 
 /// Parsed response: (status, headers, body).
 type Response = (u16, Vec<(String, String)>, Vec<u8>);
@@ -897,4 +897,31 @@ fn get_closed_range_serves_the_exact_span() {
         Some("bytes 99990-99999/100000")
     );
     assert_eq!(body, &content[99990..]);
+}
+
+#[test]
+fn spec_layers_compose_and_report() {
+    // Two layers at once: an auth gate AND a flaky gate, which no single preset expresses.
+    let server =
+        MockNexus::start_spec(Spec::atomic().with_auth("ci", "secret").with_flaky(1)).unwrap();
+    assert_eq!(server.scenario_name(), "spec");
+
+    // The auth gate fires first: an unauthenticated request is a 401 challenge, not a 503.
+    let (status, _, _) = exchange(server.addr(), "GET", "/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 401, "the auth gate outranks the flaky gate");
+    // Authenticated: the flaky gate consumes its one 503, then the miss is a plain 404.
+    let auth = [("Authorization", "Basic Y2k6c2VjcmV0")]; // base64("ci:secret")
+    let (status, _, _) = exchange(server.addr(), "GET", "/a.bin", b"", &auth).unwrap();
+    assert_eq!(
+        status, 503,
+        "the flaky layer fires on the first authenticated request"
+    );
+    let (status, _, _) = exchange(server.addr(), "GET", "/a.bin", b"", &auth).unwrap();
+    assert_eq!(status, 404, "past the flaky budget the miss is a plain 404");
+}
+
+#[test]
+fn preset_scenario_names_stay_canonical() {
+    let server = MockNexus::start(Scenario::AuditLitter).unwrap();
+    assert_eq!(server.scenario_name(), "audit-litter");
 }

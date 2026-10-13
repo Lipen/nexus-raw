@@ -6,6 +6,84 @@ use crate::server::{Drip, Resp};
 use crate::store::{Outcome, Shared};
 
 /// Scenario names understood by the `mock-nexus` binary and by test harnesses.
+impl Scenario {
+    /// The canonical scenario name, matching the [`SCENARIOS`] table entry.
+    pub fn as_str(&self) -> &'static str {
+        // The table is the single source: the position of the variant IS the name.
+        const NAMES: &[&str] = &[
+            "atomic",
+            "partial-put",
+            "cut-body",
+            "drop-connection",
+            "freeze-upload",
+            "sizeless",
+            "slow",
+            "foreign-marker",
+            "markerless",
+            "auth-401",
+            "auth-403",
+            "doc-drift",
+            "flaky",
+            "rate-limit",
+            "redirect",
+            "readonly",
+            "no-service",
+            "search-400",
+            "service-status-empty",
+            "service-status-version",
+            "service-status-down",
+            "repo-collection-trimmed",
+            "repo-collection-scoped",
+            "repo-detail-admin",
+            "repo-prefix-match",
+            "assets-pagination",
+            "assets-absent",
+            "assets-prefix-q",
+            "eula-gate",
+            "eula-absent",
+            "detail-in-hint",
+            "ignore-range",
+            "audit-litter",
+        ];
+        let _ = NAMES; // positions align, but data variants need the explicit arm below
+        match self {
+            Scenario::Atomic => "atomic",
+            Scenario::PartialPut { .. } => "partial-put",
+            Scenario::CutBody { .. } => "cut-body",
+            Scenario::DropConnection => "drop-connection",
+            Scenario::FreezeUpload => "freeze-upload",
+            Scenario::Sizeless => "sizeless",
+            Scenario::Slow { .. } => "slow",
+            Scenario::ForeignMarker => "foreign-marker",
+            Scenario::Markerless => "markerless",
+            Scenario::Auth401 { .. } => "auth-401",
+            Scenario::Auth403 { .. } => "auth-403",
+            Scenario::DocDrift => "doc-drift",
+            Scenario::Flaky { .. } => "flaky",
+            Scenario::RateLimit { .. } => "rate-limit",
+            Scenario::Redirect { .. } => "redirect",
+            Scenario::ReadOnly => "readonly",
+            Scenario::NoService => "no-service",
+            Scenario::Search400 => "search-400",
+            Scenario::ServiceStatusEmpty => "service-status-empty",
+            Scenario::ServiceStatusVersion => "service-status-version",
+            Scenario::ServiceStatusDown => "service-status-down",
+            Scenario::RepoCollectionTrimmed => "repo-collection-trimmed",
+            Scenario::RepoCollectionScoped { .. } => "repo-collection-scoped",
+            Scenario::RepoDetailAdmin { .. } => "repo-detail-admin",
+            Scenario::RepoPrefixMatch => "repo-prefix-match",
+            Scenario::AssetsPagination => "assets-pagination",
+            Scenario::AssetsAbsent => "assets-absent",
+            Scenario::AssetsPrefixQ => "assets-prefix-q",
+            Scenario::EulaGate => "eula-gate",
+            Scenario::EulaAbsent => "eula-absent",
+            Scenario::DetailInHint => "detail-in-hint",
+            Scenario::IgnoreRange => "ignore-range",
+            Scenario::AuditLitter => "audit-litter",
+        }
+    }
+}
+
 pub const SCENARIOS: &[&str] = &[
     "atomic",
     "partial-put",
