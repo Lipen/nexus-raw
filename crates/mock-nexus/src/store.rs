@@ -182,12 +182,18 @@ fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>
             // (precomputed: the mock is std-only, no hasher here).
             const CLEAN_DIGEST: &str =
                 "a22ae4f83248fb43415404da410560378910398baf65f234d8de8cde3538351d";
-            store.insert("repository/raw-main/1.0.0/clean/app.bin".to_owned(), b"clean bytes".to_vec());
+            store.insert(
+                "repository/raw-main/1.0.0/clean/app.bin".to_owned(),
+                b"clean bytes".to_vec(),
+            );
             store.insert(
                 "repository/raw-main/1.0.0/clean/app.bin.sha256".to_owned(),
                 format!("{}  clean/app.bin\n", CLEAN_DIGEST).into_bytes(),
             );
-            store.insert("repository/raw-main/1.0.0/orphan/app.bin".to_owned(), b"orphan bytes".to_vec());
+            store.insert(
+                "repository/raw-main/1.0.0/orphan/app.bin".to_owned(),
+                b"orphan bytes".to_vec(),
+            );
             store.insert(
                 "repository/raw-main/1.0.0/dangling/app.bin.sha256".to_owned(),
                 b"aa  dangling/app.bin\n".to_vec(),
@@ -195,7 +201,10 @@ fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>
             // The unparseable class needs a full pair: bytes present, the
             // marker body outside the digest format. Dangling is the
             // existence verdict and outranks the body's shape.
-            store.insert("repository/raw-main/1.0.0/broken/app.bin".to_owned(), b"broken bytes".to_vec());
+            store.insert(
+                "repository/raw-main/1.0.0/broken/app.bin".to_owned(),
+                b"broken bytes".to_vec(),
+            );
             store.insert(
                 "repository/raw-main/1.0.0/broken/app.bin.sha256".to_owned(),
                 b"this line is not a digest line\n".to_vec(),

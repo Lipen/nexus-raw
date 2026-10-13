@@ -536,9 +536,7 @@ pub(crate) async fn audit(
         (names.is_empty() || names.iter().any(|n| n == name))
             && (prefixes.is_empty()
                 || prefixes.iter().any(|p| {
-                    name == p
-                        || name.starts_with(&format!("{p}/"))
-                        || name.starts_with(p)
+                    name == p || name.starts_with(&format!("{p}/")) || name.starts_with(p)
                 }))
     };
     let findings: Vec<_> = run
@@ -551,8 +549,7 @@ pub(crate) async fn audit(
         .byte_checks
         .iter()
         .filter(|(n, c)| {
-            matches!(c, nexus_raw_core::sync::audit::ByteCheck::Mismatch { .. })
-                && keep(n.as_str())
+            matches!(c, nexus_raw_core::sync::audit::ByteCheck::Mismatch { .. }) && keep(n.as_str())
         })
         .collect();
 

@@ -24,24 +24,35 @@ fn stdout(out: &Output) -> String {
 
 fn deep_args(srv: &MockNexus) -> [String; 4] {
     let url = format!("{}repository/raw-main/1.0.0/", srv.base_url());
-    ["doctor".to_owned(), url, "--deep".to_owned(), "--json".to_owned()]
+    [
+        "doctor".to_owned(),
+        url,
+        "--deep".to_owned(),
+        "--json".to_owned(),
+    ]
 }
 
 #[test]
 fn deep_on_atomic_reports_all_probes() {
     let srv = MockNexus::start(Scenario::Atomic).expect("mock nexus starts");
     let a = deep_args(&srv);
-    let out = nxr(&[
-        a[0].as_str(),
-        &a[1],
-        &a[2],
-        &a[3],
-    ]);
-    assert_eq!(out.status.code(), Some(0), "warns never fail: {}", stdout(&out));
+    let out = nxr(&[a[0].as_str(), &a[1], &a[2], &a[3]]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "warns never fail: {}",
+        stdout(&out)
+    );
     let s = stdout(&out);
-    assert!(s.contains(r#""check":"deep:version""#), "version probe: {s}");
+    assert!(
+        s.contains(r#""check":"deep:version""#),
+        "version probe: {s}"
+    );
     assert!(s.contains(r#""check":"deep:search""#), "search probe: {s}");
-    assert!(s.contains(r#""check":"deep:repo-type""#), "repo-type probe: {s}");
+    assert!(
+        s.contains(r#""check":"deep:repo-type""#),
+        "repo-type probe: {s}"
+    );
     assert!(s.contains(r#""check":"deep:range""#), "range probe: {s}");
 }
 
@@ -72,7 +83,12 @@ fn deep_on_ignore_range_warns_range_stripped() {
         "--probe-name",
         "probe.bin",
     ]);
-    assert_eq!(out.status.code(), Some(0), "a warn is advice: {}", stdout(&out));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a warn is advice: {}",
+        stdout(&out)
+    );
     let s = stdout(&out);
     assert!(
         s.contains("range-stripped"),
@@ -85,12 +101,7 @@ fn deep_on_ignore_range_warns_range_stripped() {
 fn deep_on_status_down_keeps_going() {
     let srv = MockNexus::start(Scenario::ServiceStatusDown).expect("mock nexus starts");
     let a = deep_args(&srv);
-    let out = nxr(&[
-        a[0].as_str(),
-        &a[1],
-        &a[2],
-        &a[3],
-    ]);
+    let out = nxr(&[a[0].as_str(), &a[1], &a[2], &a[3]]);
     assert_eq!(
         out.status.code(),
         Some(0),

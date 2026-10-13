@@ -379,10 +379,14 @@ impl Nxr {
                 let _permit = permit;
                 let marker_url = format!("{base}{}", encode_rel(&key));
                 let body = client.get_small(&marker_url).await;
-                (i, body.map(|b| b.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())))
+                (
+                    i,
+                    body.map(|b| b.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())),
+                )
             });
         }
-        let mut bodies: Vec<Option<Option<String>>> = (0..marker_keys.len()).map(|_| None).collect();
+        let mut bodies: Vec<Option<Option<String>>> =
+            (0..marker_keys.len()).map(|_| None).collect();
         while let Some(res) = set.join_next().await {
             let (i, inner) = res.map_err(|e| Error::misuse(format!("task panicked: {e}")))?;
             bodies[i] = Some(inner?);
@@ -390,10 +394,8 @@ impl Nxr {
         let _ = &mut bodies;
 
         // 3. Fold the bodies into the tree map the classifier reads.
-        let mut tree: BTreeMap<String, Option<String>> = tree_list
-            .iter()
-            .map(|(p, _)| (p.clone(), None))
-            .collect();
+        let mut tree: BTreeMap<String, Option<String>> =
+            tree_list.iter().map(|(p, _)| (p.clone(), None)).collect();
         for (i, key) in marker_keys.iter().enumerate() {
             if let Some(slot) = tree.get_mut(key) {
                 *slot = bodies[i].clone().flatten();
@@ -416,7 +418,12 @@ impl Nxr {
                 Some(n) if n > 0 && n < asset_keys.len() => {
                     // Deterministic stride sample: sort is stable above.
                     let step = asset_keys.len() / n;
-                    asset_keys.iter().step_by(step.max(1)).take(n).cloned().collect()
+                    asset_keys
+                        .iter()
+                        .step_by(step.max(1))
+                        .take(n)
+                        .cloned()
+                        .collect()
                 }
                 _ => asset_keys,
             };
@@ -434,7 +441,8 @@ impl Nxr {
                 bset.spawn(async move {
                     let _permit = permit;
                     let url = format!("{base}{}", encode_rel(&key));
-                    let actual = crate::primitive::sha(&client, crate::primitive::ShaSource::Url(url)).await;
+                    let actual =
+                        crate::primitive::sha(&client, crate::primitive::ShaSource::Url(url)).await;
                     (i, actual)
                 });
             }
@@ -459,10 +467,7 @@ impl Nxr {
                 };
                 let check = match parsed {
                     Some((marker, _)) if marker == actual => ByteCheck::Match,
-                    Some((marker, _)) => ByteCheck::Mismatch {
-                        marker,
-                        actual,
-                    },
+                    Some((marker, _)) => ByteCheck::Mismatch { marker, actual },
                     None => continue,
                 };
                 byte_checks.insert(asset_name, check);

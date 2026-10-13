@@ -143,7 +143,9 @@ pub fn classify(input: &AuditInput) -> AuditVerdict {
             // The marker maps to no legal asset name: report the marker
             // itself under the closest parseable form of its asset half, or
             // skip when even the segment grammar refuses it.
-            let Ok(nominal) = ArtifactName::parse(asset_str.split('/').next_back().unwrap_or("marker")) else {
+            let Ok(nominal) =
+                ArtifactName::parse(asset_str.split('/').next_back().unwrap_or("marker"))
+            else {
                 continue;
             };
             findings.push(Finding {
@@ -180,10 +182,7 @@ pub fn classify(input: &AuditInput) -> AuditVerdict {
                 findings.push(Finding {
                     class: FindingClass::DivergedFact,
                     name: asset.clone(),
-                    detail: format!(
-                        "marker says {}, the search index says {}",
-                        digest, fact
-                    ),
+                    detail: format!("marker says {}, the search index says {}", digest, fact),
                 });
             }
         }
@@ -239,11 +238,9 @@ mod tests {
         let input = AuditInput {
             tree: [
                 tree_entry("app.zip", None),
-                tree_entry(
-                    "lib.zip.sha256",
-                    Some("aa  lib.zip\n"),
-                ),
-            ].into(),
+                tree_entry("lib.zip.sha256", Some("aa  lib.zip\n")),
+            ]
+            .into(),
             facts: BTreeMap::new(),
         };
         let v = classify(&input);
@@ -259,7 +256,8 @@ mod tests {
             tree: [
                 tree_entry("app.zip", None),
                 tree_entry("app.zip.sha256", Some("garbage line\n")),
-            ].into(),
+            ]
+            .into(),
             facts: BTreeMap::new(),
         };
         let v = classify(&input);
@@ -275,7 +273,8 @@ mod tests {
             tree: [
                 tree_entry("app.zip", None),
                 tree_entry("app.zip.sha256", Some(&format!("{}  app.zip\n", d1))),
-            ].into(),
+            ]
+            .into(),
             facts: [(name("app.zip"), Some(d2))].into_iter().collect(),
         };
         let v = classify(&input);
@@ -291,8 +290,11 @@ mod tests {
             tree: [
                 tree_entry("app.zip", None),
                 tree_entry("app.zip.sha256", Some(&format!("{}  app.zip\n", d1))),
-            ].into(),
-            facts: [(name("other.zip"), Some(d1.clone()))].into_iter().collect(),
+            ]
+            .into(),
+            facts: [(name("other.zip"), Some(d1.clone()))]
+                .into_iter()
+                .collect(),
         };
         let v = classify(&input);
         assert!(v.findings.is_empty());

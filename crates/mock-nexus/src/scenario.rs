@@ -237,8 +237,7 @@ fn assets_page(shared: &Shared, req: &Request) -> Resp {
 /// The facts are the cross-check surface: the clean marker's digest agrees with
 /// its fact, and the report stays honest about what the index proves.
 fn audit_litter_page(shared: &Shared) -> Resp {
-    const CLEAN_DIGEST: &str =
-        "a22ae4f83248fb43415404da410560378910398baf65f234d8de8cde3538351d";
+    const CLEAN_DIGEST: &str = "a22ae4f83248fb43415404da410560378910398baf65f234d8de8cde3538351d";
     let base = base_of(shared);
     let item = |path: &str, digest: &str| {
         format!(
@@ -246,12 +245,24 @@ fn audit_litter_page(shared: &Shared) -> Resp {
         )
     };
     let items = [
-        item("broken/app.bin", "cc03e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"),
-        item("broken/app.bin.sha256", "bb02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"),
+        item(
+            "broken/app.bin",
+            "cc03e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
+        ),
+        item(
+            "broken/app.bin.sha256",
+            "bb02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
+        ),
         item("clean/app.bin", CLEAN_DIGEST),
         item("clean/app.bin.sha256", CLEAN_DIGEST),
-        item("dangling/app.bin.sha256", "aa02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"),
-        item("orphan/app.bin", "cc02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"),
+        item(
+            "dangling/app.bin.sha256",
+            "aa02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
+        ),
+        item(
+            "orphan/app.bin",
+            "cc02e1c1d5f1d2d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
+        ),
     ];
     let body = format!("{{\"items\": [{}]}}", items.join(", "));
     plain(200, body.as_bytes(), None)

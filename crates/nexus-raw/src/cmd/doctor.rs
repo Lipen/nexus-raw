@@ -334,7 +334,11 @@ async fn deep_probes(
                 }
             }
             Err(e) => {
-                out.push(("deep:content-length", true, format!("skipped: HEAD failed ({e})")));
+                out.push((
+                    "deep:content-length",
+                    true,
+                    format!("skipped: HEAD failed ({e})"),
+                ));
                 out.push(("deep:range", true, "skipped: HEAD failed".to_owned()));
             }
         },
@@ -382,12 +386,11 @@ async fn deep_probes(
         Ok(Some(body)) => {
             let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
             let entry = parsed.as_ref().and_then(|v| v.as_array()).and_then(|a| {
-                a.iter()
-                    .find(|r| {
-                        r["name"]
-                            .as_str()
-                            .is_some_and(|n| base.contains(&format!("/repository/{n}/")))
-                    })
+                a.iter().find(|r| {
+                    r["name"]
+                        .as_str()
+                        .is_some_and(|n| base.contains(&format!("/repository/{n}/")))
+                })
             });
             match entry {
                 Some(r) => {
@@ -405,10 +408,7 @@ async fn deep_probes(
                                 .unwrap_or_else(|| "members not reported".to_owned())
                         )
                     } else {
-                        format!(
-                            "{kind}, format {}",
-                            r["format"].as_str().unwrap_or("?")
-                        )
+                        format!("{kind}, format {}", r["format"].as_str().unwrap_or("?"))
                     };
                     out.push(("deep:repo-type", true, detail));
                 }
@@ -455,8 +455,7 @@ async fn resolve_probe_target(
     let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
     let body = client.get_small(&search_url).await.ok()??;
     let parsed: serde_json::Value = serde_json::from_slice(&body).ok()?;
-    let first = parsed
-        ["items"]
+    let first = parsed["items"]
         .as_array()
         .and_then(|a| a.first())
         .and_then(|i| i["path"].as_str())

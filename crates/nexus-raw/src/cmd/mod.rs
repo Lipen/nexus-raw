@@ -52,10 +52,7 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
         json,
     } = &cli.command
     {
-        return transfer::audit(
-            cli, repo, *bytes, *sample, prefix, name, *workers, *json,
-        )
-        .await;
+        return transfer::audit(cli, repo, *bytes, *sample, prefix, name, *workers, *json).await;
     }
     run(cli).await.map(|()| 0)
 }
@@ -191,9 +188,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             url,
             deep,
             probe_name,
-        } => {
-            doctor::run(cli, url.as_deref(), *deep, probe_name.as_deref()).await
-        }
+        } => doctor::run(cli, url.as_deref(), *deep, probe_name.as_deref()).await,
         Cmd::Complete { shell } => complete::complete(shell),
         // Routed in `dispatch`, where the verdict becomes the exit code.
         Cmd::Diff { .. } => Ok(()),

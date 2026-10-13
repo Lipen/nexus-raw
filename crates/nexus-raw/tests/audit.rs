@@ -35,7 +35,12 @@ fn stdout(out: &Output) -> String {
 fn structural_mode_reports_every_litter_class() {
     let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
     let out = nxr(&["audit", &repo_url(&srv)]);
-    assert_eq!(out.status.code(), Some(1), "findings are exit 1: {}", stdout(&out));
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "findings are exit 1: {}",
+        stdout(&out)
+    );
     let s = stdout(&out);
     assert!(s.contains("orphan orphan/app.bin"), "orphan line: {s}");
     assert!(
@@ -47,7 +52,10 @@ fn structural_mode_reports_every_litter_class() {
         "unparseable line: {s}"
     );
     // The clean pair is the control: flagged by nothing.
-    assert!(!s.contains("clean/app.bin"), "clean pair must stay silent: {s}");
+    assert!(
+        !s.contains("clean/app.bin"),
+        "clean pair must stay silent: {s}"
+    );
     assert!(s.contains("findings: 3"), "the summary counts three: {s}");
 }
 
@@ -59,7 +67,12 @@ fn clean_prefix_exits_zero() {
     // because an audit over an incomplete listing is not an audit.
     let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
     let out = nxr(&["audit", &repo_url(&srv), "--prefix", "clean"]);
-    assert_eq!(out.status.code(), Some(0), "clean prefix exits 0: {}", stdout(&out));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "clean prefix exits 0: {}",
+        stdout(&out)
+    );
     let s = stdout(&out);
     assert!(s.contains("findings: 0"), "zero findings: {s}");
 }
@@ -94,33 +107,12 @@ fn byte_mode_verifies_the_clean_pair() {
     // pass verifies the clean pair without flagging it: no byte_mismatch line.
     assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
     let s = stdout(&out);
-    assert!(!s.contains("byte_mismatch"), "the clean pair must byte-verify: {s}");
-    assert!(s.contains("bytes checked 1"), "exactly one clean asset checked: {s}");
-}
-
-// A tiny temp-dir helper: the tempfile dev-dependency is not on the CLI test
-// crate yet, and one fixed env dir keeps the test hermetic enough.
-mod mktemp {
-    use std::path::PathBuf;
-
-    pub struct TempDir(PathBuf);
-
-    impl TempDir {
-        pub fn new() -> std::io::Result<Self> {
-            let mut p = std::env::temp_dir();
-            p.push(format!("nxr-audit-test-{}", std::process::id()));
-            std::fs::create_dir_all(&p)?;
-            Ok(Self(p))
-        }
-
-        pub fn path(&self) -> &std::path::Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
+    assert!(
+        !s.contains("byte_mismatch"),
+        "the clean pair must byte-verify: {s}"
+    );
+    assert!(
+        s.contains("bytes checked 1"),
+        "exactly one clean asset checked: {s}"
+    );
 }
