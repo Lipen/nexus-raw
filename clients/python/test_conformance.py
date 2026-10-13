@@ -38,6 +38,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 # Scenarios the reference client cannot exercise, with the reason and what is not implemented.
 # The drift test holds this table against the mock's own list: a stale row fails the suite.
 SKIP = {
+    "ignore-range": (
+        "the scenario answers a ranged GET with the whole body, and the reference client is single-stream:"
+        " it never sends Range, so the degradation the scenario pins is not observable here"
+    ),
     "doc-drift": (
         "the drift toggle is a library-only knob (MockNexus::enable_drift), so the binary serves plain storage"
         " and the client-side half, version.json being an ordinary name, is already pinned under atomic"
