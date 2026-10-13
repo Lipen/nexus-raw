@@ -171,6 +171,9 @@ bump part:
 release v *mode:
     #!/bin/sh
     set -eu
+    if [ "{{ v }}" = "-h" ] || [ "{{ v }}" = "--help" ]; then
+        exec scripts/release.sh --help
+    fi
     exec scripts/release.sh "{{ v }}" {{ mode }}
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]

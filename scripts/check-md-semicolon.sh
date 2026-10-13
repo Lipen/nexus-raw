@@ -4,6 +4,13 @@
 # are exempt: a semicolon there is syntax, not typography.
 set -eu
 
+usage() { echo "usage: check-md-semicolon.sh" >&2; echo "  scans tracked markdown for semicolon-spliced sentences; exits 1 on a hit" >&2; }
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *) usage; exit 2 ;;
+esac
+
 hits=0
 # Tracked markdown only: git ls-files keeps node_modules, target and site out
 # by construction, and untracked scratch files never gate.

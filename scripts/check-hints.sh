@@ -6,6 +6,13 @@
 # Called from `just check-docs` and the docs workflow.
 set -eu
 
+usage() { echo "usage: check-hints.sh" >&2; echo "  cross-checks Error::hint literals against docs/reference/errors.md; exits 1 on drift" >&2; }
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *) usage; exit 2 ;;
+esac
+
 src=crates/nexus-raw-core/src/error.rs
 doc=docs/reference/errors.md
 failed=0

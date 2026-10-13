@@ -4,6 +4,13 @@
 # `.dev/` is exempt: it never leaves the machine.
 set -eu
 
+usage() { echo "usage: check-external-names.sh" >&2; echo "  scans tracked sources for external project names; exits 1 on a hit" >&2; }
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *) usage; exit 2 ;;
+esac
+
 # The names, space-separated. Extend the list as new deployments appear.
 banned="arkui arkts panda openlab koala huawei bz-openlab"
 hits=0

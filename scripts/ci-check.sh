@@ -20,6 +20,11 @@ sha="$(git rev-parse --verify --quiet HEAD^{commit} 2>/dev/null || true)"
 quick=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      echo "usage: ci-check.sh [--sha X] [--quick]"
+      echo "  polls the CI run for a commit until it settles; --quick takes the current state without waiting"
+      exit 0
+      ;;
     --sha)
       [ -n "${2:-}" ] || die "usage: ci-check.sh [--sha X] [--quick]"
       sha="$(git rev-parse --verify --quiet "$2^{commit}" 2>/dev/null)" \

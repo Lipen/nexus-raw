@@ -15,6 +15,10 @@ import sys
 
 def main() -> int:
     rest = sys.argv[1:]
+    if "-h" in rest or "--help" in rest:
+        print("usage: changelog-finalize.py X.Y.Z [--dry]")
+        print("  finalizes the [Unreleased] changelog section under the given version and today's date")
+        return 0
     if not rest or len(rest) > 2 or (len(rest) == 2 and rest[1] != "--dry"):
         print("usage: changelog-finalize.py X.Y.Z [--dry]", file=sys.stderr)
         return 2
