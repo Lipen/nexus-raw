@@ -38,7 +38,8 @@ hint: check the command line arguments
 ## Exit codes are the API
 
 Exit `0` continues, `1` is a data problem (a retry fails identically), `2` is a broken job definition, `3` is transport trouble (the same command is expected to succeed on a later run).
-The cause-and-fix table: [exit codes](troubleshoot.md#exit-codes-cause-and-fix), the full taxonomy: [errors and exit codes](../reference/errors.md).
+The cause-and-fix table: [exit codes](troubleshoot.md#exit-codes-cause-and-fix).
+The full taxonomy: [errors and exit codes](../reference/errors.md).
 
 Transfers are resumable and re-runs are free, so a retry loop is always safe to write:
 

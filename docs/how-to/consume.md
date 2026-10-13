@@ -54,7 +54,7 @@ plan: 0 to upload, 3 to download, 0 up to date
 uploaded 0, downloaded 3, skipped 0
 ```
 
-Three names in the list, three fetched: the list is the caller's, and nothing you did not name arrives.
+Three names in the list, three fetched.
 
 ### What the pipeline guarantees
 
@@ -112,7 +112,8 @@ uploaded 0, downloaded 1, skipped 0
 ```
 
 Keep the name list in your own pipeline: a shell array, a generated script, whatever the job owns.
-Every listed name must exist on the server, ghosts refuse the run.
+Every listed name must exist on the server.
+A ghost name refuses the run.
 
 ## Heavy artifacts: `get --segments`
 
