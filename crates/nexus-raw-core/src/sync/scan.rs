@@ -81,7 +81,11 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn scan_rejects_unsafe_names() {
+        // The fixture needs a name windows cannot create at all (`*` is
+        // reserved there): the scan's own grammar is exercised on unix, and
+        // on windows the filesystem is the first line of the same defense.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         fs::create_dir_all(root.join("bad*name")).unwrap();
