@@ -7,42 +7,6 @@ impl Scenario {
     /// The canonical scenario name, matching the [`SCENARIOS`] table entry.
     pub fn as_str(&self) -> &'static str {
         // The table is the single source: the position of the variant IS the name.
-        const NAMES: &[&str] = &[
-            "atomic",
-            "partial-put",
-            "cut-body",
-            "drop-connection",
-            "freeze-upload",
-            "sizeless",
-            "slow",
-            "foreign-marker",
-            "markerless",
-            "auth-401",
-            "auth-403",
-            "doc-drift",
-            "flaky",
-            "rate-limit",
-            "redirect",
-            "readonly",
-            "no-service",
-            "search-400",
-            "service-status-empty",
-            "service-status-version",
-            "service-status-down",
-            "repo-collection-trimmed",
-            "repo-collection-scoped",
-            "repo-detail-admin",
-            "repo-prefix-match",
-            "assets-pagination",
-            "assets-absent",
-            "assets-prefix-q",
-            "eula-gate",
-            "eula-absent",
-            "detail-in-hint",
-            "ignore-range",
-            "audit-litter",
-        ];
-        let _ = NAMES; // positions align, but data variants need the explicit arm below
         match self {
             Scenario::Atomic => "atomic",
             Scenario::PartialPut { .. } => "partial-put",
