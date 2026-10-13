@@ -85,11 +85,13 @@ fn code(out: &Output) -> i32 {
 }
 
 fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
+    // A windows runner hands the child's output over with CRLF: the tests
+    // judge content, not the platform's line-ending convention.
+    String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
 }
 
 fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
+    String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n")
 }
 
 /// Assert the exit code, dumping both streams on mismatch.
