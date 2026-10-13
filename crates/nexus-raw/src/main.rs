@@ -386,6 +386,18 @@ pub(crate) enum ChannelOp {
 }
 
 fn main() -> std::process::ExitCode {
+    // Windows gives the main thread 1 MB and the deep async frames of the
+    // transfer paths overflow it: the run continues on a thread with an
+    // explicit budget, so every platform gets the same generous stack.
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(run_main)
+        .expect("the main thread spawns the work thread")
+        .join()
+        .expect("the work thread carries the exit code")
+}
+
+fn run_main() -> std::process::ExitCode {
     let mut cli = Cli::parse();
     if let Err(e) = alias::apply_remote(&mut cli) {
         if cli.json {
