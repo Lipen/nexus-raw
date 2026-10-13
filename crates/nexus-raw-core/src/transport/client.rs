@@ -392,6 +392,27 @@ impl NexusClient {
     /// # Errors
     ///
     /// Returns transport, auth or HTTP errors from the GET and [`Error::Misuse`] when the body exceeds the small-object cap.
+    /// The range probe of `doctor --deep`: one ranged GET (`bytes=0-0`), no
+    /// retry loop, the answer reduced to the verdict inputs.
+    ///
+    /// `206` means the server honors `Range`; `200` means the server (or a
+    /// proxy on the way) strips it; anything else is named as-is.
+    /// Read-only: a `bytes=0-0` GET transfers one byte and writes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the single attempt.
+    pub async fn probe_range(&self, url: &str) -> Result<u16, Error> {
+        let req = self
+            .authorize(self.http.get(url))
+            .header("Range", "bytes=0-0");
+        let resp = match req.send().await {
+            Ok(r) => r,
+            Err(e) => return Err(self.wrap_send_err(url, e).error),
+        };
+        Ok(resp.status().as_u16())
+    }
+
     pub async fn get_small(&self, url: &str) -> Result<Option<Vec<u8>>, Error> {
         self.with_retries(None, url, |this: &Self, url: &str| {
             Box::pin(async move {

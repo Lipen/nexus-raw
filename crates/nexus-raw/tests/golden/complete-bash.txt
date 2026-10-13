@@ -554,12 +554,16 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__doctor)
-            opts="-u -R -q -v -h --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --deep --probe-name --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --probe-name)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --user)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0

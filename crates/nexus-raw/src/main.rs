@@ -302,6 +302,12 @@ pub(crate) enum Cmd {
         /// A base URL to probe (checks without it stay local).
         #[arg(value_name = "URL")]
         url: Option<String>,
+        /// Probe the server's behavior: range, content-length, search, repo type, version. Read-only.
+        #[arg(long)]
+        deep: bool,
+        /// The object the deep probes target (default: a soft autolookup of the root).
+        #[arg(long, value_name = "NAME", requires = "deep")]
+        probe_name: Option<String>,
     },
     /// Server metadata through the Sonatype service REST API (not part of the storage protocol).
     Service {

@@ -279,12 +279,14 @@ complete -c nxr -n "__fish_nxr_using_subcommand verify" -l json -d 'Emit one NDJ
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l probe-name -d 'The object the deep probes target (default: a soft autolookup of the root)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l deep -d 'Probe the server\'s behavior: range, content-length, search, repo type, version. Read-only'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s q -l quiet -d 'Print only the final summary line'

@@ -4,7 +4,12 @@ use nexus_raw_core::{config::normalize_base, creds, Error};
 
 use crate::Cli;
 
-pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
+pub(crate) async fn run(
+    cli: &Cli,
+    url: Option<&str>,
+    deep: bool,
+    probe_name: Option<&str>,
+) -> Result<(), Error> {
     let mut report: Vec<(&'static str, bool, String)> = Vec::new();
     // Warns pass the check (no exit-code impact) but deserve their own marker in both renders.
     let mut warns: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
@@ -124,7 +129,7 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                 // reads as a bug.
                 let status_url = format!("{}/service/rest/v1/status", base.trim_end_matches('/'));
                 let cfg = nexus_raw_core::Config {
-                    base,
+                    base: base.clone(),
                     tls_insecure: cli.tls_insecure,
                     workers: 1,
                     retry_attempts: 1,
@@ -160,6 +165,12 @@ pub(crate) async fn run(cli: &Cli, url: Option<&str>) -> Result<(), Error> {
                             },
                         }
                         report.push(("probe", ok, detail));
+                        if deep {
+                            match deep_probes(cli, &client, &base, probe_name).await {
+                                Ok(lines) => report.extend(lines),
+                                Err(e) => report.push(("deep", false, e.to_string())),
+                            }
+                        }
                     }
                     Err(e) => report.push(("probe", false, e.to_string())),
                 }
@@ -247,4 +258,208 @@ fn split_and_resolve(explicit: Option<&str>) -> Result<Option<String>, Error> {
 fn dead_progress() -> nexus_raw_core::Progress {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     nexus_raw_core::Progress::new(tx)
+}
+
+/// One deep-probe verdict: the check name, whether it passed, and the detail.
+/// A `false` that names a warn (through the report's warn set upstream) is
+/// advice, never a failure.
+type DeepLine = (&'static str, bool, String);
+
+/// The read-only `--deep` probes of the server's actual behavior.
+///
+/// Every probe is independent: one refusing never stops the others.
+/// A probe with a target (range, content-length) needs an object; without one
+/// the verdict is `skipped`, never `ok` and never `fail` (an empty repository
+/// is a normal thing to point doctor at, before the first `up`).
+/// Write rights are deliberately not probed: a PUT probe would itself be a
+/// mutation, against the read-only contract of the diagnostics.
+async fn deep_probes(
+    cli: &Cli,
+    client: &nexus_raw_core::NexusClient,
+    base: &str,
+    probe_name: Option<&str>,
+) -> Result<Vec<DeepLine>, Error> {
+    let _ = cli;
+    let mut out: Vec<DeepLine> = Vec::new();
+    let root = base.trim_end_matches('/').to_owned();
+    let status_url = format!("{root}/service/rest/v1/status");
+
+    // version: diagnostic only, never a gate.
+    match client.get_small(&status_url).await {
+        Ok(Some(body)) => {
+            let text = String::from_utf8_lossy(&body);
+            let version = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .and_then(|v| v["version"].as_str().map(str::to_owned));
+            out.push((
+                "deep:version",
+                true,
+                version.unwrap_or_else(|| "status endpoint answered".to_owned()),
+            ));
+        }
+        Ok(None) => out.push(("deep:version", true, "status endpoint empty".to_owned())),
+        Err(_) => out.push((
+            "deep:version",
+            true,
+            "skipped: the status endpoint did not answer (diagnostic only)".to_owned(),
+        )),
+    }
+
+    // range + content-length on the resolved target object.
+    match resolve_probe_target(client, &root, probe_name).await {
+        Some(object_url) => match client.head_info(&object_url).await {
+            Ok(info) => {
+                let len = info.size;
+                match len {
+                    Some(n) => out.push(("deep:content-length", true, format!("present ({n})"))),
+                    None => out.push((
+                        "deep:content-length",
+                        true,
+                        "warning: absent (resume and --segments are limited)".to_owned(),
+                    )),
+                }
+                match client.probe_range(&object_url).await {
+                    Ok(206) => out.push(("deep:range", true, "206 honored".to_owned())),
+                    Ok(200) => out.push((
+                        "deep:range",
+                        true,
+                        "warning: range-stripped (200 to a ranged GET: --segments degrades to the single stream)".to_owned(),
+                    )),
+                    Ok(code) => out.push((
+                        "deep:range",
+                        false,
+                        format!("ranged GET answered HTTP {code}"),
+                    )),
+                    Err(e) => out.push(("deep:range", false, e.to_string())),
+                }
+            }
+            Err(e) => {
+                out.push(("deep:content-length", true, format!("skipped: HEAD failed ({e})")));
+                out.push(("deep:range", true, "skipped: HEAD failed".to_owned()));
+            }
+        },
+        None => {
+            out.push((
+                "deep:content-length",
+                true,
+                "skipped: no object to probe (an empty repository is a normal case)".to_owned(),
+            ));
+            out.push((
+                "deep:range",
+                true,
+                "skipped: no object to probe (an empty repository is a normal case)".to_owned(),
+            ));
+        }
+    }
+
+    // search liveness: one page against the first repository path segment.
+    let repo = base
+        .split("/repository/")
+        .nth(1)
+        .and_then(|rest| rest.split('/').next())
+        .unwrap_or("raw-main")
+        .to_owned();
+    let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
+    match client.get_small(&search_url).await {
+        Ok(Some(_)) => out.push(("deep:search", true, "the search index answers".to_owned())),
+        Ok(None) => out.push(("deep:search", true, "empty page".to_owned())),
+        Err(nexus_raw_core::Error::SearchRepoMissing { .. }) => out.push((
+            "deep:search",
+            true,
+            "warning: search-dead (400: the repository is unknown to the index; diff --via search refuses there, --fallback saves it)".to_owned(),
+        )),
+        Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
+            "deep:search",
+            true,
+            "warning: search-dead (404: the search endpoint is absent; diff --via search refuses there, --fallback saves it)".to_owned(),
+        )),
+        Err(e) => out.push(("deep:search", false, e.to_string())),
+    }
+
+    // repo type through the service REST API, read-only.
+    let repos_url = format!("{root}/service/rest/v1/repositories");
+    match client.get_small(&repos_url).await {
+        Ok(Some(body)) => {
+            let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
+            let entry = parsed.as_ref().and_then(|v| v.as_array()).and_then(|a| {
+                a.iter()
+                    .find(|r| {
+                        r["name"]
+                            .as_str()
+                            .is_some_and(|n| base.contains(&format!("/repository/{n}/")))
+                    })
+            });
+            match entry {
+                Some(r) => {
+                    let kind = r["type"].as_str().unwrap_or("?");
+                    let detail = if kind == "group" {
+                        format!(
+                            "group: {}",
+                            r["members"]
+                                .as_array()
+                                .map(|m| m
+                                    .iter()
+                                    .filter_map(|x| x.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", "))
+                                .unwrap_or_else(|| "members not reported".to_owned())
+                        )
+                    } else {
+                        format!(
+                            "{kind}, format {}",
+                            r["format"].as_str().unwrap_or("?")
+                        )
+                    };
+                    out.push(("deep:repo-type", true, detail));
+                }
+                None => out.push((
+                    "deep:repo-type",
+                    true,
+                    "skipped: the repository is not in the service listing".to_owned(),
+                )),
+            }
+        }
+        Ok(None) => out.push((
+            "deep:repo-type",
+            true,
+            "skipped: the service listing is empty".to_owned(),
+        )),
+        Err(_) => out.push((
+            "deep:repo-type",
+            true,
+            "skipped: the service REST endpoint did not answer".to_owned(),
+        )),
+    }
+
+    Ok(out)
+}
+
+/// Resolve the object the range and content-length probes target: the explicit
+/// name, else the first object one search page returns.
+/// `None` means no target exists, which is a skip, not a failure.
+async fn resolve_probe_target(
+    client: &nexus_raw_core::NexusClient,
+    root: &str,
+    probe_name: Option<&str>,
+) -> Option<String> {
+    if let Some(n) = probe_name {
+        // The name rides the base as the user typed it: the base already
+        // points at the directory the object lives under.
+        return Some(format!("{root}/{n}"));
+    }
+    let repo = root
+        .split("/repository/")
+        .nth(1)
+        .and_then(|rest| rest.split('/').next())
+        .unwrap_or("raw-main");
+    let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
+    let body = client.get_small(&search_url).await.ok()??;
+    let parsed: serde_json::Value = serde_json::from_slice(&body).ok()?;
+    let first = parsed
+        ["items"]
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|i| i["path"].as_str())
+        .map(|p| p.trim_start_matches('/').to_owned())?;
+    Some(format!("{root}/repository/{repo}/{first}"))
 }

@@ -170,7 +170,13 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             }
             ServiceOp::Eula { url, accept } => layout::service_eula(cli, url, *accept).await,
         },
-        Cmd::Doctor { url } => doctor::run(cli, url.as_deref()).await,
+        Cmd::Doctor {
+            url,
+            deep,
+            probe_name,
+        } => {
+            doctor::run(cli, url.as_deref(), *deep, probe_name.as_deref()).await
+        }
         Cmd::Complete { shell } => complete::complete(shell),
         // Routed in `dispatch`, where the verdict becomes the exit code.
         Cmd::Diff { .. } => Ok(()),

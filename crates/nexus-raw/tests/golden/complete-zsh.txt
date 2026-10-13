@@ -472,6 +472,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (doctor)
 _arguments "${_arguments_options[@]}" : \
+'--probe-name=[The object the deep probes target (default\: a soft autolookup of the root)]:NAME:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
@@ -480,6 +481,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--deep[Probe the server'\''s behavior\: range, content-length, search, repo type, version. Read-only]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \

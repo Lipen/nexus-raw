@@ -260,8 +260,8 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
             | crate::ServiceOp::Assets { url, .. }
             | crate::ServiceOp::Eula { url, .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
         },
-        C::Doctor { url: Some(url) } => vec![std::ptr::addr_of!(*url).cast_mut()],
-        C::Verify { .. } | C::Complete { .. } | C::Doctor { url: None } => vec![],
+        C::Doctor { url: Some(url), .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
+        C::Verify { .. } | C::Complete { .. } | C::Doctor { .. } => vec![],
     }
 }
 
