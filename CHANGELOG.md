@@ -5,7 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr audit <REPO_URL>`: the repository integrity report in one call.
+  The structural mode reads metadata only: the raw tree (markers included), one small GET per listed marker, and the search facts as the independent cross-check.
+  It classifies `orphan` (bytes without marker), `dangling_marker` (marker without bytes), `unparseable_marker` (a body outside the `sha256sum -c` format) and `diverged_fact` (marker digest vs search fact); findings are data, so a run with findings exits 1.
+  A fresh upload missing from the lagging index is never a finding: the tree and the markers are the truth.
+  `--bytes` additionally downloads and hashes every asset against its marker: the only pass that sees silent bitrot, at the price of reading the repository.
+  `--sample N` byte-checks a deterministic subset instead (requires `--bytes`, misuse otherwise).
+  Read-only by contract: no audit request mutates the repository.
+- `nxr doctor --deep` (with `--probe-name NAME`): the server-behavior probes behind the invocation checks, all read-only.
+  `range` (a `bytes=0-0` GET: `206` honored, `200` names a range-stripping proxy that degrades `--segments`), `content-length` presence, `search` liveness, `repo-type` through the service REST API (group members in order), and the server `version` as a diagnostic.
+  A probe without a target (an empty repository is a normal case before the first `up`) reports `skipped`, never `ok` or `fail`.
+  Warns are advice and keep the exit at 0; probes are independent, one refusing never stops the others.
+  Write rights are deliberately not probed: the probe would itself be a mutation.
+- The `audit-litter` mock scenario seeds the structural finding classes plus a clean control pair; the conformance suite pins the two-mode contract (the structural pass sees no byte corruption, the byte pass verifies the clean pair).
 
 ## [0.14.0] - 2026-10-13
 
