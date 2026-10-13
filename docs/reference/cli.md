@@ -1051,7 +1051,7 @@ Missing credentials are a warning, not a failure: the run reports `none found` a
 | Flag | Meaning |
 |:-----|:--------|
 | `--deep` | add read-only probes of the server itself: auth, range, content-length, search, repo-type, tls, version |
-| `--probe-name <NAME>` | the object the targeted probes (range, content-length) examine; without it, one is found by a single listing of the repository root |
+| `--probe-name <NAME>` | the object the targeted probes (range, content-length) examine. Without it, one is found by a single listing of the repository root |
 
 With `--deep` every probe is independent: one probe refusing never stops the others, because doctor is a diagnosis, not a gate.
 A probe that needs an object (range, content-length) reports `skipped` with the reason when none exists: an empty repository before the first `up` is a normal case, and the verdict is then `skipped`, never `ok` and never `fail`.

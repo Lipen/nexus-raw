@@ -183,7 +183,8 @@ An `Action` is one name's line of a plan and has exactly three shapes: `Upload {
 The digest inside an `Upload` action is present only when markers are enabled: knowing the digest and writing the marker are separate concerns.
 
 Every directory transfer runs under an adaptive worker budget: it starts at the configured maximum, halves in-flight capacity on every `Retry-After` failure (a 429), and recovers one worker per success streak, never above the maximum.
-The budget lives on the facade for the duration of a run; `last_run_limit()` reports the trajectory (current limit, the lowest it reached) for tests and dashboards.
+The budget lives on the facade for the duration of a run.
+`last_run_limit()` reports the trajectory (current limit, the lowest it reached) for tests and dashboards.
 The wire behavior is unchanged: a polite client on a throttling server, byte-for-byte the same protocol.
 
 ## L2: layout
