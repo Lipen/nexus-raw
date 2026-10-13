@@ -1609,7 +1609,7 @@ fn golden_ndjson_up_down_hold() {
     expect_exit(&up, 0, "golden up");
     assert_eq!(
         stdout(&up),
-        include_str!("golden/up.ndjson"),
+        golden("up.ndjson"),
         "the up ndjson changed: update tests/golden/up.ndjson deliberately"
     );
 
@@ -1625,7 +1625,7 @@ fn golden_ndjson_up_down_hold() {
     expect_exit(&down, 0, "golden down");
     assert_eq!(
         stdout(&down),
-        include_str!("golden/down.ndjson"),
+        golden("down.ndjson"),
         "the down ndjson changed: update tests/golden/down.ndjson deliberately"
     );
 }
@@ -1646,7 +1646,7 @@ fn golden_ndjson_mirror_holds() {
     expect_exit(&mirror, 0, "golden mirror");
     assert_eq!(
         stdout(&mirror),
-        include_str!("golden/mirror.ndjson"),
+        golden("mirror.ndjson"),
         "the mirror ndjson changed: update tests/golden/mirror.ndjson deliberately"
     );
 }
@@ -1669,7 +1669,7 @@ fn golden_ndjson_retrying_holds() {
     let normalized = stdout(&up).replace(&port, "PORT");
     assert_eq!(
         normalized,
-        include_str!("golden/retrying.ndjson"),
+        golden("retrying.ndjson"),
         "the retrying ndjson changed: update tests/golden/retrying.ndjson deliberately"
     );
 }
@@ -1694,7 +1694,7 @@ fn golden_ndjson_doctor_holds() {
     expect_exit(&out, 0, "golden doctor");
     assert_eq!(
         stdout(&out),
-        include_str!("golden/doctor.ndjson"),
+        golden("doctor.ndjson"),
         "the doctor ndjson changed: update tests/golden/doctor.ndjson deliberately"
     );
 }
@@ -1707,14 +1707,33 @@ fn golden_ndjson_doctor_holds() {
 /// The scripts are deterministic: no ports, no timestamps, no environment.
 /// A platform-flavored render (an `.exe` in the program name, a path separator) fails here
 /// with the first differing lines printed, so the flavor is visible from the CI log alone.
+/// The fixture content, normalized: include_str! reads the checkout's bytes,
+/// and a windows checkout with core.autocrlf hands golden files over with CRLF.
+/// The tests judge content, not the checkout's line-ending convention.
+fn golden(name: &str) -> String {
+    match name {
+        "up.ndjson" => include_str!("golden/up.ndjson"),
+        "down.ndjson" => include_str!("golden/down.ndjson"),
+        "mirror.ndjson" => include_str!("golden/mirror.ndjson"),
+        "retrying.ndjson" => include_str!("golden/retrying.ndjson"),
+        "doctor.ndjson" => include_str!("golden/doctor.ndjson"),
+        "diff.ndjson" => include_str!("golden/diff.ndjson"),
+        _ => unreachable!("the golden table and the fixture name drift together"),
+    }
+    .replace("\r\n", "\n")
+}
+
 fn assert_golden(actual: &str, fixture: &str, what: &str) {
+    // include_str! reads the checkout's bytes, and a windows checkout with
+    // core.autocrlf hands the fixture over with CRLF: both sides normalize.
     let expected = match fixture {
         "complete-bash.txt" => include_str!("golden/complete-bash.txt"),
         "complete-zsh.txt" => include_str!("golden/complete-zsh.txt"),
         "complete-fish.txt" => include_str!("golden/complete-fish.txt"),
         "complete-powershell.txt" => include_str!("golden/complete-powershell.txt"),
         _ => unreachable!("the golden table and the fixture name drift together"),
-    };
+    }
+    .replace("\r\n", "\n");
     if actual == expected {
         return;
     }
@@ -2586,7 +2605,7 @@ fn golden_ndjson_diff_holds() {
     expect_exit(&out, 1, "the golden diff finds differences");
     assert_eq!(
         stdout(&out),
-        include_str!("golden/diff.ndjson"),
+        golden("diff.ndjson"),
         "the diff ndjson changed: update tests/golden/diff.ndjson deliberately"
     );
     assert_eq!(put_requests(&srv).len(), before, "a diff must not PUT");
