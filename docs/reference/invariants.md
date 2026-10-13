@@ -305,4 +305,4 @@ Integrity litter seeded.
 The store carries one clean pair, an orphan (bytes without marker), a dangling marker (marker without bytes) and an unparseable marker, plus the usual service documents.
 GET, HEAD and PUT behave like `atomic`.
 
-**Pinned invariant:** The audit structural mode classifies orphan, dangling marker and unparseable marker from the metadata and exits 1 with the report; the clean pair is never flagged.
+**Pinned invariant:** The audit structural mode classifies orphan, dangling marker and unparseable marker from the metadata and exits 1 with the report. The clean pair is never flagged.
