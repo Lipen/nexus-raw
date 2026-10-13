@@ -404,6 +404,90 @@ impl Nxr {
         .await
     }
 
+    /// Upload a local directory, skipping names the remote already vouches for (`up --if-changed`).
+    ///
+    /// The plan is [`sync::classify_if_changed`](crate::sync): the only skip is a complete
+    /// local copy whose digest equals the remote marker's digest, everything divergent
+    /// re-PUTs, and a broken local or remote object refuses the run exactly like the plain `up`:
+    /// the flag relaxes the divergence rule, never the never-overwrite rule.
+    ///
+    /// # Errors
+    ///
+    /// The same classes as [`Self::up`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn up_if_changed(
+        &self,
+        dir: &Path,
+        names: Option<Vec<ArtifactName>>,
+        gen_markers: bool,
+        claim: Option<ArtifactName>,
+    ) -> Result<Summary, Error> {
+        if !dir.is_dir() {
+            return Err(Error::misuse(format!("not a directory: {}", dir.display())));
+        }
+        let names = if let Some(list) = names {
+            let scanned = self.scan(dir)?;
+            let have: std::collections::HashSet<&ArtifactName> = scanned.iter().collect();
+            let absent: Vec<String> = list
+                .iter()
+                .filter(|n| !have.contains(n))
+                .map(std::string::ToString::to_string)
+                .collect();
+            if !absent.is_empty() {
+                return Err(Error::Missing { names: absent });
+            }
+            list
+        } else {
+            let scanned = self.scan(dir)?;
+            if scanned.is_empty() {
+                return Err(Error::misuse(format!(
+                    "nothing to upload: {} holds no artifacts",
+                    dir.display()
+                )));
+            }
+            scanned
+        };
+        let mut locals = sync::local_statuses(dir, names).await;
+        if gen_markers {
+            up::generate_markers(dir, &mut locals).await?;
+        }
+        if let Some(claim) = &claim {
+            let known = locals.iter().any(|(n, _)| n == claim);
+            if !known {
+                return Err(Error::misuse(format!(
+                    "claim-first: {} is not among the scanned names of {}",
+                    claim,
+                    dir.display()
+                )));
+            }
+        }
+        let remotes = self
+            .remote_states_for(locals.iter().map(|(n, _)| n))
+            .await?;
+        let d = dir.to_owned();
+        let markers = gen_markers;
+        let actions = tokio::task::spawn_blocking(move || {
+            sync::classify_if_changed(&d, markers, locals, remotes)
+        })
+        .await
+        .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
+        .map_err(Error::from)?;
+        self.events.plan(&actions, Dir::Up);
+        // One AIMD budget per run, the same contract as the plain `up`.
+        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+        self.client.attach_aimd(aimd.clone());
+        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
+        up::execute(
+            self.client.clone(),
+            dir.to_owned(),
+            self.base.clone(),
+            actions,
+            claim,
+            aimd,
+        )
+        .await
+    }
+
     /// Download into a local directory (§5.2, §5.2.1).
     ///
     /// The enumeration source is mandatory: without one the call refuses.

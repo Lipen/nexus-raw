@@ -9,6 +9,6 @@ pub mod scan;
 pub mod up;
 
 pub use delta::{compare, Delta, Side};
-pub use diff::{classify, local_statuses, Action, Mode};
+pub use diff::{classify, classify_if_changed, local_statuses, Action, Mode};
 pub use rm::RmAction;
 pub use scan::scan_dir;
