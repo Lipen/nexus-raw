@@ -861,7 +861,7 @@ Check a repository for integrity and print what it finds: one line per finding, 
 The default structural mode reads metadata only: the raw tree (the authoritative listing, markers included), one small GET per marker, and the search facts as an independent cross-check when the index is alive.
 Asset bytes are never read.
 It classifies `orphan` (bytes without marker), `dangling_marker` (marker without bytes), `unparseable_marker` (a marker outside the `sha256sum -c` format) and `diverged_fact` (marker digest and search fact disagree).
-A dead search index degrades honestly: the run continues on tree and markers, the cross-check is skipped, and the summary says `facts: unavailable` instead of staying silent.
+A refusal of the search listing (400/404) refuses the audit with the enumeration hint: an audit over an incomplete listing is not an audit. A fresh upload missing from the lagging index is not a finding: the tree and the markers are the truth, not the index.
 A fresh upload missing from the not-yet-caught-up index is not a finding: the tree and the markers are the truth, not the index.
 
 `--bytes` adds a download and sha256 check of every asset against its marker: the only mode that catches silent bitrot, at the price of reading every object.
@@ -882,11 +882,11 @@ A fresh upload missing from the not-yet-caught-up index is not a finding: the tr
 $ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/
 orphan releases/2.0.0/big.bin: bytes without marker
 dangling_marker releases/2.0.0/app.zip: marker without bytes
-audited 412, findings: orphan 1, dangling_marker 1
+audited 412, findings: 2, bytes checked 0
 $ echo $?
 1
 $ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned
-audited 2, findings: none
+audited 2, findings: 0, bytes checked 0
 $ echo $?
 0
 ```
@@ -898,11 +898,11 @@ $ echo $?
 | `2` | misuse: `--sample` without `--bytes`, a non-http URL |
 | `3` | transport or auth failure |
 
-`--json` prints one `finding` event per finding and the summary last, with `facts` set to `"unavailable"` when the search cross-check could not run:
+`--json` prints one `finding` event per finding and the summary last:
 
 ```json
 {"class":"dangling_marker","detail":"marker without bytes","event":"finding","name":"releases/2.0.0/app.zip"}
-{"audited":412,"event":"summary","facts":"unavailable","findings":{"dangling_marker":1,"orphan":1}}
+{"audited":412,"bytes_checked":0,"event":"summary","facts_available":true,"findings":2}
 ```
 
 The workflow around the two modes: [audit a repository for integrity](../how-to/audit.md).

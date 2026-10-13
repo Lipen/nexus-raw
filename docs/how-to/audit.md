@@ -43,7 +43,7 @@ orphan releases/2.0.0/big.bin: bytes without marker
 dangling_marker releases/2.0.0/app.zip: marker without bytes
 unparseable_marker releases/2.0.0/notes.txt: marker does not parse as sha256sum -c
 diverged_fact releases/1.4.0/app-1.4.0.zip: marker f732… diverges from search fact a8a2…
-audited 412, findings: orphan 1, dangling_marker 1, unparseable_marker 1, diverged_fact 1
+audited 412, findings: 4, bytes checked 0
 $ echo $?
 1
 ```
@@ -74,7 +74,7 @@ No metadata-only run can find bitrot, because nothing in the metadata moved.
 ```console
 $ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --bytes
 corrupted releases/1.4.0/app-1.4.0.zip: sha256 mismatch: marker a8a2… vs bytes f712…
-audited 412, checked 412, findings: corrupted 1
+audited 412, findings: 1, bytes checked 412
 $ echo $?
 1
 ```
@@ -91,13 +91,12 @@ Huge repositories make full `--bytes` a project of its own.
 ```console
 $ nxr audit https://nexus.example.com/repository/raw-main/2.0.0/ --bytes --sample 50
 corrupted releases/2.0.0/big.bin: sha256 mismatch: marker a8a2… vs bytes f712…
-audited 412, checked 50, seed 736251, findings: corrupted 1
+audited 412, findings: 1, bytes checked 50
 $ echo $?
 1
 ```
 
-The summary prints the seed it sampled with.
-The same seed re-selects the same objects, so a finding is reproducible and a sampled audit is a schedulable, comparable routine.
+The sample is a deterministic stride over the sorted name list, so the same repository selects the same objects and a finding is reproducible and a sampled audit is a schedulable, comparable routine.
 `--sample` without `--bytes` is misuse: exit 2, there is nothing to sample without byte checks.
 
 ## The read-only guarantee
@@ -116,12 +115,14 @@ The `diverged_fact` cross-check is not computed in that run, and the summary say
 ```console
 $ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/
 orphan releases/2.0.0/old.bin: bytes without marker
-audited 412, findings: orphan 1, facts: unavailable
+error: cannot enumerate: the search endpoint answered 404
+hint: the audit needs the search listing and the server refused it
 $ echo $?
 1
 ```
 
-`facts: unavailable` is part of the honest contract: a summary without it claims the cross-check ran.
+An audit over an incomplete listing is not an audit: when the search API refuses, the run refuses with the enumeration hint rather than silently shrinking the checked set.
+A fresh upload missing from the not-yet-caught-up index is a different thing: the index answers, the fact for that one name is just not there yet, and the audit stays silent about it instead of inventing a finding.
 
 ## Filters, JSON and pacing
 
