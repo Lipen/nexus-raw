@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::http;
-use crate::scenario::{self, Scenario};
+use crate::scenario::Scenario;
 use crate::store::{lock, Outcome, ReqLog, Shared};
 
 /// Handle to a running mock server.

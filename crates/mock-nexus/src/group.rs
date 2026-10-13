@@ -8,7 +8,6 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 
 use crate::http;
-use crate::scenario;
 use crate::server::{self, Request};
 use crate::store::{Outcome, Shared};
 use crate::support::{log_request, plain};
