@@ -223,7 +223,7 @@ pub fn join(base: &str, arg: &str) -> String {
 fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
     use crate::Cmd as C;
     match &cli.command {
-        C::Get { url, .. } | C::Put { url, .. } | C::Head { url, .. } => {
+        C::Get { url, .. } | C::Put { url, .. } | C::Head { url, .. } | C::Audit { repo: url, .. } => {
             vec![std::ptr::addr_of!(*url).cast_mut()]
         }
         C::Up { dst, .. }

@@ -42,11 +42,28 @@ pub(crate) async fn dispatch(cli: &Cli) -> Result<u8, Error> {
         )
         .await;
     }
+    if let Cmd::Audit {
+        repo,
+        bytes,
+        sample,
+        prefix,
+        name,
+        workers,
+        json,
+    } = &cli.command
+    {
+        return transfer::audit(
+            cli, repo, *bytes, *sample, prefix, name, *workers, *json,
+        )
+        .await;
+    }
     run(cli).await.map(|()| 0)
 }
 
 async fn run(cli: &Cli) -> Result<(), Error> {
     match &cli.command {
+        // Routed in `dispatch` (it owns the exit-1 verdict), like `diff`.
+        Cmd::Audit { .. } => unreachable!("audit is routed in dispatch"),
         Cmd::Get {
             url,
             out,

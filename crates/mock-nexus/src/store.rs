@@ -192,6 +192,10 @@ fn initial_store(scenario: &Scenario, base_url: &str) -> HashMap<String, Vec<u8>
                 "repository/raw-main/1.0.0/dangling/app.bin.sha256".to_owned(),
                 b"aa  dangling/app.bin\n".to_vec(),
             );
+            // The unparseable class needs a full pair: bytes present, the
+            // marker body outside the digest format. Dangling is the
+            // existence verdict and outranks the body's shape.
+            store.insert("repository/raw-main/1.0.0/broken/app.bin".to_owned(), b"broken bytes".to_vec());
             store.insert(
                 "repository/raw-main/1.0.0/broken/app.bin.sha256".to_owned(),
                 b"this line is not a digest line\n".to_vec(),

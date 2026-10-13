@@ -150,6 +150,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "eula-absent" => Some(Scenario::EulaAbsent),
         "detail-in-hint" => Some(Scenario::DetailInHint),
         "ignore-range" => Some(Scenario::IgnoreRange),
+        "audit-litter" => Some(Scenario::AuditLitter),
         _ => None,
     }
 }

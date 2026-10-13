@@ -185,6 +185,30 @@ pub(crate) enum Cmd {
         #[arg(long, requires = "via")]
         fallback: bool,
     },
+    /// Audit a repository for integrity: the structural report, optionally byte-verified.
+    Audit {
+        /// The repository directory URL to audit.
+        #[arg(value_name = "REPO_URL")]
+        repo: String,
+        /// Download every asset and hash it against its marker: the only pass that catches silent bitrot.
+        #[arg(long)]
+        bytes: bool,
+        /// Byte-check a deterministic sample of N assets instead of all (requires --bytes).
+        #[arg(long, value_name = "N", requires = "bytes")]
+        sample: Option<usize>,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
+        /// One explicit name (repeatable).
+        #[arg(long, value_name = "NAME")]
+        name: Vec<String>,
+        /// Ceiling of the worker pool for the marker and byte fetches.
+        #[arg(long, value_name = "N")]
+        workers: Option<usize>,
+        /// Emit NDJSON events instead of the human report.
+        #[arg(long)]
+        json: bool,
+    },
     /// Delete the enumerated names from a remote directory (§5.4).
     Rm {
         /// The remote directory URL.

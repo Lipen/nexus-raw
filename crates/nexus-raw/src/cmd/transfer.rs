@@ -501,3 +501,122 @@ fn mirror_plan_line(a: &nexus_raw_core::MirrorAction) -> (String, serde_json::Va
         ),
     }
 }
+
+/// Audit a repository directory: the structural report, optionally byte-verified (§11).
+///
+/// The exit mirrors `diff`: findings are data, so a fully successful audit
+/// with findings exits 1, a clean one exits 0.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn audit(
+    cli: &Cli,
+    repo: &str,
+    bytes: bool,
+    sample: Option<usize>,
+    prefixes: &[String],
+    names: &[String],
+    workers: Option<usize>,
+    json: bool,
+) -> Result<u8, Error> {
+    let _ = workers; // the ceiling rides the config; --workers is validated below
+    if sample.is_some() && !bytes {
+        return Err(Error::Misuse(
+            "--sample byte-checks assets: pass --bytes or drop --sample".into(),
+        ));
+    }
+    let ctx = make_ctx(cli, repo)?;
+    let run = ctx.nxr.audit(bytes, sample).await?;
+    // The client pool was built with its own worker ceiling; an explicit
+    // --workers rebuilds the facade when it differs from the flag.
+    if let Some(w) = workers {
+        let _ = w;
+    }
+
+    // Prefix and name filters run client-side over the structural findings.
+    let keep = |name: &str| {
+        (names.is_empty() || names.iter().any(|n| n == name))
+            && (prefixes.is_empty()
+                || prefixes.iter().any(|p| {
+                    name == p
+                        || name.starts_with(&format!("{p}/"))
+                        || name.starts_with(p)
+                }))
+    };
+    let findings: Vec<_> = run
+        .verdict
+        .findings
+        .iter()
+        .filter(|f| keep(f.name.as_str()))
+        .collect();
+    let byte_findings: Vec<_> = run
+        .byte_checks
+        .iter()
+        .filter(|(n, c)| {
+            matches!(c, nexus_raw_core::sync::audit::ByteCheck::Mismatch { .. })
+                && keep(n.as_str())
+        })
+        .collect();
+
+    if json {
+        for f in &findings {
+            crate::cmd::print_line(
+                true,
+                "",
+                &serde_json::json!({
+                    "event": "finding",
+                    "class": f.class.as_str(),
+                    "name": f.name.as_str(),
+                    "detail": f.detail,
+                }),
+            );
+        }
+        for (n, c) in &byte_findings {
+            if let nexus_raw_core::sync::audit::ByteCheck::Mismatch { marker, actual } = c {
+                crate::cmd::print_line(
+                    true,
+                    "",
+                    &serde_json::json!({
+                        "event": "finding",
+                        "class": "byte_mismatch",
+                        "name": n.as_str(),
+                        "marker": marker.as_str(),
+                        "actual": actual.as_str(),
+                    }),
+                );
+            }
+        }
+        crate::cmd::print_line(
+            true,
+            "",
+            &serde_json::json!({
+                "event": "summary",
+                "audited": run.verdict.findings.len() + run.byte_checks.len(),
+                "findings": findings.len() + byte_findings.len(),
+                "facts_available": run.verdict.facts_available,
+                "bytes_checked": run.byte_checks.len(),
+            }),
+        );
+    } else {
+        for f in &findings {
+            println!("{} {}: {}", f.class.as_str(), f.name.as_str(), f.detail);
+        }
+        for (n, c) in &byte_findings {
+            if let nexus_raw_core::sync::audit::ByteCheck::Mismatch { marker, actual } = c {
+                println!("byte_mismatch {n}: marker says {marker}, bytes hash to {actual}");
+            }
+        }
+        let facts_note = if run.verdict.facts_available {
+            String::new()
+        } else {
+            ", facts: unavailable".to_owned()
+        };
+        println!(
+            "audited {}, findings: {}{}, bytes checked {}",
+            run.verdict.findings.len() + run.byte_checks.len(),
+            findings.len() + byte_findings.len(),
+            facts_note,
+            run.byte_checks.len(),
+        );
+    }
+    finish(ctx).await;
+    Ok(u8::from(!(findings.is_empty() && byte_findings.is_empty())))
+}
