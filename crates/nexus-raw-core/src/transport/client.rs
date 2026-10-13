@@ -129,6 +129,12 @@ pub struct NexusClient {
     auth: Option<String>,
     events: Progress,
     workers: Arc<Semaphore>,
+    /// The configured worker maximum: the AIMD budget never exceeds it.
+    workers_max: usize,
+    /// The run's AIMD worker budget, when one is attached (directory transfers).
+    /// Set by the facade after construction; primitive-only clients have none,
+    /// and their retry outcomes never touch a budget.
+    aimd: std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>,
 }
 
 impl NexusClient {
@@ -171,12 +177,33 @@ impl NexusClient {
             auth: cfg.auth.clone(),
             events,
             workers: Arc::new(Semaphore::new(cfg.workers)),
+            workers_max: cfg.workers,
+            aimd: std::sync::Mutex::new(None),
         })
     }
 
     #[must_use]
     pub fn workers(&self) -> Arc<Semaphore> {
         self.workers.clone()
+    }
+
+    /// The configured worker maximum.
+    #[must_use]
+    pub(crate) fn workers_max(&self) -> usize {
+        self.workers_max
+    }
+
+    /// Attach the run's AIMD worker budget: the client reports every
+    /// `Retry-After` failure and every success into it (§7).
+    /// Called by the facade once per run; the budget lives as long as the run.
+    pub fn attach_aimd(&self, limit: Arc<crate::transport::aimd::WorkerLimit>) {
+        *self.aimd.lock().expect("aimd attach lock") = Some(limit);
+    }
+
+    /// The attached budget, if any.
+    #[must_use]
+    pub(crate) fn aimd(&self) -> Option<Arc<crate::transport::aimd::WorkerLimit>> {
+        self.aimd.lock().expect("aimd attach lock").clone()
     }
 
     #[must_use]
@@ -213,10 +240,24 @@ impl NexusClient {
         loop {
             n += 1;
             match attempt(self, url).await {
-                Ok(v) => return Ok(v),
+                Ok(v) => {
+                    // A full success also recovers the run's budget (§7):
+                    // additive increase toward the configured maximum.
+                    if let Some(aimd) = self.aimd() {
+                        aimd.on_success();
+                    }
+                    return Ok(v);
+                }
                 Err(fail) if fail.retryable && n < self.retry.attempts => {
                     let reason = fail.error.to_string();
                     let pause = fail.retry_after.unwrap_or_else(|| self.retry.delay(n));
+                    // A server-mandated pause means the server is under load:
+                    // shrink the run's worker budget before the retry sleeps.
+                    if fail.retry_after.is_some() {
+                        if let Some(aimd) = self.aimd() {
+                            aimd.on_retryable();
+                        }
+                    }
                     log::warn!(
                         "retry {n}/{} for {url}: {reason} (pause {pause:?})",
                         self.retry.attempts

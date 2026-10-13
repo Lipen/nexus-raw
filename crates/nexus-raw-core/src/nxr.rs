@@ -85,6 +85,9 @@ pub struct Nxr {
     events: Progress,
     /// The normalized directory URL this invocation works on.
     base: String,
+    /// The AIMD budget of the most recent directory transfer, kept for
+    /// introspection: conformance tests assert the limit was reduced after 429s.
+    last_aimd: Arc<std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>>,
 }
 
 impl Nxr {
@@ -103,6 +106,7 @@ impl Nxr {
             workers,
             events: progress,
             base,
+            last_aimd: Arc::new(std::sync::Mutex::new(None)),
         })
     }
 
@@ -110,6 +114,25 @@ impl Nxr {
     #[must_use]
     pub fn base(&self) -> &str {
         &self.base
+    }
+
+    /// The configured worker maximum: the AIMD budget starts here and never
+    /// exceeds it.
+    #[must_use]
+    fn max_workers(&self) -> usize {
+        self.client.workers_max()
+    }
+
+    /// The worker limit of the most recent directory transfer: the current AIMD
+    /// value and the lowest value the run reached.
+    /// Test and diagnosis surface for the §7 adaptive worker budget.
+    #[must_use]
+    pub fn last_run_limit(&self) -> (usize, usize) {
+        let guard = self.last_aimd.lock().expect("last aimd lock");
+        match guard.as_ref() {
+            Some(aimd) => (aimd.limit(), aimd.min_limit()),
+            None => (self.max_workers(), self.max_workers()),
+        }
     }
 
     // ---- L0: primitives -------------------------------------------------
@@ -322,13 +345,18 @@ impl Nxr {
         .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
         .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Up);
+        // One AIMD budget per run: workers shrink on `Retry-After` (§7) and
+        // recover additively, capped at the configured maximum.
+        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+        self.client.attach_aimd(aimd.clone());
+        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
         up::execute(
             self.client.clone(),
             dir.to_owned(),
             self.base.clone(),
             actions,
             claim,
-            self.workers.clone(),
+            aimd,
         )
         .await
     }
@@ -367,13 +395,16 @@ impl Nxr {
         .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
         .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Down);
+        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+        self.client.attach_aimd(aimd.clone());
+        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
         down::execute(
             self.client.clone(),
             dir.to_owned(),
             self.base.clone(),
             actions,
             fresh,
-            self.workers.clone(),
+            aimd,
         )
         .await
     }
@@ -597,17 +628,25 @@ impl Nxr {
         // an advisory lock refuses the second run instead of corrupting the first.
         // The guard lives to the end of the run, the lock dies with it.
         let _staging_guard = acquire_staging_lock(&staging)?;
-        let result = mirror::execute(
-            self.client.clone(),
-            dst.client.clone(),
-            staging.clone(),
-            self.base.clone(),
-            dst.base.clone(),
-            actions,
-            claim,
-            self.workers.clone(),
-        )
-        .await;
+        let result = {
+            // One AIMD budget per run, covering both legs: the source GET and
+            // the destination PUT report into the same controller (§7).
+            let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+            self.client.attach_aimd(aimd.clone());
+            dst.client.attach_aimd(aimd.clone());
+            *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
+            mirror::execute(
+                self.client.clone(),
+                dst.client.clone(),
+                staging.clone(),
+                self.base.clone(),
+                dst.base.clone(),
+                actions,
+                claim,
+                aimd,
+            )
+            .await
+        };
         // A clean run consumes its staging dir.
         // A failed one keeps the parts as the rerun's resume fuel.
         if result.is_ok() {

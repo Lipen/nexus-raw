@@ -56,3 +56,11 @@ Divergence is never checked when deleting: names, not content.
 Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse, 3 transport) and [`Error::hint`], the human hint the CLI renders.
 A storage 404 (the object or version is absent) is data: exit 1 with the `Http { status: 404 }` error, never transport.
 A service-API 404 (`service repos` against a server without the management API) stays transport: exit 3 with [`Error::ServiceMissing`].
+
+The transfer worker pool is adaptive (§7 retries).
+A directory transfer (`up`, `down`, `mirror`, and `mv`'s pour) starts with as many workers as `--workers` grants.
+When a retryable request fails with a `Retry-After` (a 429), the effective limit halves at once: the run stops acquiring new workers past the reduced limit, and permits still held are surrendered as their transfers finish.
+The floor is 1 worker: some transfer always goes on.
+On a streak of successes (one step per four consecutive successes) the limit recovers one worker at a time, never exceeding the configured maximum.
+A single success after a 429 does not restore the limit: the recovery slope must fill first.
+The wire behavior is unchanged: only how many transfers run at once.

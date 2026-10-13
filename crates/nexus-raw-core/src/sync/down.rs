@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Semaphore;
 
 use crate::error::Error;
 use crate::events::{Dir, Summary};
@@ -13,6 +12,7 @@ use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path};
 use crate::sync::diff::Action;
+use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
 use sha2::Digest as _;
 
@@ -55,7 +55,7 @@ pub async fn execute(
     dir_url: String,
     actions: Vec<Action>,
     fresh: bool,
-    workers: Arc<Semaphore>,
+    workers: Arc<WorkerLimit>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
@@ -70,21 +70,33 @@ pub async fn execute(
                     .await;
             }
             Action::Download { name, size, digest } => {
-                let permit = workers
-                    .clone()
-                    .acquire_owned()
-                    .await
-                    .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+                // The AIMD budget admits the task under the current limit (§7):
+                // the permit settles with the task's outcome when it finishes.
+                let permit = workers.acquire().await.map_err(Error::misuse)?;
                 let client = client.clone();
                 let dir = dir.clone();
                 let dir_url = dir_url.clone();
+                let workers = workers.clone();
                 set.spawn(async move {
-                    let _permit = permit;
-                    match download_one(&client, &dir, &dir_url, &name, size, digest, fresh, true)
-                        .await
-                    {
-                        Ok(()) => Ok(name),
-                        Err((name, failure)) => Err((name, failure)),
+                    let result =
+                        download_one(&client, &dir, &dir_url, &name, size, digest, fresh, true)
+                            .await;
+                    // The permit is dropped first, so a decrease that landed
+                    // mid-task reclaims it in `release_*` as owed.
+                    drop(permit);
+                    if result.is_ok() {
+                        workers.release_success();
+                        Ok(name)
+                    } else {
+                        workers.release_failure();
+                        Err(result.err().unwrap_or_else(|| {
+                            (
+                                name.clone(),
+                                Failure::Failed(Error::misuse(
+                                    "internal: a failed download carried no error",
+                                )),
+                            )
+                        }))
                     }
                 });
             }

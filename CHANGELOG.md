@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `--prefix` filters the facts client-side; the report shape and exit codes are the plain `diff` ones.
   A searched asset without a search-reported digest counts as changed, never equal.
   A search refusal (400/404) refuses with the `cannot enumerate` hint naming the search API, or with `--fallback` degrades explicitly: a warning line, then the probe-based report over `--ls` or explicit names.
+- Adaptive transfer workers (AIMD): a directory transfer starts with `--workers` and halves its in-flight capacity whenever a request fails with a `Retry-After` (a 429), reclaiming permits still held as their transfers finish.
+  On a streak of successes the limit recovers one worker per step, never above the configured maximum.
+  A lone success after a 429 does not snap the limit back: the recovery slope must fill first.
+  The floor is 1 worker and the wire behavior is unchanged.
 
 ## [0.13.0] - 2026-10-12
 

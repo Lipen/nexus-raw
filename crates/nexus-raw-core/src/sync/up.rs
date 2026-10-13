@@ -3,14 +3,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tokio::sync::Semaphore;
-
 use crate::error::Error;
 use crate::events::{Dir, Summary};
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path, LocalStatus};
 use crate::sync::diff::Action;
+use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
 
 /// Upload the artifacts: bytes first, then the marker of the same name.
@@ -28,7 +27,7 @@ pub async fn execute(
     dir_url: String,
     actions: Vec<Action>,
     claim: Option<ArtifactName>,
-    workers: Arc<Semaphore>,
+    workers: Arc<WorkerLimit>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
@@ -69,19 +68,27 @@ pub async fn execute(
                     .await;
             }
             Action::Upload { name, size, digest } => {
-                let permit = workers
-                    .clone()
-                    .acquire_owned()
-                    .await
-                    .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+                // The AIMD budget admits the task under the current limit (§7):
+                // the permit settles with the task's outcome when it finishes.
+                let permit = workers.acquire().await.map_err(Error::misuse)?;
                 let client = client.clone();
                 let dir = dir.clone();
                 let dir_url = dir_url.clone();
+                let workers = workers.clone();
                 set.spawn(async move {
-                    let _permit = permit;
-                    match upload_one(&client, &dir, &dir_url, &name, size, digest, true).await {
-                        Ok(()) => Ok(name),
-                        Err(e) => Err((name.to_string(), e)),
+                    let result = upload_one(&client, &dir, &dir_url, &name, size, digest, true).await;
+                    // The permit is dropped first, so a decrease that landed
+                    // mid-task reclaims it in `release_*` as owed.
+                    drop(permit);
+                    if result.is_ok() {
+                        workers.release_success();
+                        Ok(name)
+                    } else {
+                        let e = result.err().unwrap_or_else(|| {
+                            Error::misuse("internal: a failed upload carried no error")
+                        });
+                        workers.release_failure();
+                        Err((name.to_string(), e))
                     }
                 });
             }

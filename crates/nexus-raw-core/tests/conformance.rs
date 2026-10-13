@@ -1976,6 +1976,50 @@ async fn rate_limited_up_recovers_in_one_invocation() {
 }
 
 #[tokio::test]
+async fn rate_limited_up_shrinks_the_worker_budget_and_recovers() {
+    // The first requests per path answer 429 with a Retry-After: the run's AIMD
+    // budget must shrink below its start (workers 4), and the transfer still
+    // lands completely. The final limit may already have recovered, so the
+    // deterministic assertion is on the lowest limit the run reached (§7).
+    let mock = MockNexus::start(Scenario::RateLimit {
+        first_429s: 3,
+        retry_after_secs: 1,
+    })
+    .unwrap();
+    let local = TempDir::new().unwrap();
+    for n in ["a.zip", "b.zip", "c.zip", "d.zip"] {
+        seed_complete(local.path(), n, CONTENT);
+    }
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut cfg = config(&mock, None);
+    cfg.workers = 4;
+    let nxr = Nxr::new(cfg, tx).unwrap();
+
+    let summary = nxr.up(local.path(), None, true, None).await.unwrap();
+    assert_eq!(summary.uploaded, 4);
+    assert!(summary.failed.is_empty());
+    assert_eq!(
+        mock.store_get(&format!("{VERSION}/d.zip")).unwrap(),
+        CONTENT
+    );
+
+    // The run saw 429s, so the trajectory dipped below the configured 4.
+    let (final_limit, min_limit) = nxr.last_run_limit();
+    let retried = collect_events(&mut rx)
+        .into_iter()
+        .any(|e| matches!(e, Event::Retrying { .. }));
+    assert!(retried, "the scenario must have produced 429 retries");
+    assert!(
+        min_limit < 4,
+        "the worker budget must shrink on Retry-After, got min {min_limit}"
+    );
+    assert!(
+        final_limit <= 4,
+        "the budget never exceeds the configured maximum"
+    );
+}
+
+#[tokio::test]
 async fn auth_403_surfaces_as_the_auth_error() {
     // auth-403 answers 403 to every unauthenticated request: the client maps it onto the auth error (exit 3), like a 401.
     let mock = MockNexus::start(Scenario::Auth403 {

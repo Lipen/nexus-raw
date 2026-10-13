@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sha2::Digest as _;
-use tokio::sync::Semaphore;
 
 use crate::error::{Error, Verdict};
 use crate::events::{Dir, Summary};
@@ -21,6 +20,7 @@ use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path, RemoteStatus};
 use crate::sync::down::{self, Failure};
 use crate::sync::up;
+use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
 
 /// The conventional version-document name.
@@ -184,7 +184,7 @@ pub(crate) async fn execute(
     dst_url: String,
     actions: Vec<MirrorAction>,
     claim: Option<ArtifactName>,
-    workers: Arc<Semaphore>,
+    workers: Arc<WorkerLimit>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
     let mut claim_action: Option<MirrorAction> = None;
@@ -234,19 +234,31 @@ pub(crate) async fn execute(
                     .await;
             }
             copy @ MirrorAction::Copy { .. } => {
-                let permit = workers
-                    .clone()
-                    .acquire_owned()
-                    .await
-                    .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+                // The AIMD budget admits the task under the current limit (§7):
+                // the permit settles with the task's outcome when it finishes.
+                let permit = workers.acquire().await.map_err(Error::misuse)?;
                 let client = client.clone();
                 let dst_client = dst_client.clone();
                 let staging = staging.clone();
                 let src_url = src_url.clone();
                 let dst_url = dst_url.clone();
+                let workers = workers.clone();
                 set.spawn(async move {
-                    let _permit = permit;
-                    copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &copy).await
+                    let result =
+                        copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &copy).await;
+                    // The permit is dropped first, so a decrease that landed
+                    // mid-task reclaims it in `release_*` as owed.
+                    drop(permit);
+                    match result {
+                        Ok(v) => {
+                            workers.release_success();
+                            Ok(v)
+                        }
+                        Err((name, failure)) => {
+                            workers.release_failure();
+                            Err((name, failure))
+                        }
+                    }
                 });
             }
         }
