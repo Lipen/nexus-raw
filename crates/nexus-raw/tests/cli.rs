@@ -1183,15 +1183,16 @@ fn alias_mirror_two_remotes() {
         &[],
     );
     expect_exit(&mirror, 0, "the mirror pours through two aliases");
+    let check = TempDir::new().unwrap();
+    let check_path = check.path().join("alias-mirror-check.bin");
     let back = nxr(&[
         "get",
         &format!("{}1.14.0/a.zip", dst_srv.base_url()),
         "-o",
-        "/tmp/alias-mirror-check.bin",
+        check_path.to_str().unwrap(),
     ]);
     expect_exit(&back, 0, "the artifact landed on the destination");
-    assert_eq!(std::fs::read("/tmp/alias-mirror-check.bin").unwrap(), ALPHA);
-    let _ = std::fs::remove_file("/tmp/alias-mirror-check.bin");
+    assert_eq!(std::fs::read(&check_path).unwrap(), ALPHA);
 }
 
 /// doctor through an alias: the URL expands, and the credential source line

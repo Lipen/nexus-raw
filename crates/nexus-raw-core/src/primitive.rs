@@ -277,13 +277,16 @@ pub async fn get_segmented(
     // Every segment spans at least one byte; spans are `total / segments` sized with
     // the remainder spread over the leading segments.
     let base = total / segments as u64;
+    let segments = if base == 0 {
+        // The object is smaller than the segment count: one segment per byte,
+        // computed iteratively (a recursive degrade re-entered this huge frame
+        // on the same stack and overflowed the default windows thread stack).
+        total as usize
+    } else {
+        segments
+    };
+    let base = total / segments as u64;
     let rem = total % segments as u64;
-    if base == 0 {
-        // The object is smaller than the segment count: degrade to one segment per byte,
-        // the exact download either way.
-        let eff = total as usize;
-        return Box::pin(get_segmented(client, url, out, eff, events)).await;
-    }
     let staging = temp_staging_dir(out).await?;
     let part = part_of(out);
     let mut bounds: Vec<(u64, u64)> = Vec::with_capacity(segments);
