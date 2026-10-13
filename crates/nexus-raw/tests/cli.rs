@@ -1705,47 +1705,66 @@ fn golden_ndjson_doctor_holds() {
 /// A clap tree change (a command, a flag, a help text) deliberately breaks them;
 /// regenerate with `cargo run -p nexus-raw -- complete <shell> > <fixture>` and commit on purpose.
 /// The scripts are deterministic: no ports, no timestamps, no environment.
+/// A platform-flavored render (an `.exe` in the program name, a path separator) fails here
+/// with the first differing lines printed, so the flavor is visible from the CI log alone.
+fn assert_golden(actual: &str, fixture: &str, what: &str) {
+    let expected = include_str!(concat!("golden/", fixture));
+    if actual == expected {
+        return;
+    }
+    let actual_lines: Vec<&str> = actual.lines().collect();
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let mut diffs = String::new();
+    for (i, (a, e)) in actual_lines
+        .iter()
+        .zip(expected_lines.iter())
+        .enumerate()
+        .filter(|(a, e)| a != e)
+        .take(6)
+    {
+        diffs.push_str(&format!("line {}: actual {a:?} != expected {e:?}\n", i + 1));
+    }
+    if actual_lines.len() != expected_lines.len() {
+        diffs.push_str(&format!(
+            "line count: actual {} != expected {}\n",
+            actual_lines.len(),
+            expected_lines.len()
+        ));
+    }
+    panic!(
+        "{what} changed: update tests/golden/{fixture} deliberately\nplatform flavor:\n{diffs}"
+    );
+}
+
 #[test]
 fn golden_complete_bash_holds() {
     let out = nxr(&["complete", "bash"]);
     expect_exit(&out, 0, "golden complete bash");
-    assert_eq!(
-        stdout(&out),
-        include_str!("golden/complete-bash.txt"),
-        "the bash completion changed: update tests/golden/complete-bash.txt deliberately"
-    );
+    assert_golden(&stdout(&out), "complete-bash.txt", "the bash completion");
 }
 
 #[test]
 fn golden_complete_zsh_holds() {
     let out = nxr(&["complete", "zsh"]);
     expect_exit(&out, 0, "golden complete zsh");
-    assert_eq!(
-        stdout(&out),
-        include_str!("golden/complete-zsh.txt"),
-        "the zsh completion changed: update tests/golden/complete-zsh.txt deliberately"
-    );
+    assert_golden(&stdout(&out), "complete-zsh.txt", "the zsh completion");
 }
 
 #[test]
 fn golden_complete_fish_holds() {
     let out = nxr(&["complete", "fish"]);
     expect_exit(&out, 0, "golden complete fish");
-    assert_eq!(
-        stdout(&out),
-        include_str!("golden/complete-fish.txt"),
-        "the fish completion changed: update tests/golden/complete-fish.txt deliberately"
-    );
+    assert_golden(&stdout(&out), "complete-fish.txt", "the fish completion");
 }
 
 #[test]
 fn golden_complete_powershell_holds() {
     let out = nxr(&["complete", "powershell"]);
     expect_exit(&out, 0, "golden complete powershell");
-    assert_eq!(
-        stdout(&out),
-        include_str!("golden/complete-powershell.txt"),
-        "the powershell completion changed: update tests/golden/complete-powershell.txt deliberately"
+    assert_golden(
+        &stdout(&out),
+        "complete-powershell.txt",
+        "the powershell completion",
     );
 }
 
