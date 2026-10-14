@@ -165,20 +165,17 @@ bump part:
 
 # The whole release act: bump, changelog, push, dispatch, watch. A repeat
 # call for the same number is the recovery path: the version step is
-# idempotent, the changelog date refreshes to today, the guards in the
-# workflow skip whatever is already published.
-# The real run bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.
+# idempotent, the changelog date refreshes to today, the guards rerun.
+# The preview is the safe default: `just release 0.6.0` prints the plan.
+# The real run goes through the script: `scripts/release.sh 0.6.0 --yes`.
 [doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
 release *args:
     #!/bin/sh
     set -eu
-    # just (1.58) swallows every `-`-leading argument after the recipe name, and
-    # even a positional placed after it: `just release 0.15.0 --dry` loses both.
-    # The working paths for a full release are the env variable or the script:
-    #   RELEASE_ARGS="--yes" just release 0.15.0
-    #   scripts/release.sh 0.15.0 --yes
-    # A swallowed --yes degrades the run to a preview, which is the safe direction.
+    # just (1.58) swallows every `-`-leading argument after the recipe name, so
+    # `--yes` cannot reach the script through here: the recipe stays a preview.
+    # The full release is a direct call: scripts/release.sh X.Y.Z --yes
     exec scripts/release.sh "$@"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
