@@ -126,6 +126,12 @@ pub(crate) enum Cmd {
         /// Skip names whose remote marker digest already equals the local copy, re-upload the changed rest.
         #[arg(long)]
         if_changed: bool,
+        /// After the run, poll the search index until every uploaded name is visible (the index lags behind writes on a real server).
+        #[arg(long)]
+        wait_index: bool,
+        /// The visibility wait budget for --wait-index.
+        #[arg(long, value_name = "SECS", default_value_t = 30)]
+        index_timeout: u64,
         /// Print the plan without transferring anything.
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,

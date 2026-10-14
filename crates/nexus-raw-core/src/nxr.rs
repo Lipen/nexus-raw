@@ -1045,6 +1045,64 @@ impl Nxr {
         layout::ls::search_assets(&self.client, &self.base).await
     }
 
+    /// Poll the search index until every given name is visible, or the budget runs out.
+    ///
+    /// The search index on a real server lags behind completed writes by seconds;
+    /// a consumer that reads through search right after `up` sees a stale world.
+    /// The poll asks for the full asset list every 500ms and counts how many of
+    /// `names` are present. The returned count may be lower than `names.len()`:
+    /// the caller decides whether that is a warning or a failure, and the upload
+    /// itself has already succeeded either way.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Enumerate`] when the search endpoint is unavailable (the
+    /// wait is pointless there: the run cannot confirm visibility at all).
+    pub async fn wait_search_visible(
+        &self,
+        names: &[ArtifactName],
+        timeout_secs: u64,
+    ) -> Result<usize, Error> {
+        if names.is_empty() {
+            return Ok(0);
+        }
+        // The repo name for the search endpoint: the segment after
+        // `/repository/` when the base carries one, else the first path
+        // segment (the mock and plain static hosts serve the repository
+        // from the origin root).
+        let url = reqwest::Url::parse(&self.base)
+            .map_err(|e| Error::misuse(format!("base URL: {e}")))?;
+        let segs: Vec<&str> = url.path().split('/').filter(|s| !s.is_empty()).collect();
+        let repo = match segs.iter().position(|s| *s == "repository") {
+            Some(i) if i + 1 < segs.len() => segs[i + 1].to_owned(),
+            _ => (*segs.first().unwrap_or(&"raw-main")).to_owned(),
+        };
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+        // Search reports repo-relative paths (`/<group…>/<version>/<name>`):
+        // a watched name is watched as a path suffix `/<last-segment>/<name>`,
+        // which holds for a directory URL at any depth.
+        let version_dir = segs.last().copied().unwrap_or_default();
+        let mut visible: usize;
+        loop {
+            // The full asset page set for the repository, filtered client-side
+            // to the watched names: the watch is a visibility check, not an
+            // enumeration, so a marker or a foreign path in the answer is noise.
+            let present: std::collections::HashSet<String> =
+                layout::ls::search_paths(&self.client, &self.base, &repo).await?;
+            visible = names
+                .iter()
+                .filter(|n| present.contains(&format!("/{version_dir}/{}", n.as_str())))
+                .count();
+            if visible == names.len() {
+                return Ok(visible);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Ok(visible);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+
     // ---- internals ---------------------------------------------------------
 
     /// Remote states for the given names, in order.

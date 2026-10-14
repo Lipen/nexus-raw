@@ -38,6 +38,7 @@ impl Scenario {
             Scenario::AssetsPrefixQ => "assets-prefix-q",
             Scenario::EulaGate => "eula-gate",
             Scenario::EulaAbsent => "eula-absent",
+            Scenario::SearchLag { .. } => "search-lag",
             Scenario::DetailInHint => "detail-in-hint",
             Scenario::IgnoreRange => "ignore-range",
             Scenario::AuditLitter => "audit-litter",
@@ -201,6 +202,11 @@ pub enum Scenario {
     /// `/v1/system/eula` answers 404: no gate on this server (pre-3.79 CE, PRO).
     /// Storage behavior is [`Scenario::Atomic`].
     EulaAbsent,
+    /// The search index lags behind writes: for `lag_ms` after the first PUT of a run,
+    /// `/service/rest/v1/search/assets` serves the empty page; afterwards it serves the
+    /// store-backed answer like [`Scenario::Atomic`]. The first PUT starts the clock.
+    /// Storage behavior is [`Scenario::Atomic`].
+    SearchLag { lag_ms: u64 },
     /// Writes answer `403` with a short `please ask the administrator` body, so the client hint carries the server detail.
     /// Storage reads behave like [`Scenario::Atomic`].
     DetailInHint,

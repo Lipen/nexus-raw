@@ -250,6 +250,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "assets-prefix-q" => Some(Scenario::AssetsPrefixQ),
         "eula-gate" => Some(Scenario::EulaGate),
         "eula-absent" => Some(Scenario::EulaAbsent),
+        "search-lag" => Some(Scenario::SearchLag { lag_ms: 6000 }),
         "detail-in-hint" => Some(Scenario::DetailInHint),
         "ignore-range" => Some(Scenario::IgnoreRange),
         "audit-litter" => Some(Scenario::AuditLitter),

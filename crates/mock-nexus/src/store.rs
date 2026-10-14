@@ -53,6 +53,9 @@ pub(crate) struct Shared {
     pub(crate) auth_b64: Option<String>,
     /// Whether the EULA gate has been opened (eula-gate scenario only).
     pub(crate) eula_accepted: Mutex<bool>,
+    /// The moment the search index catches up (search-lag scenario only):
+    /// `None` means no lag is armed, `Some(instant)` is when answers go store-backed.
+    pub(crate) search_caught_up_at: Mutex<Option<std::time::Instant>>,
     /// Slow-drip parameters for GET/HEAD bodies.
     pub(crate) drip: Option<Drip>,
     /// Success GET/HEAD answers hide `Content-Length` (the proxy case).
@@ -110,6 +113,7 @@ impl Shared {
             drift: AtomicBool::new(false),
             auth_b64,
             eula_accepted: Mutex::new(false),
+            search_caught_up_at: Mutex::new(None),
             drip,
             sizeless,
             partial_first_put,

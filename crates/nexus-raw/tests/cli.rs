@@ -3620,3 +3620,67 @@ fn up_if_changed_reups_when_the_remote_marker_is_missing() {
     );
     assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
 }
+
+// ---- search lag -----------------------------------------------------------
+
+/// `up --wait-index` holds the run until the lagging search index surfaces every
+/// uploaded name; the default run without the flag answers before the index does.
+#[test]
+fn up_wait_index_survives_the_search_lag() {
+    let srv = server(Scenario::SearchLag { lag_ms: 1500 });
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    let run = nxr(&[
+        "up",
+        "--wait-index",
+        "--index-timeout",
+        "10",
+        src.path().to_str().unwrap(),
+        &base,
+        "--json",
+    ]);
+    expect_exit(&run, 0, "the wait ends with every name visible");
+    let lines = ndjson(&run);
+    let wait = lines
+        .iter()
+        .find_map(|l| l.get("search_wait"))
+        .expect("a search_wait event is emitted");
+    assert_eq!(wait["visible"], 1, "the name surfaces within the budget");
+    assert_eq!(wait["total"], 1);
+    assert_eq!(wait["timeout"], false, "the catch-up beat the budget");
+}
+
+/// A search that never catches up degrades `up --wait-index` to a warning line
+/// and still exits zero: the upload itself has succeeded.
+#[test]
+fn up_wait_index_timeout_is_a_warning_not_a_failure() {
+    // The lag only arms on the first PUT, so this run waits the full budget
+    // against an index that catches up 1500ms after that PUT and then serves
+    // the name: a passing wait. To pin the timeout branch without a slow test,
+    // the budget is shorter than the lag.
+    let srv = server(Scenario::SearchLag { lag_ms: 10_000 });
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    let run = nxr(&[
+        "up",
+        "--wait-index",
+        "--index-timeout",
+        "1",
+        src.path().to_str().unwrap(),
+        &base,
+        "--json",
+    ]);
+    expect_exit(&run, 0, "a visibility timeout is not a failure");
+    let lines = ndjson(&run);
+    let wait = lines
+        .iter()
+        .find_map(|l| l.get("search_wait"))
+        .expect("a search_wait event is emitted");
+    assert_eq!(wait["visible"], 0);
+    assert_eq!(wait["total"], 1);
+    assert_eq!(wait["timeout"], true, "the budget expired");
+}

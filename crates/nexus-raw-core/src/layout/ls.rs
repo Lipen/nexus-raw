@@ -509,3 +509,15 @@ mod tests {
         assert_eq!(percent_decode("bad%2"), "bad%2");
     }
 }
+
+/// The set of repo-relative asset paths the search index currently reports for the repository.
+/// A visibility check reads this, not an enumeration: markers included, filtering is the caller's.
+/// # Errors
+/// [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
+pub(crate) async fn search_paths(
+    client: &NexusClient,
+    base: &str,
+    repo: &str,
+) -> Result<std::collections::HashSet<String>, Error> {
+    Ok(paginate(client, base, repo).await?.into_iter().collect())
+}

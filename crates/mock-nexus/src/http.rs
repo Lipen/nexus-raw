@@ -308,6 +308,34 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                 }
                 Scenario::AuditLitter => Some(audit_litter_page(shared)),
                 Scenario::AssetsAbsent => Some(plain(404, b"not found\n", None)),
+                Scenario::SearchLag { .. } => {
+                    let caught_up = lock(&shared.search_caught_up_at)
+                        .is_some_and(|t| std::time::Instant::now() >= t);
+                    if !caught_up {
+                        Some(plain(200, br#"{"items": [], "continuationToken": null}"#, None))
+                    } else {
+                        // Store-backed: one item per stored object, markers included,
+                        // the same shape the search API reports.
+                        let base = base_of(shared);
+                        let keys: Vec<String> = lock(&shared.store)
+                            .keys()
+                            .cloned()
+                            .collect();
+                        let items: Vec<String> = keys
+                            .iter()
+                            .map(|k| {
+                                format!(
+                                    "{{\"downloadUrl\":\"{base}repository/raw-main/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
+                                )
+                            })
+                            .collect();
+                        let body = format!(
+                            "{{\"items\": [{}], \"continuationToken\": null}}",
+                            items.join(", ")
+                        );
+                        Some(plain(200, body.as_bytes(), None))
+                    }
+                }
                 _ => None,
             },
             _ => None,
@@ -343,6 +371,17 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
             let _ = server::write_response(stream, &resp);
         }
         return;
+    }
+
+    // search-lag: the first storage PUT arms the catch-up deadline; the index
+    // serves the empty page until it passes, then the store-backed answer.
+    if let Scenario::SearchLag { lag_ms } = shared.scenario {
+        if req.method == "PUT" && !path.starts_with("service/rest/v1/") {
+            let mut armed = lock(&shared.search_caught_up_at);
+            if armed.is_none() {
+                *armed = Some(std::time::Instant::now() + std::time::Duration::from_millis(lag_ms));
+            }
+        }
     }
 
     // eula-gate: writes are refused with the EULA body until the gate is opened by echoing the disclaimer.

@@ -23,11 +23,13 @@ pub(crate) async fn up(
     claim: Option<ArtifactName>,
     no_sha: bool,
     if_changed: bool,
+    wait_index: bool,
+    index_timeout: u64,
     plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, claim, no_sha, if_changed, plan).await;
+    let result = run_up(&ctx, src, claim, no_sha, if_changed, wait_index, index_timeout, plan).await;
     finish(ctx).await;
     result
 }
@@ -38,6 +40,8 @@ async fn run_up(
     claim: Option<ArtifactName>,
     no_sha: bool,
     if_changed: bool,
+    wait_index: bool,
+    index_timeout: u64,
     plan: bool,
 ) -> Result<(), Error> {
     if plan {
@@ -53,11 +57,28 @@ async fn run_up(
     }
     if if_changed {
         ctx.nxr.up_if_changed(src, None, !no_sha, claim).await?;
-        return Ok(());
+    } else {
+        // The Summary event is the single source for totals: the renderer prints it in both modes.
+        // Printing a second copy here raced the renderer.
+        ctx.nxr.up(src, None, !no_sha, claim).await?;
     }
-    // The Summary event is the single source for totals: the renderer prints it in both modes.
-    // Printing a second copy here raced the renderer.
-    ctx.nxr.up(src, None, !no_sha, claim).await?;
+    if wait_index {
+        let names = ctx.nxr.scan(src)?;
+        let waited = ctx.nxr.wait_search_visible(&names, index_timeout).await?;
+        let total = names.len();
+        let line = format!("search visibility: {waited}/{total}");
+        if waited == total {
+            crate::cmd::print_line(ctx.json, &line, &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": false}}));
+        } else {
+            // The upload already succeeded: the missing visibility is a
+            // degraded guarantee, a warning, never a failure.
+            crate::cmd::print_line(
+                ctx.json,
+                &format!("{line} (warning: the index did not surface the rest within {index_timeout}s)"),
+                &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": true}}),
+            );
+        }
+    }
     Ok(())
 }
 

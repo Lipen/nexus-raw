@@ -431,6 +431,42 @@ async fn deep_probes(
         )),
     }
 
+    // eula gate: the CE 3.79+ write gate, strictly read-only (a GET).
+    // A 404 means the server predates the gate; 401/403 means the probe
+    // needs admin rights, which is a skip, not a finding.
+    let eula_url = format!("{root}/service/rest/v1/system/eula");
+    match client.get_small(&eula_url).await {
+        Ok(Some(body)) => {
+            let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
+            match parsed.as_ref().and_then(|v| v["accepted"].as_bool()) {
+                Some(true) => {
+                    out.push(("deep:eula", true, "accepted (writes are not gated)".to_owned()))
+                }
+                Some(false) => out.push((
+                    "deep:eula",
+                    true,
+                    "warning: not accepted (writes answer 403 with the EULA body until POST /service/rest/v1/system/eula echoes the disclaimer back)".to_owned(),
+                )),
+                None => out.push((
+                    "deep:eula",
+                    true,
+                    "skipped: the endpoint answered without an accepted field".to_owned(),
+                )),
+            }
+        }
+        Ok(None) => out.push(("deep:eula", true, "skipped: empty answer".to_owned())),
+        Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
+            "deep:eula",
+            true,
+            "skipped: the endpoint is absent (404: no EULA gate on this server)".to_owned(),
+        )),
+        Err(_) => out.push((
+            "deep:eula",
+            true,
+            "skipped: the endpoint refused the probe (admin rights are required; the refusal is not a finding)".to_owned(),
+        )),
+    }
+
     Ok(out)
 }
 

@@ -195,6 +195,7 @@ impl From<&Scenario> for Spec {
             Scenario::AssetsPrefixQ => {}
             Scenario::EulaGate => {}
             Scenario::EulaAbsent => {}
+            Scenario::SearchLag { .. } => {}
             Scenario::DetailInHint => {}
             Scenario::IgnoreRange => spec.ignore_range = true,
             Scenario::AuditLitter => {}
