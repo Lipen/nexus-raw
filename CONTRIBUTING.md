@@ -56,7 +56,7 @@ The recorded session in `docs/assets/cast/` is the exception: it names the binar
 
 ```bash
 just release X.Y.Z          # preview: a summary of the expected act, nothing is pushed
-scripts/release.sh X.Y.Z --yes   # the real thing: bump, changelog, push, publish, tag
+just release X.Y.Z --yes    # the real thing: bump, changelog, push, publish, tag
 ```
 
 `just release X.Y.Z` prints what the release would do: the version move, the changelog section it would finalize, warnings about a dirty tree, an existing tag or a version already on crates.io, and the pipeline order.

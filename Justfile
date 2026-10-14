@@ -168,14 +168,13 @@ bump part:
 # idempotent, the changelog date refreshes to today, the guards rerun.
 # The preview is the safe default: `just release 0.6.0` prints the plan.
 # The real run goes through the script: `scripts/release.sh 0.6.0 --yes`.
-[doc('Release X.Y.Z: a preview. The real run is scripts/release.sh X.Y.Z --yes. -h for the usage.')]
+[doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
 release *args:
     #!/bin/sh
     set -eu
-    # just (1.58) swallows every `-`-leading argument after the recipe name, so
-    # `--yes` cannot reach the script through here: the recipe stays a preview.
-    # The full release is a direct call: scripts/release.sh X.Y.Z --yes
+    # With the positional-arguments setting every argument reaches the script,
+    # `-h` and `--yes` included.
     exec scripts/release.sh "$@"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
