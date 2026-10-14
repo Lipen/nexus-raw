@@ -293,6 +293,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         invariant: "An absent gate is a success-shaped `gate: false`: the ensure pass is a no-op with exit 0, never an error.",
     },
     ScenarioDoc {
+        id: "search-lag",
+        name: "The search index lags behind writes.",
+        behavior: &[
+            "The first storage PUT arms a catch-up deadline (6000 ms).",
+            "`GET /service/rest/v1/search/assets` answers the empty page until the deadline passes, then a store-backed listing.",
+        ],
+        invariant: "up --wait-index holds the run until the uploaded names surface in the search answer and reports the wait; an expired budget is a warning line, never a failed exit.",
+    },
+    ScenarioDoc {
         id: "detail-in-hint",
         name: "A write refusal carries a short server sentence.",
         behavior: &["Every write answers `403` with a `please ask the administrator` body. Reads behave like `atomic`."],

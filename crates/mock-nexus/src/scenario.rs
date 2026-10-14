@@ -77,6 +77,7 @@ pub const SCENARIOS: &[&str] = &[
     "assets-prefix-q",
     "eula-gate",
     "eula-absent",
+    "search-lag",
     "detail-in-hint",
     "ignore-range",
     // wave-150 tail
