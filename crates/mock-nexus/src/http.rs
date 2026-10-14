@@ -312,7 +312,11 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                     let caught_up = lock(&shared.search_caught_up_at)
                         .is_some_and(|t| std::time::Instant::now() >= t);
                     if !caught_up {
-                        Some(plain(200, br#"{"items": [], "continuationToken": null}"#, None))
+                        Some(plain(
+                            200,
+                            br#"{"items": [], "continuationToken": null}"#,
+                            None,
+                        ))
                     } else {
                         // Store-backed: one item per stored object, markers included,
                         // repo-relative paths, the shape the search API reports.

@@ -744,6 +744,36 @@ impl Nxr {
         self.resolve_names(enum_src).await
     }
 
+    /// The tokens of every channel ref file sitting directly at this base.
+    ///
+    /// A ref is a top-level *file* of the base; its one-line content is a token
+    /// that usually names a version. A file that reads empty contributes
+    /// nothing, and read failures are silently ignored: protection is best
+    /// effort, the run itself never fails because a ref refused to read.
+    async fn channel_tokens_at_base(&self) -> Result<Vec<String>, Error> {
+        let mut out = Vec::new();
+        let entries = self.ls_entries().await;
+        let Ok(entries) = entries else {
+            return Ok(out);
+        };
+        for e in entries
+            .iter()
+            .filter(|e| e.kind == layout::ls::EntryKind::File)
+        {
+            if let Ok(Some(body)) = self
+                .client
+                .get_small(&format!("{}{}", self.base, encode_rel(&e.name)))
+                .await
+            {
+                let token = String::from_utf8_lossy(&body).trim().to_owned();
+                if !token.is_empty() {
+                    out.push(token);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// The retention plan for `clean`: the versions to delete so that only the
     /// `keep` newest remain, with the names each doomed version carries.
     ///
@@ -755,14 +785,38 @@ impl Nxr {
     ///
     /// Returns [`Error::Enumerate`] when the search endpoint is unavailable.
     pub async fn clean_plan(&self, keep: usize) -> Result<Vec<(String, Vec<ArtifactName>)>, Error> {
-        let versions = layout::ls::search_versions(&self.client, &self.base).await?;
-        let doomed = if versions.len() <= keep {
-            &[][..]
-        } else {
-            &versions[..versions.len() - keep]
+        let mut versions = layout::ls::search_versions(&self.client, &self.base).await?;
+        // search_versions returns lexicographic order (a BTreeSet); retention
+        // promises dotted-numeric newest-first thinking, so the sort is ours:
+        // `sort_by` with the protocol comparator, ascending, oldest first.
+        versions.sort_by(|a, b| {
+            if crate::model::pointer::version_ge(a, b) {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Less
+            }
+        });
+        let keep = keep.min(versions.len());
+        let mut doomed: Vec<String> = versions[..versions.len() - keep].to_vec();
+        // A top-level file at the base is a channel ref, not a version: it
+        // never enters the plan, and the version its token names is protected
+        // (dangling a channel is worse than keeping an extra version).
+        let files: std::collections::BTreeSet<String> = match self.ls_entries().await {
+            Ok(entries) => entries
+                .iter()
+                .filter(|e| e.kind == layout::ls::EntryKind::File)
+                .map(|e| e.name.clone())
+                .collect(),
+            Err(_) => Default::default(),
         };
+        doomed.retain(|v| !files.contains(v));
+        if !doomed.is_empty() {
+            let protected: std::collections::BTreeSet<String> =
+                self.channel_tokens_at_base().await?.into_iter().collect();
+            doomed.retain(|v| !protected.contains(v));
+        }
         let mut plan = Vec::new();
-        for v in doomed {
+        for v in &doomed {
             let prefix = crate::model::name::NamePrefix::parse(&format!("{v}/"))?;
             let names = self
                 .resolve_names(Enumeration::Filtered {
@@ -1103,8 +1157,8 @@ impl Nxr {
         // `/repository/` when the base carries one, else the first path
         // segment (the mock and plain static hosts serve the repository
         // from the origin root).
-        let url = reqwest::Url::parse(&self.base)
-            .map_err(|e| Error::misuse(format!("base URL: {e}")))?;
+        let url =
+            reqwest::Url::parse(&self.base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;
         let segs: Vec<&str> = url.path().split('/').filter(|s| !s.is_empty()).collect();
         let repo = match segs.iter().position(|s| *s == "repository") {
             Some(i) if i + 1 < segs.len() => segs[i + 1].to_owned(),

@@ -29,7 +29,17 @@ pub(crate) async fn up(
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, claim, no_sha, if_changed, wait_index, index_timeout, plan).await;
+    let result = run_up(
+        &ctx,
+        src,
+        claim,
+        no_sha,
+        if_changed,
+        wait_index,
+        index_timeout,
+        plan,
+    )
+    .await;
     finish(ctx).await;
     result
 }
@@ -68,13 +78,19 @@ async fn run_up(
         let total = names.len();
         let line = format!("search visibility: {waited}/{total}");
         if waited == total {
-            crate::cmd::print_line(ctx.json, &line, &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": false}}));
+            crate::cmd::print_line(
+                ctx.json,
+                &line,
+                &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": false}}),
+            );
         } else {
             // The upload already succeeded: the missing visibility is a
             // degraded guarantee, a warning, never a failure.
             crate::cmd::print_line(
                 ctx.json,
-                &format!("{line} (warning: the index did not surface the rest within {index_timeout}s)"),
+                &format!(
+                    "{line} (warning: the index did not surface the rest within {index_timeout}s)"
+                ),
                 &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": true}}),
             );
         }
@@ -673,7 +689,11 @@ async fn run_clean(ctx: &Ctx, keep: usize, yes: bool) -> Result<(), Error> {
         let hint = format!(
             "dry run: {doomed_versions} version(s), {doomed_names} name(s); rerun with --yes to delete"
         );
-        crate::cmd::print_line(ctx.json, &hint, &serde_json::json!({"clean": {"versions": doomed_versions, "names": doomed_names, "dry": true}}));
+        crate::cmd::print_line(
+            ctx.json,
+            &hint,
+            &serde_json::json!({"clean": {"versions": doomed_versions, "names": doomed_names, "dry": true}}),
+        );
         return Ok(());
     }
     let mut deleted = 0usize;
@@ -702,7 +722,9 @@ async fn run_clean(ctx: &Ctx, keep: usize, yes: bool) -> Result<(), Error> {
         &serde_json::json!({"clean": {"versions": doomed_versions, "names": deleted, "failed": failed, "dry": false}}),
     );
     if failed > 0 {
-        return Err(Error::Misuse(format!("{failed} version(s) failed to delete")));
+        return Err(Error::Misuse(format!(
+            "{failed} version(s) failed to delete"
+        )));
     }
     Ok(())
 }
