@@ -252,7 +252,7 @@ Version directories are never reused, which is what keeps re-runs, resume and fo
 
     Transfers never delete.
     `nxr rm` is the deliberate exception ([the CLI reference](../reference/cli.md#nxr-rm)).
-    Retire a version explicitly: `rm` the enumerated names, then move the channel forward or `nxr point --clear` it.
+    Retire a version explicitly: `rm` the enumerated names, then move the channel forward or `nxr point` it.
 
 ## Next steps
 

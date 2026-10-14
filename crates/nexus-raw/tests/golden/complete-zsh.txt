@@ -303,7 +303,6 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
-'--clear[Delete the pointer file the URL names]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \

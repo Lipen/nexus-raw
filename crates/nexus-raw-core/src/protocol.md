@@ -46,7 +46,7 @@ The remote side of the delta report comes from the search API's per-asset facts 
 A searched asset that lacks a search-reported digest counts as changed, never equal: there is nothing to verify against.
 A search refusal (400 for an unknown repository, 404 for a missing endpoint) degrades honestly: the run refuses with the enumeration-family error, or with `--fallback` it announces the degradation and rebuilds the report from the probe-based enumeration.
 
-Deletion (`rm`, `point --clear`) is the one deliberate extension (§5.4).
+Deletion (`rm`, `point`) is the one deliberate extension (§5.4).
 DELETE is allowed for the objects of the enumerated version only: bytes, markers,
 the version document, the pointer file.
 The order is the reverse of publishing: the marker first, then the bytes,

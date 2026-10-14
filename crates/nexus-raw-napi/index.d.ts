@@ -319,7 +319,7 @@ export function channelSet(
   opts?: NxrCommonOpts,
 ): Promise<NxrChannelSetResult>
 
-/** DELETE a pointer file: absence is a normal outcome, like `point --clear`. */
+/** DELETE a pointer file: absence is a normal outcome, like `point`. */
 export function pointClear(url: string, opts?: NxrCommonOpts): Promise<NxrPointClearResult>
 
 /** Flat artifact names under a version directory URL: the URL must point inside

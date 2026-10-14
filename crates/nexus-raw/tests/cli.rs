@@ -2294,31 +2294,26 @@ fn rm_exit_matrix_rows() {
     expect_exit(&dead, 3, "a dead base is transport");
 }
 
-/// point --clear deletes a channel ref and stays idempotent; the read-only scenario refuses it.
+/// point deletes a channel ref and stays idempotent; the read-only scenario refuses it.
 #[test]
-fn point_clear_roundtrip_and_readonly() {
+fn point_roundtrip_and_readonly() {
     let srv = server(Scenario::Atomic);
     let url = format!("{}stable", root_url(&srv));
     expect_exit(&nxr(&["channel", "set", &url, "1.4.0"]), 0, "channel set");
 
-    let clear = nxr(&["point", "--clear", &url]);
+    let clear = nxr(&["point", &url]);
     expect_exit(&clear, 0, "first clear");
     assert!(stdout(&clear).contains("cleared"), "{}", stdout(&clear));
     assert!(srv.store_get("stable").is_none());
 
-    let again = nxr(&["point", "--clear", &url]);
+    let again = nxr(&["point", &url]);
     expect_exit(&again, 0, "clearing an absent pointer is exit 0");
     assert!(stdout(&again).contains("absent"), "{}", stdout(&again));
-
-    // `point` without --clear is misuse.
-    let bare = nxr(&["point", &url]);
-    expect_exit(&bare, 2, "point without --clear is misuse");
-    assert!(stderr(&bare).contains("hint:"));
 
     let ro = server(Scenario::ReadOnly);
     ro.insert("stable", b"1.4.0\n");
     let ro_url = format!("{}stable", root_url(&ro));
-    let refused = nxr(&["point", "--clear", &ro_url]);
+    let refused = nxr(&["point", &ro_url]);
     expect_exit(&refused, 1, "read-only refusal");
     assert!(
         stderr(&refused).contains("read-only"),

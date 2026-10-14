@@ -4,7 +4,7 @@
 Single-object commands: `get`, `put`, `head`, `sha`.
 Directory transfers with sha-sibling verification: `up`, `down`, `mirror`, `mv`.
 Comparing a local directory against the storage without writing: `diff`.
-Deletion of an enumerated version or a pointer file: `rm`, `point --clear`.
+Deletion of an enumerated version or a pointer file: `rm`, `point`.
 Layout helpers: `channel get`, `channel set`, `verify`, `doctor`, `ls`.
 Shell completions: `complete`.
 
@@ -699,10 +699,10 @@ rm a.zip
 
 `--json` streams the events of both phases. The summary of the pour is followed by the summary of the delete.
 
-## nxr point --clear
+## nxr point
 
 ```
-nxr point --clear <URL>
+nxr point <URL>
 ```
 
 DELETE the pointer file the URL names: the channel ref, retired.
@@ -713,11 +713,11 @@ An already-absent pointer is a normal outcome (`absent`, exit 0), so the command
 ```console
 $ nxr channel set https://nexus.example.com/repository/raw-main/stable 1.4.0
 channel: set https://nexus.example.com/repository/raw-main/stable → 1.4.0
-$ nxr point --clear https://nexus.example.com/repository/raw-main/stable
+$ nxr point https://nexus.example.com/repository/raw-main/stable
 point: cleared https://nexus.example.com/repository/raw-main/stable
 $ echo $?
 0
-$ nxr point --clear https://nexus.example.com/repository/raw-main/stable
+$ nxr point https://nexus.example.com/repository/raw-main/stable
 point: absent https://nexus.example.com/repository/raw-main/stable
 $ echo $?
 0

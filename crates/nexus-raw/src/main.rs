@@ -250,9 +250,6 @@ pub(crate) enum Cmd {
     },
     /// Delete a pointer file (§5.4).
     Point {
-        /// Delete the pointer file the URL names.
-        #[arg(long)]
-        clear: bool,
         /// The pointer file URL.
         #[arg(value_name = "URL")]
         url: String,

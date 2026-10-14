@@ -917,7 +917,7 @@ impl Nxr {
         Ok(names)
     }
 
-    /// DELETE a pointer file (`point --clear`, §5.4): absence is a normal outcome.
+    /// DELETE a pointer file (`point`, §5.4): absence is a normal outcome.
     ///
     /// # Errors
     ///
@@ -1221,6 +1221,7 @@ impl Nxr {
         // which holds for a directory URL at any depth.
         let version_dir = segs.last().copied().unwrap_or_default();
         let mut visible: usize;
+        let mut poll_rounds: u32 = 0;
         loop {
             // The full asset page set for the repository, filtered client-side
             // to the watched names: the watch is a visibility check, not an
@@ -1237,7 +1238,15 @@ impl Nxr {
             if tokio::time::Instant::now() >= deadline {
                 return Ok(visible);
             }
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            // Exponential backoff: the index lag is seconds, not milliseconds,
+            // so hammering the full listing every 500ms buys nothing. 500ms →
+            // 1s → 2s → 4s, capped: a 30s budget costs ~8 requests, not ~60.
+            let delay = std::cmp::min(
+                std::time::Duration::from_millis(500).saturating_mul(1 << poll_rounds.min(4)),
+                std::time::Duration::from_secs(5),
+            );
+            tokio::time::sleep(delay).await;
+            poll_rounds += 1;
         }
     }
 

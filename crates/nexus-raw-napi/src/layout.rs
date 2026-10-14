@@ -81,7 +81,7 @@ pub async fn channel_set(
     })
 }
 
-/// DELETE a pointer file: absence is a normal outcome, like the CLI `point --clear`.
+/// DELETE a pointer file: absence is a normal outcome, like the CLI `point`.
 #[napi]
 pub async fn point_clear(url: String, opts: Option<NxrCommonOpts>) -> Result<NxrPointClearResult> {
     let o = opts.unwrap_or_default();

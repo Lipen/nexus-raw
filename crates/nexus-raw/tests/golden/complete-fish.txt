@@ -206,7 +206,6 @@ complete -c nxr -n "__fish_nxr_using_subcommand point" -l workers -d 'Parallel a
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
-complete -c nxr -n "__fish_nxr_using_subcommand point" -l clear -d 'Delete the pointer file the URL names'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print only the final summary line'

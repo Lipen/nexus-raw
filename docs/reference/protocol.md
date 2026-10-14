@@ -24,7 +24,7 @@ A version is just a directory, and a channel is just a file.
 |:------------|:-----|:-----------|:--------|:-----------|
 | bytes | `<base>/<name>` | `put`, `up`, `down` | `get`, `sha`, `head`, `down` | `rm` |
 | sha-sibling | `<base>/<name>.sha256` | `put --sha`, `up`, `down` | `up`, `down`, `verify` | `rm`, before the bytes |
-| channel ref | `<base>/<channel>` | `channel set` | `channel get` | `point --clear` |
+| channel ref | `<base>/<channel>` | `channel set` | `channel get` | `point` |
 
 Example: base `https://nexus.example.com/repository/raw-main/`, artifact `bom/linux-x86_64.json`:
 
@@ -217,7 +217,7 @@ The `down` part name is a stable hash of the artifact name, so a repeated run fi
 
 ## Deletion
 
-`rm` and `point --clear` are the one deliberate extension of the write-only protocol.
+`rm` and `point` are the one deliberate extension of the write-only protocol.
 DELETE is allowed for the objects of the enumerated version only:
 
 | Object | Deleted by |
@@ -225,7 +225,7 @@ DELETE is allowed for the objects of the enumerated version only:
 | `<base>/<name>` bytes | `rm`, one DELETE per enumerated name |
 | `<base>/<name>.sha256` marker | `rm`, before the bytes of the same name |
 | the version document | `rm --name version.json`: it is an ordinary name |
-| the pointer file | `point --clear <URL>` |
+| the pointer file | `point <URL>` |
 
 The rules the protocol fixes:
 

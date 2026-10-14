@@ -105,7 +105,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--prefix P]` | enumerate → DELETE each marker, then its bytes (404 is fine, read-only refuses) |
 | `nxr clean <BASE_URL> [--keep N] [--yes]` | retention over whole versions: plan (default) or delete the versions outside the newest `--keep`, channel refs survive |
 | `nxr mv <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | mirror into the destination, then delete at the source (nothing deleted until the pour converged) |
-| `nxr point --clear <URL>` | DELETE a pointer file (channel ref, absent is fine) |
+| `nxr point <URL>` | DELETE a pointer file (channel ref, absent is fine) |
 | `nxr ls <URL> [--assets]` | the raw-tree listing of a directory URL, any depth (folders `/`-marked). `--assets`: flat artifact names |
 | `nxr channel get <URL>` | print the current token (`unset` when empty) |
 | `nxr channel set <URL> <TOKEN> [--if-forward]` | write a token (`--if-forward` accepts only forward moves in dotted-numeric order) |

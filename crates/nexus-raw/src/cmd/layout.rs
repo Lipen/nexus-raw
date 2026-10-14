@@ -66,7 +66,7 @@ pub(crate) async fn channel_get(cli: &Cli, url: &str) -> Result<(), Error> {
     result
 }
 
-/// `point --clear <URL>`: DELETE the pointer file.
+/// `point <URL>`: DELETE the pointer file.
 pub(crate) async fn point_clear(cli: &Cli, url: &str) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
     let result = run_point_clear(&ctx, url).await;

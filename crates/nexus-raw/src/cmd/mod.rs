@@ -120,15 +120,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             prefix,
         } => transfer::rm(cli, src, name, names_from, *ls, *dry_run, prefix).await,
         Cmd::Clean { dst, keep, yes } => transfer::clean(cli, dst, *keep, *yes).await,
-        Cmd::Point { clear, url } => {
-            if !clear {
-                return Err(Error::Misuse(
-                    "point needs --clear: deleting the pointer is the only operation it has"
-                        .to_owned(),
-                ));
-            }
-            layout::point_clear(cli, url).await
-        }
+        Cmd::Point { url } => layout::point_clear(cli, url).await,
         Cmd::Mirror {
             src,
             dst,

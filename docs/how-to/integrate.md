@@ -27,7 +27,7 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `diff` | the local-against-storage delta report, nothing written |
 | `rm` | delete an enumerated version, marker first, 404 is success |
 | `mv` | `mirror` plus the delete: nothing is removed until the pour converges |
-| `point --clear` | delete one pointer file, idempotently |
+| `point` | delete one pointer file, idempotently |
 | `service repos` | list the server's repositories with format and writability |
 | `doctor` | credentials, TLS and reachability, without printing secrets |
 

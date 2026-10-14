@@ -1635,7 +1635,7 @@ async fn rm_without_names_refuses_with_enumeration_error() {
     assert_eq!(err.exit_code(), 1);
 }
 
-/// `point --clear` deletes the pointer, and the rerun is a normal `absent`.
+/// `point` deletes the pointer, and the rerun is a normal `absent`.
 #[tokio::test]
 async fn point_clear_is_idempotent() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();

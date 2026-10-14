@@ -24,7 +24,7 @@
 | перенести версию | `nxr mirror <src-url> <dst-url> --names-from list.txt` | `uploaded N, downloaded N` | 0 |
 | переименовать версию | `nxr mv <src-url> <dst-url>` | mirror + удаление источника | 0 |
 | удалить версию | `nxr rm <dir-url> --names-from list.txt` | маркер удалён первым, затем байты | 0 |
-| снять pointer | `nxr point --clear <ptr-url>` | pointer-файл удалён | 0 |
+| снять pointer | `nxr point <ptr-url>` | pointer-файл удалён | 0 |
 | проверить локально | `nxr verify <dir>` | digest и маркеры сходятся | 0 |
 | диагностика доступа | `nxr doctor <url>` | креды/TLS/достижимость по пунктам | 0 |
 

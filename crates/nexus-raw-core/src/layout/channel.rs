@@ -68,7 +68,7 @@ pub async fn set(
     Ok(ChannelOutcome::Written { from: current })
 }
 
-/// The `point --clear` result.
+/// The `point` result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClearOutcome {
     /// The pointer existed and is deleted.
@@ -77,7 +77,7 @@ pub enum ClearOutcome {
     Absent,
 }
 
-/// DELETE a pointer file (`point --clear`, §5.4).
+/// DELETE a pointer file (`point`, §5.4).
 ///
 /// Clearing is not a comparison: there is no `--if-forward` semantics here.
 /// An already-absent pointer is a normal outcome, so the call is idempotent.

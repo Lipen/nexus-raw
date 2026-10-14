@@ -108,7 +108,7 @@ Every method mirrors a CLI command one-to-one.
 | `rm_plan(enum_src)` | `Vec<RmAction>` | `rm --dry-run` | `Remove`/`Missing` per name by remote existence, nothing deleted |
 | `enumerate(enum_src)` | `Vec<ArtifactName>` | - | resolve any enumeration source to its deduplicated names |
 | `service_repos()` | `Vec<RepoInfo>` | `nxr service repos` | server metadata through the service REST API, not storage protocol |
-| `point_clear(url)` | `ClearOutcome` | `nxr point --clear` | DELETE the pointer: `Cleared` or `Absent` |
+| `point_clear(url)` | `ClearOutcome` | `nxr point` | DELETE the pointer: `Cleared` or `Absent` |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
