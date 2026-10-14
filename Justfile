@@ -167,7 +167,7 @@ bump part:
 # call for the same number is the recovery path: the version step is
 # idempotent, the changelog date refreshes to today, the guards rerun.
 # The preview is the safe default: `just release 0.6.0` prints the plan.
-# The real run goes through the script: `scripts/release.sh 0.6.0 --yes`.
+# The real run: `just release 0.6.0 --yes`.
 [doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
 release *args:
