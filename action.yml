@@ -1,0 +1,98 @@
+name: 'nxr'
+description: >-
+  Run the nxr CLI (nexus-raw) in a workflow: install the prebuilt binary
+  from the GitHub Releases of this repository and execute a command.
+author: 'nexus-raw contributors'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'The nxr subcommand to run (up, down, diff, ls, …).'
+    required: true
+  args:
+    description: 'Arguments passed to the nxr subcommand.'
+    required: false
+    default: ''
+  version:
+    description: 'The nxr release version to install (without the leading v).'
+    required: false
+    default: '0.15.0'
+  auth:
+    description: >-
+      Credentials as user:password. Pass through a secret; exported as
+      NXR_USERNAME/NXR_PASSWORD and never placed in argv.
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Resolve the platform archive name'
+      id: 'platform'
+      shell: 'bash'
+      run: |
+        case "${{ runner.os }}/${{ runner.arch }}" in
+          Linux/X64)   name="linux-x64" ;;
+          Linux/ARM64) name="linux-aarch64" ;;
+          macOS/X64)   name="darwin-x64" ;;
+          macOS/ARM64) name="darwin-arm64" ;;
+          Windows/X64) name="windows-x64" ;;
+          *) echo "::error::unsupported runner: ${{ runner.os }}/${{ runner.arch }}"; exit 2 ;;
+        esac
+        echo "archive=nxr-${name}.tar.gz" >> "$GITHUB_OUTPUT"
+
+    - name: 'Download and verify the archive'
+      id: 'download'
+      shell: 'bash'
+      env:
+        VERSION: '${{ inputs.version }}'
+        ARCHIVE: '${{ steps.platform.outputs.archive }}'
+      run: |
+        set -eu
+        url="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ARCHIVE}"
+        curl --fail --silent --show-error --location -o "$ARCHIVE" "$url"
+        curl --fail --silent --show-error --location -o "${ARCHIVE}.sha256" "${url}.sha256"
+        echo "expected: $(cat "${ARCHIVE}.sha256")"
+        sha256sum --check --status <<< "$(cat "${ARCHIVE}.sha256")"
+        echo "path=$ARCHIVE" >> "$GITHUB_OUTPUT"
+
+    - name: 'Unpack and install'
+      id: 'install'
+      shell: 'bash'
+      run: |
+        set -eu
+        archive='${{ steps.download.outputs.path }}'
+        mkdir -p "$RUNNER_TEMP/nxr-bin"
+        tar -xzf "$archive" -C "$RUNNER_TEMP/nxr-bin"
+        # The archive root holds the binary; windows keeps the .exe suffix.
+        exe="$RUNNER_TEMP/nxr-bin/nxr"
+        [ "${{ runner.os }}" = Windows ] && exe="${exe}.exe"
+        chmod +x "$exe"
+        echo "exe=$exe" >> "$GITHUB_OUTPUT"
+
+    - name: 'Run the command'
+      id: 'run'
+      shell: 'bash'
+      env:
+        NXR_EXE: '${{ steps.install.outputs.exe }}'
+        NXR_COMMAND: '${{ inputs.command }}'
+        NXR_ARGS: '${{ inputs.args }}'
+        NXR_AUTH: '${{ inputs.auth }}'
+      run: |
+        set -eu
+        if [ -n "$NXR_AUTH" ]; then
+          # NXR_USERNAME/NXR_PASSWORD keep the credentials out of argv.
+          user="${NXR_AUTH%%:*}"
+          pass="${NXR_AUTH#*:}"
+          export NXR_USERNAME="$user" NXR_PASSWORD="$pass"
+        fi
+        # shellcheck disable=SC2086
+        "$NXR_EXE" "$NXR_COMMAND" $NXR_ARGS
+
+outputs:
+  exe:
+    description: 'The absolute path of the installed nxr binary.'
+    value: '${{ steps.install.outputs.exe }}'
