@@ -170,8 +170,6 @@ bump part:
 # The real run bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.
 [doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
-[doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
-[group('release')]
 release *args:
     #!/bin/sh
     set -eu
