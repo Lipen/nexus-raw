@@ -87,3 +87,9 @@ A scenario is contract, not code: four places must agree, and drift tests fail u
 
 Then the behavior itself: the wire arms live in `http.rs` (pipeline gates) and `service_api.rs` (service REST pages), storage transforms in `storage.rs`, and a preset instance's knobs gather in `store.rs::Shared::hosted`.
 `cargo test -p mock-nexus` runs the in-crate suite, including both drift guards.
+
+## search-lag
+
+The search index lags behind writes: the first storage PUT arms a catch-up deadline (6000 ms), and `GET /service/rest/v1/search/assets` answers the empty page until it passes, then a store-backed listing.
+The scenario models a real server's eventual search visibility, and pins the `up --wait-index` contract: the wait ends with every uploaded name reported visible, and an expired budget is a warning line, never a failed exit.
+Storage reads and writes behave like `atomic`.

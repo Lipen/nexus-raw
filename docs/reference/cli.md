@@ -254,6 +254,8 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 | `--if-changed` | skip names whose remote marker digest equals the local copy, re-upload the changed rest (a missing or foreign remote marker re-uploads the name) |
 | `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
+| `--wait-index` | after the run, poll the search index until every uploaded name is visible (see below) |
+| `--index-timeout <SECS>` | the visibility budget for `--wait-index` (default 30) |
 
 Markers are on by default, in both directions:
 
@@ -334,6 +336,19 @@ $ echo $?
 | `1` | data refusal: `mismatch`, `incomplete`. local I/O failures |
 | `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
+
+### up --wait-index
+
+A real server's search index lags behind completed writes by seconds, so a consumer that reads through the search API right after `up` sees a stale world.
+`--wait-index` holds the run: every 500ms the search answer is checked, until every uploaded name is visible or `--index-timeout` (default 30s) expires.
+
+```console
+$ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --wait-index --json
+{"search_wait":{"visible":12,"total":12,"timeout":false}}
+```
+
+An expired budget prints the lower count with a warning and still exits 0: the upload itself has succeeded, the degraded guarantee is the index's, not the writer's.
+A search-dead server refuses the wait with `cannot enumerate` (exit 1): there is nothing to poll.
 
 ## nxr down
 
@@ -615,6 +630,36 @@ A rerun emits `missing` events and still exits 0:
 {"action":"rm","name":"a.zip","size":23}
 {"action":"missing","name":"ghost.bin"}
 ```
+
+## nxr clean
+
+```
+nxr clean <BASE_URL> [--keep N] [--yes]
+```
+
+Retention over whole versions: the plan names every version outside the newest `--keep` (default 3, dotted-numeric order) with the count of its names, and `--yes` deletes exactly those versions through the regular `rm` machinery — markers before bytes, per-version atomic.
+The plan is the default: without `--yes` nothing is deleted and the run exits 0.
+
+The base is a group-level URL: `<…>/repository/<repo>/<group…>/`, one level above the versions it deletes.
+Versions come from the search API, so a search-dead server refuses the run with `cannot enumerate` (exit 1).
+Channel refs (token files at the base) and every name outside the recognized versions never enter the plan.
+
+```console
+$ nxr clean https://nexus.example.com/repository/raw-main/releases/ --keep 2
+clean 1.2.0: 5 names
+clean 1.1.0: 4 names
+dry run: 2 version(s), 9 name(s); rerun with --yes to delete
+$ nxr clean https://nexus.example.com/repository/raw-main/releases/ --keep 2 --yes
+clean 1.2.0: 5 names
+clean 1.1.0: 4 names
+cleaned 9 name(s) across 2 version(s)
+```
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the plan printed, or every doomed version deleted |
+| `1` | enumeration refused (search dead), or a version failed mid-delete (the rest still ran; the count names the failures) |
+| `2` | misuse: the base is not a group-level URL |
 
 ## nxr mv
 

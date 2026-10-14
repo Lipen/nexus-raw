@@ -5,7 +5,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr clean <BASE_URL> [--keep N] [--yes]`: retention over whole versions.
+  The plan names every version outside the newest `--keep` (dotted-numeric order) with the count of its names.
+  A plan is the default and deletes nothing.
+  `--yes` deletes the doomed versions through the regular `rm` machinery: markers before bytes, per-version atomic.
+  Channel refs and names outside the recognized versions never enter the plan.
+  Requires the search API (like `audit`'s cross-check): a search-dead server refuses the run.
+- `up --wait-index [--index-timeout SECS]`: after the run, poll the search index until every uploaded name is visible.
+  A real server's index lags behind writes by seconds, so a consumer reading through search right after `up` sees a stale world.
+  The wait reports `search visibility: N/M` and degrades to a warning when the budget (default 30s) expires: the upload itself has succeeded.
+- `doctor --deep` gains the `eula` probe: `GET /service/rest/v1/system/eula`, strictly read-only.
+  `accepted: false` is a warning naming the write gate and the accepting command, a 404 is a skip (no gate on this server), a refusal is a skip (admin rights).
+- The mock scenario `search-lag`: the search index serves the empty page for 6s after the first PUT, then a store-backed listing.
+  The python reference client skip-lists it: its uploads are synchronous by construction.
+
+### Changed
+
+- The docker/CI images and the docs site ship a composite GitHub Action in this repository: `uses: <owner>/nexus-raw@v…` with `command`, `args`, `version` and `auth` (a secret, passed through the environment, never argv).
+- `cargo binstall nexus-raw` resolves the prebuilt release archives through the crate manifest metadata (present since 0.15.0, now documented).
 
 ## [0.15.0] - 2026-10-14
 

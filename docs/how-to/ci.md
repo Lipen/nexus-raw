@@ -174,3 +174,19 @@ Run it at the top of a pipeline.
 - What the consumer job downloads and how it verifies: [consume artifacts](consume.md).
 - Decoding a failure from its `error:` line: [when it breaks](troubleshoot.md).
 - The full event and exit-code contract: [errors and exit codes](../reference/errors.md).
+
+## Run nxr from a workflow: the action
+
+This repository ships a composite action that installs the prebuilt `nxr` from the Releases and runs one command:
+
+```yaml
+- uses: <owner>/nexus-raw@v0.16.0
+  with:
+    command: up
+    args: ./dist/ https://nexus.example.com/repository/raw-main/1.4.0/
+    auth: ${{ secrets.NXR_AUTH }}   # user:password, exported as NXR_USERNAME/NXR_PASSWORD
+```
+
+The `version` input defaults to the action's own release.
+The binary is checksum-verified against the release `SHA256SUMS` before it runs.
+Linux (x64, aarch64), macOS (x64, aarch64) and windows-x64 runners are supported.
