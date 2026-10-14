@@ -658,7 +658,7 @@ cleaned 9 name(s) across 2 version(s)
 | Exit | When |
 |:----:|:-----|
 | `0` | the plan printed, or every doomed version deleted |
-| `1` | enumeration refused (search dead), or a version failed mid-delete (the rest still ran; the count names the failures) |
+| `1` | enumeration refused (search dead), or a version failed mid-delete, the rest still ran and the count names the failures |
 | `2` | misuse: the base is not a group-level URL |
 
 ## nxr mv
