@@ -299,7 +299,8 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
             "The first storage PUT arms a catch-up deadline (6000 ms).",
             "`GET /service/rest/v1/search/assets` answers the empty page until the deadline passes, then a store-backed listing.",
         ],
-        invariant: "up --wait-index holds the run until the uploaded names surface in the search answer and reports the wait; an expired budget is a warning line, never a failed exit.",
+        invariant: "up --wait-index holds the run until the uploaded names surface in the search answer and reports the wait.
+The expired budget is a warning line, never a failed exit.",
     },
     ScenarioDoc {
         id: "detail-in-hint",
