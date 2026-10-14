@@ -53,6 +53,22 @@ The order is the reverse of publishing: the marker first, then the bytes,
 so nobody ever sees a complete object mid-delete.
 404 is a normal answer: deletion is idempotent.
 A 403/405 is the read-only repository: refused with a hint, exit 1.
+A 403/405 is the read-only repository: refused with a hint, exit 1.
+
+## Two planes
+
+The CLI speaks to two different server planes, and each command states which one it needs.
+
+- **Storage**: `get put head sha up down diff mirror mv rm point ls channel verify clean`.
+  Lives entirely on the four storage methods of this protocol; works against any static host.
+- **Service** (read-only diagnostics): `service repos/status/repo/assets/eula`, `doctor --deep`,
+  the `audit` cross-check, `clean`'s enumeration, `diff --via search`, `up --wait-index`.
+  Requires the Sonatype service REST API and the search index; a static host has neither.
+
+Degradation is uniform inside the service plane: an enumeration-family refusal
+(a missing endpoint, an unknown repository) refuses the run with `cannot enumerate` and exit 1,
+unless the command documents a `--fallback` or a skip-shaped verdict (`doctor`).
+Nothing degrades silently.
 Divergence is never checked when deleting: names, not content.
 
 Errors: [`Error`] with [`Error::exit_code`] (0 ok, 1 data, 2 misuse, 3 transport) and [`Error::hint`], the human hint the CLI renders.

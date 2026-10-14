@@ -5,7 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Removed
+
+- `nxr point --clear <URL>`: the `--clear` flag is gone, `nxr point <URL>` deletes directly.
+  The flag-guarded misuse case never had a success path, so the guarded form was a dead branch of the interface.
 
 ## [0.16.0] - 2026-10-15
 
