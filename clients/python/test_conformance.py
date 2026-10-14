@@ -38,6 +38,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 # Scenarios the reference client cannot exercise, with the reason and what is not implemented.
 # The drift test holds this table against the mock's own list: a stale row fails the suite.
 SKIP = {
+    "search-lag": (
+        "the scenario models the search index lagging behind writes, which the CLI absorbs with up --wait-index:"
+        " the reference client polls nothing, its uploads are synchronous by construction"
+    ),
     "ignore-range": (
         "the scenario answers a ranged GET with the whole body, and the reference client is single-stream:"
         " it never sends Range, so the degradation the scenario pins is not observable here"
