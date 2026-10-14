@@ -232,6 +232,7 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
         C::Up { dst, .. }
         | C::Down { src: dst, .. }
         | C::Rm { src: dst, .. }
+        | C::Clean { dst, .. }
         | C::Ls { url: dst, .. } => {
             vec![std::ptr::addr_of!(*dst).cast_mut()]
         }

@@ -115,6 +115,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             dry_run,
             prefix,
         } => transfer::rm(cli, src, name, names_from, *ls, *dry_run, prefix).await,
+        Cmd::Clean { dst, keep, yes } => transfer::clean(cli, dst, *keep, *yes).await,
         Cmd::Point { clear, url } => {
             if !clear {
                 return Err(Error::Misuse(

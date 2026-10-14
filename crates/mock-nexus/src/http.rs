@@ -315,17 +315,25 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         Some(plain(200, br#"{"items": [], "continuationToken": null}"#, None))
                     } else {
                         // Store-backed: one item per stored object, markers included,
-                        // the same shape the search API reports.
-                        let base = base_of(shared);
+                        // repo-relative paths, the shape the search API reports.
                         let keys: Vec<String> = lock(&shared.store)
                             .keys()
                             .cloned()
+                            .filter_map(|k| {
+                                // Strip the `repository/<repo>/` prefix the store keys carry.
+                                let mut segs = k.split('/');
+                                if segs.next() != Some("repository") {
+                                    return None;
+                                }
+                                segs.next()?;
+                                Some(segs.collect::<Vec<_>>().join("/"))
+                            })
                             .collect();
                         let items: Vec<String> = keys
                             .iter()
                             .map(|k| {
                                 format!(
-                                    "{{\"downloadUrl\":\"{base}repository/raw-main/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
+                                    "{{\"downloadUrl\":\"/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
                                 )
                             })
                             .collect();

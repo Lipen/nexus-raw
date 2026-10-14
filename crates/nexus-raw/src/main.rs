@@ -236,6 +236,18 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
     },
+    /// Delete old versions so only the newest survive: a plan by default, deletion with --yes.
+    Clean {
+        /// The remote directory URL.
+        #[arg(value_name = "DST_URL")]
+        dst: String,
+        /// The number of newest versions to keep.
+        #[arg(long, value_name = "N", default_value_t = 3)]
+        keep: usize,
+        /// Delete for real. Without it the run prints the plan and touches nothing.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Delete a pointer file (§5.4).
     Point {
         /// Delete the pointer file the URL names.

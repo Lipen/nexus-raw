@@ -744,6 +744,39 @@ impl Nxr {
         self.resolve_names(enum_src).await
     }
 
+    /// The retention plan for `clean`: the versions to delete so that only the
+    /// `keep` newest remain, with the names each doomed version carries.
+    ///
+    /// Versions come from the search listing (dotted-numeric order); a version
+    /// with no deletable names is absent from the plan. Channel refs and every
+    /// name outside the recognized versions are never planned.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Enumerate`] when the search endpoint is unavailable.
+    pub async fn clean_plan(&self, keep: usize) -> Result<Vec<(String, Vec<ArtifactName>)>, Error> {
+        let versions = layout::ls::search_versions(&self.client, &self.base).await?;
+        let doomed = if versions.len() <= keep {
+            &[][..]
+        } else {
+            &versions[..versions.len() - keep]
+        };
+        let mut plan = Vec::new();
+        for v in doomed {
+            let prefix = crate::model::name::NamePrefix::parse(&format!("{v}/"))?;
+            let names = self
+                .resolve_names(Enumeration::Filtered {
+                    inner: Box::new(Enumeration::Search),
+                    prefixes: vec![prefix],
+                })
+                .await?;
+            if !names.is_empty() {
+                plan.push((v.clone(), names));
+            }
+        }
+        Ok(plan)
+    }
+
     /// Resolve the enumeration source into names, refusing an empty result like `down`.
     /// A repeated explicit name collapses to its first occurrence: one artifact, one worker.
     async fn resolve_names(&self, enum_src: Enumeration) -> Result<Vec<ArtifactName>, Error> {
