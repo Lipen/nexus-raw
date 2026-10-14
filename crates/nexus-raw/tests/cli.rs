@@ -3628,7 +3628,9 @@ fn up_if_changed_reups_when_the_remote_marker_is_missing() {
 #[test]
 fn up_wait_index_survives_the_search_lag() {
     let srv = server(Scenario::SearchLag { lag_ms: 1500 });
-    let base = dir_url(&srv);
+    // A group-level base: the search visibility check needs the real-world
+    // `repository/<repo>/…` store layout the root-style base does not have.
+    let base = format!("{}repository/raw-main/g/", srv.base_url());
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.zip", ALPHA);
 

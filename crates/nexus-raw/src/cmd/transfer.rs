@@ -16,30 +16,30 @@ pub(crate) struct MirrorArgs<'a> {
     pub(crate) dst_user: Option<&'a str>,
 }
 
+/// The `--wait-index` pair: the toggle and its budget.
+pub(crate) struct WaitIndex {
+    pub(crate) on: bool,
+    pub(crate) timeout: u64,
+}
+
+/// The marker and change-skipping modes of `up`.
+pub(crate) struct UpModes {
+    pub(crate) no_sha: bool,
+    pub(crate) if_changed: bool,
+}
+
 pub(crate) async fn up(
     cli: &Cli,
     src: &Path,
     dst: &str,
     claim: Option<ArtifactName>,
-    no_sha: bool,
-    if_changed: bool,
-    wait_index: bool,
-    index_timeout: u64,
+    modes: UpModes,
+    wait: WaitIndex,
     plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(
-        &ctx,
-        src,
-        claim,
-        no_sha,
-        if_changed,
-        wait_index,
-        index_timeout,
-        plan,
-    )
-    .await;
+    let result = run_up(&ctx, src, claim, modes, wait, plan).await;
     finish(ctx).await;
     result
 }
@@ -48,33 +48,33 @@ async fn run_up(
     ctx: &Ctx,
     src: &Path,
     claim: Option<ArtifactName>,
-    no_sha: bool,
-    if_changed: bool,
-    wait_index: bool,
-    index_timeout: u64,
+    modes: UpModes,
+    wait: WaitIndex,
     plan: bool,
 ) -> Result<(), Error> {
     if plan {
         let names = ctx.nxr.scan(src)?;
         let actions = ctx
             .nxr
-            .diff(src, names, nexus_raw_core::Mode::Up, !no_sha)
+            .diff(src, names, nexus_raw_core::Mode::Up, !modes.no_sha)
             .await?;
         for a in &actions {
             crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
         }
         return Ok(());
     }
-    if if_changed {
-        ctx.nxr.up_if_changed(src, None, !no_sha, claim).await?;
+    if modes.if_changed {
+        ctx.nxr
+            .up_if_changed(src, None, !modes.no_sha, claim)
+            .await?;
     } else {
         // The Summary event is the single source for totals: the renderer prints it in both modes.
         // Printing a second copy here raced the renderer.
-        ctx.nxr.up(src, None, !no_sha, claim).await?;
+        ctx.nxr.up(src, None, !modes.no_sha, claim).await?;
     }
-    if wait_index {
+    if wait.on {
         let names = ctx.nxr.scan(src)?;
-        let waited = ctx.nxr.wait_search_visible(&names, index_timeout).await?;
+        let waited = ctx.nxr.wait_search_visible(&names, wait.timeout).await?;
         let total = names.len();
         let line = format!("search visibility: {waited}/{total}");
         if waited == total {
@@ -89,7 +89,8 @@ async fn run_up(
             crate::cmd::print_line(
                 ctx.json,
                 &format!(
-                    "{line} (warning: the index did not surface the rest within {index_timeout}s)"
+                    "{line} (warning: the index did not surface the rest within {}s)",
+                    wait.timeout
                 ),
                 &serde_json::json!({"search_wait": {"visible": waited, "total": total, "timeout": true}}),
             );

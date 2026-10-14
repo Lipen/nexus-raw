@@ -324,12 +324,12 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                             .keys()
                             .cloned()
                             .filter_map(|k| {
-                                // Strip the `repository/<repo>/` prefix the store keys carry.
+                                // Strip the `repository/<repo>/` prefix the store keys
+                                // carry when it is there; a root-style store key passes as is.
                                 let mut segs = k.split('/');
-                                if segs.next() != Some("repository") {
-                                    return None;
+                                if segs.next() == Some("repository") {
+                                    segs.next()?;
                                 }
-                                segs.next()?;
                                 Some(segs.collect::<Vec<_>>().join("/"))
                             })
                             .collect();

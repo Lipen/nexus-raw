@@ -89,10 +89,14 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                 src,
                 dst,
                 claim,
-                *no_sha,
-                *if_changed,
-                *wait_index,
-                *index_timeout,
+                transfer::UpModes {
+                    no_sha: *no_sha,
+                    if_changed: *if_changed,
+                },
+                transfer::WaitIndex {
+                    on: *wait_index,
+                    timeout: *index_timeout,
+                },
                 *plan,
             )
             .await
