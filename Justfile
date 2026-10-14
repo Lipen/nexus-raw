@@ -168,7 +168,7 @@ bump part:
 # idempotent, the changelog date refreshes to today, the guards rerun.
 # The preview is the safe default: `just release 0.6.0` prints the plan.
 # The real run goes through the script: `scripts/release.sh 0.6.0 --yes`.
-[doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
+[doc('Release X.Y.Z: a preview. The real run is scripts/release.sh X.Y.Z --yes. -h for the usage.')]
 [group('release')]
 release *args:
     #!/bin/sh

@@ -62,11 +62,11 @@ scripts/release.sh X.Y.Z --yes   # the real thing: bump, changelog, push, publis
 `just release X.Y.Z` prints what the release would do: the version move, the changelog section it would finalize, warnings about a dirty tree, an existing tag or a version already on crates.io, and the pipeline order.
 It pushes nothing and dispatches nothing.
 
-`just release X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then dispatches `.github/workflows/release.yml` on master and watches the run.
+`scripts/release.sh X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then dispatches `.github/workflows/release.yml` on master and watches the run.
 
 The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and only then the finalize job creates the tag and the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
-A repeat `just release X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, and a hotfix on master rides the fresh dispatch.
+A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, and a hotfix on master rides the fresh dispatch.
 A permanent registry refusal burns the number: bump and go again.
 The tag is created by the workflow and is not signed: the signed commits and the npm provenance carry the trust.
 
