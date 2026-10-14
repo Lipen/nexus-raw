@@ -12,7 +12,16 @@
 # the workflow skip whatever is already published.
 set -eu
 
-usage() { echo "usage: release.sh X.Y.Z [--yes]" >&2; echo "  bumps the workspace, finalizes the changelog, pushes and dispatches the release" >&2; exit "${1:-2}"; }
+usage() {
+  if [ "${1:-}" = "0" ]; then
+    echo "usage: release.sh X.Y.Z [--yes]"
+    echo "  bumps the workspace, finalizes the changelog, pushes and dispatches the release"
+  else
+    echo "usage: release.sh X.Y.Z [--yes]" >&2
+    echo "  bumps the workspace, finalizes the changelog, pushes and dispatches the release" >&2
+  fi
+  exit "${1:-2}"
+}
 case "${1:-}" in
   -h|--help) usage 0 ;;
 esac

@@ -166,15 +166,12 @@ bump part:
 # idempotent, the changelog date refreshes to today, the guards in the
 # workflow skip whatever is already published.
 # The real run bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.
-[doc('Release X.Y.Z: a preview by default, --yes for the real run.')]
+[doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
-release v *mode:
+release *args:
     #!/bin/sh
     set -eu
-    if [ "{{ v }}" = "-h" ] || [ "{{ v }}" = "--help" ]; then
-        exec scripts/release.sh --help
-    fi
-    exec scripts/release.sh "{{ v }}" {{ mode }}
+    exec scripts/release.sh "$@"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('check')]

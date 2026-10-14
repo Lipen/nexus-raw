@@ -8,11 +8,15 @@
 # to humans.
 set -eu
 
-usage() { echo "usage: llms-check.sh [FILE]" >&2; echo "  asserts docs/llms.txt keeps the llmstxt.org structure (default FILE: docs/llms.txt)" >&2; }
+usage() {
+  echo "usage: llms-check.sh [FILE]"
+  echo "  asserts docs/llms.txt keeps the llmstxt.org structure (default FILE: docs/llms.txt)"
+}
+usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   "") ;;
-  *) usage; exit 2 ;;
+  *) usage_err ;;
 esac
 
 f="${1:-docs/llms.txt}"

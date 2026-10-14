@@ -4,11 +4,15 @@
 # are exempt: a semicolon there is syntax, not typography.
 set -eu
 
-usage() { echo "usage: check-md-semicolon.sh" >&2; echo "  scans tracked markdown for semicolon-spliced sentences; exits 1 on a hit" >&2; }
+usage() {
+  echo "usage: check-md-semicolon.sh"
+  echo "  scans tracked markdown for semicolon-spliced sentences; exits 1 on a hit"
+}
+usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   "") ;;
-  *) usage; exit 2 ;;
+  *) usage_err ;;
 esac
 
 hits=0

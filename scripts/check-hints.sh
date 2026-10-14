@@ -6,11 +6,15 @@
 # Called from `just check-docs` and the docs workflow.
 set -eu
 
-usage() { echo "usage: check-hints.sh" >&2; echo "  cross-checks Error::hint literals against docs/reference/errors.md; exits 1 on drift" >&2; }
+usage() {
+  echo "usage: check-hints.sh"
+  echo "  cross-checks Error::hint literals against docs/reference/errors.md; exits 1 on drift"
+}
+usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   "") ;;
-  *) usage; exit 2 ;;
+  *) usage_err ;;
 esac
 
 src=crates/nexus-raw-core/src/error.rs

@@ -6,11 +6,15 @@
 # second copy that drifts is a broken release.
 set -eu
 
-usage() { echo "usage: version-check.sh" >&2; echo "  asserts every version carrier agrees with the workspace manifest" >&2; }
+usage() {
+  echo "usage: version-check.sh"
+  echo "  asserts every version carrier agrees with the workspace manifest"
+}
+usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   "") ;;
-  *) usage; exit 2 ;;
+  *) usage_err ;;
 esac
 
 ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
