@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.16.0] - 2026-10-15
+
 ### Added
 
 - `nxr clean <BASE_URL> [--keep N] [--yes]`: retention over whole versions.
@@ -323,7 +327,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/Lipen/nexus-raw/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/Lipen/nexus-raw/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Lipen/nexus-raw/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Lipen/nexus-raw/compare/v0.12.0...v0.13.0
