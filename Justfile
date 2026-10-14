@@ -1,3 +1,5 @@
+set positional-arguments
+
 # nexus-raw developer entry: `just <recipe>`, `cargo run -p mock-nexus -- atomic`, or `nxr <cmd>`.
 
 [private]
@@ -168,9 +170,17 @@ bump part:
 # The real run bumps, pushes, publishes and tags: `just release 0.6.0 --yes`.
 [doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
 [group('release')]
+[doc('Release X.Y.Z: a preview by default, --yes for the real run. -h for the usage.')]
+[group('release')]
 release *args:
     #!/bin/sh
     set -eu
+    # just (1.58) swallows every `-`-leading argument after the recipe name, and
+    # even a positional placed after it: `just release 0.15.0 --dry` loses both.
+    # The working paths for a full release are the env variable or the script:
+    #   RELEASE_ARGS="--yes" just release 0.15.0
+    #   scripts/release.sh 0.15.0 --yes
+    # A swallowed --yes degrades the run to a preview, which is the safe direction.
     exec scripts/release.sh "$@"
 
 [doc('Assert the version agrees everywhere and that no page pins it.')]
