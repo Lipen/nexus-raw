@@ -48,6 +48,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('audit', 'audit', [CompletionResultType]::ParameterValue, 'Audit a repository for integrity: the structural report, optionally byte-verified')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
+            [CompletionResult]::new('clean', 'clean', [CompletionResultType]::ParameterValue, 'Delete old versions so only the newest survive: a plan by default, deletion with --yes')
             [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
             [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
             [CompletionResult]::new('mv', 'mv', [CompletionResultType]::ParameterValue, 'Move a version: mirror it into the destination, then delete the same names at the source')
@@ -145,6 +146,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         }
         'nxr;up' {
             [CompletionResult]::new('--claim-first', '--claim-first', [CompletionResultType]::ParameterName, 'Upload this file first, alone, before any other name (claim-first)')
+            [CompletionResult]::new('--index-timeout', '--index-timeout', [CompletionResultType]::ParameterName, 'The visibility wait budget for --wait-index')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
@@ -155,6 +157,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--no-sha', '--no-sha', [CompletionResultType]::ParameterName, 'Skip marker generation and marker uploads')
             [CompletionResult]::new('--if-changed', '--if-changed', [CompletionResultType]::ParameterName, 'Skip names whose remote marker digest already equals the local copy, re-upload the changed rest')
+            [CompletionResult]::new('--wait-index', '--wait-index', [CompletionResultType]::ParameterName, 'After the run, poll the search index until every uploaded name is visible (the index lags behind writes on a real server)')
             [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
@@ -255,6 +258,27 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without deleting anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;clean' {
+            [CompletionResult]::new('--keep', '--keep', [CompletionResultType]::ParameterName, 'The number of newest versions to keep')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Delete for real. Without it the run prints the plan and touches nothing')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
@@ -653,6 +677,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('audit', 'audit', [CompletionResultType]::ParameterValue, 'Audit a repository for integrity: the structural report, optionally byte-verified')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4)')
+            [CompletionResult]::new('clean', 'clean', [CompletionResultType]::ParameterValue, 'Delete old versions so only the newest survive: a plan by default, deletion with --yes')
             [CompletionResult]::new('point', 'point', [CompletionResultType]::ParameterValue, 'Delete a pointer file (§5.4)')
             [CompletionResult]::new('mirror', 'mirror', [CompletionResultType]::ParameterValue, 'Pour a version from one repository into another: bytes, markers, the version document')
             [CompletionResult]::new('mv', 'mv', [CompletionResultType]::ParameterValue, 'Move a version: mirror it into the destination, then delete the same names at the source')
@@ -690,6 +715,9 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;help;rm' {
+            break
+        }
+        'nxr;help;clean' {
             break
         }
         'nxr;help;point' {

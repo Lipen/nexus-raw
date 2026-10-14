@@ -699,16 +699,9 @@ async fn run_clean(ctx: &Ctx, keep: usize, yes: bool) -> Result<(), Error> {
     }
     let mut deleted = 0usize;
     let mut failed = 0usize;
-    for (_, names) in &plan {
-        match ctx
-            .nxr
-            .rm(nexus_raw_core::Enumeration::Names(names.clone()))
-            .await
-        {
-            Ok(summary) => deleted += summary.removed,
-            Err(_) => failed += 1,
-        }
-    }
+    let (d, f) = ctx.nxr.clean_execute(&plan).await?;
+    deleted += d;
+    failed += f;
     let line = format!(
         "cleaned {deleted} name(s) across {doomed_versions} version(s){}",
         if failed > 0 {

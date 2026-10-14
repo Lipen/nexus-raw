@@ -816,19 +816,70 @@ impl Nxr {
             doomed.retain(|v| !protected.contains(v));
         }
         let mut plan = Vec::new();
+        // The names of a doomed version come straight from the search paths,
+        // filtered by the `<group…>/<version>/` prefix: the general name
+        // resolution strips the last segment (the version), which clean must
+        // keep, because deletion addresses the version directory itself.
+        let (_repo, group) = layout::ls::split_prefix(&self.base)?;
+        let present = layout::ls::search_paths(&self.client, &self.base, &_repo).await?;
+        let group_prefix = if group.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", group.join("/"))
+        };
         for v in &doomed {
-            let prefix = crate::model::name::NamePrefix::parse(&format!("{v}/"))?;
-            let names = self
-                .resolve_names(Enumeration::Filtered {
-                    inner: Box::new(Enumeration::Search),
-                    prefixes: vec![prefix],
+            let prefix = format!("{group_prefix}{v}/");
+            let mut names: Vec<ArtifactName> = present
+                .iter()
+                .filter_map(|p| {
+                    let rel = p.trim_start_matches('/');
+                    rel.strip_prefix(&prefix)
                 })
-                .await?;
+                .filter_map(|rel| ArtifactName::parse(rel).ok())
+                .collect();
+            names.sort();
             if !names.is_empty() {
                 plan.push((v.clone(), names));
             }
         }
         Ok(plan)
+    }
+
+    /// Execute a clean plan: DELETE every planned name, the `.sha256` marker
+    /// before the bytes, per-version atomic (a version fails alone).
+    ///
+    /// The URLs are built from the base and the version directory, the same
+    /// paths the plan read: the plan and the execution never disagree.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport errors of the first failing version; the returned
+    /// count names the versions that refused.
+    pub async fn clean_execute(
+        &self,
+        plan: &[(String, Vec<ArtifactName>)],
+    ) -> Result<(usize, usize), Error> {
+        let mut deleted = 0usize;
+        let mut failed = 0usize;
+        for (version, names) in plan {
+            let mut ok = true;
+            for name in names {
+                let full = format!("{version}/{}", name.as_str());
+                let marker_url = format!("{}{full}.sha256", self.base);
+                let bytes_url = format!("{}{full}", self.base);
+                for url in [marker_url, bytes_url] {
+                    if self.client.delete_url(&url).await.is_err() {
+                        ok = false;
+                    }
+                }
+            }
+            if ok {
+                deleted += names.len();
+            } else {
+                failed += 1;
+            }
+        }
+        Ok((deleted, failed))
     }
 
     /// Resolve the enumeration source into names, refusing an empty result like `down`.

@@ -45,6 +45,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "down" -d 'Download a remote
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "diff" -d 'Compare a local directory against a remote one: the delta report'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "audit" -d 'Audit a repository for integrity: the structural report, optionally byte-verified'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "clean" -d 'Delete old versions so only the newest survive: a plan by default, deletion with --yes'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "point" -d 'Delete a pointer file (§5.4)'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
@@ -105,6 +106,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print onl
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l index-timeout -d 'The visibility wait budget for --wait-index' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l workers -d 'Parallel artifact transfers' -r
@@ -113,6 +115,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -l connect-timeout-secs -d '
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l no-sha -d 'Skip marker generation and marker uploads'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l if-changed -d 'Skip names whose remote marker digest already equals the local copy, re-upload the changed rest'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l wait-index -d 'After the run, poll the search index until every uploaded name is visible (the index lags behind writes on a real server)'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l plan -l dry-run -d 'Print the plan without transferring anything'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -184,6 +187,19 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -l json -d 'Emit one NDJSON 
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s h -l help -d 'Print help'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l keep -d 'The number of newest versions to keep' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l workers -d 'Parallel artifact transfers' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l retry -d 'Attempts per HTTP request' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l yes -d 'Delete for real. Without it the run prints the plan and touches nothing'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l tls-insecure -d 'Skip TLS certificate verification'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -l json -d 'Emit one NDJSON event per line on stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
+complete -c nxr -n "__fish_nxr_using_subcommand clean" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l workers -d 'Parallel artifact transfers' -r
@@ -401,25 +417,26 @@ complete -c nxr -n "__fish_nxr_using_subcommand complete" -l json -d 'Emit one N
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s q -l quiet -d 'Print only the final summary line'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "get" -d 'GET a URL to a file or stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "put" -d 'PUT a file, optionally with its sha-sibling marker'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "head" -d 'HEAD a URL: status, size, content type'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "sha" -d 'The sha256 of a file or URL'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "up" -d 'Upload a local directory (§5.2)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "diff" -d 'Compare a local directory against a remote one: the delta report'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "audit" -d 'Audit a repository for integrity: the structural report, optionally byte-verified'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "point" -d 'Delete a pointer file (§5.4)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "ls" -d 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "channel" -d 'Read or write a channel ref: a token file with any name'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "verify" -d 'Check local bytes, markers and digests (no network)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "doctor" -d 'Diagnose credentials, TLS and reachability'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "service" -d 'Server metadata through the Sonatype service REST API (not part of the storage protocol)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "complete" -d 'Print a shell completion script to stdout (bash, zsh, fish, powershell)'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "get" -d 'GET a URL to a file or stdout'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "put" -d 'PUT a file, optionally with its sha-sibling marker'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "head" -d 'HEAD a URL: status, size, content type'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "sha" -d 'The sha256 of a file or URL'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "up" -d 'Upload a local directory (§5.2)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "diff" -d 'Compare a local directory against a remote one: the delta report'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "audit" -d 'Audit a repository for integrity: the structural report, optionally byte-verified'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "clean" -d 'Delete old versions so only the newest survive: a plan by default, deletion with --yes'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "point" -d 'Delete a pointer file (§5.4)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "ls" -d 'List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "channel" -d 'Read or write a channel ref: a token file with any name'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "verify" -d 'Check local bytes, markers and digests (no network)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "doctor" -d 'Diagnose credentials, TLS and reachability'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "service" -d 'Server metadata through the Sonatype service REST API (not part of the storage protocol)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "complete" -d 'Print a shell completion script to stdout (bash, zsh, fish, powershell)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm clean point mirror mv ls channel verify doctor service complete help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from channel" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from channel" -f -a "set" -d 'Write the token, optionally only forward in version order'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and __fish_seen_subcommand_from service" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'

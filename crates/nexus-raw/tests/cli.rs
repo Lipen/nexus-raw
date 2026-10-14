@@ -3694,7 +3694,7 @@ fn up_wait_index_timeout_is_a_warning_not_a_failure() {
 /// (any non-version file at the base) never enter the plan.
 #[test]
 fn clean_plan_and_yes_delete_exactly_the_doomed_versions() {
-    let srv = server(Scenario::SearchLag { lag_ms: 800 });
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
     let base = format!("{}repository/raw-main/g/", srv.base_url());
     for (v, bytes) in [("v0", ALPHA), ("v1", BETA), ("v2", ALPHA), ("v3", BETA)] {
         let src = TempDir::new().unwrap();
@@ -3702,9 +3702,6 @@ fn clean_plan_and_yes_delete_exactly_the_doomed_versions() {
         let up = nxr(&["up", src.path().to_str().unwrap(), &format!("{base}{v}/")]);
         expect_exit(&up, 0, "the version uploads");
     }
-    // The lag arms on the first PUT; by now the index serves everything.
-    std::thread::sleep(std::time::Duration::from_millis(1200));
-
     let plan = nxr(&["clean", &base, "--keep", "2", "--json"]);
     expect_exit(&plan, 0, "the plan is a success-shaped dry run");
     let versions: Vec<String> = ndjson(&plan)
@@ -3745,13 +3742,12 @@ fn clean_plan_and_yes_delete_exactly_the_doomed_versions() {
 /// A base holding fewer versions than --keep plans nothing and exits zero.
 #[test]
 fn clean_with_nothing_to_delete_is_a_noop() {
-    let srv = server(Scenario::SearchLag { lag_ms: 800 });
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
     let base = format!("{}repository/raw-main/g/", srv.base_url());
     let src = TempDir::new().unwrap();
     write_file(src.path(), "a.bin", ALPHA);
     let up = nxr(&["up", src.path().to_str().unwrap(), &format!("{base}only/")]);
     expect_exit(&up, 0, "the single version uploads");
-    std::thread::sleep(std::time::Duration::from_millis(1200));
 
     let plan = nxr(&["clean", &base, "--keep", "3"]);
     expect_exit(&plan, 0, "nothing to clean is not an error");
@@ -3769,7 +3765,7 @@ fn clean_with_nothing_to_delete_is_a_noop() {
 /// so --keep 1 keeps 1.10.0 and dooms 1.9.0 (a lexicographic sort deletes the wrong one).
 #[test]
 fn clean_orders_versions_dotted_numeric() {
-    let srv = server(Scenario::SearchLag { lag_ms: 600 });
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
     let base = format!("{}repository/raw-main/g/", srv.base_url());
     for v in ["1.9.0", "1.10.0"] {
         let src = TempDir::new().unwrap();
@@ -3777,7 +3773,6 @@ fn clean_orders_versions_dotted_numeric() {
         let up = nxr(&["up", src.path().to_str().unwrap(), &format!("{base}{v}/")]);
         expect_exit(&up, 0, "the version uploads");
     }
-    std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let plan = nxr(&["clean", &base, "--keep", "1", "--json"]);
     expect_exit(&plan, 0, "the plan succeeds");
@@ -3798,7 +3793,7 @@ fn clean_orders_versions_dotted_numeric() {
 /// plan skips a doomed version when a ref names it, so no channel dangles.
 #[test]
 fn clean_spares_the_version_a_channel_points_at() {
-    let srv = server(Scenario::SearchLag { lag_ms: 600 });
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
     let base = format!("{}repository/raw-main/g/", srv.base_url());
     for v in ["1.9.0", "1.10.0"] {
         let src = TempDir::new().unwrap();
@@ -3809,7 +3804,6 @@ fn clean_spares_the_version_a_channel_points_at() {
     // stable → 1.9.0: an old channel pointing at the otherwise doomed version.
     let set = nxr(&["channel", "set", &format!("{base}stable"), "1.9.0"]);
     expect_exit(&set, 0, "the channel writes");
-    std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let plan = nxr(&["clean", &base, "--keep", "1", "--json"]);
     expect_exit(&plan, 0, "the plan succeeds");

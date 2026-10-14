@@ -246,7 +246,7 @@ struct BaseParts {
 }
 
 /// `<…>/repository/<repo>/<group…>/` as a prefix: the group is everything after the repo, and there is no version segment requirement.
-fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
+pub(crate) fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
     let err = || {
         Error::misuse(format!(
             "URL {base:?} must point inside /repository/<name>/<group…>/"
