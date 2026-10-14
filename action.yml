@@ -17,9 +17,11 @@ inputs:
     required: false
     default: ''
   version:
-    description: 'The nxr release version to install (without the leading v).'
+    description: >-
+      The nxr release version to install (without the leading v), or `latest`
+      for the most recent release.
     required: false
-    default: '0.15.0'
+    default: 'latest'
   auth:
     description: >-
       Credentials as user:password. Pass through a secret; exported as
@@ -52,9 +54,15 @@ runs:
         ARCHIVE: '${{ steps.platform.outputs.archive }}'
       run: |
         set -eu
-        url="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ARCHIVE}"
+        if [ "$VERSION" = "latest" ]; then
+          url="https://github.com/${{ github.repository }}/releases/latest/download/${ARCHIVE}"
+          checksum_url="${url}.sha256"
+        else
+          url="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ARCHIVE}"
+          checksum_url="${url}.sha256"
+        fi
         curl --fail --silent --show-error --location -o "$ARCHIVE" "$url"
-        curl --fail --silent --show-error --location -o "${ARCHIVE}.sha256" "${url}.sha256"
+        curl --fail --silent --show-error --location -o "${ARCHIVE}.sha256" "${checksum_url}"
         echo "expected: $(cat "${ARCHIVE}.sha256")"
         sha256sum --check --status <<< "$(cat "${ARCHIVE}.sha256")"
         echo "path=$ARCHIVE" >> "$GITHUB_OUTPUT"
