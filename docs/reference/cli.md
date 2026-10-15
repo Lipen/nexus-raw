@@ -520,7 +520,6 @@ Without the overrides the shared `-u` (or env) applies to both sides.
 
 Every name travels through a staging directory: a Range-aware GET from the source, a digest check against the source marker, then a PUT of the bytes and of the `<name>.sha256` marker on the destination.
 The destination diff follows `up`'s rules: an identical complete copy is skipped, a diverging complete copy refuses the run, an unfinished copy is completed.
-When the enumeration leads with `version.json`, the conventional version document, that name is claimed: it transfers alone before any other name starts, and a failed claim aborts the run with nothing else sent.
 The staging directory carries a lock: a second concurrent `mirror` for the same source-destination pair refuses with a hint (exit 2) instead of interleaving the `.part` writes, on unix through an exclusive `flock`, on windows through a share-denied open of the lock file.
 
 `--json` prints the transfer event stream, a `downloading` and an `uploading` sequence for every moved name:

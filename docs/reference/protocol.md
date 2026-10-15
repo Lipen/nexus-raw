@@ -345,7 +345,7 @@ The enumeration is the source's (the same table as above), and the destination d
 Reads are GETs: every copied name is staged through the `down` machinery (a Range-aware GET into a part file, hashed on the fly, verified against the source marker when one exists) and then pushed through the `up` machinery, so the write order is exactly up's and a refusal never reaches the destination.
 The staging parts live in a per-(source, destination) directory under the system temp dir.
 A rerun resumes them through `206`, and a clean run removes the directory.
-On `up`, the conventional version document `version.json` is claimed: it transfers first and alone, and a failed claim aborts the run with nothing else sent.
+The transfer order follows the user's enumeration verbatim: no name is special.
 
 ## Transport
 
