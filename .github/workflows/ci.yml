@@ -160,9 +160,20 @@ jobs:
         with:
           node-version: 22
 
+      # The runner image's chromium now quits `--dump-dom` at the load event,
+      # long before the page's top-level await (the ServiceWorker listing)
+      # finishes, so the CLI dump path never sees the beacon. Drive the same
+      # binary under CDP instead: playwright-core holds the page open until
+      # the harness sees the beacon, not until the browser feels quiescent.
+      # No browser download here: the driver launches the image's chromium.
+      - name: Set up the browser driver
+        run: npm install --prefix /tmp/nxr-playwright --no-fund --no-audit playwright-core
+
       - name: Smoke the built sandbox
         working-directory: examples/wasm-sandbox
         run: node smoke.mjs
+        env:
+          NXR_WASM_DRIVER: /tmp/nxr-playwright/node_modules/playwright-core
 
   # The Node addon: a cargo build wrapped by the napi CLI. `npm run
   # build:debug` compiles the crate and leaves the platform addon, the

@@ -140,13 +140,29 @@ async function runBrowser(url, waitForBeacon) {
   if (driver) {
     // A CJS require, so the path may be the package directory or its entry file.
     const playwright = createRequire(import.meta.url)(driver)
-    const browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] })
+    // When the setup carries no pinned binary, drive the very browser the CLI
+    // path would have found: the runner image's chromium, under CDP control,
+    // where the harness (not the browser) decides when the run is over.
+    const binary = process.env.NXR_WASM_BROWSER ?? await findBrowser()
+    const browser = await playwright.chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+      ...(binary ? { executablePath: binary } : {}),
+    })
     const page = await browser.newPage()
     await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
-    await waitForBeacon()
+    // A beacon that never lands still leaves a page worth reading: the page's
+    // own error element names why the listing stalled, and that belongs in the
+    // failure message instead of an empty beacon list.
+    let late = ''
+    try {
+      await waitForBeacon()
+    } catch (e) {
+      late = ` (${String(e).slice(0, 200)})`
+    }
     const dom = await page.content()
     await browser.close()
-    return { dom, driver: 'playwright-core' }
+    return { dom, driver: `playwright-core over ${binary ?? 'bundled chromium'}${late}` }
   }
   const bin = await findBrowser()
   if (!bin) return null
@@ -239,13 +255,13 @@ async function main() {
     // window, for no change on our side; two shots, and only both silent make
     // the red. Every assertion below rides the passing attempt's facts.
     let run = null
-    const drivers = []
+    const attempts = []
     let passing = false
     for (let shot = 0; shot < 2 && !passing; shot++) {
       try {
         run = await runBrowser(`${staticHost.url}/`, waitForBeacon)
       } catch (e) {
-        drivers.push(String(e).slice(0, 120))
+        attempts.push(String(e).slice(0, 120))
         continue
       }
       if (!run) break
@@ -253,10 +269,15 @@ async function main() {
       if (beacon && beacon.rows > 0 && beacon.failed === '' && staticHost.apiHits() === 0) {
         passing = true
       } else {
-        drivers.push(run.driver)
+        attempts.push(run.driver)
       }
     }
     if (!run) {
+      if (attempts.length > 0) {
+        // A browser was found but every launch or drive attempt failed: that is
+        // a red, not a skip, or the job would report green on a broken browser.
+        throw new Error(`browser attempts failed: ${attempts.join(' | ')}`)
+      }
       if (requireBrowser) throw new Error('no chromium-family browser found (set NXR_WASM_BROWSER or NXR_WASM_DRIVER)')
       console.log('smoke: browser: no chromium-family binary found, skipping the service worker check')
       return
@@ -265,7 +286,14 @@ async function main() {
     // The backend refused everything (apiHits counts even those), yet a listing
     // landed: only the ServiceWorker fake can have answered it.
     const beacon = staticHost.beacons.at(-1)
-    assert.ok(beacon && beacon.rows > 0 && beacon.failed === '', `no passing beacon: ${JSON.stringify(staticHost.beacons)}, attempts: ${drivers.join(' | ')}`)
+    // The last attempt's DOM names what the page itself saw: the status line
+    // and the error pre hold the failure the beacon never carried.
+    const pageFacts = (dom) => {
+      const status = dom.match(/<p id="status">(.*?)<\/p>/s)?.[1] ?? ''
+      const error = dom.match(/<pre id="error">(.*?)<\/pre>/s)?.[1] ?? ''
+      return `status="${status.slice(0, 120)}" error="${error.slice(0, 300)}"`
+    }
+    assert.ok(beacon && beacon.rows > 0 && beacon.failed === '', `no passing beacon: ${JSON.stringify(staticHost.beacons)}, attempts: ${attempts.join(' | ')}, page: ${pageFacts(run.dom)}`)
     // The dom dump is a bonus, not the contract: some chromium builds never reach
     // the dump's quiescence while a service worker stays registered, and the
     // `--timeout` flag does not save those. The beacon already proves the wasm
