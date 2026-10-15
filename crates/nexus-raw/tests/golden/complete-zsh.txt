@@ -270,29 +270,6 @@ _arguments "${_arguments_options[@]}" : \
 ':src -- The remote directory URL:_default' \
 && ret=0
 ;;
-(clean)
-_arguments "${_arguments_options[@]}" : \
-'--keep=[The number of newest versions to keep]:N:_default' \
-'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
-'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
-'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
-'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
-'--workers=[Parallel artifact transfers]:N:_default' \
-'--retry=[Attempts per HTTP request]:N:_default' \
-'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
-'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
-'--yes[Delete for real. Without it the run prints the plan and touches nothing]' \
-'--tls-insecure[Skip TLS certificate verification]' \
-'--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
-'-v[Print more detail\: transfer starts and plan names]' \
-'--verbose[Print more detail\: transfer starts and plan names]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':dst -- The remote directory URL:_default' \
-&& ret=0
-;;
 (point)
 _arguments "${_arguments_options[@]}" : \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -792,10 +769,6 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
-(clean)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
 (point)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -909,7 +882,6 @@ _nxr_commands() {
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
-'clean:Delete old versions so only the newest survive\: a plan by default, deletion with --yes' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
 'mv:Move a version\: mirror it into the destination, then delete the same names at the source' \
@@ -971,11 +943,6 @@ _nxr__subcmd__channel__subcmd__set_commands() {
     local commands; commands=()
     _describe -t commands 'nxr channel set commands' commands "$@"
 }
-(( $+functions[_nxr__subcmd__clean_commands] )) ||
-_nxr__subcmd__clean_commands() {
-    local commands; commands=()
-    _describe -t commands 'nxr clean commands' commands "$@"
-}
 (( $+functions[_nxr__subcmd__complete_commands] )) ||
 _nxr__subcmd__complete_commands() {
     local commands; commands=()
@@ -1018,7 +985,6 @@ _nxr__subcmd__help_commands() {
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)' \
-'clean:Delete old versions so only the newest survive\: a plan by default, deletion with --yes' \
 'point:Delete a pointer file (§5.4)' \
 'mirror:Pour a version from one repository into another\: bytes, markers, the version document' \
 'mv:Move a version\: mirror it into the destination, then delete the same names at the source' \
@@ -1054,11 +1020,6 @@ _nxr__subcmd__help__subcmd__channel__subcmd__get_commands() {
 _nxr__subcmd__help__subcmd__channel__subcmd__set_commands() {
     local commands; commands=()
     _describe -t commands 'nxr help channel set commands' commands "$@"
-}
-(( $+functions[_nxr__subcmd__help__subcmd__clean_commands] )) ||
-_nxr__subcmd__help__subcmd__clean_commands() {
-    local commands; commands=()
-    _describe -t commands 'nxr help clean commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__complete_commands] )) ||
 _nxr__subcmd__help__subcmd__complete_commands() {

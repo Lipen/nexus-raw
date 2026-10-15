@@ -113,7 +113,6 @@ Every method mirrors a CLI command one-to-one.
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
 | `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden |
-| `ls_versions()` | `Vec<String>` | - | the version view through the search API, experimental |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 
 One parameter deserves its one-liner:
@@ -249,7 +248,7 @@ Both are covered variant by variant in [errors and exit codes](errors.md).
 
 ## Node bindings
 
-The npm package `@nexus-raw/nxr` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsVersions`, `lsAssets`) and `serviceRepos`.
+The npm package `@nexus-raw/nxr` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsAssets`) and `serviceRepos`.
 Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
 Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.

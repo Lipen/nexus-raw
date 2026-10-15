@@ -327,9 +327,6 @@ export function pointClear(url: string, opts?: NxrCommonOpts): Promise<NxrPointC
  * search API, and `.sha256` siblings are never returned (fetch one by name). */
 export function lsAssets(url: string, opts?: NxrCommonOpts): Promise<Array<string>>
 
-/** List the version tokens the server search API reports for this directory (`ls`). */
-export function lsVersions(url: string, opts?: NxrCommonOpts): Promise<Array<string>>
-
 /** One repository of a Nexus server, as the service REST API reports it. */
 export interface NxrRepoInfo {
   name: string

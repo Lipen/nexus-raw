@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The flag-guarded misuse case never had a success path, so the guarded form was a dead branch of the interface.
 - Documentation advertised manifest-based enumeration that was removed in 0.12.0: the `AGENTS.md` down-source list, the core README example and the CLI README quick start now show the real sources (`--name`, `--names-from`, `--ls`).
   The rust example and its tutorial were ported to explicit enumeration, and the example compiles again against the published crate.
+- `nxr clean`: the command is gone, enumerate and delete with `nxr rm` itself.
+  The command guessed versions by path-segment grammar, and a guessed scope is the one thing a destructive command must never do: a channel file named `stable` once passed as a "version".
+  Retention is a policy, and policies live on the user side: [the keep-N recipe](https://lipen.github.io/nexus-raw/how-to/retention/) builds it from `ls`, `channel get` and `rm` with explicit enumeration.
+  The library surface loses `Nxr::clean_plan`, `Nxr::clean_execute`, `Nxr::ls_versions`, `search_versions` and `validate_version` with it, and the npm package loses `lsVersions`.
 
 ## [0.16.0] - 2026-10-15
 

@@ -7,7 +7,6 @@
 use crate::error::Error;
 use crate::model::digest::Digest;
 use crate::model::name::percent_decode;
-use crate::model::name::validate_version;
 use crate::model::name::ArtifactName;
 use crate::transport::client::NexusClient;
 
@@ -100,31 +99,6 @@ pub async fn search_entries_counted(
         }))
         .collect();
     Ok((entries, hidden))
-}
-
-/// Versions under a repository/group base: the path segment right after the group prefix of every asset, collected and sorted.
-///
-/// The base is a *prefix* here: `<…>/repository/<repo>/<group…>/` with any number of group segments, including none.
-///
-/// # Errors
-///
-/// Returns [`Error::Misuse`] when `base` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
-pub async fn search_versions(client: &NexusClient, base: &str) -> Result<Vec<String>, Error> {
-    let (repo, group) = split_prefix(base)?;
-    // The `group` search parameter matches Maven coordinates, not raw path
-    // prefixes, so passing it would empty the listing on a real Nexus.
-    // The client-side filter below scopes the result instead.
-    let paths = paginate(client, base, &repo).await?;
-    let mut versions = std::collections::BTreeSet::new();
-    for path in paths {
-        let rel = drop_segments(&path, group.len());
-        if let Some(seg) = rel.split('/').next() {
-            if !seg.is_empty() && validate_version(seg).is_ok() {
-                versions.insert(seg.to_owned());
-            }
-        }
-    }
-    Ok(versions.into_iter().collect())
 }
 
 /// Artifact names under a version directory URL: every asset path that starts with `<group>/<version>/`, mapped to the relative name.

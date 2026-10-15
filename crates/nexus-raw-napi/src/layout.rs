@@ -187,34 +187,6 @@ pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<
         .collect())
 }
 
-/// List the version tokens the server search API reports for this directory.
-/// The CLI `ls` prints the raw tree, so the version view lives only in the library API.
-#[napi]
-pub async fn ls_versions(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<String>> {
-    let o = opts.unwrap_or_default();
-    let (common, on_event) = split_common(
-        o.auth,
-        o.workers,
-        o.retry,
-        o.connect_timeout_ms,
-        o.stall_ms,
-        o.tls_insecure,
-        o.on_event,
-    );
-    let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
-    let (tx, rx) = mpsc::unbounded_channel();
-    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
-    let pump = spawn_pump(rx, on_event);
-    let versions = nxr.ls_versions().await;
-    drop(nxr);
-    let versions = match versions {
-        Ok(v) => v,
-        Err(e) => return Err(finish_pump_err(pump, e).await),
-    };
-    finish_pump(pump).await?;
-    Ok(versions)
-}
-
 /// One repository of a Nexus server, as the service REST API reports it.
 #[napi(object)]
 pub struct NxrRepoInfo {

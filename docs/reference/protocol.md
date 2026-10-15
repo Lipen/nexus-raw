@@ -380,10 +380,10 @@ Decoding is streaming: a frame that declares its content size fails once the out
 
 The CLI speaks to two different server planes, and each command states which one it needs.
 
-- **Storage**: `get put head sha up down diff mirror mv rm point ls channel verify clean`.
+- **Storage**: `get put head sha up down diff mirror mv rm point ls channel verify`.
   Lives entirely on the four storage methods of this protocol, and works against any static host.
 - **Service** (read-only diagnostics): `service repos/status/repo/assets/eula`, `doctor --deep`,
-  the `audit` cross-check, `clean`'s enumeration, `diff --via search`, `up --wait-index`.
+  the `audit` cross-check, `diff --via search`, `up --wait-index`.
   Requires the Sonatype service REST API and the search index: a static host has neither.
 
 Degradation is uniform inside the service plane: an enumeration-family refusal

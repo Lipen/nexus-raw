@@ -118,21 +118,6 @@ impl Deref for ArtifactName {
     }
 }
 
-/// Version segment validation (§4.1 sane check): same grammar as a name segment.
-///
-/// # Errors
-///
-/// Returns [`Error::Misuse`] when `version` is not a valid name segment: empty, too long, a character outside `[A-Za-z0-9._-]`, or `.`/`..`.
-pub fn validate_version(version: &str) -> Result<(), Error> {
-    if valid_segment(version) {
-        Ok(())
-    } else {
-        Err(Error::misuse(format!(
-            "invalid version segment {version:?}: must match [A-Za-z0-9._-]+, 1..=255 bytes, not '.'/'..'"
-        )))
-    }
-}
-
 /// Percent-decode a path segment: `%XX` sequences become bytes, everything else
 /// passes through, and an invalid escape stays literal (`bad%2g` never panics).
 pub(crate) fn percent_decode(seg: &str) -> String {
@@ -217,15 +202,6 @@ mod tests {
     fn sibling_name() {
         let n = ArtifactName::parse("a.zip").unwrap();
         assert_eq!(n.sibling(), "a.zip.sha256");
-    }
-
-    #[test]
-    fn version_validation() {
-        validate_version("1.14.0").unwrap();
-        validate_version("nightly-2026.09.25").unwrap();
-        assert!(validate_version("").is_err());
-        assert!(validate_version("../etc").is_err());
-        assert!(validate_version("a b").is_err());
     }
 }
 

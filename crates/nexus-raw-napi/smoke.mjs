@@ -66,7 +66,7 @@ try {
   assert.equal(await nxr.sha(join(dir, 'a.txt')), hex)
 
   // The new exports exist and are callable: the surface is at parity with the CLI.
-  for (const name of ['rm', 'mirror', 'diff', 'pointClear', 'lsAssets', 'lsVersions']) {
+  for (const name of ['rm', 'mirror', 'diff', 'pointClear', 'lsAssets']) {
     assert.equal(typeof nxr[name], 'function', `${name} is exported`)
   }
 
