@@ -16,7 +16,7 @@ usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   "") ;;
-  *) usage_err ;;
+  -*) usage_err ;;
 esac
 
 f="${1:-docs/llms.txt}"
@@ -69,6 +69,36 @@ if dup="$(sed -n '/^## /,$p' "$f" | grep -E '^[[:space:]]*- \[' | awk '{
   echo "llms-check: a link entry repeats a URL:" >&2
   echo "$dup" >&2
   failed=1
+fi
+
+# Coverage: every content page of the mkdocs nav must appear in the index.
+# llms.txt is the agent entry point advertised by `nxr --help`: a page missing
+# from it is invisible to every machine consumer, and shape checks alone cannot
+# see that drift (it took three real pages to prove the point).
+# The nav extraction takes the `.md` path from lines like `- Name: path/to/page.md`
+# (leftmost-longest match: the display name stops at the space, the path is what
+# ends in .md) and handles a bare `- path.md` line the same way.
+# `index.md` (the site home) and `assets/`, `stylesheets/`, `javascripts/` are
+# not agent content and stay exempt.
+# A nav block that yields no pages means the parser drifted from mkdocs.yml's
+# shape, and a vacuous pass is the one failure this gate must never have.
+if [ -f mkdocs.yml ]; then
+  pages="$(awk '/^nav:/{f=1; next} f && /^[^[:space:]]/{f=0} f {if (match($0, /[A-Za-z0-9_./-]+\.md$/)) print substr($0, RSTART, RLENGTH)}' mkdocs.yml)"
+  if [ -z "$pages" ]; then
+    echo "llms-check: the mkdocs nav extraction found no pages: the parser drifted, fix this script" >&2
+    failed=1
+  else
+    missing="$(printf '%s\n' "$pages" \
+      | grep -v '^index\.md$' \
+      | while IFS= read -r page; do
+          grep -qF "/${page%.md}/" "$f" || echo "$page"
+        done)"
+    if [ -n "$missing" ]; then
+      echo "llms-check: a nav page is missing from the index (every agent-facing page must be linked):" >&2
+      echo "$missing" >&2
+      failed=1
+    fi
+  fi
 fi
 
 [ "$failed" = 0 ] || exit 1

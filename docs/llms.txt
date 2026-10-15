@@ -73,6 +73,8 @@ Quirks that are not bugs:
 - [Drive it with an agent](https://lipen.github.io/nexus-raw/how-to/agents/): the one-page cookbook: intent to command to expected result
 - [Integrate it](https://lipen.github.io/nexus-raw/how-to/integrate/): scripting over NDJSON, exit codes and hints
 - [Publish a version](https://lipen.github.io/nexus-raw/how-to/publish/): up, markers, channels, the sha-sibling rule
+- [Audit a repository](https://lipen.github.io/nexus-raw/how-to/audit/): the integrity report: structural findings, --bytes for silent bitrot
+- [Keep the newest versions](https://lipen.github.io/nexus-raw/how-to/retention/): keep-N retention from ls, channels and rm, no guessing
 - [Consume artifacts](https://lipen.github.io/nexus-raw/how-to/consume/): down, unpack, digest verification
 - [Use in CI](https://lipen.github.io/nexus-raw/how-to/ci/): credentials, caching, the retry contract
 - [Named remotes](https://lipen.github.io/nexus-raw/how-to/config/): the -R alias file: one TOML, read only when named
@@ -86,6 +88,7 @@ Quirks that are not bugs:
 - [Errors and exit codes](https://lipen.github.io/nexus-raw/reference/errors/): the error taxonomy and every hint
 - [Wire protocol](https://lipen.github.io/nexus-raw/reference/protocol/): store shape, markers and forbiddances
 - [Wire invariants](https://lipen.github.io/nexus-raw/reference/invariants/): the rules every client must hold
+- [The mock server](https://lipen.github.io/nexus-raw/reference/mock/): failure scenarios, Spec composition, seed-dir and config
 - [Rust API](https://lipen.github.io/nexus-raw/reference/api/): the `Nxr` facade, events and configuration
 - [The TUI](https://lipen.github.io/nexus-raw/reference/tui/): keys, presets and config of the terminal browser
 

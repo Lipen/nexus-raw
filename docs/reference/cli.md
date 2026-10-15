@@ -1225,6 +1225,9 @@ A captured transfer stream:
 ```
 
 The shapes are pinned by the golden files in `crates/nexus-raw/tests/golden/` and documented variant by variant in [the API page](api.md#events).
+These shapes are a stable contract for scripts and agents.
+New fields are additive: an existing field never changes its type, its meaning or its position, and a field never disappears.
+Consumers must ignore unknown fields, and must not depend on key order inside one object.
 
 ## Exit codes
 
