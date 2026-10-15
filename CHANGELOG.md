@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- `up --wait-index` polls the search index with exponential backoff instead of a fixed interval: 500ms, then 1s, 2s, 4s, capped at 5s.
+  A 30s budget costs roughly 8 listing requests instead of roughly 60.
+
 ### Removed
 
 - `nxr point --clear <URL>`: the `--clear` flag is gone, `nxr point <URL>` deletes directly.
