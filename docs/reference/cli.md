@@ -679,7 +679,6 @@ nxr point <URL>
 DELETE the pointer file the URL names: the channel ref, retired.
 There is no `--if-forward` here and no comparison at all: clearing is an action, not a move in version order.
 An already-absent pointer is a normal outcome (`absent`, exit 0), so the command is idempotent.
-`point` without `--clear` is misuse (exit 2): deleting is the only operation the command has.
 
 ```console
 $ nxr channel set https://nexus.example.com/repository/raw-main/stable 1.4.0
@@ -698,7 +697,7 @@ $ echo $?
 |:----:|:-----|
 | `0` | the pointer is deleted, or was already absent |
 | `1` | the read-only repository refused (403/405) |
-| `2` | misuse: `point` without `--clear`, a non-http URL |
+| `2` | misuse: a non-http URL |
 | `3` | transport or auth failure |
 
 `--json` prints one object per outcome:
@@ -1235,7 +1234,7 @@ Four codes cover every failure, and the mapping from error to code has one home,
 |:----:|:------|:----------------------|
 | `0` | ok | transfer converged, digest verified, status reported, channel written or kept, version deleted or already absent |
 | `1` | data | `mismatch`, `incomplete`, `missing`, `cannot enumerate`, the read-only repository refusing a delete, local I/O failures, the storage 404 of `get` (the object is absent. a retry cannot change it), the findings of `audit` |
-| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `point` without `--clear`, `get --json` without `-o`, `audit --sample` without `--bytes` |
+| `2` | misuse | bad flags, unsafe names, half-set credentials, empty directories, non-http URLs, `get --json` without `-o`, `audit --sample` without `--bytes` |
 | `3` | transport | auth failures, connection resets, stalls, 5xx after retries, other unexpected statuses |
 
 `verify` is offline and cannot produce `3`.
