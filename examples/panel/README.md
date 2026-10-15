@@ -180,3 +180,9 @@ The replay also rewinds the job card: the `start` frame resets it, so a reconnec
 - The mock has no real search endpoint, so `lsEntries` needs the seeded page described above.
 - The mock's group repository does not dispatch the search API, so listings against `raw-all` answer with an enumerate error.
 - Job history is capped at the last 50 jobs in memory.
+
+## Status
+
+The panel is frozen.
+It exists as an integration check for the napi bindings.
+Development does not continue here.
