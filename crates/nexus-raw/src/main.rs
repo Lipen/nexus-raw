@@ -215,7 +215,7 @@ pub(crate) enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Delete the enumerated names from a remote directory (§5.4).
+    /// Delete the enumerated names from a remote directory (§5.4): a plan by default, deletion with --yes.
     Rm {
         /// The remote directory URL.
         #[arg(value_name = "SRC_URL")]
@@ -229,9 +229,9 @@ pub(crate) enum Cmd {
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Print the plan without deleting anything.
+        /// Delete for real. Without it the run prints the plan and touches nothing.
         #[arg(long)]
-        dry_run: bool,
+        yes: bool,
         /// Keep only names under this whole-segment prefix (repeatable).
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
@@ -291,9 +291,9 @@ pub(crate) enum Cmd {
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Print both plans (the pour and the delete) without moving anything.
+        /// Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing.
         #[arg(long)]
-        dry_run: bool,
+        yes: bool,
         /// Credentials for the source only, overriding the shared `-u`.
         #[arg(long, value_name = "USER:PASS")]
         src_user: Option<String>,

@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The command guessed versions by path-segment grammar, and a guessed scope is the one thing a destructive command must never do: a channel file named `stable` once passed as a "version".
   Retention is a policy, and policies live on the user side: [the keep-N recipe](https://lipen.github.io/nexus-raw/how-to/retention/) builds it from `ls`, `channel get` and `rm` with explicit enumeration.
   The library surface loses `Nxr::clean_plan`, `Nxr::clean_execute`, `Nxr::ls_versions`, `search_versions` and `validate_version` with it, and the npm package loses `lsVersions`.
+- `rm --dry-run` and `mv --dry-run`: the flags are gone, both commands plan by default and delete only with `--yes`.
+  Deletion being the default unless flagged was the dialect inversion: a destructive command must demand the explicit go.
+  The npm `rm` surface follows: the promise resolves to the plan by default, `confirm: true` deletes, and `dryRun` is gone from `NxrRmOpts`.
+- The implicit `version.json` claim in `mirror` and `mv`: no name is special, the transfer order follows the user's enumeration verbatim.
+  The explicit `up --claim-first` is untouched: an opt-in claim stays a user decision.
 
 ## [0.16.0] - 2026-10-15
 

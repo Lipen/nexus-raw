@@ -882,10 +882,7 @@ impl Nxr {
     /// same digest skips, a different digest refuses, an unfinished copy is completed.
     /// Each copied name is staged through the down machinery (Range-aware GET, digest
     /// check) and pushed through the up machinery (PUT bytes, then PUT marker).
-    /// When the enumeration lists the conventional version document
-    /// ([`VERSION_DOCUMENT`](crate::sync::mirror::VERSION_DOCUMENT)) first, it is claimed:
-    /// it transfers alone before any other name, and a failed claim aborts the run with
-    /// nothing else sent.
+    /// No name is special: the transfer order follows the user's enumeration verbatim.
     ///
     /// # Errors
     ///
@@ -893,8 +890,8 @@ impl Nxr {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
         let actions = self.mirror_plan(dst, enum_src).await?;
-        // Claim-first: the version document, when the enumeration leads with it.
-        let claim = mirror::claim_first(&actions);
+        // No implicit claim: no name is special, the enumeration order stands.
+        let claim = None::<ArtifactName>;
         let staging = mirror::staging_dir(&self.base, &dst.base);
         // The parts may hold private bytes in a shared temp location: create the
         // directory private instead of publishing them to every local user.

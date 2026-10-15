@@ -545,12 +545,13 @@ The staging directory carries a lock: a second concurrent `mirror` for the same 
 ## nxr rm
 
 ```
-nxr rm <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run] [--prefix PREFIX]
+nxr rm <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [--prefix PREFIX] [--yes]
 ```
 
 Delete a version, name by name: the `.sha256` marker of every enumerated name goes first, then the bytes, so nobody ever sees a complete object mid-delete ([the protocol](protocol.md#deletion)).
 The enumeration source is mandatory and shared with `down`: repeatable `--name` or best-effort `--ls`.
 Without any source the run refuses with `cannot enumerate` (exit 1).
+The plan is the default: without `--yes` nothing is deleted and the run exits 0.
 
 Deletion is by name, not by content.
 Divergence is never checked: a diverging or broken remote copy is deleted like any other, because deletion is irreversible by definition.
@@ -561,19 +562,19 @@ Nothing is deleted beyond the enumerated names: a rerun passes the same `--name`
 |:-----|:--------|
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
-| `--dry-run` | probe and print the plan: `rm <name>` for present names, `missing <name>` for absent ones, nothing deleted |
+| `--yes` | delete for real. Without it the run prints the plan (`rm <name>` for present names, `missing <name>` for absent ones) and touches nothing |
 | `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 
 A full version goes away in one call:
 
 ```console
-$ nxr rm --dry-run https://nexus.example.com/repository/raw-main/1.14.0/
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/ --ls
 rm a.zip
 rm b.bin
 rm version.json
 $ echo $?
 0
-$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/ --ls --yes
 × a.zip removed
 × b.bin removed
 × version.json removed
@@ -585,7 +586,7 @@ $ echo $?
 The rerun is a normal 404 walk:
 
 ```console
-$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/ --ls --yes
 ○ a.zip missing
 ○ b.bin missing
 ○ version.json missing
@@ -597,7 +598,7 @@ $ echo $?
 A read-only repository refuses before anything moves:
 
 ```console
-$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/
+$ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/ --ls --yes
 uploaded 0, downloaded 0, skipped 0
 failed: a.zip
 error: read-only: https://nexus.example.com/repository/raw-main/1.14.0/a.zip.sha256: HTTP 403
@@ -608,7 +609,7 @@ $ echo $?
 
 | Exit | When |
 |:----:|:-----|
-| `0` | every name deleted or already absent. also the `--dry-run` plan |
+| `0` | every name deleted or already absent, or the plan printed without `--yes` |
 | `1` | data refusal: `cannot enumerate`, the read-only repository (403/405). local I/O failures |
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure: the `failed:` list names where the run stopped |
@@ -624,7 +625,7 @@ A rerun emits `missing` events and still exits 0:
 {"downloaded":0,"event":"summary","failed":[],"removed":1,"skipped":1,"uploaded":0}
 ```
 
-`--dry-run --json` prints one object per plan line:
+Without `--yes` the `--json` output is one object per plan line:
 
 ```json
 {"action":"rm","name":"a.zip","size":23}
@@ -640,8 +641,9 @@ $ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.exa
 ```
 
 The enumeration lives at the source, with the same sources as `mirror`: repeatable `--name`, `--names-from`, `--ls`, `--prefix`.
-The conventional version document transfers first (the claim), exactly like `mirror`.
+No name is special: the transfer order follows the enumeration verbatim.
 Per-side credentials work here too: `--src-user` and `--dst-user` override the shared `-u`.
+The plan is the default: without `--yes` the run prints both plans and moves nothing.
 
 The safety rule is the point of the command: nothing is deleted until the pour converged.
 A failed mirror leaves the source untouched and the destination empty.
@@ -650,10 +652,10 @@ The stderr line `delete phase:` separates the two halves of the run in human out
 
 A read-only source (a group repository, for example) pours fine and then refuses the delete with exit 1: the result is the duplicate above, and `mirror` without deletion is the right tool for read-only sources.
 
-`mv --dry-run` prints two plans and moves nothing:
+Without `--yes` `mv` prints two plans and moves nothing:
 
 ```console
-$ nxr mv --dry-run https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
+$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
 will move:
 copy a.zip
 will delete:
@@ -662,7 +664,7 @@ rm a.zip
 
 | Exit | When |
 |:----:|:-----|
-| `0` | the pour converged and the delete finished |
+| `0` | the pour converged and the delete finished, or the plans printed without `--yes` |
 | `1` | data refusal: `cannot enumerate`, the delete phase refused on a read-only source |
 | `2` | misuse: a bad URL, name or prefix |
 | `3` | transport or auth failure of either phase |

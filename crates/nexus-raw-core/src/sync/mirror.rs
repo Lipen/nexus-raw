@@ -23,10 +23,6 @@ use crate::sync::up;
 use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
 
-/// The conventional version-document name.
-/// When the enumeration lists it first, the mirror claims it: it transfers alone, before any other name, and a failed claim aborts the run with nothing else sent.
-pub const VERSION_DOCUMENT: &str = "version.json";
-
 /// The staging directory of a (source, destination) pair: a stable temp location, so the part files of a killed run are the rerun's resume fuel.
 /// The name is a 128-bit truncation of the SHA-256 over both bases: two pairs sharing a staging dir would interleave part writes, and the space stays far beyond birthday reach.
 /// The directory is removed on a fully successful run and kept otherwise.
@@ -393,16 +389,6 @@ async fn copy_one(
 fn action_name(action: &MirrorAction) -> ArtifactName {
     match action {
         MirrorAction::Skip { name, .. } | MirrorAction::Copy { name, .. } => name.clone(),
-    }
-}
-
-/// The version document to claim first, when the enumeration leads with it.
-pub(crate) fn claim_first(actions: &[MirrorAction]) -> Option<ArtifactName> {
-    match actions.first() {
-        Some(MirrorAction::Copy { name, .. }) if name.as_str() == VERSION_DOCUMENT => {
-            Some(name.clone())
-        }
-        _ => None,
     }
 }
 

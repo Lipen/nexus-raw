@@ -732,7 +732,6 @@ async fn down_markerless_remote_writes_computed_marker() {
 const DOC: &[u8] = br#"{"schema_version":1,"version":"1.0.0","artifacts":["a.zip","b.bin"]}"#;
 
 /// Seed a source repository through `up`: two payloads, the version document and the manifest enumerating them, every name with its marker.
-/// The manifest lists the version document first, the convention the mirror's claim-first rule reads.
 async fn seed_source(mock: &MockNexus) -> Nxr {
     let local = TempDir::new().unwrap();
     seed_complete(local.path(), "a.zip", CONTENT);
@@ -787,24 +786,24 @@ async fn mirror_pours_byte_equal_trees_through_a_manifest() {
         );
     }
 
-    // The enumeration led with the version document, so it claimed the run:
-    // its bytes and its marker land before any other name's writes.
+    // No name is special: the mirror writes every name's bytes before its own
+    // marker, and the request order follows the plan, not a reserved filename.
     let puts: Vec<String> = dst_mock
         .requests()
         .iter()
         .filter(|r| r.method == "PUT")
         .map(|r| r.path.clone())
         .collect();
-    assert_eq!(
-        puts.first().map(String::as_str),
-        Some(format!("{VERSION}/version.json").as_str()),
-        "the version document is claimed first: {puts:?}"
-    );
-    assert_eq!(
-        puts.get(1).map(String::as_str),
-        Some(format!("{VERSION}/version.json.sha256").as_str()),
-        "the claim marker precedes the other names: {puts:?}"
-    );
+    for name in FIXTURE {
+        let bytes = format!("{VERSION}/{name}");
+        let marker = format!("{bytes}.sha256");
+        let b = puts.iter().position(|p| p == &bytes);
+        let m = puts.iter().position(|p| p == &marker);
+        let (Some(b), Some(m)) = (b, m) else {
+            panic!("{name} missing from the PUT log: {puts:?}");
+        };
+        assert!(b < m, "{name}: bytes before its marker: {puts:?}");
+    }
 
     // A clean run consumes its staging dir.
     assert!(!staging_dir(src.base(), dst.base()).exists());
@@ -1580,7 +1579,7 @@ async fn readonly_refuses_rm_and_changes_nothing() {
     );
 }
 
-/// `rm --dry-run` probes and plans, but the mock never sees a DELETE and the bytes never move.
+/// `rm_plan` probes and plans, but the mock never sees a DELETE and the bytes never move.
 #[tokio::test]
 async fn rm_dry_run_plans_and_touches_nothing() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();

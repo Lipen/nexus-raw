@@ -2062,6 +2062,7 @@ fn rm_removes_whole_version_and_reruns_clean() {
 
     let rm = nxr(&[
         "rm",
+        "--yes",
         &base,
         "--name",
         "a.zip",
@@ -2103,6 +2104,7 @@ fn rm_removes_whole_version_and_reruns_clean() {
 
     let second = nxr(&[
         "rm",
+        "--yes",
         &base,
         "--name",
         "a.zip",
@@ -2144,7 +2146,7 @@ fn rm_readonly_refuses_and_keeps_bytes() {
     let srv = server(Scenario::ReadOnly);
     let base = publish_for_rm(&srv, &["a.zip", "b.bin"]);
 
-    let rm = nxr(&["rm", &base, "--name", "a.zip", "--name", "b.bin"]);
+    let rm = nxr(&["rm", "--yes", &base, "--name", "a.zip", "--name", "b.bin"]);
     expect_exit(&rm, 1, "read-only refusal is exit 1");
     let err = stderr(&rm);
     assert!(
@@ -2164,15 +2166,14 @@ fn rm_readonly_refuses_and_keeps_bytes() {
     assert!(!successful, "no DELETE may succeed");
 }
 
-/// rm --dry-run prints the plan and the mock counts zero DELETEs.
+/// rm plans by default: the plan prints and the mock counts zero DELETEs.
 #[test]
-fn rm_dry_run_touches_no_bytes() {
+fn rm_plans_by_default_and_touches_no_bytes() {
     let srv = server(Scenario::Atomic);
     let base = publish_for_rm(&srv, &["a.zip", "b.bin", "version.json", "ghost.bin"]);
 
     let dry = nxr(&[
         "rm",
-        "--dry-run",
         &base,
         "--name",
         "a.zip",
@@ -2183,7 +2184,7 @@ fn rm_dry_run_touches_no_bytes() {
         "--name",
         "ghost.bin",
     ]);
-    expect_exit(&dry, 0, "rm --dry-run");
+    expect_exit(&dry, 0, "rm without --yes");
     let out = stdout(&dry);
     assert!(out.contains("rm a.zip"), "plan line: {out}");
     assert!(
@@ -2223,6 +2224,7 @@ fn rm_json_events_parse_and_summarize() {
     let rm = nxr(&[
         "--json",
         "rm",
+        "--yes",
         &base,
         "--name",
         "a.zip",
@@ -2254,6 +2256,7 @@ fn rm_json_events_parse_and_summarize() {
     let second = nxr(&[
         "--json",
         "rm",
+        "--yes",
         &base,
         "--name",
         "a.zip",
@@ -2724,7 +2727,14 @@ fn mv_moves_and_empties_the_source() {
     seed_mirror_source(&src);
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
+    let out = nxr(&[
+        "mv",
+        "--yes",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "a.zip",
+    ]);
     expect_exit(&out, 0, "a converged move is exit 0");
 
     // The destination holds the whole poured name.
@@ -2735,21 +2745,14 @@ fn mv_moves_and_empties_the_source() {
     assert!(src.store_get("1.14.0/a.zip.sha256").is_none());
 }
 
-/// `mv --dry-run` prints both plans and moves nothing.
+/// `mv` plans by default: both plans print and nothing moves.
 #[test]
-fn mv_dry_run_prints_both_plans() {
+fn mv_plans_by_default_and_prints_both_plans() {
     let src = server(Scenario::Atomic);
     seed_mirror_source(&src);
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&[
-        "mv",
-        &dir_url(&src),
-        &dir_url(&dst),
-        "--dry-run",
-        "--name",
-        "a.zip",
-    ]);
+    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
     expect_exit(&out, 0, "a plan is exit 0");
     let text = stdout(&out);
     assert!(text.contains("will move:"), "{text}");
@@ -2771,7 +2774,14 @@ fn mv_failed_mirror_keeps_the_source() {
         pass: "secret".into(),
     });
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
+    let out = nxr(&[
+        "mv",
+        "--yes",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "a.zip",
+    ]);
     expect_exit(&out, 3, "the pour fails on destination auth");
 
     assert!(
@@ -2789,7 +2799,14 @@ fn mv_refused_delete_leaves_a_duplicate() {
     let src = MockNexus::start_group(&[&member, &server(Scenario::Atomic)]).unwrap();
     let dst = server(Scenario::Atomic);
 
-    let out = nxr(&["mv", &dir_url(&src), &dir_url(&dst), "--name", "a.zip"]);
+    let out = nxr(&[
+        "mv",
+        "--yes",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "a.zip",
+    ]);
     expect_exit(&out, 1, "the read-only source refuses the delete phase");
 
     // The pour converged before the delete was refused: both sides hold the bytes.

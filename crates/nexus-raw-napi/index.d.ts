@@ -164,11 +164,11 @@ export interface NxrRmOpts extends NxrCommonOpts {
   names?: string[]
   /** Best-effort enumeration through the server search API (`--ls`). */
   ls?: boolean
-  /** Resolve to the plan without deleting anything (`rm --dry-run`). */
-  dryRun?: boolean
+  /** Delete for real. Without it the promise resolves to the plan (`rm --yes`). */
+  confirm?: boolean
 }
 
-/** One planned deletion, shaped like the CLI `rm --dry-run` lines. */
+/** One planned deletion, shaped like the CLI `rm` plan lines. */
 export interface NxrRmPlanAction {
   /** `rm` when the remote copy exists and would be deleted, `missing` when it is already absent. */
   action: 'rm' | 'missing'
@@ -177,7 +177,7 @@ export interface NxrRmPlanAction {
   size?: number
 }
 
-/** The plan an `rm` dry run resolves to. */
+/** The plan `rm` resolves to by default. */
 export interface NxrRmPlan {
   actions: NxrRmPlanAction[]
 }

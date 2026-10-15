@@ -105,7 +105,7 @@ Every method mirrors a CLI command one-to-one.
 | `mirror_plan(dst, enum_src)` | `Vec<MirrorAction>` | `mirror --dry-run` | probe both sides and classify, emit the plan, move nothing |
 | `mirror(dst, enum_src)` | `Summary` | `nxr mirror` | pour the enumerated names into a second facade's base: staged through the `down` machinery, written in `up`'s order |
 | `rm(enum_src)` | `Summary` | `nxr rm` | DELETE the enumerated names, marker before bytes: 404 is success, divergence is never checked |
-| `rm_plan(enum_src)` | `Vec<RmAction>` | `rm --dry-run` | `Remove`/`Missing` per name by remote existence, nothing deleted |
+| `rm_plan(enum_src)` | `Vec<RmAction>` | `rm` without `--yes` | `Remove`/`Missing` per name by remote existence, nothing deleted |
 | `enumerate(enum_src)` | `Vec<ArtifactName>` | - | resolve any enumeration source to its deduplicated names |
 | `service_repos()` | `Vec<RepoInfo>` | `nxr service repos` | server metadata through the service REST API, not storage protocol |
 | `point_clear(url)` | `ClearOutcome` | `nxr point` | DELETE the pointer: `Cleared` or `Absent` |

@@ -344,17 +344,18 @@ fn delta_json(d: &nexus_raw_core::Delta) -> serde_json::Value {
 }
 
 /// Delete the enumerated names from a remote directory: marker first, then bytes.
+/// A plan by default: without `--yes` the run prints the plan and deletes nothing.
 pub(crate) async fn rm(
     cli: &Cli,
     src: &str,
     names: &[String],
     names_from: &[String],
     ls: bool,
-    dry_run: bool,
+    yes: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
-    let result = run_rm(&ctx, names, names_from, ls, dry_run, prefixes).await;
+    let result = run_rm(&ctx, names, names_from, ls, yes, prefixes).await;
     finish(ctx).await;
     result
 }
@@ -364,12 +365,12 @@ async fn run_rm(
     names: &[String],
     names_from: &[String],
     ls: bool,
-    dry_run: bool,
+    yes: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let enum_src =
         enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
-    if dry_run {
+    if !yes {
         for a in ctx.nxr.rm_plan(enum_src).await? {
             crate::cmd::print_line(ctx.json, &rm_plan_line(&a), &rm_action_json(&a));
         }
@@ -458,7 +459,7 @@ pub(crate) async fn mv(
     names: &[String],
     names_from: &[String],
     ls: bool,
-    dry_run: bool,
+    yes: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
@@ -466,7 +467,7 @@ pub(crate) async fn mv(
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
     let enum_src =
         enumeration_source(src_nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
-    let result = run_mv(&src_nxr, &dst_nxr, enum_src, dry_run, cli.json).await;
+    let result = run_mv(&src_nxr, &dst_nxr, enum_src, yes, cli.json).await;
     drop(src_nxr);
     drop(dst_nxr);
     session.finish().await;
@@ -477,12 +478,12 @@ async fn run_mv(
     src: &Nxr,
     dst: &Nxr,
     enum_src: Enumeration,
-    dry_run: bool,
+    yes: bool,
     json: bool,
 ) -> Result<(), Error> {
     // One resolution feeds both phases: the delete removes exactly what the pour poured.
     let names = src.enumerate(enum_src).await?;
-    if dry_run {
+    if !yes {
         println!("will move:");
         for a in src
             .mirror_plan(dst, Enumeration::Names(names.clone()))

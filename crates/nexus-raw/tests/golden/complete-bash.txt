@@ -1320,7 +1320,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__mv)
-            opts="-u -R -q -v -h --name --names-from --ls --dry-run --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --yes --src-user --dst-user --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1486,7 +1486,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__rm)
-            opts="-u -R -q -v -h --name --names-from --ls --dry-run --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            opts="-u -R -q -v -h --name --names-from --ls --yes --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

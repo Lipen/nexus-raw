@@ -116,9 +116,9 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             name,
             names_from,
             ls,
-            dry_run,
+            yes,
             prefix,
-        } => transfer::rm(cli, src, name, names_from, *ls, *dry_run, prefix).await,
+        } => transfer::rm(cli, src, name, names_from, *ls, *yes, prefix).await,
         Cmd::Point { url } => layout::point_clear(cli, url).await,
         Cmd::Mirror {
             src,
@@ -153,7 +153,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             name,
             names_from,
             ls,
-            dry_run,
+            yes,
             src_user,
             dst_user,
             prefix,
@@ -169,7 +169,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                 name,
                 names_from,
                 *ls,
-                *dry_run,
+                *yes,
                 prefix,
             )
             .await

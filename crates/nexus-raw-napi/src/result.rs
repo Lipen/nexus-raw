@@ -42,7 +42,7 @@ pub struct NxrPlan {
     pub actions: Vec<NxrPlanAction>,
 }
 
-/// One planned deletion, shaped like the CLI `rm --dry-run` lines.
+/// One planned deletion, shaped like the CLI `rm` plan lines.
 #[napi(object)]
 pub struct NxrRmPlanAction {
     /// `rm` when the remote copy exists and would be deleted, `missing` when it is already absent.
@@ -69,7 +69,7 @@ impl From<&RmAction> for NxrRmPlanAction {
     }
 }
 
-/// The plan an `rm` dry run resolves to.
+/// The plan `rm` resolves to by default.
 #[napi(object)]
 pub struct NxrRmPlan {
     pub actions: Vec<NxrRmPlanAction>,

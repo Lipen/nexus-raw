@@ -44,7 +44,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "up" -d 'Upload a local dire
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "diff" -d 'Compare a local directory against a remote one: the delta report'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "audit" -d 'Audit a repository for integrity: the structural report, optionally byte-verified'
-complete -c nxr -n "__fish_nxr_needs_command" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_needs_command" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4): a plan by default, deletion with --yes'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "point" -d 'Delete a pointer file (§5.4)'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'
@@ -180,7 +180,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -l retry -d 'Attempts per HT
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l ls -d 'Best-effort enumeration through the server search API'
-complete -c nxr -n "__fish_nxr_using_subcommand rm" -l dry-run -d 'Print the plan without deleting anything'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l yes -d 'Delete for real. Without it the run prints the plan and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print only the final summary line'
@@ -227,7 +227,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mv" -l retry -d 'Attempts per HT
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l ls -d 'Best-effort enumeration through the server search API'
-complete -c nxr -n "__fish_nxr_using_subcommand mv" -l dry-run -d 'Print both plans (the pour and the delete) without moving anything'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l yes -d 'Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s q -l quiet -d 'Print only the final summary line'
@@ -410,7 +410,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcom
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "down" -d 'Download a remote directory into a local one (§5.2, §5.2.1)'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "diff" -d 'Compare a local directory against a remote one: the delta report'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "audit" -d 'Audit a repository for integrity: the structural report, optionally byte-verified'
-complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4)'
+complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "rm" -d 'Delete the enumerated names from a remote directory (§5.4): a plan by default, deletion with --yes'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "point" -d 'Delete a pointer file (§5.4)'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "mirror" -d 'Pour a version from one repository into another: bytes, markers, the version document'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "mv" -d 'Move a version: mirror it into the destination, then delete the same names at the source'

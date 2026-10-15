@@ -208,7 +208,7 @@ pub async fn diff(
 ///
 /// The enumeration source is mandatory, like `down`: `ls` or explicit `names`.
 /// Divergence is never checked: `rm` deletes names, not content.
-/// With `dryRun` the promise resolves to the plan instead of a summary and nothing is deleted, like `rm --dry-run`.
+/// The promise resolves to the plan by default: `confirm: true` deletes for real, like `rm --yes`.
 #[napi]
 pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSummary, NxrRmPlan>> {
     let o = opts.unwrap_or_default();
@@ -239,7 +239,7 @@ pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSu
             return Err(finish_pump_err(pump, e).await);
         }
     };
-    if o.dry_run.unwrap_or(false) {
+    if !o.confirm.unwrap_or(false) {
         let plan = nxr.rm_plan(enum_src).await;
         drop(nxr);
         let actions = match plan {

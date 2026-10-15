@@ -94,7 +94,7 @@ nxr verify vendor/prebuilt
 | `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--plan]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
 | `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет |
 | `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
-| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--dry-run]` | перечисление → DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
+| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL>` | mirror в приёмник, затем удаление в источнике (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point --clear <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
 | `nxr ls <URL> [--assets]` | листинг raw-дерева каталога на любой глубине (папки с `/`). `--assets`: плоские имена артефактов |

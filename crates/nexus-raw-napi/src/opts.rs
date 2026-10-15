@@ -227,8 +227,8 @@ pub struct NxrRmOpts {
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
     pub ls: Option<bool>,
-    /// Resolve to the plan without deleting anything (`rm --dry-run`).
-    pub dry_run: Option<bool>,
+    /// Delete for real. Without it the promise resolves to the plan, like `rm` without `--yes`.
+    pub confirm: Option<bool>,
 }
 
 /// `mirror` options: the enumeration lives at the source, credentials are per side.

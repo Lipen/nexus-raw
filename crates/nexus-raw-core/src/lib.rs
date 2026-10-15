@@ -29,7 +29,7 @@ pub use crate::nxr::{Enumeration, Nxr};
 #[cfg(not(target_arch = "wasm32"))]
 pub use crate::primitive::{GetOutcome, ShaSource};
 #[cfg(not(target_arch = "wasm32"))]
-pub use crate::sync::mirror::{staging_dir, MirrorAction, VERSION_DOCUMENT};
+pub use crate::sync::mirror::{staging_dir, MirrorAction};
 #[cfg(not(target_arch = "wasm32"))]
 pub use crate::sync::{Action, Delta, Mode, RmAction, Side};
 pub use crate::transport::client::{DeleteOutcome, HeadInfo, NexusClient};
