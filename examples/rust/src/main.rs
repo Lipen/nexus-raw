@@ -7,7 +7,7 @@
 //! cargo run --manifest-path examples/rust/Cargo.toml -- https://nexus.example.com/repository/demo/
 //! ```
 
-use nexus_raw_core::{ArtifactName, Config, Nxr};
+use nexus_raw_core::{Config, Nxr};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
@@ -18,13 +18,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => spawn_mock()?,
     };
 
-    // The producer side: a version directory with two artifacts and the manifest that names them.
+    // The producer side: a version directory with two artifacts.
+    // A manifest.json of your own is an ordinary file: it rides `up` like any name.
     let dist = std::env::current_dir()?.join("demo-dist");
+    let _ = std::fs::remove_dir_all(&dist);
     std::fs::create_dir_all(dist.join("bom"))?;
     std::fs::write(dist.join("app.bin"), vec![7u8; 4096])?;
-    std::fs::write(dist.join("bom/manifest.json"), br#"{"artifacts": ["app.bin"]}"#)?;
-    // In a real pipeline the manifest sits at the version root and lists exactly what consumers may fetch.
-    std::fs::copy(dist.join("bom/manifest.json"), dist.join("manifest.json"))?;
+    std::fs::write(dist.join("bom/data.json"), br#"{"kind": "bom"}"#)?;
 
     let cfg = Config {
         base: format!("{repo}1.0.0/"),
@@ -43,8 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let nxr = Nxr::new(cfg, tx)?;
 
-    let claim = ArtifactName::parse("manifest.json")?;
-    let up = nxr.up(&dist, None, true, Some(claim)).await?;
+    let up = nxr.up(&dist, None, true, None).await?;
     println!(
         "up: uploaded {}, skipped {}",
         up.uploaded, up.skipped
@@ -55,12 +54,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let version = nxr.channel_get(&format!("{repo}latest")).await?.unwrap();
     println!("channel latest -> {version}");
 
-    // The consumer side: a fresh process would re-point Config at the resolved version URL and read manifest.json from there.
+    // The consumer side: a fresh process would re-point Config at the resolved version URL.
+    // Enumeration is explicit: the search listing (`--ls` on the CLI) or names you pass yourself.
     let vendor = std::env::current_dir()?.join("demo-vendor");
     let _ = std::fs::remove_dir_all(&vendor);
-    let manifest = std::fs::read(dist.join("manifest.json"))?;
-    let enum_src = nexus_raw_core::Manifest::from_slice(&manifest)?;
-    let down = nxr.down(&vendor, nexus_raw_core::Enumeration::Manifest(enum_src), false).await?;
+    let down = nxr
+        .down(
+            &vendor,
+            nexus_raw_core::Enumeration::Names(
+                ["app.bin", "bom/data.json"]
+                    .iter()
+                    .map(|n| nexus_raw_core::ArtifactName::parse(n))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            false,
+        )
+        .await?;
     println!(
         "down: downloaded {}, skipped {}",
         down.downloaded, down.skipped

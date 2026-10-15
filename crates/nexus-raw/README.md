@@ -28,12 +28,11 @@ Check the install with `nxr --version`.
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down needs a name list: manifest.json provides it
-printf '{"artifacts": ["app-1.4.0.zip"]}\n' > dist/1.4.0/manifest.json
+# down needs a name source: --ls reads the search listing, --name names files
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 V=$(nxr channel get "$BASE/latest")
-nxr down "$BASE/$V/" vendor/prebuilt
+nxr down "$BASE/$V/" vendor/prebuilt --ls
 nxr verify vendor/prebuilt
 ```
 

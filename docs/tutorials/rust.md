@@ -58,11 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A version directory: any files, the relative paths are the artifact names.
     std::fs::create_dir_all("dist/bom")?;
     std::fs::write("dist/app.bin", vec![0u8; 4096])?;
-    std::fs::write("dist/bom/manifest.json", r#"{"artifacts":["app.bin"]}"#)?;
-    std::fs::write(
-        "dist/manifest.json",
-        r#"{"artifacts":["app.bin","bom/manifest.json"]}"#,
-    )?;
+    std::fs::write("dist/bom/data.json", r#"{"kind": "bom"}"#)?;
 
     // The facade: one config, one event channel, every operation.
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
@@ -95,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Path::new("vendor"),
             Enumeration::Names(vec![
                 ArtifactName::parse("app.bin")?,
-                ArtifactName::parse("bom/manifest.json")?,
+                ArtifactName::parse("bom/data.json")?,
             ]),
             false,
         )
@@ -122,12 +118,12 @@ cargo run
 ```
 
 ```console
-{"download":[],"event":"plan","skip":[],"upload":["app.bin","bom/manifest.json","manifest.json"]}
+{"download":[],"event":"plan","skip":[],"upload":["app.bin","bom/data.json"]}
 {"done":4096,"event":"artifact","name":"app.bin","state":"uploading","total":4096}
 …
-{"downloaded":0,"event":"summary","failed":[],"removed":0,"skipped":0,"uploaded":3}
-up: uploaded 3, skipped 0
-{"download":["app.bin","bom/manifest.json"],"event":"plan","skip":[],"upload":[]}
+{"downloaded":0,"event":"summary","failed":[],"removed":0,"skipped":0,"uploaded":2}
+up: uploaded 2, skipped 0
+{"download":["app.bin","bom/data.json"],"event":"plan","skip":[],"upload":[]}
 …
 down: downloaded 2, skipped 0
 {"downloaded":2,"event":"summary","failed":[],"removed":0,"skipped":0,"uploaded":0}

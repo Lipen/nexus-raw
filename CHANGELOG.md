@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `nxr point --clear <URL>`: the `--clear` flag is gone, `nxr point <URL>` deletes directly.
   The flag-guarded misuse case never had a success path, so the guarded form was a dead branch of the interface.
+- Documentation advertised manifest-based enumeration that was removed in 0.12.0: the `AGENTS.md` down-source list, the core README example and the CLI README quick start now show the real sources (`--name`, `--names-from`, `--ls`).
+  The rust example and its tutorial were ported to explicit enumeration, and the example compiles again against the published crate.
 
 ## [0.16.0] - 2026-10-15
 
