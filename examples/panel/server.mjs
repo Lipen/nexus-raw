@@ -260,7 +260,7 @@ async function startRemove(body) {
     if (names.length === 0) {
       return { actions: [] }
     }
-    return nxr.rm(split.repoUrl, { names, dryRun: true })
+    return nxr.rm(split.repoUrl, { names })
   }
   if (names.length === 0) {
     throw badRequest(`no files under ${url}`)
@@ -275,6 +275,7 @@ async function runRemove(job, repoUrl, scope, names) {
   try {
     const summary = await nxr.rm(repoUrl, {
       names,
+      confirm: true,
       onEvent: (event) => publish(job, { type: 'event', event }),
     })
     publish(job, { type: 'end', ok: true, summary })
