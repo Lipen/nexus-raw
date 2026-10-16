@@ -5,7 +5,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Lipen/nexus-raw.git"
+    "url": "git+https://github.com/Lipen/nexus-raw.git",
+    "directory": "packaging/npm-bridge"
   },
   "homepage": "https://lipen.github.io/nexus-raw/",
   "main": "index.js",
