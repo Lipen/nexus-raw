@@ -1,6 +1,9 @@
 # nexus-raw: Node bindings
 
 Node bindings for nexus-raw: the `nxr` command surface as promises over Nexus raw storage, built on napi-rs 3 (async exports on its tokio runtime, `@napi-rs/cli` packaging).
+
+The package name follows the crate (`nexus-raw-napi`), not the contents: this is the library surface only. The `nxr` CLI installs from cargo or the releases page; a future npm channel for the CLI, if one appears, would be a separate `@nexus-raw/cli` package.
+
 Install from npm:
 
 ```bash
