@@ -677,7 +677,10 @@ jobs:
           if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
             echo "nexus-raw@$version is already on the registry, skipping"
           else
-            npm publish packaging/npm-bridge --provenance --access public
+            # From inside the folder: npm parses `packaging/npm-bridge` as a
+            # github owner/repo spec (the slash), not a path, and dies trying
+            # to ssh-fetch it. `cd + .` is the unambiguous form.
+            (cd packaging/npm-bridge && npm publish . --provenance --access public)
           fi
 
   # The last job, and the only one that touches tags: after every artifact
