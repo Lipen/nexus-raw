@@ -139,7 +139,7 @@ version v:
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw-tui/Cargo.toml
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{ v }}\"/" clients/python/pyproject.toml
     perl -pi -e "s/\"version\": \"[^\"]*\"/\"version\": \"{{ v }}\"/ if \$. == 3" packaging/npm-bridge/package.json
-    perl -pi -e "s/\"@nexus-raw\/nxr\": \"[^\"]*\"/\"@nexus-raw\/nxr\": \"{{ v }}\"/" packaging/npm-bridge/package.json
+    perl -pi -e "s/\"\@nexus-raw\/nxr\": \"[^\"]*\"/\"\@nexus-raw\/nxr\": \"{{ v }}\"/" packaging/npm-bridge/package.json
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{ v }}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "^version = \"{{ v }}\"" clients/python/pyproject.toml || { echo "version: the pyproject version did not move" >&2; exit 1; }
