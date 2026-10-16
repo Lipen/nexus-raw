@@ -54,6 +54,7 @@ nav:
       - Use in CI: how-to/ci.md
       - Audit a repository: how-to/audit.md
       - Keep the newest versions: how-to/retention.md
+      - Compare two servers: how-to/compare.md
       - Name your remotes: how-to/config.md
       - When it breaks: how-to/troubleshoot.md
       - Drive it with an agent: how-to/agents.md
