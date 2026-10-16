@@ -265,7 +265,7 @@ jobs:
 
   node:
     name: Node addon ${{ matrix.name }}
-    needs: [gate]
+    needs: [gate, build]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     defaults:
@@ -338,11 +338,25 @@ jobs:
 
       # The staged package is what npm publish ships: the loader requires
       # the package name, and its main file is the renamed addon.
+      # The CLI rides the platform package: the nxr binary the build job
+      # packed is downloaded per-matrix and staged into bin/ next to the addon.
+      - name: Download the CLI binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bins-${{ matrix.name }}
+          path: ${{ runner.temp }}/bins
+
       - name: Stage the platform package
         run: |
           cd crates/nexus-raw-napi
-          mkdir -p "npm/@nexus-raw/${{ matrix.name }}"
+          mkdir -p "npm/@nexus-raw/${{ matrix.name }}/bin"
           cp nexus-raw.*.node "npm/@nexus-raw/${{ matrix.name }}/index.node"
+          # The CLI rides the same package: the nxr binary is the one the
+          # build job packed into bins-${{ matrix.name }} (downloaded above),
+          # unpacked into bin/ next to the addon so the bin wrapper finds it
+          # there. The windows archive ships nxr.exe: the wrapper already
+          # expects the suffix on that platform.
+          tar -xzf "$RUNNER_TEMP/bins/nxr-${{ matrix.name }}.tar.gz" -C "npm/@nexus-raw/${{ matrix.name }}/bin"
           node -e '
             const fs = require("fs");
             const main = JSON.parse(fs.readFileSync("package.json", "utf8"));
@@ -359,7 +373,7 @@ jobs:
               // The darwin legs carry no libc, so the field stays absent there.
               libc: process.argv[4] ? [process.argv[4]] : undefined,
               main: "index.node",
-              files: ["index.node"],
+              files: ["index.node", "bin/nxr"],
             };
             fs.writeFileSync("npm/@nexus-raw/" + process.argv[1] + "/package.json", JSON.stringify(pkg, null, 2) + "\n");
           ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}" "${{ matrix.platform-libc }}"
@@ -588,6 +602,13 @@ jobs:
             }
             console.log(`consumer smoke: core ok, ${declared.length} declared functions resolve (mode ${process.env.SMOKE_MODE})`);
           '
+          # The CLI rides the package: the bin wrapper must spawn the real
+          # binary end to end. Release mode only: the rehearsal's latest addon
+          # predates the bin/ folder.
+          if [ "$SMOKE_MODE" = release ]; then
+            ./node_modules/.bin/nxr --version
+            echo "consumer smoke: nxr --version ok"
+          fi
         env:
           SMOKE_MODE: ${{ inputs.dry-run && 'rehearsal' || 'release' }}
 

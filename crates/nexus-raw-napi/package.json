@@ -18,10 +18,14 @@
   "description": "Node bindings for nexus-raw: the nxr command surface as promises over Nexus raw storage",
   "main": "index.js",
   "types": "index.d.ts",
+  "bin": {
+    "nxr": "bin/nxr.js"
+  },
   "files": [
     "index.d.ts",
     "index.js",
-    "binding.cjs"
+    "binding.cjs",
+    "bin/nxr.js"
   ],
   "engines": {
     "node": ">= 18"
