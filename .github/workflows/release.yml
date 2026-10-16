@@ -471,6 +471,7 @@ jobs:
               fail=1
             fi
           done
+          [ "$fail" = 0 ] || { echo "platform packages failed to publish" >&2; exit 1; }
 
       # The dev manifest stays free of version pins: the platform packages
       # do not exist between releases, and a frozen pnpm install would fail
