@@ -72,8 +72,8 @@ The tag is created by the workflow and is not signed: the signed commits and the
 
 
 `nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.
-The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64`, `darwin-arm64`) through npm trusted publishing.
-`win32-x64-msvc` joins when its name clears npm's spam filter.
+The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64`, `darwin-arm64`, `win32-x64-msvc`) through npm trusted publishing.
+The unscoped `nexus-raw` bridge rides the same pipeline: the old npm name re-exports the scoped one.
 
 ## License
 

@@ -144,6 +144,7 @@ Without `-o` the stdout body is raw bytes and nothing else: stdout mode emits no
 
 ```
 nxr put <URL> -f FILE [--sha]
+nxr put <URL> --stdin [--sha]
 ```
 
 PUT a file as the URL's bytes, streamed, with `Content-Length`.
@@ -152,6 +153,7 @@ PUTs are idempotent: a broken attempt is replayed whole.
 | Flag | Meaning |
 |:-----|:--------|
 | `-f, --file <FILE>` | the file to send |
+| `--stdin` | read the bytes from stdin instead of a file; the body is buffered whole (Content-Length is part of the protocol), then sent as one PUT |
 | `--sha` | also PUT `<URL>.sha256` with a sha256sum-style marker, digest computed on the fly |
 
 ```console

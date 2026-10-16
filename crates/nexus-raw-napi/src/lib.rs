@@ -7,9 +7,8 @@
 //! A promise resolves to the command's result and rejects with an `Error` whose `exitCode` and `hint` mirror `Error::exit_code` and `Error::hint` of the core.
 //! The JS entry (`index.js`) promotes them from the rejection message the raw addon produces.
 //!
-//! Platform status: `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64` and `darwin-arm64` ship as prebuilt packages.
-//! The win32 addon waits on an npm ticket.
-//! There the loader falls back to a local build.
+//! Platform status: all five release targets ship as prebuilt packages under the @nexus-raw scope.
+//! The loader falls back to a local build when the registry has none for this platform.
 
 mod error;
 mod input;

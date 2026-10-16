@@ -254,7 +254,7 @@ Each promise resolves to the command's result or rejects with an `Error` carryin
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.
 
 ```js
-import { up, down } from 'nexus-raw'
+import { up, down } from '@nexus-raw/nxr'
 
 const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw-main/1.4.0/', {
   claimFirst: 'version.json',

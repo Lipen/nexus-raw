@@ -137,7 +137,7 @@ Events still cross a thread boundary, so the last callback invocation may run an
 Tests that assert on collected events drain the JS queue first, as `crates/nexus-raw-napi/smoke.mjs` does.
 
 ```js
-import { up } from 'nexus-raw'
+import { up } from '@nexus-raw/nxr'
 
 const summary = await up('dist/1.4.0', 'https://nexus.example.com/repository/raw-main/1.4.0/', {
   claimFirst: 'version.json',
