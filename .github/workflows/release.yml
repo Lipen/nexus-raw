@@ -782,8 +782,10 @@ jobs:
           gh release upload "v$version" dist/nxr-*.tar.gz dist/SHA256SUMS --clobber
           # The agent-facing docs snapshot rides the release: an agent pinned
           # to this version reads the documentation of exactly its version,
-          # while the site keeps serving the latest.
-          sed "s|https://lipen.github.io/nexus-raw/|https://github.com/Lipen/nexus-raw/releases/tag/v$version#g" docs/llms.txt > /tmp/llms.txt
+          # while the site keeps serving the latest. Site URLs rewrite to the
+          # raw markdown at this tag: a page that exists at the tag, not a
+          # rendered-site path that does not.
+          sed -E "s|https://lipen\\.github\\.io/nexus-raw/(.+)/|https://raw.githubusercontent.com/Lipen/nexus-raw/v${version}/docs/\\1.md|g" docs/llms.txt > /tmp/llms.txt
           gh release upload "v$version" /tmp/llms.txt --clobber
 
 # `nexus-raw-napi` is `publish = false`: its crates.io twin would be dead

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nexus-raw"
+version = "0.17.0"
+description = "The Python reference client for nexus-raw: a minimal Nexus raw-storage client on the Python standard library"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "lipen" }]
+keywords = ["nexus", "nexus-raw", "artifacts", "sha256", "devops"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: System :: Archiving",
+]
+
+[project.urls]
+Homepage = "https://lipen.github.io/nexus-raw/"
+Repository = "https://github.com/Lipen/nexus-raw"
+Documentation = "https://lipen.github.io/nexus-raw/reference/api/"
+
+[tool.hatch.build.targets.wheel]
+# The single-module layout: the wheel ships nxr.py at the top level, nothing else.
+packages = ["nxr.py"]
+
+[tool.hatch.build.targets.sdist]
+# The sdist carries the conformance suite so a packager can verify the build
+# against the mock server, the same proof the repository's CI runs.
+include = [
+  "nxr.py",
+  "test_conformance.py",
+  "README.md",
+  "../../LICENSE",
+]

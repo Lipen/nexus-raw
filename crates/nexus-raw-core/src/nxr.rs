@@ -223,6 +223,7 @@ impl Nxr {
     ///
     /// Returns transport, auth or HTTP errors from the uploads and
     /// [`Error::UnsafeName`] when the final URL segment cannot carry a marker.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn put_bytes(
         &self,
         url: &str,
