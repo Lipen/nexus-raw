@@ -29,7 +29,15 @@ bridge_exports="$(grep -o 'exports\.[a-zA-Z]*' "$bridge_idx" | sort -u)"
 failed=0
 if [ "$(printf '%s\n' "$main_exports")" != "$(printf '%s\n' "$bridge_exports")" ]; then
   echo "check-bridge-surface: the bridge surface diverged from the main package:" >&2
-  diff <(printf '%s\n' "$main_exports") <(printf '%s\n' "$bridge_exports") >&2 || true
+  # POSIX: no process substitution, the diff rides temp files. mktemp makes
+  # the pair unique, the trap cleans them up on every exit path.
+  main_tmp="$(mktemp)"
+  bridge_tmp="$(mktemp)"
+  trap 'rm -f "$main_tmp" "$bridge_tmp"' EXIT
+  printf '%s\n' "$main_exports" > "$main_tmp"
+  printf '%s\n' "$bridge_exports" > "$bridge_tmp"
+  diff "$main_tmp" "$bridge_tmp" >&2 || true
+  rm -f "$main_tmp" "$bridge_tmp"
   echo "check-bridge-surface: mirror every exports.<name> line 1:1" >&2
   failed=1
 fi
