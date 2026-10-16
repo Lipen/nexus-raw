@@ -514,6 +514,9 @@ jobs:
           };
           fs.mkdirSync("pkg-main", { recursive: true });
           for (const f of main.files) {
+            // A nested file (bin/nxr.js) needs its parent inside pkg-main:
+            // copyFileSync does not create directories.
+            fs.mkdirSync(require("node:path").dirname(`pkg-main/${f}`), { recursive: true });
             fs.copyFileSync(`crates/nexus-raw-napi/${f}`, `pkg-main/${f}`);
           }
           fs.copyFileSync("crates/nexus-raw-napi/README.md", "pkg-main/README.md");
