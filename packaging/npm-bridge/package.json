@@ -1,0 +1,31 @@
+{
+  "name": "nexus-raw",
+  "version": "0.17.0",
+  "description": "Renamed to @nexus-raw/nxr: this shim forwards to it, so `require('nexus-raw')` and `import 'nexus-raw'` keep resolving to the current package",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lipen/nexus-raw.git"
+  },
+  "homepage": "https://lipen.github.io/nexus-raw/",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "keywords": [
+    "nexus",
+    "nexus-raw",
+    "artifacts",
+    "sha256",
+    "devops"
+  ],
+  "dependencies": {
+    "@nexus-raw/nxr": "0.17.0"
+  },
+  "engines": {
+    "node": ">= 18"
+  }
+}

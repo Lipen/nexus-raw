@@ -23,9 +23,11 @@ ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
 dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
 tui="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw-tui/Cargo.toml)"
+py="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
+bridge="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
 
 failed=0
-for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui"; do
+for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui" "clients/python/pyproject.toml:$py" "packaging/npm-bridge/package.json:$bridge"; do
   name="${pair%%:*}"; got="${pair#*:}"
   if [ "$got" != "$ws" ]; then
     echo "version-check: $name is '$got', the workspace is '$ws'" >&2
