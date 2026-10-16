@@ -710,7 +710,9 @@ jobs:
           done
           ok=0
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -q "\"version\":\"$version\""; then
+            # The PyPI JSON serves `"version": "…"` with a space: the optional
+            # one keeps the check honest whatever the serializer chooses.
+            if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -Eq "\"version\": ?\"$version\""; then
               ok=1
               break
             fi
