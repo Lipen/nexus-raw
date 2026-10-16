@@ -618,6 +618,7 @@ jobs:
   # pattern: npm has no rename, so the old name keeps resolving.
   bridge:
     name: Publish the npm bridge
+    needs: npm
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
