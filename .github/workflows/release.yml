@@ -198,6 +198,7 @@ jobs:
           elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw-core@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
+            echo "nexus-raw-core@$version publish failed and the version is not visible" >&2
             exit 1
           fi
 
@@ -220,6 +221,7 @@ jobs:
           elif curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
             echo "mock-nexus@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
+            echo "mock-nexus@$version publish failed and the version is not visible" >&2
             exit 1
           fi
 
@@ -235,6 +237,7 @@ jobs:
           elif curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
+            echo "nexus-raw@$version publish failed and the version is not visible" >&2
             exit 1
           fi
 
@@ -256,6 +259,7 @@ jobs:
           elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw-tui@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
+            echo "nexus-raw-tui@$version publish failed and the version is not visible" >&2
             exit 1
           fi
 
