@@ -79,7 +79,17 @@ check:
     just clippy
     just lint
     just version-check
+    just deny
     just test
+
+# The dependency gate: licenses, RustSec advisories, duplicate versions,
+# source policy. nxr is itself part of someone else's supply chain, so the
+# chain it builds from is part of the contract. Excluded from `just lint`:
+# the prek hooks run without the cargo-deny binary, this recipe carries it.
+[doc('The cargo-deny dependency gate.')]
+[group('lint')]
+deny *args:
+    cargo deny check {{ args }}
 
 # ---- bench -----------------------------------------------------------------
 
@@ -127,8 +137,10 @@ version v:
     perl -pi -e "s/\Q$old\E/{{ v }}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw/Cargo.toml
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw-tui/Cargo.toml
+    perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{ v }}\"/" clients/python/pyproject.toml
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{ v }}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
+    grep -q "^version = \"{{ v }}\"" clients/python/pyproject.toml || { echo "version: the pyproject version did not move" >&2; exit 1; }
     grep -q "version = \"{{ v }}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{ v }}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
     # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.

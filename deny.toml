@@ -1,0 +1,65 @@
+# The dependency gate: licenses, advisories, duplicate detection, source policy.
+# Called from `just check` and from CI: nxr is itself part of someone else's
+# supply chain, so the chain it builds from is part of the contract.
+# `cargo deny check` (all four) is the entry; each section is a lint level.
+
+[graph]
+# The workspace builds for the five release targets; one native check covers
+# the license and advisory surface, which is target-independent in practice.
+all-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+# Vulnerabilities, unsound and notice advisories always error in 0.20:
+# the gate is red until the tree carries the patched version.
+# Unmaintained transitive crates (paste, via napi) are a watch signal, not
+# a hole: they ride ignore with a reason and an expiry, so the ignore
+# itself is re-reviewed when it lapses.
+yanked = "deny"
+unmaintained = "workspace"
+# A stale ignore is a hole: an advisory that no longer applies fails the
+# gate until the entry is removed, so every ignore is reviewed against
+# the graph on every run.
+unused-ignored-advisory = "deny"
+
+[licenses]
+version = 2
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "CDLA-Permissive-2.0",
+]
+# The workspace is MIT; a transitive license outside the list is a decision,
+# not an accident: extend this list deliberately, with the crate named here.
+confidence-threshold = 0.93
+
+[bans]
+# Multiple versions of a crate are a smell but common in a deep tree; the
+# gate warns so a human sees the count drift, and the exact list is one
+# `cargo deny check bans` away.
+multiple-versions = "warn"
+wildcards = "deny"
+# The workspace pins its own crates as path dependencies with a version,
+# and the members are private (unpublished) or path-linked by design: the
+# wildcard ban targets foreign version strings, not the workspace shape.
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+# The registry is the only source: a git dependency is a supply-chain decision
+# the repo does not make silently.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = [
+  "https://github.com/rust-lang/crates.io-index",
+]
+allow-git = []

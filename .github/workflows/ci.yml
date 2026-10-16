@@ -110,6 +110,23 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  # The dependency gate: licenses, advisories, bans, sources. A lockfile
+  # change that carries a vulnerability or a foreign source is red here,
+  # not only in a release rehearsal.
+  deny:
+    name: Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # cargo-deny
+
+      - name: Run cargo-deny
+        run: cargo deny --locked check
+
   # The wasm sandbox pins the read surface: the browser slice of the core must
   # keep compiling for wasm32, the glue must keep generating, and the page must
   # keep listing the demo repository. The smoke runs the built wasm end to end
