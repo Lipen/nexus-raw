@@ -94,6 +94,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
             [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--stdin', '--stdin', [CompletionResultType]::ParameterName, 'Read the bytes from stdin instead of a file: the body is buffered (Content-Length is part of the protocol), then sent as one PUT')
             [CompletionResult]::new('--sha', '--sha', [CompletionResultType]::ParameterName, 'Also PUT `<url>`.sha256 with the sha256sum-style marker')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')

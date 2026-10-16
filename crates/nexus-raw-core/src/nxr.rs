@@ -210,6 +210,45 @@ impl Nxr {
         primitive::put(&self.client, url, src, sha).await
     }
 
+    /// PUT an in-memory body, optionally with its sha-sibling marker
+    /// (spec §5.1, the `put --stdin` path).
+    ///
+    /// The bytes are already whole in memory: Content-Length is just `body.len()`,
+    /// and the digest is computed on the buffer, no extra pass.
+    /// With `sha`, the marker is PUT right after the bytes, naming the object
+    /// by its final path segment: the same order and shape as [`Nxr::put`].
+    /// Returns `(bytes sent, digest when sha)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the uploads and
+    /// [`Error::UnsafeName`] when the final URL segment cannot carry a marker.
+    pub async fn put_bytes(
+        &self,
+        url: &str,
+        body: &[u8],
+        sha: bool,
+    ) -> Result<(u64, Option<Digest>), Error> {
+        let digest = Digest::of_bytes(body);
+        self.client.put_small(url, body.to_vec()).await?;
+        if !sha {
+            return Ok((body.len() as u64, None));
+        }
+        let marker_name = url
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or_default();
+        let name = ArtifactName::parse(marker_name).map_err(|e| Error::UnsafeName {
+            name: marker_name.to_owned(),
+            reason: format!("the final URL segment cannot carry a sha marker: {e}"),
+        })?;
+        let marker = crate::model::sibling::format_line(name.as_str(), &digest);
+        let sib_url = format!("{url}.sha256");
+        self.client.put_small(&sib_url, marker.into_bytes()).await?;
+        Ok((body.len() as u64, Some(digest)))
+    }
+
     /// HEAD a URL (spec §5.1).
     ///
     /// # Errors

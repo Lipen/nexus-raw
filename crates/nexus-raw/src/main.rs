@@ -92,7 +92,11 @@ pub(crate) enum Cmd {
         url: String,
         /// The file to send.
         #[arg(short = 'f', long, value_name = "FILE")]
-        file: PathBuf,
+        file: Option<PathBuf>,
+        /// Read the bytes from stdin instead of a file: the body is buffered
+        /// (Content-Length is part of the protocol), then sent as one PUT.
+        #[arg(long, conflicts_with = "file")]
+        stdin: bool,
         /// Also PUT `<url>`.sha256 with the sha256sum-style marker.
         #[arg(long)]
         sha: bool,

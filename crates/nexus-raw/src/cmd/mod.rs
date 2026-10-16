@@ -67,7 +67,12 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             cont,
             segments,
         } => primitives::get(cli, url, out.as_deref(), *cont, *segments).await,
-        Cmd::Put { url, file, sha } => primitives::put(cli, url, file, *sha).await,
+        Cmd::Put {
+            url,
+            file,
+            stdin,
+            sha,
+        } => primitives::put(cli, url, file.as_deref(), *stdin, *sha).await,
         Cmd::Head { url } => primitives::head(cli, url).await,
         Cmd::Sha { target } => primitives::sha(cli, target).await,
         Cmd::Up {

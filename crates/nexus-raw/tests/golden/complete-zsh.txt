@@ -79,6 +79,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(-f --file)--stdin[Read the bytes from stdin instead of a file\: the body is buffered (Content-Length is part of the protocol), then sent as one PUT]' \
 '--sha[Also PUT \`<url>\`.sha256 with the sha256sum-style marker]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \

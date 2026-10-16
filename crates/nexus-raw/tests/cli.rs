@@ -664,6 +664,50 @@ fn mirror_refuses_a_diverged_destination() {
 
 // ---- primitives -----------------------------------------------------------
 
+/// `put --stdin` buffers the pipe, sends one PUT, `--sha` stores the sibling:
+/// the streamed body roundtrips exactly, the marker matches the bytes.
+#[test]
+fn put_stdin_roundtrip_with_sha_sibling() {
+    let srv = server(Scenario::Atomic);
+    let root = root_url(&srv);
+
+    let plain_url = format!("{root}pub/pipe.bin");
+    let body = std::str::from_utf8(ALPHA).unwrap();
+    let put = nxr_stdin(&["put", &plain_url, "--stdin"], body);
+    expect_exit(&put, 0, "plain put --stdin");
+    assert_eq!(srv.store_get("pub/pipe.bin").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("pub/pipe.bin.sha256").is_none());
+
+    let marked_url = format!("{root}pub/pipe-marked.bin");
+    let put_sha = nxr_stdin(&["put", "--sha", &marked_url, "--stdin"], body);
+    expect_exit(&put_sha, 0, "put --stdin --sha");
+    assert_eq!(
+        srv.store_get("pub/pipe-marked.bin.sha256").as_deref(),
+        Some(marker_line("pipe-marked.bin", ALPHA).as_bytes()),
+    );
+
+    // Both -f and --stdin is a misuse refusal, not a silent winner.
+    let file = TempDir::new().unwrap();
+    write_file(file.path(), "blob.bin", ALPHA);
+    let both = nxr(&[
+        "put",
+        &format!("{root}pub/both.bin"),
+        "-f",
+        file.path().join("blob.bin").to_str().unwrap(),
+        "--stdin",
+    ]);
+    expect_exit(&both, 2, "put with both -f and --stdin refuses");
+    assert!(
+        stderr(&both).contains("cannot be used with"),
+        "the refusal names the conflict: {}",
+        stderr(&both)
+    );
+
+    // Neither is the same class: the command cannot send nothing.
+    let neither = nxr(&["put", &format!("{root}pub/none.bin")]);
+    expect_exit(&neither, 2, "put with no source refuses");
+}
+
 /// put → get roundtrip, put --sha stores the sibling, sha prints the digest of the remote bytes.
 #[test]
 fn put_get_roundtrip_with_sha_sibling() {

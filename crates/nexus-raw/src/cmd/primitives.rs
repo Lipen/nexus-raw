@@ -61,11 +61,55 @@ async fn run_get(
     Ok(())
 }
 
-pub(crate) async fn put(cli: &Cli, url: &str, file: &Path, sha: bool) -> Result<(), Error> {
+pub(crate) async fn put(
+    cli: &Cli,
+    url: &str,
+    file: Option<&Path>,
+    stdin: bool,
+    sha: bool,
+) -> Result<(), Error> {
     let ctx = make_ctx(cli, url)?;
-    let result = run_put(&ctx, url, file, sha).await;
+    let result = if stdin {
+        run_put_stdin(&ctx, url, sha).await
+    } else {
+        match file {
+            Some(f) => run_put(&ctx, url, f, sha).await,
+            None => Err(Error::Misuse(
+                "put needs -f FILE or --stdin: nothing to send".to_owned(),
+            )),
+        }
+    };
     finish(ctx).await;
     result
+}
+
+/// `put --stdin`: read the whole body from stdin, then send it as one PUT.
+/// The protocol carries Content-Length and the resume scheme assumes a known
+/// size, so a pipe is buffered whole before the upload; the digest rides the
+/// same buffered body.
+async fn run_put_stdin(ctx: &Ctx, url: &str, sha: bool) -> Result<(), Error> {
+    use std::io::Read;
+    let mut body = Vec::new();
+    std::io::stdin()
+        .read_to_end(&mut body)
+        .map_err(|e| Error::Io {
+            path: "-".to_owned(),
+            detail: e.to_string(),
+        })?;
+    let (size, digest) = ctx.nxr.put_bytes(url, &body, sha).await?;
+    match digest {
+        Some(d) => print_line(
+            ctx.json,
+            &format!("put: {size} bytes + marker {d} → {url}"),
+            &serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": d.as_str()}),
+        ),
+        None => print_line(
+            ctx.json,
+            &format!("put: {size} bytes → {url} (no marker)"),
+            &serde_json::json!({"ok": true, "url": url, "bytes": size, "marker": serde_json::Value::Null}),
+        ),
+    }
+    Ok(())
 }
 
 async fn run_put(ctx: &Ctx, url: &str, file: &Path, sha: bool) -> Result<(), Error> {

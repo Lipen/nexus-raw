@@ -76,6 +76,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand put" -l workers -d 'Parallel art
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l stdin -d 'Read the bytes from stdin instead of a file: the body is buffered (Content-Length is part of the protocol), then sent as one PUT'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l sha -d 'Also PUT `<url>`.sha256 with the sha256sum-style marker'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l json -d 'Emit one NDJSON event per line on stdout'
