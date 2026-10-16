@@ -10,7 +10,7 @@ pub(crate) async fn run(
     deep: bool,
     probe_name: Option<&str>,
 ) -> Result<(), Error> {
-    let mut report: Vec<(&'static str, bool, String)> = Vec::new();
+    let mut report: Vec<(&'static str, bool, String, Option<&'static str>)> = Vec::new();
     // Warns pass the check (no exit-code impact) but deserve their own marker in both renders.
     let mut warns: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
 
@@ -41,7 +41,7 @@ pub(crate) async fn run(
         };
         let has = resolved.is_some();
         if has {
-            report.push(("credentials", true, format!("resolved from {source}")));
+            report.push(("credentials", true, format!("resolved from {source}"), None));
         } else {
             // Anonymous access is a legitimate configuration: the gap is a warning, not a failure.
             warns.insert("credentials");
@@ -49,6 +49,7 @@ pub(crate) async fn run(
                 "credentials",
                 true,
                 "warning: none found; anonymous requests go out unauthenticated (pass -u or export NXR_AUTH)".to_owned(),
+                None,
             ));
         }
         resolved
@@ -61,9 +62,10 @@ pub(crate) async fn run(
             false,
             "verification is OFF (--tls-insecure); fine for a local mock, dangerous beyond it"
                 .to_owned(),
+            Some("drop --tls-insecure, or install a real certificate on the server"),
         ));
     } else {
-        report.push(("tls", true, "verification is ON".to_owned()));
+        report.push(("tls", true, "verification is ON".to_owned(), None));
     }
 
     report.push((
@@ -77,6 +79,7 @@ pub(crate) async fn run(
             "workers {}, retry {}, stall {}s, connect {}s",
             cli.workers, cli.retry, cli.stall_secs, cli.connect_timeout_secs
         ),
+        None,
     ));
 
     // Proxy awareness: the names only, never the values (they can carry credentials).
@@ -102,6 +105,7 @@ pub(crate) async fn run(
         } else {
             format!("environment proxy: {}", proxies.join(", "))
         },
+        None,
     ));
 
     let mut plaintext_host: Option<String> = None;
@@ -139,6 +143,7 @@ pub(crate) async fn run(
                 };
                 match nexus_raw_core::NexusClient::new(&cfg, dead_progress()) {
                     Ok(client) => {
+                        let mut next: Option<&'static str> = None;
                         let detail;
                         let ok;
                         match client.get_small(&status_url).await {
@@ -153,6 +158,15 @@ pub(crate) async fn run(
                                     // call: a credentials failure, not a pass.
                                     let rejected = info.status == 401 || info.status == 403;
                                     ok = !rejected && info.status < 500;
+                                    if rejected {
+                                        next = Some(
+                                            "pass -u user:pass, or export NXR_AUTH (base64 user:pass), or NXR_USERNAME + NXR_PASSWORD",
+                                        );
+                                    } else if info.status >= 500 {
+                                        next = Some(
+                                            "the server is up but unhealthy: check the Nexus logs, retry when it answers 2xx or 4xx",
+                                        );
+                                    }
                                     detail = format!(
                                         "HEAD {url} → HTTP {}: any non-5xx means the server is reachable",
                                         info.status
@@ -160,22 +174,25 @@ pub(crate) async fn run(
                                 }
                                 Err(e) => {
                                     ok = false;
+                                    next = Some(
+                                        "check the host and port, TLS trust, and that the URL is the Nexus base (…/nexus): nxr doctor <url> --deep names the failure",
+                                    );
                                     detail = e.to_string();
                                 }
                             },
                         }
-                        report.push(("probe", ok, detail));
+                        report.push(("probe", ok, detail, next));
                         if deep {
                             match deep_probes(cli, &client, &base, probe_name).await {
                                 Ok(lines) => report.extend(lines),
-                                Err(e) => report.push(("deep", false, e.to_string())),
+                                Err(e) => report.push(("deep", false, e.to_string(), None)),
                             }
                         }
                     }
-                    Err(e) => report.push(("probe", false, e.to_string())),
+                    Err(e) => report.push(("probe", false, e.to_string(), None)),
                 }
             }
-            Err(e) => report.push(("url", false, e.to_string())),
+            Err(e) => report.push(("url", false, e.to_string(), None)),
         }
     }
     if let Some(host) = plaintext_host {
@@ -184,13 +201,14 @@ pub(crate) async fn run(
             "plaintext",
             true,
             format!("warning: Basic credentials travel over plaintext http to {host}"),
+            None,
         ));
     }
 
     let mut failures = 0usize;
     let mut transport_failures = 0usize;
     if cli.json {
-        for (name, ok, detail) in &report {
+        for (name, ok, detail, next) in &report {
             if !*ok {
                 failures += 1;
                 if matches!(*name, "probe") {
@@ -198,6 +216,9 @@ pub(crate) async fn run(
                 }
             }
             let mut line = serde_json::json!({"check": name, "ok": ok, "detail": detail});
+            if let Some(n) = next {
+                line["next"] = serde_json::Value::String((*n).to_owned());
+            }
             if warns.contains(name) {
                 line["warn"] = serde_json::Value::Bool(true);
             }
@@ -205,7 +226,7 @@ pub(crate) async fn run(
         }
     } else {
         println!("doctor:");
-        for (name, ok, detail) in &report {
+        for (name, ok, detail, next) in &report {
             let mark = if !ok {
                 " FAIL "
             } else if warns.contains(name) {
@@ -220,6 +241,9 @@ pub(crate) async fn run(
                 }
             }
             println!("  [{mark}] {name}: {detail}");
+            if let Some(n) = next {
+                println!("        next: {n}");
+            }
         }
         if failures == 0 && warns.is_empty() {
             println!("  all checks passed");
@@ -260,10 +284,11 @@ fn dead_progress() -> nexus_raw_core::Progress {
     nexus_raw_core::Progress::new(tx)
 }
 
-/// One deep-probe verdict: the check name, whether it passed, and the detail.
+/// One deep-probe verdict: the check name, whether it passed, the detail,
+/// and the remediation a failed check suggests (`None` for passes and skips).
 /// A `false` that names a warn (through the report's warn set upstream) is
 /// advice, never a failure.
-type DeepLine = (&'static str, bool, String);
+type DeepLine = (&'static str, bool, String, Option<&'static str>);
 
 /// The read-only `--deep` probes of the server's actual behavior.
 ///
@@ -295,13 +320,20 @@ async fn deep_probes(
                 "deep:version",
                 true,
                 version.unwrap_or_else(|| "status endpoint answered".to_owned()),
+                None,
             ));
         }
-        Ok(None) => out.push(("deep:version", true, "status endpoint empty".to_owned())),
+        Ok(None) => out.push((
+            "deep:version",
+            true,
+            "status endpoint empty".to_owned(),
+            None,
+        )),
         Err(_) => out.push((
             "deep:version",
             true,
             "skipped: the status endpoint did not answer (diagnostic only)".to_owned(),
+            None,
         )),
     }
 
@@ -311,26 +343,31 @@ async fn deep_probes(
             Ok(info) => {
                 let len = info.size;
                 match len {
-                    Some(n) => out.push(("deep:content-length", true, format!("present ({n})"))),
+                    Some(n) => {
+                        out.push(("deep:content-length", true, format!("present ({n})"), None))
+                    }
                     None => out.push((
                         "deep:content-length",
                         true,
                         "warning: absent (resume and --segments are limited)".to_owned(),
+                        None,
                     )),
                 }
                 match client.probe_range(&object_url).await {
-                    Ok(206) => out.push(("deep:range", true, "206 honored".to_owned())),
+                    Ok(206) => out.push(("deep:range", true, "206 honored".to_owned(), None)),
                     Ok(200) => out.push((
                         "deep:range",
                         true,
                         "warning: range-stripped (200 to a ranged GET: --segments degrades to the single stream)".to_owned(),
+                        None,
                     )),
                     Ok(code) => out.push((
                         "deep:range",
                         false,
                         format!("ranged GET answered HTTP {code}"),
+                        Some("the server or a proxy strips Range: expect full-file downloads, --segments will not resume"),
                     )),
-                    Err(e) => out.push(("deep:range", false, e.to_string())),
+                    Err(e) => out.push(("deep:range", false, e.to_string(), None)),
                 }
             }
             Err(e) => {
@@ -338,8 +375,9 @@ async fn deep_probes(
                     "deep:content-length",
                     true,
                     format!("skipped: HEAD failed ({e})"),
+                    None,
                 ));
-                out.push(("deep:range", true, "skipped: HEAD failed".to_owned()));
+                out.push(("deep:range", true, "skipped: HEAD failed".to_owned(), None));
             }
         },
         None => {
@@ -347,11 +385,13 @@ async fn deep_probes(
                 "deep:content-length",
                 true,
                 "skipped: no object to probe (an empty repository is a normal case)".to_owned(),
+                None,
             ));
             out.push((
                 "deep:range",
                 true,
                 "skipped: no object to probe (an empty repository is a normal case)".to_owned(),
+                None,
             ));
         }
     }
@@ -365,19 +405,21 @@ async fn deep_probes(
         .to_owned();
     let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
     match client.get_small(&search_url).await {
-        Ok(Some(_)) => out.push(("deep:search", true, "the search index answers".to_owned())),
-        Ok(None) => out.push(("deep:search", true, "empty page".to_owned())),
+        Ok(Some(_)) => out.push(("deep:search", true, "the search index answers".to_owned(), None)),
+        Ok(None) => out.push(("deep:search", true, "empty page".to_owned(), None)),
         Err(nexus_raw_core::Error::SearchRepoMissing { .. }) => out.push((
             "deep:search",
             true,
             "warning: search-dead (400: the repository is unknown to the index; diff --via search refuses there, --fallback saves it)".to_owned(),
+            None,
         )),
         Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
             "deep:search",
             true,
             "warning: search-dead (404: the search endpoint is absent; diff --via search refuses there, --fallback saves it)".to_owned(),
+            None,
         )),
-        Err(e) => out.push(("deep:search", false, e.to_string())),
+        Err(e) => out.push(("deep:search", false, e.to_string(), None)),
     }
 
     // repo type through the service REST API, read-only.
@@ -410,12 +452,13 @@ async fn deep_probes(
                     } else {
                         format!("{kind}, format {}", r["format"].as_str().unwrap_or("?"))
                     };
-                    out.push(("deep:repo-type", true, detail));
+                    out.push(("deep:repo-type", true, detail, None));
                 }
                 None => out.push((
                     "deep:repo-type",
                     true,
                     "skipped: the repository is not in the service listing".to_owned(),
+                    None,
                 )),
             }
         }
@@ -423,11 +466,13 @@ async fn deep_probes(
             "deep:repo-type",
             true,
             "skipped: the service listing is empty".to_owned(),
+            None,
         )),
         Err(_) => out.push((
             "deep:repo-type",
             true,
             "skipped: the service REST endpoint did not answer".to_owned(),
+            None,
         )),
     }
 
@@ -440,30 +485,34 @@ async fn deep_probes(
             let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
             match parsed.as_ref().and_then(|v| v["accepted"].as_bool()) {
                 Some(true) => {
-                    out.push(("deep:eula", true, "accepted (writes are not gated)".to_owned()))
+                    out.push(("deep:eula", true, "accepted (writes are not gated)".to_owned(), None))
                 }
                 Some(false) => out.push((
                     "deep:eula",
                     true,
                     "warning: not accepted (writes answer 403 with the EULA body until POST /service/rest/v1/system/eula echoes the disclaimer back)".to_owned(),
+                    Some("nxr service eula <url> --accept (needs nx-admin): until then every PUT answers 403"),
                 )),
                 None => out.push((
                     "deep:eula",
                     true,
                     "skipped: the endpoint answered without an accepted field".to_owned(),
+                    None,
                 )),
             }
         }
-        Ok(None) => out.push(("deep:eula", true, "skipped: empty answer".to_owned())),
+        Ok(None) => out.push(("deep:eula", true, "skipped: empty answer".to_owned(), None)),
         Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
             "deep:eula",
             true,
             "skipped: the endpoint is absent (404: no EULA gate on this server)".to_owned(),
+            None,
         )),
         Err(_) => out.push((
             "deep:eula",
             true,
             "skipped: the endpoint refused the probe (admin rights are required; the refusal is not a finding)".to_owned(),
+            None,
         )),
     }
 
