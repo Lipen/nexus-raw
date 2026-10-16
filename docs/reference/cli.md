@@ -153,7 +153,7 @@ PUTs are idempotent: a broken attempt is replayed whole.
 | Flag | Meaning |
 |:-----|:--------|
 | `-f, --file <FILE>` | the file to send |
-| `--stdin` | read the bytes from stdin instead of a file; the body is buffered whole (Content-Length is part of the protocol), then sent as one PUT |
+| `--stdin` | read the bytes from stdin instead of a file. The body is buffered whole (Content-Length is part of the protocol), then sent as one PUT |
 | `--sha` | also PUT `<URL>.sha256` with a sha256sum-style marker, digest computed on the fly |
 
 ```console

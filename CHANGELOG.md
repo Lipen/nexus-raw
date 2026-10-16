@@ -13,7 +13,8 @@ Nothing yet.
 
 - `put --stdin`: the body streams from stdin as one PUT (`printf … | nxr put URL --stdin [--sha]`).
   The pipe is buffered whole (Content-Length is part of the protocol), the digest rides the same buffer.
-  `-f` and `--stdin` are mutually exclusive; neither is a misuse refusal.
+  `-f` and `--stdin` are mutually exclusive, and calling with both (or neither) is refused as a misuse.
+- `Nxr::put_bytes(url, body, sha)`: one-call PUT of an in-memory body, the library surface under `--stdin`.
 - `nxr doctor --json` and the human report carry a remediation on every failed check:
   `next` names the command or configuration to try next (credentials for 401/403, the base URL and
   `--deep` for a transport refusal, the EULA accept for the 403 write gate).
