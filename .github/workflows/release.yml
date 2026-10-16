@@ -635,6 +635,27 @@ jobs:
       - name: The surface mirrors the main package
         run: scripts/check-bridge-surface.sh
 
+      # The bridge depends on the main package at the exact same version:
+      # an install of the bridge before main lands fails ERESOLVE. The same
+      # rule the npm job holds for its platform packages, one level down.
+      # The npm CLI caches a missing packument negatively, so the poll reads
+      # the registry origin directly.
+      - name: The main package is on the registry
+        if: ${{ !inputs.dry-run }}
+        run: |
+          version="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl -sf "https://registry.npmjs.org/@nexus-raw%2Fnxr" | grep -q "\"$version\""; then
+              ok=1
+              break
+            fi
+            echo "@nexus-raw/nxr@$version not visible yet (attempt $attempt), waiting"
+            sleep 30
+          done
+          [ "$ok" = 1 ] || { echo "refusing to publish the bridge: @nexus-raw/nxr@$version is not on the registry, its dependency would fail to resolve" >&2; exit 1; }
+          echo "@nexus-raw/nxr@$version is on the registry"
+
       - name: Publish the bridge
         if: ${{ !inputs.dry-run }}
         run: |

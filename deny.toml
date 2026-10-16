@@ -14,9 +14,10 @@ feature-depth = 1
 [advisories]
 # Vulnerabilities, unsound and notice advisories always error in 0.20:
 # the gate is red until the tree carries the patched version.
-# Unmaintained transitive crates (paste, via napi) are a watch signal, not
-# a hole: they ride ignore with a reason and an expiry, so the ignore
-# itself is re-reviewed when it lapses.
+# Unmaintained transitive crates (paste, via napi) pass by scope: only a
+# direct dependency of a workspace crate fails the gate. A transitive
+# unmaintained is a watch signal, not a hole; the decision to move off one
+# is deliberate and lands as a reasoned ignore here when it happens.
 yanked = "deny"
 unmaintained = "workspace"
 # A stale ignore is a hole: an advisory that no longer applies fails the
