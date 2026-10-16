@@ -5,7 +5,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `put --stdin`: the body streams from stdin as one PUT (`printf … | nxr put URL --stdin [--sha]`).
+  The pipe is buffered whole (Content-Length is part of the protocol), the digest rides the same buffer.
+  `-f` and `--stdin` are mutually exclusive; neither is a misuse refusal.
+- `nxr doctor --json` and the human report carry a remediation on every failed check:
+  `next` names the command or configuration to try next (credentials for 401/403, the base URL and
+  `--deep` for a transport refusal, the EULA accept for the 403 write gate).
+- The Python reference client ships on PyPI as `nexus-raw`: `pip install nexus-raw`, the same
+  stdlib-only `nxr.py` the conformance suite drives, trusted publishing, no tokens.
+- The unscoped npm name returns as a bridge: `nexus-raw` re-exports `@nexus-raw/nxr` 1:1
+  (babel-core's bridge pattern), version in lockstep, so `require('nexus-raw')` keeps resolving
+  to current code. Versions below 0.17.0 are deprecated with the rename message.
+- The release carries a `llms.txt` snapshot: site URLs rewritten to the raw markdown at the tag,
+  so an agent pinned to a version reads that version's documentation.
+
+### Changed
+
+- `cargo deny check` joins `just check` and CI: RustSec vulnerabilities and yanked crates deny,
+  licenses allowlist, sources policy. rustls moved to 0.23.46 (four advisories closed by upgrade).
+- The docs gain a how-to: comparing two servers through `mirror --dry-run`, the plan is the delta.
 
 ## [0.17.0] - 2026-10-15
 

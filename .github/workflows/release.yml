@@ -606,8 +606,21 @@ jobs:
           python -m pip install --quiet clients/python/dist/*.whl
           python -c "import nxr; assert 'Nxr' in nxr.__all__; print('wheel import ok,', len(nxr.__all__), 'names')"
 
-      - name: Publish to PyPI
+      # The pypa upload has no skip: a re-dispatch after a partial failure
+      # would die on "file already exists" instead of idling through. The
+      # same already-out guard every publish step here carries.
+      - name: Already on PyPI
+        id: pypi-guard
         if: ${{ !inputs.dry-run }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
+          if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -Eq "\"version\": ?\"$version\""; then
+            echo "nexus-raw@$version is already on PyPI, skipping the upload"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to PyPI
+        if: ${{ !inputs.dry-run && steps.pypi-guard.outputs.skip != 'true' }}
         uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.12.4
         with:
           packages-dir: clients/python/dist
