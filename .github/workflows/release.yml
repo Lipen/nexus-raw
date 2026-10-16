@@ -193,8 +193,12 @@ jobs:
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
           if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw-core@$version is already on crates.io, skipping"
+          elif cargo publish --locked -p nexus-raw-core; then
+            echo "published"
+          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-core@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
-            cargo publish --locked -p nexus-raw-core
+            exit 1
           fi
 
       # crates.io resolves a dependent only after the index carries the
@@ -211,8 +215,12 @@ jobs:
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
           if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
             echo "mock-nexus@$version is already on crates.io, skipping"
+          elif cargo publish --locked -p mock-nexus; then
+            echo "published"
+          elif curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
+            echo "mock-nexus@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
-            cargo publish --locked -p mock-nexus
+            exit 1
           fi
 
       - name: Publish nexus-raw
@@ -222,8 +230,12 @@ jobs:
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
           if curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw@$version is already on crates.io, skipping"
+          elif cargo publish --locked -p nexus-raw; then
+            echo "published"
+          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
-            cargo publish --locked -p nexus-raw
+            exit 1
           fi
 
       - name: Wait for the index
@@ -239,8 +251,12 @@ jobs:
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
           if curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
             echo "nexus-raw-tui@$version is already on crates.io, skipping"
+          elif cargo publish --locked -p nexus-raw-tui; then
+            echo "published"
+          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
+            echo "nexus-raw-tui@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
           else
-            cargo publish --locked -p nexus-raw-tui
+            exit 1
           fi
 
   node:
@@ -446,8 +462,13 @@ jobs:
             name="$(node -p "require('./$d/package.json').name")"
             if npm view "$name@$version" version > /dev/null 2>&1; then
               echo "$name@$version is already on the registry, skipping"
+            elif npm publish "$d" --provenance --access public; then
+              echo "published"
+            elif npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "$name@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
             else
-              npm publish "$d" --provenance --access public
+              echo "$name@$version publish failed and the version is not visible" >&2
+              fail=1
             fi
           done
 
@@ -571,8 +592,17 @@ jobs:
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           if npm view "@nexus-raw/nxr@$version" version > /dev/null 2>&1; then
             echo "@nexus-raw/nxr@$version is already on the registry, skipping"
+          elif npm publish ./pkg-main --provenance --access public; then
+            echo "published"
           else
-            npm publish ./pkg-main --provenance --access public
+            # A guard check can race the CDN (run A published, our check read
+            # the stale packument): the registry rejected the duplicate, and
+            # the version being visible now means that race is the whole story.
+            if npm view "@nexus-raw/nxr@$version" version > /dev/null 2>&1; then
+              echo "@nexus-raw/nxr@$version appeared after our publish attempt: the race went to a concurrent run, this is not a failure"
+            else
+              exit 1
+            fi
           fi
 
   # The Python reference client ships to PyPI: the same stdlib-only nxr.py,
@@ -624,6 +654,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@v1.14.2
         with:
           packages-dir: clients/python/dist
+          # A guard check can race the CDN: run A published, run B's check
+          # reads a stale packument and attempts the upload. skip-existing
+          # downgrades the registry's "file already exists" to a warning;
+          # with OIDC trusted publishing nothing can be overwritten.
+          skip-existing: true
 
   # The unscoped bridge package forwards the old npm name to the current one:
   # version in lockstep, publish right after the main package, and the surface
@@ -676,11 +711,16 @@ jobs:
           version="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
           if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
             echo "nexus-raw@$version is already on the registry, skipping"
+          elif (cd packaging/npm-bridge && npm publish . --provenance --access public); then
+            echo "published"
           else
-            # From inside the folder: npm parses `packaging/npm-bridge` as a
-            # github owner/repo spec (the slash), not a path, and dies trying
-            # to ssh-fetch it. `cd + .` is the unambiguous form.
-            (cd packaging/npm-bridge && npm publish . --provenance --access public)
+            # The same CDN-race fallback: a concurrent run's publish may have
+            # landed between our guard and our attempt.
+            if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
+              echo "nexus-raw@$version appeared after our publish attempt: lost the race, not broken"
+            else
+              exit 1
+            fi
           fi
 
   # The last job, and the only one that touches tags: after every artifact
