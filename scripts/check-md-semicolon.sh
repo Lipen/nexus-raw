@@ -19,6 +19,9 @@ hits=0
 # Tracked markdown only: git ls-files keeps node_modules, target and site out
 # by construction, and untracked scratch files never gate.
 while IFS= read -r -d '' file; do
+  # A tracked path is gone from the working tree until its deletion is staged:
+  # `git ls-files` still lists it, and a missing file is not a hit.
+  [ -f "$file" ] || continue
   # Strip fenced code blocks first, then look for the splice pattern:
   # a lowercase/uppercase word, `; `, and another word on the same line.
   # Inside a raw <figure> HTML block the semicolons are CSS or SVG syntax,
