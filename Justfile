@@ -131,10 +131,11 @@ bench *args:
     target=""
     need_cli=1
     case "${1:-}" in
+        "") ;;
         scan|diff|up|down) target="$1"; shift; need_cli=0 ;;
         cli) target="$1"; shift ;;
         -*) ;;
-        *) echo "bench: unknown scenario '${1}' (want scan, diff, up, down or cli)" >&2; exit 2 ;;
+        *) echo "bench: unknown scenario '${1:-}' (want scan, diff, up, down or cli)" >&2; exit 2 ;;
     esac
     if [ "$need_cli" = 1 ]; then
         cargo build -q --release -p nexus-raw
