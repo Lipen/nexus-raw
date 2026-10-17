@@ -1,76 +1,49 @@
 //! `diff`: the delta report, a local tree against a half-populated enumeration.
 //! Half the names exist on both sides, the rest only locally: adds and sames in one union.
+//!
+//! The remote side is read-only, so one seeded mock serves every iteration: the
+//! per-iteration cost is a fresh connection pool, which is what the probes need.
 
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use nexus_raw_bench::{runtime, write_tree, Mock, TreeSpec};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use nexus_raw_bench::{matrix, measure, runtime, worker_ladder, write_tree, Mock};
 use nexus_raw_core::{ArtifactName, Enumeration};
 
 fn bench_diff(c: &mut Criterion) {
     let rt = runtime();
-    let spec = TreeSpec::standard();
-    let dir = write_tree(spec).expect("the generated tree writes");
-    let mock = Mock::start();
-    let half: Vec<(u32, ArtifactName)> = (0..spec.files)
-        .filter(|i| i % 2 == 0)
-        .map(|i| {
-            let name = ArtifactName::parse(&spec.file_name(i)).expect("generated names fit");
-            (i, name)
-        })
-        .collect();
-    for (i, name) in &half {
-        mock.seed(name.as_str(), &spec.file_bytes(*i));
-    }
-    let enum_names: Vec<ArtifactName> = half.into_iter().map(|(_, name)| name).collect();
-
     let mut group = c.benchmark_group("diff");
-    group.throughput(Throughput::Elements(u64::from(spec.files)));
-    group.bench_function("standard", |b| {
-        // The enumeration is the input, built outside the timing: the measured
-        // work is the report, not a clone of a hundred names.
-        b.iter_batched(
-            || Enumeration::Names(enum_names.clone()),
-            |enum_src| {
-                let mut report = match rt.block_on(mock.nxr.delta(&dir, enum_src)) {
-                    Ok(r) => r,
-                    Err(first) => {
-                        // See the up bench: loopback storms are transient, retry on a fresh pool.
-                        eprintln!("bench: diff hit a transport error, retrying: {first}");
-                        let mut last = first;
-                        let mut out = None;
-                        for attempt in 0..3 {
-                            std::thread::sleep(Duration::from_millis(250));
-                            match rt.block_on(
-                                mock.facade()
-                                    .delta(&dir, Enumeration::Names(enum_names.clone())),
-                            ) {
-                                Ok(r) => {
-                                    out = Some(r);
-                                    break;
-                                }
-                                Err(e) => {
-                                    last = e;
-                                    eprintln!("bench: diff retry {attempt} failed: {last}");
-                                }
-                            }
-                        }
-                        match out {
-                            Some(r) => r,
-                            None => panic!("diff kept failing after retries: {last}"),
-                        }
-                    }
-                };
-                assert_eq!(
-                    report.len(),
-                    spec.files as usize,
-                    "the delta union lost names"
-                );
-                black_box(std::mem::take(&mut report))
-            },
-            BatchSize::SmallInput,
-        )
-    });
+    for spec in matrix() {
+        let dir = write_tree(spec).expect("the generated tree writes");
+        let names = spec.names();
+        let mock = Mock::start(8);
+        for (index, name) in names.iter().enumerate() {
+            if index % 2 == 0 {
+                let i = u32::try_from(index).expect("the index fits u32");
+                mock.seed(name.as_str(), &spec.file_bytes(i));
+            }
+        }
+        let half: Vec<ArtifactName> = names.iter().step_by(2).cloned().collect();
+        for workers in worker_ladder() {
+            group.throughput(Throughput::Elements(u64::from(spec.files)));
+            group.bench_with_input(BenchmarkId::new(spec.tag(), workers), &dir, |b, dir| {
+                b.iter_custom(|iters| {
+                    measure(
+                        iters,
+                        || (mock.facade(workers), Enumeration::Names(half.clone())),
+                        |(nxr, src)| rt.block_on(nxr.delta(dir, src)).map_err(|e| e.to_string()),
+                        |report| {
+                            assert_eq!(
+                                report.len(),
+                                spec.files as usize,
+                                "the delta union lost names"
+                            );
+                        },
+                    )
+                })
+            });
+        }
+    }
     group.finish();
 }
 

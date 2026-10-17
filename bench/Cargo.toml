@@ -14,7 +14,7 @@ mock-nexus = { path = "../crates/mock-nexus" }
 nexus-raw-core = { path = "../crates/nexus-raw-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
-# Nothing in the package itself is a bench target: only the four criterion
+# Nothing in the package itself is a bench target: only the criterion
 # harnesses below run, so `cargo bench` stays free of stray test-harness output.
 [lib]
 bench = false
@@ -38,4 +38,8 @@ harness = false
 
 [[bench]]
 name = "down"
+harness = false
+
+[[bench]]
+name = "cli"
 harness = false

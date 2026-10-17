@@ -104,13 +104,23 @@ deny *args:
 # ---- bench -----------------------------------------------------------------
 
 # Opt-in and manual: bench/ is a standalone workspace the gate never compiles.
-# A bare name selects one scenario: `just bench scan`. Everything else passes
-# through to cargo, so `just bench scan -- --save-baseline before` reaches
-# criterion. A typo must fail loudly, never run nothing: cargo treats an
-# unknown bare word as a TESTNAME filter and exits 0 having run nothing, so
-# only the four known names select a target and any other bare word is
-# refused. --locked keeps a comparison free of a silent re-lock between its
-# before and after sides.
+# A bare name selects one scenario: `just bench scan`. Any other argument is a
+# criterion flag, and the recipe supplies the `--` cargo wants before it:
+# `just bench scan --save-baseline before`.
+# A typo must fail loudly, never run nothing: cargo treats an unknown bare word
+# as a TESTNAME filter and exits 0 having run nothing, so only the five known
+# names select a target and any other bare word is refused.
+# --locked keeps a comparison free of a silent re-lock between its before and
+# after sides.
+#
+# The cli target drives the real binary, so the release build comes first and
+# its path reaches the bench through NXR_BIN. A run that cannot include the cli
+# target (`just bench scan`) skips that build: nothing else needs the binary.
+#
+# The dataset and the concurrency ladder are the environment's:
+#   NXR_BENCH_FILES=100,1000,10000   the file counts to cover
+#   NXR_BENCH_WORKERS=1,8,32         the worker counts to cover
+#   NXR_BENCH_SIZE / DEPTH / FANOUT / SEED   the shape of every rung
 # `just bench` is all, `just bench scan` is one.
 [doc('Run the criterion benches.')]
 [group('bench')]
@@ -118,12 +128,49 @@ bench *args:
     #!/bin/sh
     set -eu
     set -- {{ args }}
+    target=""
+    need_cli=1
     case "${1:-}" in
-        scan|diff|up|down) set -- --bench "$@" ;;
+        scan|diff|up|down) target="$1"; shift; need_cli=0 ;;
+        cli) target="$1"; shift ;;
         -*) ;;
-        *) echo "bench: unknown scenario '${1}' (want scan, diff, up or down)" >&2; exit 2 ;;
+        *) echo "bench: unknown scenario '${1}' (want scan, diff, up, down or cli)" >&2; exit 2 ;;
     esac
+    if [ "$need_cli" = 1 ]; then
+        cargo build -q --release -p nexus-raw
+        bin=target/release/nxr
+        [ -x "$bin" ] || bin=target/release/nxr.exe
+        NXR_BIN="$PWD/$bin"
+        export NXR_BIN
+    fi
+    # The scenario is a cargo target, the rest is a criterion flag: cargo only
+    # hands the harness what follows its own `--`.
+    if [ -n "$target" ]; then
+        set -- --bench "$target" -- "$@"
+    else
+        set -- -- "$@"
+    fi
     exec cargo bench --locked --manifest-path bench/Cargo.toml --quiet "$@"
+
+# A report is the durable record: `target/criterion` dies with `cargo clean`.
+# `just bench-report first` runs the suite, saves the baseline under the tag and
+# writes reports/first.json plus reports/first.md from it.
+# `just bench-compare first second` reads two records back and writes the delta.
+# Both are manual, like the benches themselves.
+[doc('Run the benches under a tag and write reports/<tag>.{json,md}.')]
+[group('bench')]
+bench-report tag:
+    #!/bin/sh
+    set -eu
+    just bench --save-baseline {{ tag }}
+    python3 bench/report.py collect {{ tag }}
+
+[doc('Compare two bench reports: reports/<a>-vs-<b>.md and a printed summary.')]
+[group('bench')]
+bench-compare a b:
+    #!/bin/sh
+    set -eu
+    python3 bench/report.py compare {{ a }} {{ b }}
 
 # ---- release ---------------------------------------------------------------
 

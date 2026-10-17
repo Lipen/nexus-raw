@@ -79,15 +79,15 @@ New fields are additive.
 
 | Path | Role |
 |:-----|:-----|
-| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (per-invocation `Config`, no config file), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
-| `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `cmd/` (`primitives`, `transfer`, `layout`, `doctor`), `render/` (human, NDJSON) |
+| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (the per-invocation `Config`), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
+| `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `alias.rs` (the `-R` named-remote file), `cmd/` (`primitives`, `transfer`, `layout`, `doctor`), `render/` (human, NDJSON) |
 |`crates/mock-nexus/`|the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites|
 |`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `@nexus-raw/nxr`, plus the unscoped `nexus-raw` bridge): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 | `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package), `examples/panel` (the web panel on the napi bindings, `just panel`), `examples/wasm-sandbox` (the browser sandbox, `just wasm`) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just panel` / `just wasm` / `just example-rust` |
-| `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches for scan/diff/up/down against `mock-nexus`, the deterministic tree generator, `just bench`; the manual baseline workflow lives in `bench/README.md` |
+| `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches over the core (`scan`, `diff`, `up`, `down`, `down-slow`) and the real binary (`cli`), the environment-driven dataset and worker ladders, the deterministic tree generator, and the report pipeline (`just bench-report`, `just bench-compare`); the workflow and the measurement rules live in `bench/README.md` |
 |`clients/python/`|the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite. ruff and ty gate it, and `just check` runs the suite|
 
 ## Commits

@@ -1,87 +1,99 @@
 //! `down`: the full get flow with sibling digest checks into an empty directory.
 //! The mock is pre-seeded with bytes and real `.sha256` siblings: every name verifies.
+//!
+//! The source tree is never involved: the artifacts come out of the mock's memory
+//! and land in a target directory that every iteration wipes, so no run inherits
+//! a `.part` file or a sibling from the run before it.
+//!
+//! Two groups: the straight-through server, and a dribbling one.
+//! The second answers what the first cannot: whether the pool keeps the pipe full
+//! when every response body arrives in pieces.
 
-use std::path::Path;
 use std::time::Duration;
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use nexus_raw_bench::{down_target, runtime, Mock, TreeSpec};
-use nexus_raw_core::{Enumeration, Error, Summary};
-use tokio::runtime::Runtime;
-
-// See the up bench: fewer samples, less loopback exposure, faster hand runs.
-const SAMPLES: usize = 20;
-
-fn retry_down(
-    rt: &Runtime,
-    mock: &Mock,
-    target: &Path,
-    spec: TreeSpec,
-    mut last: Error,
-) -> Summary {
-    for attempt in 0..3 {
-        std::thread::sleep(Duration::from_millis(250));
-        match rt.block_on(
-            mock.facade()
-                .down(target, Enumeration::Names(spec.names()), true),
-        ) {
-            Ok(s) => return s,
-            Err(e) => {
-                last = e;
-                eprintln!("bench: down retry {attempt} failed: {last}");
-            }
-        }
-    }
-    panic!("down kept failing after retries: {last}");
-}
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use nexus_raw_bench::{down_target, matrix, measure, runtime, slow_server, wipe, worker_ladder, Mock};
+use nexus_raw_core::{Enumeration, Summary};
 
 fn bench_down(c: &mut Criterion) {
     let rt = runtime();
-    let spec = TreeSpec::standard();
-    let target = down_target(spec);
     let mut group = c.benchmark_group("down");
-    group.throughput(Throughput::Bytes(
-        u64::from(spec.files) * u64::from(spec.size),
-    ));
-    group.bench_function("standard", |b| {
-        b.iter_batched(
-            || {
-                // A fresh mock holding every artifact, and an empty target directory.
-                let mock = Mock::start();
-                for i in 0..spec.files {
-                    mock.seed(&spec.file_name(i), &spec.file_bytes(i));
-                }
-                let _ = std::fs::remove_dir_all(&target);
-                std::fs::create_dir_all(&target).expect("the target directory is creatable");
-                mock
-            },
-            |mock| {
-                let summary = match rt.block_on(mock.nxr.down(
-                    &target,
-                    Enumeration::Names(spec.names()),
-                    true,
-                )) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("bench: down hit a transport error, retrying: {e}");
-                        retry_down(&rt, &mock, &target, spec, e)
-                    }
-                };
-                assert!(
-                    summary.failed.is_empty()
-                        && summary.downloaded + summary.skipped == spec.files as usize,
-                    "the download lost or doubled names: {summary:?}"
-                );
-            },
-            BatchSize::PerIteration,
-        )
-    });
+    for spec in matrix() {
+        let target = down_target(spec);
+        for workers in worker_ladder() {
+            group.throughput(Throughput::Bytes(spec.bytes()));
+            group.bench_function(BenchmarkId::new(spec.tag(), workers), |b| {
+                b.iter_custom(|iters| {
+                    measure(
+                        iters,
+                        || {
+                            let mock = Mock::start(workers);
+                            mock.seed_tree(spec);
+                            wipe(&target);
+                            (mock, Enumeration::Names(spec.names()))
+                        },
+                        |(mock, src)| {
+                            rt.block_on(mock.nxr.down(&target, src, true))
+                                .map_err(|e| e.to_string())
+                        },
+                        |summary: &Summary| {
+                            assert!(
+                                summary.failed.is_empty()
+                                    && summary.downloaded + summary.skipped == spec.files as usize,
+                                "the download lost or doubled names: {summary:?}"
+                            );
+                        },
+                    )
+                })
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_down_slow(c: &mut Criterion) {
+    let rt = runtime();
+    let mut group = c.benchmark_group("down-slow");
+    // A dribbling server multiplies the dataset cost by its chunk count, so this
+    // group runs the smallest rung of the ladder only, with fewer samples.
+    let Some(spec) = matrix().into_iter().next() else {
+        return;
+    };
+    let target = down_target(spec);
+    group.sample_size(10);
+    for workers in worker_ladder() {
+        group.throughput(Throughput::Bytes(spec.bytes()));
+        group.bench_function(BenchmarkId::new(spec.tag(), workers), |b| {
+            b.iter_custom(|iters| {
+                measure(
+                    iters,
+                    || {
+                        let mock = Mock::start_scenario(workers, slow_server());
+                        mock.seed_tree(spec);
+                        wipe(&target);
+                        (mock, Enumeration::Names(spec.names()))
+                    },
+                    |(mock, src)| {
+                        rt.block_on(mock.nxr.down(&target, src, true))
+                            .map_err(|e| e.to_string())
+                    },
+                    |summary: &Summary| {
+                        assert!(
+                            summary.failed.is_empty()
+                                && summary.downloaded + summary.skipped == spec.files as usize,
+                            "the slow download lost or doubled names: {summary:?}"
+                        );
+                    },
+                )
+            })
+        });
+    }
     group.finish();
 }
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().sample_size(SAMPLES).warm_up_time(Duration::from_secs(1));
-    targets = bench_down
+    config = Criterion::default().sample_size(20).warm_up_time(Duration::from_secs(1));
+    targets = bench_down, bench_down_slow
 }
 criterion_main!(benches);
