@@ -143,6 +143,14 @@ async fn assets_pagination_collects_all_pages() {
     assert_eq!(assets.len(), 35);
     assert_eq!(summary.pages, 4, "35 assets over pages of 10");
     assert!(assets[0].path.starts_with("v0.9.0-assets/asset-"));
+    assert_eq!(
+        assets[0].url,
+        format!(
+            "{}repository/raw-main/v0.9.0-assets/asset-000.bin",
+            server.base_url()
+        ),
+        "the search downloadUrl is absolute and well-formed"
+    );
 }
 
 #[tokio::test]

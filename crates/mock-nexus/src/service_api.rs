@@ -31,7 +31,7 @@ pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
         let sha = format!("{i:064x}");
         let base = base_of(shared);
         all.push(format!(
-            "{{\"downloadUrl\":\"{base}repository/raw-main/v0.9.0-assets/asset-{i:03}.bin\",\"path\":\"{path}\",\"id\":\"raw-main:{i:03}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
+            "{{\"downloadUrl\":\"{base}/repository/raw-main/v0.9.0-assets/asset-{i:03}.bin\",\"path\":\"{path}\",\"id\":\"raw-main:{i:03}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
         ));
     }
     let total = all.len();
@@ -57,7 +57,7 @@ pub(super) fn audit_litter_page(shared: &Shared) -> Resp {
     let base = base_of(shared);
     let item = |path: &str, digest: &str| {
         format!(
-            "{{\"downloadUrl\":\"{base}repository/raw-main/1.0.0/{path}\",\"path\":\"/1.0.0/{path}\",\"id\":\"raw-main:{path}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{digest}\"}},\"lastModified\":\"2026-10-13T12:00:00.000+00:00\"}}"
+            "{{\"downloadUrl\":\"{base}/repository/raw-main/1.0.0/{path}\",\"path\":\"/1.0.0/{path}\",\"id\":\"raw-main:{path}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{digest}\"}},\"lastModified\":\"2026-10-13T12:00:00.000+00:00\"}}"
         )
     };
     let items = [
