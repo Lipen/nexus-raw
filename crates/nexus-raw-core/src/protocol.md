@@ -53,7 +53,6 @@ The order is the reverse of publishing: the marker first, then the bytes,
 so nobody ever sees a complete object mid-delete.
 404 is a normal answer: deletion is idempotent.
 A 403/405 is the read-only repository: refused with a hint, exit 1.
-A 403/405 is the read-only repository: refused with a hint, exit 1.
 
 ## Two planes
 
