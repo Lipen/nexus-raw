@@ -8,10 +8,10 @@
 # container down and leaves no orphans.
 # Port and URL knobs: NEXUS_PORT (default 18081) for the host port,
 # NEXUS_BASE for a full URL override (CI batteries elsewhere).
+# bootstrap.sh and battery.sh read them, this script only orchestrates.
 set -eu
 
 DIR=$(cd "$(dirname "$0")" && pwd)
-BASE="${NEXUS_BASE:-http://localhost:${NEXUS_PORT:-18081}}"
 
 compose() { docker compose -f "$DIR/compose.yaml" "$@"; }
 

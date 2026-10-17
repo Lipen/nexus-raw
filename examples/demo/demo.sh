@@ -177,7 +177,7 @@ if [ ! -x "$ROOT/target/debug/mock-nexus" ] || [ ! -x "$ROOT/target/debug/nxr" ]
   (cd "$ROOT" && cargo build -q -p mock-nexus -p nexus-raw) || exit 1
 fi
 
-cd "$HERE"
+cd "$HERE" || exit 1
 
 if [ -n "${NXR_DEMO_CAST:-}" ]; then
   # The session runs from this directory; a relative cast path belongs to the caller's, so resolve it before any `cd`.

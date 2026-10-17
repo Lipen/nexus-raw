@@ -21,6 +21,7 @@ fi
 # Credentials from bootstrap.sh: the battery works as admin, which stays
 # stable across nexus versions where the anonymous setup does not.
 if [ -f "${STAND_ENV:-/tmp/nxr-stand.env}" ]; then
+    # shellcheck source=/dev/null
     . "${STAND_ENV:-/tmp/nxr-stand.env}"
     BASE="${NEXUS_BASE:-${STAND_URL%/repository/stand}}"
     export NXR_USERNAME="admin" NXR_PASSWORD="$STAND_PASS"
@@ -149,15 +150,16 @@ expect_fail "get of a missing object fails" "$NXR" get "$VER/nope.bin" -o "$WORK
 # The listing reads the search index and the index lags the writes, so a
 # before/after line count is not evidence: an unrelated entry (the channel file
 # written a few checks earlier) can land in the window and move the count.
-# The plan must name the one object the server does not have yet, and a HEAD on
-# that name afterwards must answer 404: that needs no index at all.
+# The plan must name the one object the server does not have yet, and afterwards
+# that name must be absent remotely (a HEAD answers 404) and locally (the sibling
+# `up` generates on the fly was not written either): that needs no index at all.
 printf 'not yet uploaded\n' > "$WORK/src/pending.bin"
 if out=$("$NXR" up "$WORK/src" "$VER" --dry-run 2> /dev/null) && printf '%s' "$out" | grep -q 'pending.bin'; then
     ok "up --dry-run plans without sending"
 else
     no "up --dry-run plans without sending"
 fi
-if "$NXR" head "$VER/pending.bin" 2> /dev/null | grep -q 'head: 404'; then
+if "$NXR" head "$VER/pending.bin" 2> /dev/null | grep -q 'head: 404' && [ ! -e "$WORK/src/pending.bin.sha256" ]; then
     ok "dry run sends nothing"
 else
     no "dry run sends nothing"

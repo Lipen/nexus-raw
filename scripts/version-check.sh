@@ -44,9 +44,8 @@ minor="${ws%.*}"
 rust_pin="$(sed -n 's/^nexus-raw-core = "\(.*\)"/\1/p' examples/rust/Cargo.toml)"
 rust_path="$(sed -n 's/^nexus-raw-core = { path = .*}/path/p' examples/rust/Cargo.toml)"
 # The npm surface lives under @nexus-raw/nxr since the scoped rename.
-# The example pins an exact placeholder until the scoped 1.0.0 ships, so the
-# caret-shape check below is waived: the rename commit documents it.
-node_pin="$(sed -n 's/.*"@nexus-raw\/nxr": "\(.*\)".*/\1/p' examples/node/package.json)"
+# The example pins an exact placeholder until the scoped 1.0.0 ships, so its
+# pin is not shape-checked here: the rename commit documents it.
 if [ -n "$rust_path" ]; then
   : # the workspace build: nothing to agree with
 elif [ -z "$rust_pin" ]; then

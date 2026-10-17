@@ -143,10 +143,10 @@ else
       2) m="${R}block${N}" ;;
     esac
     if [ "$first" -eq 1 ]; then
-      printf '%s%-9s%s %s %s %s%s\n' "$DIM" checks "$N" "$m" "$name" "$msg"
+      printf '%s%-9s%s %s %s %s%s\n' "$DIM" checks "$N" "$m" "$name" "$msg" "$N"
       first=0
     else
-      printf '%9s %s %s %s%s\n' "" "$m" "$name" "$msg"
+      printf '%9s %s %s %s%s\n' "" "$m" "$name" "$msg" "$N"
     fi
   done
 fi
@@ -196,7 +196,7 @@ sha="$(git rev-parse origin/master)"
 echo "dispatching the release on $sha"
 gh workflow run release.yml --ref master
 run=""
-for i in 1 2 3 4 5 6; do
+for _ in 1 2 3 4 5 6; do
   sleep 5
   run="$(gh run list --workflow=Release --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
   [ -n "$run" ] && break

@@ -14,7 +14,7 @@ POLL_SECS=5
 
 die() { echo "ci-check: $*" >&2; exit 2; }
 
-sha="$(git rev-parse --verify --quiet HEAD^{commit} 2>/dev/null || true)"
+sha="$(git rev-parse --verify --quiet "HEAD^{commit}" 2>/dev/null || true)"
 [ -n "$sha" ] || die "not a git repository or no HEAD commit"
 
 quick=0
@@ -48,7 +48,7 @@ verdict() { # $1 = conclusion, $2 = run id
     printf '%sci-check:%s %s is %sGREEN%s\n' "$DIM" "$N" "$short" "$G" "$N"
     return 0
   fi
-  printf '%sci-check:%s %s is %s%s%s (run %s)%s\n' "$DIM" "$N" "$short" "$R" "${1:-unknown}" "$N" "$2" >&2
+  printf '%sci-check:%s %s is %s%s%s (run %s)%s\n' "$DIM" "$N" "$short" "$R" "${1:-unknown}" "$N" "$2" "$N" >&2
   return 1
 }
 
