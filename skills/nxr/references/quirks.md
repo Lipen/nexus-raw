@@ -49,7 +49,7 @@ The search API is an index, not the store, and it is the only enumeration source
   Any other `Range` form is ignored by the server, and an out-of-range start answers 416.
 - Every existing directory between the destination root and a file must be a real directory.
   nxr refuses a path whose intermediate component is a symlink, so a planted `bom -> ~/.config` cannot land an artifact outside the destination.
-- `up` uploads the version document first with `--claim-first <name>`, so a killed publish never leaves discoverable bytes behind a missing version document.
+- `up --claim-first <name>` sends that one name first, alone, before any other: a killed publish then leaves a document ahead of its bytes rather than bytes behind a missing document.
 
 ## Names and the alphabet
 

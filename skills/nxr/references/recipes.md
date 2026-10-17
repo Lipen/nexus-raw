@@ -89,7 +89,8 @@ nxr audit "$NEXUS/repository/releases/"
 
 The default structural pass reads metadata only: the raw tree, one small GET per marker, and the search facts as an independent cross-check.
 It classifies `orphan` (bytes with no marker), `dangling_marker` (a marker with no bytes), `unparseable_marker` and `diverged_fact`.
-Add `--bytes` to download and hash every object, which is the only pass that catches silent bitrot, or `--sample N` for a deterministic sample whose seed prints in the summary.
+Add `--bytes` to download and hash every object, which is the only pass that catches silent bitrot, and narrow it with `--sample N` for a deterministic sample whose seed prints in the summary.
+`--sample` without `--bytes` is misuse and exits 2.
 
 ## Gate a pipeline on a channel
 

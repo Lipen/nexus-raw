@@ -71,7 +71,9 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
   - `put` and `get -o` print `artifact` events and then one result object shaped like `{"ok":true,…}`.
   - `verify` prints a `summary` event and, when names failed, a closing `error` object.
   - `audit` prints one `finding` event per finding and then a `summary` event carrying `audited` and `findings`.
-  - `head`, `sha`, `ls`, `channel`, `point`, `doctor` and `service` print a single JSON object.
+  - `ls` prints one object per entry, then a `{"event":"hidden","count":N}` line when it hid markers.
+  - `doctor` prints one object per check.
+  - `head`, `sha`, `channel`, `point` and `service` print a single object.
 
 ## Recipes
 
@@ -81,7 +83,7 @@ Step-by-step tasks live in [references/recipes.md](references/recipes.md): publi
 
 - Nexus CE 3.79 and later answers 403 to every PUT until the EULA is accepted: run `nxr service eula <url> --accept`, which needs nx-admin.
 - `/service/rest/v1/status` answers 200 with an empty body there, so `nxr service status` is the liveness check.
-- The `/v1/repositories` collection is trimmed even for an admin, and full settings need `nxr service repo <url> --detail`.
+- The `/v1/repositories` collection is trimmed even for an admin, and full settings need `nxr service repo <url> --detail`, which also needs nx-admin.
 - Anonymous and authenticated users see different repository lists, and a 403 on `status/check` means "not an admin", not "the server is down".
 - The search index lags writes: right after an `up`, `ls --assets` and `service assets` can look short for a few seconds.
   A repository filled by a foreign publisher can be partially indexed, so confirm a specific name with `head` or `get` instead of trusting a listing.
@@ -94,7 +96,7 @@ The full list, with the reasoning, is in [references/quirks.md](references/quirk
 ## When not to use nxr
 
 - Talking to a non-raw Nexus format for transfers (maven, npm, pypi, docker): use that ecosystem's client.
-  `nxr service assets` can still browse and audit any format.
+  `nxr service assets` can still browse any format.
 - Local filesystem work: `verify` is the only offline command.
 - Anything that wants a manifest, a lockfile or a config file: nxr deliberately has none, and the tree layout is the caller's.
 
