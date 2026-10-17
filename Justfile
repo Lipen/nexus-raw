@@ -137,6 +137,11 @@ bench *args:
         -*) ;;
         *) echo "bench: unknown scenario '${1:-}' (want scan, diff, up, down or cli)" >&2; exit 2 ;;
     esac
+    # `just bench scan --sample-size 10` and `just bench scan -- --sample-size 10`
+    # both mean the same thing: just strips the first `--`, and this drops a
+    # second, so a second one cannot end clap's options and turn the criterion
+    # flags into a name filter that measures nothing.
+    if [ "${1:-}" = "--" ]; then shift; fi
     if [ "$need_cli" = 1 ]; then
         cargo build -q --release -p nexus-raw
         bin=target/release/nxr
@@ -163,6 +168,11 @@ bench *args:
 bench-report tag:
     #!/bin/sh
     set -eu
+    # The run and the collector must agree on where criterion writes its
+    # baselines: under a global CARGO_TARGET_DIR they would silently split, and
+    # a report would either read nothing or read another tree's numbers.
+    CRITERION_HOME="$PWD/bench/target/criterion"
+    export CRITERION_HOME
     just bench --save-baseline {{ tag }}
     python3 bench/report.py collect {{ tag }}
 

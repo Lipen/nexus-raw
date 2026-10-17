@@ -26,22 +26,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CRITERION = HERE / "target" / "criterion"
+# `just bench-report` exports CRITERION_HOME at the repo-local tree, so the run
+# and the collector cannot disagree. The default is the same path.
+CRITERION = Path(os.environ.get("CRITERION_HOME") or HERE / "target" / "criterion")
 REPORTS = HERE / "reports"
 
-# The dataset tag `TreeSpec::tag` writes: the report reads files and size back out of it.
-DATASET = re.compile(r"^(?P<files>\d+)f-\d+d-\d+w-(?P<size>\d+)b-seed\d+$")
-# The environment that shapes a run: two records are comparable only when these agree.
-PARAMETERS = (
-    "NXR_BENCH_FILES",
-    "NXR_BENCH_WORKERS",
-    "NXR_BENCH_SIZE",
-    "NXR_BENCH_DEPTH",
-    "NXR_BENCH_FANOUT",
-    "NXR_BENCH_SEED",
+# The dataset tag `TreeSpec::tag` writes: the report reads the shape back out of it.
+DATASET = re.compile(
+    r"^(?P<files>\d+)f-(?P<depth>\d+)d-(?P<fanout>\d+)w-(?P<size>\d+)b-seed(?P<seed>\d+)$"
 )
+# The knobs a case name carries, plus the worker count that follows the tag.
+# A record reads them back out of the cases, never out of the shell that
+# happened to run `collect`: two records are comparable only when these agree.
+KNOBS = ("files", "depth", "fanout", "size", "seed")
+DIMENSIONS = (*KNOBS, "workers")
 # A delta below this reads as noise on a shared machine.
 NOISE_PERCENT = 5.0
+# A tag names a baseline directory. Criterion keeps its own directories beside
+# the baselines (`new` is a symlink to the newest run, `change` and `report` are
+# its own reports), so those names would collect a harness artifact as a record.
+TAG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+RESERVED = ("new", "change", "report")
 
 
 def fail(message: str) -> None:
@@ -84,7 +89,7 @@ def cpu_model() -> str:
 
 
 def metadata() -> dict[str, object]:
-    """What a number needs to be comparable: the commit, the toolchain, the machine, the knobs."""
+    """What a number needs to be comparable: the commit, the toolchain, the machine."""
     return {
         "recorded": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit": capture("git", "rev-parse", "--short", "HEAD") or "unknown",
@@ -93,7 +98,6 @@ def metadata() -> dict[str, object]:
         "criterion": criterion_version(),
         "platform": f"{platform.system().lower()} {platform.machine()}",
         "cpu": cpu_model(),
-        "parameters": {key: os.environ[key] for key in PARAMETERS if key in os.environ},
     }
 
 
@@ -115,6 +119,28 @@ def workers(name: str) -> int | None:
     return None
 
 
+def parameters(cases: list[dict[str, object]]) -> dict[str, str]:
+    """The ladders the recorded cases cover, read out of the case names themselves.
+
+    The shell a run was launched from is not part of the record: `collect` may be
+    re-run from anywhere, and a blank reading there would let the comparability
+    guard pass two different datasets as equal.
+    """
+    seen: dict[str, set[int]] = {knob: set() for knob in DIMENSIONS}
+    for case in cases:
+        for part in str(case["name"]).split(" / "):
+            match = DATASET.match(part)
+            if match:
+                for knob in KNOBS:
+                    seen[knob].add(int(match[knob]))
+        worker = case.get("workers")
+        if isinstance(worker, int):
+            seen["workers"].add(worker)
+    if not any(seen[knob] for knob in DIMENSIONS):
+        return {"ladder": "unknown"}
+    return {knob: ",".join(str(v) for v in sorted(values)) for knob, values in seen.items()}
+
+
 def nanoseconds(estimate: object) -> float:
     """The point estimate of one criterion statistic, in nanoseconds.
 
@@ -129,8 +155,11 @@ def nanoseconds(estimate: object) -> float:
 
 def collect(tag: str) -> int:
     """Read the measurements saved under `tag` into reports/<tag>.json and .md."""
-    if not tag.isidentifier() and not tag.replace("-", "_").replace(".", "_").isidentifier():
-        fail(f"'{tag}' is not a usable tag: letters, digits, dashes and dots only")
+    if not TAG.match(tag) or tag in RESERVED:
+        fail(
+            f"'{tag}' is not a usable tag: letters, digits, dashes and dots, "
+            f"not one of {', '.join(RESERVED)}"
+        )
     cases = []
     if CRITERION.is_dir():
         for path in sorted(CRITERION.rglob("estimates.json")):
@@ -159,7 +188,7 @@ def collect(tag: str) -> int:
             cases.append(case)
     if not cases:
         fail(f"no measurements saved under `{tag}`: run `just bench-report {tag}`")
-    record = {"tag": tag, "cases": cases, **metadata()}
+    record = {"tag": tag, "cases": cases, "parameters": parameters(cases), **metadata()}
     REPORTS.mkdir(exist_ok=True)
     (REPORTS / f"{tag}.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
     (REPORTS / f"{tag}.md").write_text(render(record))
@@ -332,6 +361,8 @@ def comparability(left: dict[str, object], right: dict[str, object]) -> list[str
             f"the parameters differ ({left['parameters']} vs {right['parameters']}): "
             "the two runs did not cover the same workloads"
         )
+    elif "ladder" in left["parameters"]:
+        warnings.append("neither record names the workloads it covered: the cases carry no dataset tag")
     if left["criterion"] != right["criterion"]:
         warnings.append(f"criterion changed ({left['criterion']} vs {right['criterion']}): the harness moved")
     if left["rustc"] != right["rustc"]:
