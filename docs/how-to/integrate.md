@@ -57,7 +57,7 @@ Take it as a version dependency:
 
 ```toml
 [dependencies]
-nexus-raw-core = "0.8"
+nexus-raw-core = "0.18"
 ```
 
 A git pin or a vendored copy still works for special cases.

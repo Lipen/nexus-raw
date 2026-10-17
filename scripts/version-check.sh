@@ -71,6 +71,23 @@ for lock in examples/rust/Cargo.lock examples/wasm-sandbox/Cargo.lock bench/Carg
   fi
 done
 
+# A page that tells a consumer which library to depend on pins the workspace
+# minor: the number goes stale in silence otherwise, which is how "0.8" sat in
+# two pages through ten minors. Zero hits mean the pattern or the snippet
+# drifted, not that the pages are clean.
+doc_pins="$(grep -rEho --exclude-dir=assets 'nexus-raw-core = "[0-9][0-9.]*"' \
+    README.md README.ru.md crates/nexus-raw/README.md docs | sed 's/.*"\(.*\)"/\1/' | sort -u)"
+if [ -z "$doc_pins" ]; then
+  echo "version-check: no nexus-raw-core dependency pin found in the pages" >&2
+  failed=1
+else
+  stale="$(printf '%s\n' "$doc_pins" | grep -vx "$minor" | tr '\n' ',' | sed 's/,$//' || true)"
+  if [ -n "$stale" ]; then
+    echo "version-check: a page pins nexus-raw-core $stale, the workspace minor is $minor" >&2
+    failed=1
+  fi
+fi
+
 # Pages may name the command, never the current number: a pinned version is a
 # lie on the next release. The recorded session under docs/assets is exempt:
 # it names the binary that made the recording, and `just demo-cast` refreshes it.
