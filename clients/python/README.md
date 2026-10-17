@@ -52,6 +52,15 @@ The current skip rows, with the reasons:
 | `no-service` | The scenario only breaks `/service/rest/v1/repositories`, and the client has no service-repos surface |
 | `readonly` | The scenario only answers 403 to `DELETE`, and the client implements no delete |
 
+## Lint, types and the suite
+
+The client is gated like the rest of the repository.
+`just check` runs `just test-python`, which builds the mock binary and runs the suite below, and the prek hooks run ruff (lint plus format check) and ty over the module.
+
+Ruff's width is 120 and E501 is off on purpose: the repository mandates unwrapped sentences in comments and docstrings, and a line-length complaint would fight that rule on exactly those lines.
+The configuration lives in `pyproject.toml`.
+Only the shipped module `nxr.py` is type-checked, the suite is lint-checked, so a loose fixture in a test never blocks a commit.
+
 ## Porting note
 
 What a real integrator must implement, at minimum, beyond the verbs:

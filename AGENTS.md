@@ -87,7 +87,7 @@ New fields are additive.
 | `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package), `examples/panel` (the web panel on the napi bindings, `just panel`), `examples/wasm-sandbox` (the browser sandbox, `just wasm`) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just panel` / `just wasm` / `just example-rust` |
 | `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches for scan/diff/up/down against `mock-nexus`, the deterministic tree generator, `just bench`; the manual baseline workflow lives in `bench/README.md` |
-| `clients/python/` | the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite |
+|`clients/python/`|the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite. ruff and ty gate it, and `just check` runs the suite|
 
 ## Commits
 

@@ -71,6 +71,15 @@ lint *args:
 test *args:
     {{ cargo }} test --workspace {{ args }}
 
+# The python reference client is the second implementation of the protocol: its suite
+# drives the mock binary over real HTTP, the outside view the rust suites cannot take.
+# It is not a prek hook: the mock build plus 30-odd server spawns are too slow for a commit.
+[doc('The python conformance suite against the mock binary.')]
+[group('check')]
+test-python:
+    {{ cargo }} build -q -p mock-nexus
+    python3 -m unittest discover clients/python
+
 # The full gate a change must pass before it lands: fmt, clippy, prek, tests.
 [doc('The whole gate: fmt + clippy + prek + tests + version agreement.')]
 [group('check')]
@@ -81,6 +90,7 @@ check:
     just version-check
     just deny
     just test
+    just test-python
 
 # The dependency gate: licenses, RustSec advisories, duplicate versions,
 # source policy. nxr is itself part of someone else's supply chain, so the

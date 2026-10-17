@@ -366,6 +366,17 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Lint and format-check the client
+        run: |
+          uvx ruff@0.17.1 check clients/python
+          uvx ruff@0.17.1 format --check clients/python
+
+      - name: Type-check the shipped module
+        run: uvx ty@0.0.89 check clients/python/nxr.py
+
       - name: Build the mock server
         run: cargo build -p mock-nexus
 

@@ -30,6 +30,17 @@ Homepage = "https://lipen.github.io/nexus-raw/"
 Repository = "https://github.com/Lipen/nexus-raw"
 Documentation = "https://lipen.github.io/nexus-raw/reference/api/"
 
+[tool.ruff]
+# The formatter's width.
+# E501 stays off on purpose: the repository mandates unwrapped sentences in comments and docstrings,
+# and a line-length complaint would fight that rule on exactly those prose lines.
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
 [tool.hatch.build.targets.wheel]
 # The single-module layout: the wheel ships nxr.py at the top level, nothing else.
 packages = ["nxr.py"]
