@@ -25,9 +25,10 @@ dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "
 tui="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw-tui/Cargo.toml)"
 py="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
 bridge="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
+readme_pin="$(sed -n 's/.*uses: Lipen\/nexus-raw@v\(.*\)/\1/p' README.md)"
 
 failed=0
-for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui" "clients/python/pyproject.toml:$py" "packaging/npm-bridge/package.json:$bridge"; do
+for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui" "clients/python/pyproject.toml:$py" "packaging/npm-bridge/package.json:$bridge" "the README action pin:$readme_pin"; do
   name="${pair%%:*}"; got="${pair#*:}"
   if [ "$got" != "$ws" ]; then
     echo "version-check: $name is '$got', the workspace is '$ws'" >&2
@@ -58,7 +59,8 @@ fi
 
 # The standalone example locks must record nexus-raw-core at the workspace version: a lock left behind pins a number nobody released, and nothing rebuilds the lock until `just lock`.
 # examples/node is exempt: its pnpm lock resolves only once the registry has the release.
-for lock in examples/rust/Cargo.lock examples/wasm-sandbox/Cargo.lock; do
+# bench/Cargo.lock counts too: the bench workspace is standalone, and a stale one makes `just bench`, which runs `cargo bench --locked`, refuse before it measures anything.
+for lock in examples/rust/Cargo.lock examples/wasm-sandbox/Cargo.lock bench/Cargo.lock; do
   lock_ver="$(sed -n '/^name = "nexus-raw-core"$/ { n; s/^version = "\(.*\)"$/\1/p }' "$lock")"
   if [ -z "$lock_ver" ]; then
     echo "version-check: no nexus-raw-core entry in $lock" >&2

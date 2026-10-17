@@ -150,17 +150,22 @@ version v:
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{ v }}\"/" clients/python/pyproject.toml
     perl -pi -e "s/\"version\": \"[^\"]*\"/\"version\": \"{{ v }}\"/ if \$. == 3" packaging/npm-bridge/package.json
     perl -pi -e "s/\"\@nexus-raw\/nxr\": \"[^\"]*\"/\"\@nexus-raw\/nxr\": \"{{ v }}\"/" packaging/npm-bridge/package.json
+    # The README names the action by tag, so the tag follows the version: the
+    # recipe example must not teach an action two minors behind the binary it installs.
+    perl -pi -e "s/(uses: Lipen\/nexus-raw\@v)[0-9.]*/\${1}{{ v }}/" README.md
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{ v }}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "^version = \"{{ v }}\"" clients/python/pyproject.toml || { echo "version: the pyproject version did not move" >&2; exit 1; }
     grep -q "\"@nexus-raw/nxr\": \"{{ v }}\"" packaging/npm-bridge/package.json || { echo "version: the bridge dependency pin did not move" >&2; exit 1; }
     grep -q "version = \"{{ v }}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{ v }}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
-    # Resolve so every lock follows the new workspace version: the root lock first, then the two standalone example locks.
+    grep -q "uses: Lipen/nexus-raw@v{{ v }}" README.md || { echo "version: the README action pin did not move" >&2; exit 1; }
+    # Resolve so every lock follows the new workspace version: the root lock first, then the three standalone locks (the two examples and the bench workspace).
     # examples/node waits for the registry: `just lock` refreshes it after the release.
     cargo metadata --format-version 1 >/dev/null
     cargo metadata --manifest-path examples/rust/Cargo.toml --format-version 1 >/dev/null
     cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 >/dev/null
+    cargo metadata --manifest-path bench/Cargo.toml --format-version 1 >/dev/null
     # Assert after resolving: the example locks agree only once their own resolution has run.
     # The workspace pins are already asserted above, so a drifted pin still fails before any resolver does.
     scripts/version-check.sh
@@ -305,6 +310,8 @@ lock:
     echo "examples/rust Cargo.lock: refreshed"
     cargo metadata --manifest-path examples/wasm-sandbox/Cargo.toml --format-version 1 > /dev/null
     echo "examples/wasm-sandbox Cargo.lock: refreshed"
+    cargo metadata --manifest-path bench/Cargo.toml --format-version 1 > /dev/null
+    echo "bench Cargo.lock: refreshed"
     # examples/node pins the released package exactly and is never bumped here: a demo tracks a shipped version, not the workspace.
     echo "---"
     git status --short | grep -E "Cargo.lock|pnpm-lock.yaml" || echo "everything was already fresh"

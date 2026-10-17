@@ -1,7 +1,8 @@
 # Working in nexus-raw
 
 This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, the `nxr-tui` terminal browser, and the `mock-nexus` failure-scenario server that the conformance tests run against.
-`nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, no config file, no profiles.
+`nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, nothing required on disk.
+A named remote (`-R/--remote`) reads `~/.config/nxr/config.toml`, and only an invocation that names one touches the file.
 [README.md](README.md) is the user-facing entry.
 The protocol summary lives in the `crates/nexus-raw-core/src/protocol.md` crate docs.
 The canonical protocol text is kept outside this repository.
