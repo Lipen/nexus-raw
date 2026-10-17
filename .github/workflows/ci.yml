@@ -89,6 +89,23 @@ jobs:
       - name: Run rustfmt
         run: cargo fmt --all -- --check
 
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      # Warnings are the gate, notes are advisory: the scripts carry a few
+      # deliberate patterns (a literal `$` in a sed script, an `ls` that picks
+      # the first existing binary) that are notes, never bugs.
+      - name: Shellcheck the scripts
+        run: uvx --from shellcheck-py==0.11.0.1 shellcheck -S warning $(git ls-files '*.sh')
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
