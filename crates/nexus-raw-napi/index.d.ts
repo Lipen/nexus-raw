@@ -72,6 +72,8 @@ export interface NxrEvent {
   /** `summary` only: names the call deleted (`rm`). */
   removed?: number
   failed?: string[]
+  /** `summary` only: the stream this line closes. The audit summary (`'audit'`) is CLI-only. */
+  kind?: 'transfer'
 }
 
 /** The final summary of a transfer or verification. */
