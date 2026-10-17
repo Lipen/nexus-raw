@@ -27,6 +27,7 @@ __all__ = [
     "HeadInfo",
     "HttpError",
     "MarkerMissing",
+    "MisuseError",
     "Nxr",
     "NxrError",
     "SearchRepoMissing",
@@ -317,13 +318,9 @@ class Nxr:
             try:
                 page = json.loads(payload)
             except ValueError as err:
-                raise EnumerateError(
-                    f"cannot enumerate: {url}: the search response is not JSON: {err}"
-                ) from None
+                raise EnumerateError(f"cannot enumerate: {url}: the search response is not JSON: {err}") from None
             if not isinstance(page, dict):
-                raise EnumerateError(
-                    f"cannot enumerate: {url}: the search response is not a JSON object"
-                ) from None
+                raise EnumerateError(f"cannot enumerate: {url}: the search response is not a JSON object") from None
             for item in page.get("items") or []:
                 path = item.get("path") if isinstance(item, dict) else None
                 if isinstance(path, str):
@@ -438,16 +435,20 @@ class Nxr:
         Redirects are returned as statuses, never followed: `http.client` does not auto-follow and the protocol forbids it.
         """
         parts = urlsplit(url)
+        if parts.scheme not in ("http", "https"):
+            raise MisuseError(f"unsupported URL scheme: {parts.scheme!r}", hint="use an http or https URL")
+        # `urlsplit` leaves `hostname` None for a URL that names no host (`http://`, `http:///path`).
+        # That is a misuse, not a transport failure, and the same verdict the Rust core reaches.
+        if parts.hostname is None:
+            raise MisuseError(
+                f"misuse: {url}: the URL names no host",
+                hint="use an absolute http(s)://host/path URL",
+            )
+        conn: http.client.HTTPConnection
         if parts.scheme == "http":
-            conn: http.client.HTTPConnection = http.client.HTTPConnection(
-                parts.hostname, parts.port, timeout=self.timeout
-            )
-        elif parts.scheme == "https":
-            conn = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=self.timeout)
+            conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=self.timeout)
         else:
-            raise NxrError(
-                f"unsupported URL scheme: {parts.scheme!r}", hint="use an http or https URL"
-            )
+            conn = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=self.timeout)
         try:
             path = parts.path or "/"
             if parts.query:
@@ -494,9 +495,7 @@ class Nxr:
 
     def _backoff(self, attempt: int) -> float:
         """The pause after failed attempt `attempt` (1-based): 0.5s x 2^(n-1), capped, plus jitter."""
-        return min(BASE_BACKOFF * 2 ** (attempt - 1), MAX_BACKOFF) + random.uniform(
-            0, MAX_JITTER
-        )
+        return min(BASE_BACKOFF * 2 ** (attempt - 1), MAX_BACKOFF) + random.uniform(0, MAX_JITTER)
 
     def _pause(self, retry_after: str | None, attempt: int) -> float:
         """The pause before the next attempt: the `Retry-After` seconds when present, the backoff otherwise.
@@ -532,9 +531,7 @@ def _check_name(name: str) -> None:
     The `.sha256` suffix is reserved: markers are written by `put`, never uploaded as artifacts.
     """
     if not _SEGMENT.match(name):
-        raise UnsafeName(
-            f"unsafe name: {name!r}", hint="a name segment matches [A-Za-z0-9._-]{1,255}"
-        )
+        raise UnsafeName(f"unsafe name: {name!r}", hint="a name segment matches [A-Za-z0-9._-]{1,255}")
     if name in (".", ".."):
         raise UnsafeName(f"unsafe name: {name!r}", hint="a name segment is never . or ..")
     if name.endswith(".sha256"):

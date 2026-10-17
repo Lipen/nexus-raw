@@ -11,8 +11,8 @@ The Rust suite holds an in-process `MockNexus` handle, so its `store_get` and `r
 a plain retry-free `raw_get`/`raw_put` and the client's own `.requests` log.
 """
 
-import contextlib
 import base64
+import contextlib
 import hashlib
 import http.client
 import json
@@ -57,9 +57,7 @@ SKIP = {
     "no-service": (
         "the scenario only breaks /service/rest/v1/repositories, and the client has no service-repos surface"
     ),
-    "readonly": (
-        "the scenario only answers 403 to DELETE, and the reference client implements no delete"
-    ),
+    "readonly": ("the scenario only answers 403 to DELETE, and the reference client implements no delete"),
     "service-status-empty": (
         "the scenario only shapes /service/rest/v1/status, and the reference client has no service-status surface"
     ),
@@ -81,12 +79,8 @@ SKIP = {
     "repo-prefix-match": (
         "the scenario only shapes the per-repo service detail, and the reference client has no service detail surface"
     ),
-    "eula-gate": (
-        "the scenario only shapes /v1/system/eula, and the reference client has no eula surface"
-    ),
-    "eula-absent": (
-        "the scenario only shapes /v1/system/eula, and the reference client has no eula surface"
-    ),
+    "eula-gate": ("the scenario only shapes /v1/system/eula, and the reference client has no eula surface"),
+    "eula-absent": ("the scenario only shapes /v1/system/eula, and the reference client has no eula surface"),
     "detail-in-hint": (
         "the scenario only shapes the service detail error body, and the reference client has no service detail surface"
     ),
@@ -163,9 +157,7 @@ def mock_server(scenario: str, *flags: str):
         if not found:
             proc.terminate()
             proc.wait(timeout=10)
-            raise AssertionError(
-                f"mock-nexus {scenario} did not start: stdout={line!r} stderr={proc.stderr.read()!r}"
-            )
+            raise AssertionError(f"mock-nexus {scenario} did not start: stdout={line!r} stderr={proc.stderr.read()!r}")
         # The binary prints a bare address: normalize to a directory URL with the trailing slash.
         yield Mock(proc, found.group(1).rstrip("/") + "/")
     finally:
@@ -266,9 +258,7 @@ class Conformance(unittest.TestCase):
         self.assertTrue(bytes_at, f"expected PUTs of the bytes in {log}")
         self.assertTrue(marker_at, f"expected PUTs of the marker in {log}")
         self.assertLess(bytes_at[0], marker_at[0], "marker must follow bytes")
-        self.assertLess(
-            bytes_at[-1], marker_at[-1], "the final bytes attempt must still precede the marker"
-        )
+        self.assertLess(bytes_at[-1], marker_at[-1], "the final bytes attempt must still precede the marker")
 
     # ------------------------------------------------------------ atomic: the control group
 
@@ -484,7 +474,7 @@ class Conformance(unittest.TestCase):
             self.assertIsInstance(outcome["error"], nxr.TransportError)
             self.assertGreaterEqual(outcome["elapsed"], 1.0, "failed too fast to have watched the stall")
             puts = [1 for m, p in nx.requests if m == "PUT" and p == wire_path(path)]
-            self.assertGreaterEqual(len(puts), 2, "expected a retry, saw {puts}".format(puts=len(puts)))
+            self.assertGreaterEqual(len(puts), 2, f"expected a retry, saw {len(puts)}")
             self.assertIsNone(raw_get(path), "nothing may be stored under the frozen server")
 
     def test_sizeless(self):
@@ -565,9 +555,7 @@ class Conformance(unittest.TestCase):
             nx = self.client(auth=f"{USER}:{PASS}")
             with self.assertRaises(nxr.HttpError) as raised:
                 nx.get(mock.url("a.zip"))
-            self.assertEqual(
-                raised.exception.status, 404, "the right credentials pass the gate: a plain store miss"
-            )
+            self.assertEqual(raised.exception.status, 404, "the right credentials pass the gate: a plain store miss")
 
     def test_flaky(self):
         """One call recovers through the 503s: the retries spend attempts and still land the transfer."""
@@ -666,12 +654,7 @@ class Reference(unittest.TestCase):
 
         for scenario, reason in SKIP.items():
             self.assertTrue(reason.strip(), f"the SKIP row for {scenario} must carry a reason")
-        unclassified = {
-            s
-            for s in listed
-            if not any(owner(m) == scenario_slug(s) for m in methods)
-            and s not in SKIP
-        }
+        unclassified = {s for s in listed if not any(owner(m) == scenario_slug(s) for m in methods) and s not in SKIP}
         self.assertEqual(
             unclassified,
             set(),
@@ -745,6 +728,20 @@ class Reference(unittest.TestCase):
             with self.assertRaises(nxr.UnsafeName, msg=url):
                 nx.put(url, CONTENT)
         self.assertEqual(nx.requests, [], "the refusal must precede the wire")
+
+    def test_malformed_urls_are_misuse(self):
+        """A URL with no host, or a scheme outside http(s), is a misuse: exit 2, nothing on the wire.
+
+        `urlsplit` leaves `hostname` None for `http://` and `http:///path`, and that value used to
+        reach `http.client` and escape as a bare `AttributeError`, outside the client's error taxonomy.
+        """
+        for url in ["http://", "https://", "http:///path", "ftp://host/x"]:
+            nx = nxr.Nxr()
+            with self.assertRaises(nxr.MisuseError, msg=url) as caught:
+                nx.get(url)
+            self.assertEqual(caught.exception.exit_code, 2, msg=url)
+            self.assertTrue(caught.exception.hint, msg=url)
+            self.assertEqual(nx.requests, [], "the refusal must precede the wire")
 
     def test_channel_set_refuses_multiline_tokens(self):
         """A channel token is one non-empty line with no CR."""
