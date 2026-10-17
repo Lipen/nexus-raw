@@ -347,6 +347,7 @@ check-docs *args:
     scripts/check-hints.sh
     scripts/llms-check.sh
     scripts/check-bridge-surface.sh
+    scripts/check-skill.sh
     uvx zensical build --strict {{ args }}
 
 # The HEAD commit is green on CI: a push without a red tail.

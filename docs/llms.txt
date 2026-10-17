@@ -19,6 +19,8 @@ The agent minimum:
   The file is read only when the flag names an alias, nothing is picked up implicitly.
 - Listing needs an enumeration source: repeatable `--name`, or `--ls` (search API).
 - Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
+- A ready-made agent skill lives in the repo at `skills/nxr/SKILL.md`, with `references/recipes.md` and `references/quirks.md`.
+  Install it with `scripts/install-skill.sh`.
 
 Intent to command:
 
@@ -71,6 +73,7 @@ Quirks that are not bugs:
 ## How-to
 
 - [Drive it with an agent](https://lipen.github.io/nexus-raw/how-to/agents/): the one-page cookbook: intent to command to expected result
+- [Install the agent skill](https://lipen.github.io/nexus-raw/how-to/skills/): the SKILL.md bundle, the auto-detecting installer and the copy fallback
 - [Integrate it](https://lipen.github.io/nexus-raw/how-to/integrate/): scripting over NDJSON, exit codes and hints
 - [Publish a version](https://lipen.github.io/nexus-raw/how-to/publish/): up, markers, channels, the sha-sibling rule
 - [Audit a repository](https://lipen.github.io/nexus-raw/how-to/audit/): the integrity report: structural findings, --bytes for silent bitrot
