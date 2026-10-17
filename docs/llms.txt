@@ -11,8 +11,8 @@ The agent minimum:
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
 - Every error prints one `hint:` line on stderr telling the next thing to check.
   The hint carries `server says:` with the short 4xx/5xx body.
-- `--json` prints one NDJSON event per line.
-  The last event is always a summary.
+- `--json` is machine output: transfers, `rm`, `verify`, `put` and `get -o` print one NDJSON event per line, the summary last.
+  Simpler commands (`head`, `sha`, `ls`, `channel`, `point`, `doctor`, `service …`) print a single JSON object instead.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
   Without `-R` there is no config file in play, by design.
 - Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R releases ls 1.4.0/`).

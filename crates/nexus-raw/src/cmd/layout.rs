@@ -246,7 +246,7 @@ async fn run_service_repo(ctx: &Ctx, detail: bool) -> Result<(), Error> {
     Ok(())
 }
 
-/// Every asset of the repository (spec §3): one NDJSON line per asset, the summary last.
+/// Every asset of the repository (spec §3): one JSON object `{"assets":[…],"summary":{…}}`, not an event stream.
 pub(crate) async fn service_assets(
     cli: &Cli,
     url: &str,

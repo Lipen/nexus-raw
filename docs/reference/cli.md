@@ -1008,7 +1008,7 @@ $ nxr service assets https://nexus.example.com/repository/releases-npm/
 ```
 
 Human output is `size sha8 last-modified path`, the path last for copy-paste.
-`--json` prints one NDJSON line per asset (`event: asset`), then a summary (`event: summary`) with the totals.
+`--json` prints one object, `{"assets":[…],"summary":{…}}`, every asset and the totals.
 
 | Flag | Meaning |
 |:--|:--|
