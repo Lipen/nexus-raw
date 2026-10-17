@@ -2064,6 +2064,19 @@ fn doctor_probe_rejects_rejected_credentials() {
         "the reachability note rides every HEAD fallback line: {probe}"
     );
 
+    let last = lines.last().expect("the error object closes the stream");
+    assert_eq!(last["event"], "error", "got: {last}");
+    assert_eq!(last["code"], 3, "got: {last}");
+    let hint = last["hint"].as_str().unwrap_or_default();
+    assert!(
+        hint.contains("pass -u user:pass"),
+        "a rejected probe hints at credentials, not the network: {hint}"
+    );
+    assert!(
+        !hint.contains("check the network"),
+        "the generic transport hint would mislead here: {hint}"
+    );
+
     let good = nxr(&["--json", "-u", "nexus:secret", "doctor", &url]);
     expect_exit(&good, 0, "valid credentials pass the probe");
     let lines = ndjson(&good);

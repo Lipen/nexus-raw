@@ -109,6 +109,9 @@ pub(crate) async fn run(
     ));
 
     let mut plaintext_host: Option<String> = None;
+    // The probe rejected the credentials (401/403): the aggregate error then
+    // carries the auth hint, not the generic network one.
+    let mut probe_auth_rejected = false;
     if let Some(url) = url {
         match normalize_base(url) {
             Ok(base) => {
@@ -159,6 +162,7 @@ pub(crate) async fn run(
                                     let rejected = info.status == 401 || info.status == 403;
                                     ok = !rejected && info.status < 500;
                                     if rejected {
+                                        probe_auth_rejected = true;
                                         next = Some(
                                             "pass -u user:pass, or export NXR_AUTH (base64 user:pass), or NXR_USERNAME + NXR_PASSWORD",
                                         );
@@ -253,6 +257,14 @@ pub(crate) async fn run(
     }
     if failures == 0 {
         Ok(())
+    } else if probe_auth_rejected {
+        // The only failing probe was a 401/403: credentials are the problem,
+        // so the aggregate carries the auth hint, not the network one.
+        Err(Error::Auth {
+            url: url.unwrap_or("-").to_owned(),
+            reason: format!("{failures} check(s) failed"),
+            detail: None,
+        })
     } else if transport_failures > 0 {
         Err(Error::Transport {
             url: url.unwrap_or("-").to_owned(),
