@@ -1743,6 +1743,75 @@ fn golden_ndjson_doctor_holds() {
     );
 }
 
+// ---- golden ndjson: the failure, the deletion and the audit streams ---------
+
+/// A call that fails in JSON mode: the error record is the whole stream, one line.
+/// The reason names the request URL, so the ephemeral port is masked with `PORT`
+/// before the comparison, exactly as the retrying golden does.
+#[test]
+fn golden_ndjson_error_holds() {
+    let srv = server(Scenario::Atomic);
+    let dir = TempDir::new().unwrap();
+    let target = dir.path().join("absent.bin");
+    let url = format!("{}absent.bin", dir_url(&srv));
+    // `-o` is required: without it `--json` refuses before the request goes out,
+    // and the fixture would pin the misuse record instead of the 404.
+    let out = nxr(&["--json", "get", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&out, 1, "golden error");
+    let port = srv.addr().port().to_string();
+    let normalized = stdout(&out).replace(&port, "PORT");
+    assert_golden(
+        &normalized,
+        "error.ndjson",
+        "the error ndjson changed: update tests/golden/error.ndjson deliberately",
+    );
+}
+
+/// `rm` in one stream: the plan first, then the delete, then the rerun.
+/// The plan is the default (nothing is deleted without `--yes`), and the rerun
+/// re-enumerates the same name, collects a 404 and still exits 0.
+/// The three steps are pinned together because together they are the contract.
+#[test]
+fn golden_ndjson_rm_holds() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+    let up = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 0, "seeding the rm golden");
+
+    let plan = nxr(&["--json", "rm", &base, "--name", "a.zip"]);
+    expect_exit(&plan, 0, "the rm plan");
+    let real = nxr(&["--json", "rm", &base, "--name", "a.zip", "--yes"]);
+    expect_exit(&real, 0, "the rm delete");
+    let again = nxr(&["--json", "rm", &base, "--name", "a.zip", "--yes"]);
+    expect_exit(&again, 0, "the rm rerun");
+    let combined = format!("{}{}{}", stdout(&plan), stdout(&real), stdout(&again));
+    assert_golden(
+        &combined,
+        "rm.ndjson",
+        "the rm ndjson changed: update tests/golden/rm.ndjson deliberately",
+    );
+}
+
+/// The audit stream: one finding per problem class, then the audit summary.
+/// That summary carries the same `event` as a transfer summary, and `kind` is
+/// what tells the two apart, which is what this fixture pins.
+#[test]
+fn golden_ndjson_audit_holds() {
+    let srv = server(Scenario::AuditLitter);
+    let repo = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["--json", "audit", &repo]);
+    expect_exit(&out, 1, "golden audit");
+    let port = srv.addr().port().to_string();
+    let normalized = stdout(&out).replace(&port, "PORT");
+    assert_golden(
+        &normalized,
+        "audit.ndjson",
+        "the audit ndjson changed: update tests/golden/audit.ndjson deliberately",
+    );
+}
+
 // ---- golden completions -----------------------------------------------------
 
 /// The completion scripts are part of the contract, pinned byte-exact by fixtures in tests/golden/.
@@ -1762,6 +1831,9 @@ fn golden(name: &str) -> String {
         "retrying.ndjson" => include_str!("golden/retrying.ndjson"),
         "doctor.ndjson" => include_str!("golden/doctor.ndjson"),
         "diff.ndjson" => include_str!("golden/diff.ndjson"),
+        "error.ndjson" => include_str!("golden/error.ndjson"),
+        "rm.ndjson" => include_str!("golden/rm.ndjson"),
+        "audit.ndjson" => include_str!("golden/audit.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
     }
     .replace("\r\n", "\n")
@@ -1771,10 +1843,13 @@ fn assert_golden(actual: &str, fixture: &str, what: &str) {
     // include_str! reads the checkout's bytes, and a windows checkout with
     // core.autocrlf hands the fixture over with CRLF: both sides normalize.
     let expected = match fixture {
-        "complete-bash.txt" => include_str!("golden/complete-bash.txt"),
-        "complete-zsh.txt" => include_str!("golden/complete-zsh.txt"),
-        "complete-fish.txt" => include_str!("golden/complete-fish.txt"),
-        "complete-powershell.txt" => include_str!("golden/complete-powershell.txt"),
+        "complete-bash.txt" => include_str!("golden/complete-bash.txt").to_owned(),
+        "complete-zsh.txt" => include_str!("golden/complete-zsh.txt").to_owned(),
+        "complete-fish.txt" => include_str!("golden/complete-fish.txt").to_owned(),
+        "complete-powershell.txt" => include_str!("golden/complete-powershell.txt").to_owned(),
+        // The ndjson fixtures live in one table (`golden`): a second list here
+        // would be a second place to forget when a stream gains a fixture.
+        other if other.ends_with(".ndjson") => golden(other),
         _ => unreachable!("the golden table and the fixture name drift together"),
     }
     .replace("\r\n", "\n");

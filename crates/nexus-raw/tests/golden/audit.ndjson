@@ -1,0 +1,4 @@
+{"class":"orphan","detail":"bytes without marker","event":"finding","name":"orphan/app.bin"}
+{"class":"dangling_marker","detail":"marker without bytes","event":"finding","name":"dangling/app.bin"}
+{"class":"unparseable_marker","detail":"marker body outside the digest format","event":"finding","name":"broken/app.bin"}
+{"audited":3,"bytes_checked":0,"event":"summary","facts_available":true,"findings":3,"kind":"audit"}

@@ -236,7 +236,7 @@ Transfer-level failures surface in the summary's `failed` list and in `retrying`
 ```
 
 ```json
-{"downloaded":0,"event":"summary","failed":["app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"skipped":0,"uploaded":0}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":["app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"skipped":0,"uploaded":0}
 ```
 
 The `error:` and `hint:` lines still go to stderr, and the process exit code still carries the class.

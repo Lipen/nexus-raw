@@ -165,7 +165,11 @@ impl Event {
                 "name": name,
             }),
             Event::Summary(s) => serde_json::json!({
+                // Two commands emit `event: "summary"` with disjoint payloads
+                // (a transfer and an audit), so the kind names which one this is.
+                // Additive: a consumer that ignores it still reads the counts.
                 "event": "summary",
+                "kind": "transfer",
                 "uploaded": s.uploaded,
                 "downloaded": s.downloaded,
                 "skipped": s.skipped,

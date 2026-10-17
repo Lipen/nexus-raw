@@ -219,7 +219,7 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 | `Removing { name }` | before a name's DELETEs go out | `{"event":"removing","name":"a.zip"}` |
 | `Removed { name }` | when at least one of the name's objects was deleted | `{"event":"removed","name":"a.zip"}` |
 | `Missing { name }` | when every DELETE of the name answered 404 | `{"event":"missing","name":"a.zip"}` |
-| `Summary(Summary)` | last event of every transfer | `{"event":"summary","uploaded":1,"downloaded":0,"skipped":2,"removed":0,"failed":[]}` |
+| `Summary(Summary)` | last event of every transfer | `{"event":"summary","kind":"transfer","uploaded":1,"downloaded":0,"skipped":2,"removed":0,"failed":[]}` |
 
 `dir` renders as the state prefix: `Dir::Up` → `"uploading"`, `Dir::Down` → `"downloading"`.
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
@@ -232,7 +232,7 @@ A real stream, captured by `down --name app-1.4.0.zip --json` against the mock:
 {"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
 {"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
 {"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":45}
-{"downloaded":1,"event":"summary","failed":[],"skipped":0,"uploaded":0}
+{"downloaded":1,"event":"summary","kind":"transfer","failed":[],"skipped":0,"uploaded":0}
 ```
 
 `head` and `channel set` print their final object instead of a stream: `head` → `{"content_type":…,"size":…,"status":…,"url":…}`, `channel set` → `{"from":…,"outcome":"written","token":…,"url":…}`.

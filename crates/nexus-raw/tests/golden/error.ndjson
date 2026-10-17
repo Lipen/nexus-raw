@@ -1,0 +1,1 @@
+{"code":1,"error":"http 404: http://127.0.0.1:PORT/1.14.0/absent.bin","event":"error","hint":"check the URL path and that the version or object exists"}

@@ -625,6 +625,9 @@ pub(crate) async fn audit(
             "",
             &serde_json::json!({
                 "event": "summary",
+                // The transfer summary carries the same event name with its own
+                // counts, so the kind names which stream this line belongs to.
+                "kind": "audit",
                 "audited": run.verdict.findings.len() + run.byte_checks.len(),
                 "findings": findings.len() + byte_findings.len(),
                 "facts_available": run.verdict.facts_available,

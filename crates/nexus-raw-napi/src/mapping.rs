@@ -89,7 +89,13 @@ pub fn error_payload(e: &Error) -> ErrorPayload {
     }
 }
 
-/// The event's JSON form, exactly the NDJSON shapes the CLI emits.
+/// The parsed JSON shape of one event, exactly as the core emits it.
+///
+/// The napi adds nothing here: the shape is `Event::to_json`, and the wire bytes
+/// are pinned end to end by the CLI goldens, not by a copy of the core's shape.
+/// The unit-test build has no caller for it (the pump body that wraps events for
+/// JS is `cfg(not(test))`), so the test build reports it as dead until it is used there.
+#[cfg_attr(test, expect(dead_code))]
 pub fn event_to_json(event: &Event) -> serde_json::Value {
     event.to_json()
 }
@@ -102,7 +108,6 @@ pub fn is_url_target(target: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nexus_raw_core::Summary;
 
     /// build_config reads the process env for credentials: tests that touch it hold this lock so parallel tests never see each other's variables.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -215,52 +220,11 @@ mod tests {
         assert_eq!(p.exit_code, 3);
     }
 
-    #[test]
-    fn events_render_the_ndjson_shapes() {
-        let plan = event_to_json(&Event::Plan {
-            upload: vec!["a".into()],
-            download: vec![],
-            skip: vec!["b".into()],
-        });
-        assert_eq!(plan["event"], "plan");
-        assert_eq!(plan["upload"], serde_json::json!(["a"]));
-        assert_eq!(plan["skip"], serde_json::json!(["b"]));
-
-        let bytes = event_to_json(&Event::ArtifactBytes {
-            name: "a".into(),
-            dir: nexus_raw_core::Dir::Down,
-            done: 12,
-            total: Some(34),
-        });
-        assert_eq!(bytes["event"], "artifact");
-        assert_eq!(bytes["state"], "downloading");
-        assert_eq!(bytes["done"], 12);
-        assert_eq!(bytes["total"], 34);
-
-        let retry = event_to_json(&Event::Retrying {
-            name: "a".into(),
-            attempt: 2,
-            reason: "reset".into(),
-        });
-        assert_eq!(retry["event"], "retrying");
-        assert_eq!(retry["attempt"], 2);
-    }
-
-    #[test]
-    fn summary_event_is_the_transfer_promise_shape() {
-        let summary = Summary {
-            uploaded: 1,
-            downloaded: 2,
-            skipped: 3,
-            removed: 0,
-            failed: vec!["c".into()],
-        };
-        let line = event_to_json(&Event::Summary(summary));
-        assert_eq!(
-            line,
-            serde_json::json!({"event": "summary", "uploaded": 1, "downloaded": 2, "skipped": 3, "removed": 0, "failed": ["c"]})
-        );
-    }
+    // The NDJSON shapes are the core's: `event_to_json` only forwards to
+    // `Event::to_json`, so a test here would pin the same bytes a second time
+    // and would fail on every additive field, which the published shape
+    // contract allows on purpose.
+    // The pins live where the bytes leave the process: tests/golden/*.ndjson.
 
     #[test]
     fn sha_targets_split_by_scheme() {
