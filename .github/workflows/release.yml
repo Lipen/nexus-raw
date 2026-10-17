@@ -144,6 +144,7 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then bin="$bin.exe"; fi
           mkdir stage
           cp "$bin" README.md LICENSE stage/
+          cp -r skills stage/skills
           archive="nxr-${{ matrix.name }}.tar.gz"
           tar -czf "$archive" -C stage .
           # macOS ships shasum, not GNU sha256sum; the emitted lines are the
