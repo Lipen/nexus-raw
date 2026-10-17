@@ -180,7 +180,7 @@ Run it at the top of a pipeline.
 This repository ships a composite action that installs the prebuilt `nxr` from the Releases and runs one command:
 
 ```yaml
-- uses: <owner>/nexus-raw@v0.16.0
+- uses: <owner>/nexus-raw@vX.Y.Z
   with:
     command: up
     args: ./dist/ https://nexus.example.com/repository/raw-main/1.4.0/

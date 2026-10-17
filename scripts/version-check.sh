@@ -81,5 +81,15 @@ if grep -rEn --exclude-dir=assets 'nxr [0-9]+\.[0-9]+\.[0-9]+' \
   failed=1
 fi
 
+# README.md is the one page that names a release: it carries the action pin a
+# user copies, and `just version` rewrites it with the release. Every other page
+# teaches the shape, because a number nothing rewrites is a lie on the next
+# release: that is how the how-to stayed two minors behind unnoticed.
+if grep -rEn --exclude-dir=assets 'uses: [^ ]+@v[0-9]+\.[0-9]+\.[0-9]+' \
+    README.ru.md crates/nexus-raw/README.md docs; then
+  echo "version-check: a page outside README.md pins an action version" >&2
+  failed=1
+fi
+
 [ "$failed" = 0 ] || exit 1
 echo "version-check: $ws agrees everywhere"
