@@ -145,13 +145,26 @@ else
 fi
 expect_fail "get of a missing object fails" "$NXR" get "$VER/nope.bin" -o "$WORK/nope.bin"
 
-# 20. A dry run plans but sends nothing: the version listing must not move.
-before=$("$NXR" ls "$URL" 2> /dev/null | wc -l)
-expect_ok "up --dry-run plans without sending" "$NXR" up "$WORK/src" "$VER" --dry-run
-after=$("$NXR" ls "$URL" 2> /dev/null | wc -l)
-if [ "$before" = "$after" ]; then ok "dry run sends nothing"; else no "dry run sends nothing"; fi
+# 20. A dry run plans but sends nothing.
+# The listing reads the search index and the index lags the writes, so a
+# before/after line count is not evidence: an unrelated entry (the channel file
+# written a few checks earlier) can land in the window and move the count.
+# The plan must name the one object the server does not have yet, and a HEAD on
+# that name afterwards must answer 404: that needs no index at all.
+printf 'not yet uploaded\n' > "$WORK/src/pending.bin"
+if out=$("$NXR" up "$WORK/src" "$VER" --dry-run 2> /dev/null) && printf '%s' "$out" | grep -q 'pending.bin'; then
+    ok "up --dry-run plans without sending"
+else
+    no "up --dry-run plans without sending"
+fi
+if "$NXR" head "$VER/pending.bin" 2> /dev/null | grep -q 'head: 404'; then
+    ok "dry run sends nothing"
+else
+    no "dry run sends nothing"
+fi
+rm -f "$WORK/src/pending.bin"
 
-# 21-22. Down by explicit names mirrors the version, markers included.
+# 22-23. Down by explicit names mirrors the version, markers included.
 expect_ok "down by names mirrors the version" "$NXR" down "$VER" "$WORK/dst" --name m.json --name hello.txt --name big.bin --name nested/sub.bin --workers 4
 trees=1
 for f in m.json hello.txt big.bin nested/sub.bin; do
