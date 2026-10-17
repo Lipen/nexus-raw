@@ -5,7 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Every `summary` NDJSON line names its stream: a transfer carries `"kind":"transfer"`,
+  the audit summary `"kind":"audit"`, and the napi event type declares it, so one stream
+  is parseable without knowing which command wrote it.
+- The `--json` output shapes are an explicit contract: the records pinned by goldens
+  (`error`, `rm`, `audit` and the four completion scripts) are the promise, new fields
+  are additive, and a consumer ignores unknown fields and key order.
+- The bench ecosystem gains its report pipeline: `just bench-report <tag>` runs the
+  suite and writes `bench/reports/<tag>.json` plus a rendered `.md` with the ladders it
+  covered, the machine and the commit, and `just bench-compare <a> <b>` prints the delta
+  with each side's spread and warns when two records are not comparable.
 
 ## [0.18.0] - 2026-10-16
 
