@@ -366,7 +366,13 @@ jobs:
           # unpacked into bin/ next to the addon so the bin wrapper finds it
           # there. The windows archive ships nxr.exe: the wrapper already
           # expects the suffix on that platform.
-          tar -xzf "$RUNNER_TEMP/bins/nxr-${{ matrix.bin }}.tar.gz" -C "npm/@nexus-raw/${{ matrix.name }}/bin"
+          # Unpack by a bare name from inside the download directory: the tar
+          # Git for Windows ships reads the runner's D:\ archive path as a
+          # remote host and dies with "Cannot connect to D:".
+          crate="$PWD"
+          cd "$RUNNER_TEMP/bins"
+          tar -xzf "nxr-${{ matrix.bin }}.tar.gz" -C "$crate/npm/@nexus-raw/${{ matrix.name }}/bin"
+          cd "$crate"
           node -e '
             const fs = require("fs");
             const main = JSON.parse(fs.readFileSync("package.json", "utf8"));
