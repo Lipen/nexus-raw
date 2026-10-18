@@ -5,9 +5,9 @@
 #
 #   check-npm-main-package.sh
 #
-# Polls @nexus-raw/nxr at the bridge's version through the npm registry with
-# a 12-attempt, 30-second-apart budget and refuses to let the bridge publish
-# without it.
+# Polls @nexus-raw/nxr at the bridge's version through
+# scripts/registry-probe.sh with a 12-attempt, 30-second-apart budget and
+# refuses to let the bridge publish without it.
 #
 # Exit codes: 0 the main package is on the registry, 1 it is not, 2 bad input.
 set -eu
@@ -23,19 +23,12 @@ case "${1:-}" in
   *) usage_err ;;
 esac
 
+here="$(dirname "$0")"
 version="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
 [ -n "$version" ] || { echo "check-npm-main-package: no version in packaging/npm-bridge/package.json" >&2; exit 1; }
 
-# The npm CLI caches a missing packument negatively, so the poll reads the
-# registry origin directly.
-ok=0
-for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-  if curl -sf "https://registry.npmjs.org/@nexus-raw%2Fnxr" | grep -q "\"$version\""; then
-    ok=1
-    break
-  fi
-  echo "@nexus-raw/nxr@$version not visible yet (attempt $attempt), waiting"
-  sleep 30
-done
-[ "$ok" = 1 ] || { echo "refusing to publish the bridge: @nexus-raw/nxr@$version is not on the registry, its dependency would fail to resolve" >&2; exit 1; }
+"$here/registry-probe.sh" npm @nexus-raw/nxr "$version" 12 30 || {
+  echo "refusing to publish the bridge: @nexus-raw/nxr@$version is not on the registry, its dependency would fail to resolve" >&2
+  exit 1
+}
 echo "@nexus-raw/nxr@$version is on the registry"

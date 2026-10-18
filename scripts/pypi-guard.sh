@@ -6,7 +6,7 @@
 # The pypa upload has no skip: a re-dispatch after a partial failure would
 # die on "file already exists" instead of idling through. When the version
 # is already on PyPI the guard writes `skip=true` to $GITHUB_OUTPUT, which
-# holds the publish step back.
+# holds the publish step back. Otherwise the upload proceeds.
 #
 # Exit codes: 0 the guard decided, 1 the tree carries no version, 2 bad input.
 set -eu
@@ -22,10 +22,13 @@ case "${1:-}" in
   *) usage_err ;;
 esac
 
+here="$(dirname "$0")"
 version="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
 [ -n "$version" ] || { echo "pypi-guard: no version in clients/python/pyproject.toml" >&2; exit 1; }
 
-if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -Eq "\"version\": ?\"$version\""; then
+if "$here/registry-probe.sh" pypi nexus-raw "$version"; then
   echo "nexus-raw@$version is already on PyPI, skipping the upload"
   echo "skip=true" >> "${GITHUB_OUTPUT:-/dev/null}"
+else
+  echo "nexus-raw@$version is not on PyPI, the upload proceeds"
 fi

@@ -29,6 +29,7 @@ for dir in "$@"; do
   esac
 done
 
+here="$(dirname "$0")"
 fail=0
 for dir in "$@"; do
   name="$(sed -n 's/^  "name": "\(.*\)",/\1/p' "$dir/package.json")"
@@ -37,11 +38,11 @@ for dir in "$@"; do
     echo "npm-publish: no name or version in $dir/package.json" >&2
     exit 1
   fi
-  if npm view "$name@$version" version > /dev/null 2>&1; then
+  if "$here/registry-probe.sh" npm "$name" "$version"; then
     echo "$name@$version is already on the registry, skipping"
   elif ( cd "$dir" && npm publish . --provenance --access public ); then
     echo "published"
-  elif npm view "$name@$version" version > /dev/null 2>&1; then
+  elif "$here/registry-probe.sh" npm "$name" "$version"; then
     echo "$name@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
   else
     echo "$name@$version publish failed and the version is not visible" >&2

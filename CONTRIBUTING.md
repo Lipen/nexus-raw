@@ -72,6 +72,11 @@ A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip 
 A permanent registry refusal burns the number: bump and go again.
 The tag is created by the workflow and is not signed: the signed commits and the npm provenance carry the trust.
 
+`.github/workflows/release.yml` is the table of contents: triggers, `needs`, `if:` guards, permissions and one step per move.
+The shell that carries a rule lives in `scripts/`, where the shellcheck hook reads it and a local run reaches it.
+Inline `run:` stays for glue of a few lines.
+Every "is this version on the registry?" question goes through `scripts/registry-probe.sh`, which reads the registry's version document rather than the packument that `npm view` caches negatively.
+
 
 `nexus-raw-napi` is `publish = false`: the npm registry is its artifact channel.
 The release workflow publishes the main package plus one prebuilt package per platform (`linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64`, `darwin-arm64`, `win32-x64-msvc`) through npm trusted publishing.

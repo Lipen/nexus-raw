@@ -26,26 +26,15 @@ case "$1" in
 esac
 
 crate="$1"
+here="$(dirname "$0")"
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 [ -n "$version" ] || { echo "publish-crate: no workspace version in Cargo.toml" >&2; exit 1; }
 
-# The crates.io index nests by name length: 1/<c>, 2/<cc>, 3/<c>/<ccc>, and
-# <first two>/<next two>/<name> from four characters up.
-crates_path() { # crates_path <name>
-  case "${#1}" in
-    1) printf '1/%s' "$1" ;;
-    2) printf '2/%s' "$1" ;;
-    3) printf '3/%s/%s' "$(printf '%s' "$1" | cut -c1)" "$1" ;;
-    *) printf '%s/%s/%s' "$(printf '%s' "$1" | cut -c1-2)" "$(printf '%s' "$1" | cut -c3-4)" "$1" ;;
-  esac
-}
-index="$(crates_path "$crate")"
-
-if curl -sf "https://index.crates.io/$index" | grep -q "\"vers\":\"$version\""; then
+if "$here/registry-probe.sh" crates "$crate" "$version"; then
   echo "$crate@$version is already on crates.io, skipping"
 elif cargo publish --locked -p "$crate"; then
   echo "published"
-elif curl -sf "https://index.crates.io/$index" | grep -q "\"vers\":\"$version\""; then
+elif "$here/registry-probe.sh" crates "$crate" "$version"; then
   echo "$crate@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
 else
   echo "$crate@$version publish failed and the version is not visible" >&2
