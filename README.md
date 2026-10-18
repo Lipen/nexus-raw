@@ -52,6 +52,14 @@ From npm, with the native addon fetched as a prebuilt package:
 npm install @nexus-raw/nxr
 ```
 
+As a container, for a CI system with a runtime and no package manager:
+
+```bash
+docker run --rm -v "$PWD:/w" -w /w ghcr.io/lipen/nexus-raw:latest up ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+```
+
+The image is the same static binary on a distroless base: [run it as a container](docs/how-to/containers.md).
+
 From crates.io:
 
 ```bash
