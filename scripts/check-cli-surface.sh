@@ -75,6 +75,7 @@ version"
 foreign="cargo --path --workspace
 npm --registry
 curl --proxy
+docker --from --network --password-stdin --platform --rm --user
 scripts/install-skill.sh --agent --dir --link --list --project
 mock-nexus --chunk-delay-ms --chunk-size --flaky --port --print-scenarios
 the wasm sandbox --allow-host --max-response-bytes --rate-limit --upstream"

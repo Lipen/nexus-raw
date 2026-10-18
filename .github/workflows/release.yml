@@ -3,9 +3,10 @@ name: Release
 # A dispatch is the release. `just release X.Y.Z` bumps the version,
 # finalizes the changelog, pushes master and dispatches this workflow on
 # that exact commit. The pipeline gates on the full suite, builds every
-# platform, publishes the crates, the addons and the npm packages, and only
-# then the finalize job creates the tag and the GitHub release: a tag now
-# attests a tree that shipped whole, and a failed run leaves no tag.
+# platform, publishes the crates, the container image, the addons and the
+# npm packages, and only then the finalize job creates the tag and the GitHub
+# release: a tag now attests a tree that shipped whole, and a failed run leaves
+# no tag.
 # `dry-run` runs the gate and every build and rehearsed staging without
 # publishing anything and without creating a tag: the way to test this
 # workflow without spending a version number.
@@ -163,6 +164,93 @@ jobs:
             nxr-*.tar.gz
             nxr-*.tar.gz.sha256
           if-no-files-found: error
+
+  # The container image, assembled from the archives the build job already
+  # packed: the static musl binary is copied out of nxr-linux-<arch>.tar.gz, so
+  # nothing is rebuilt under emulation. distroless/static carries the CA bundle
+  # TLS verification reads (a scratch base breaks every HTTPS request), a
+  # nonroot user and no shell.
+  # The image ships per release under the version tag and latest; a dispatch
+  # rehearses the build and the smoke and pushes nothing.
+  container:
+    name: Container image
+    needs: [gate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # The GHCR push authenticates with the workflow token.
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Collect the linux archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: bins-linux-*
+          path: ${{ runner.temp }}/bins
+
+      # The context is exactly what the Dockerfile reads: bin/<arch>/nxr per
+      # platform. The binary travels in the tarball with its mode, and the image
+      # has no shell to chmod it afterwards, so the mode is asserted here.
+      - name: Stage the build context
+        run: |
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx/bin/amd64" "$ctx/bin/arm64"
+          tar -xzf "$RUNNER_TEMP/bins/bins-linux-x64/nxr-linux-x64.tar.gz" -C "$ctx/bin/amd64" ./nxr
+          tar -xzf "$RUNNER_TEMP/bins/bins-linux-aarch64/nxr-linux-aarch64.tar.gz" -C "$ctx/bin/arm64" ./nxr
+          test -x "$ctx/bin/amd64/nxr"
+          test -x "$ctx/bin/arm64/nxr"
+
+      # The image has to run before it ships: the same check the build job
+      # applies to the bare binary, one layer down.
+      - name: Smoke the image
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          # TARGETARCH is the layout key the Dockerfile reads: the multi-arch
+          # push below takes it from BuildKit, and this single-platform load
+          # names the one it loads.
+          docker buildx build --platform linux/amd64 --load --build-arg TARGETARCH=amd64 \
+            --build-arg VERSION="$version" \
+            --build-arg REVISION="$GITHUB_SHA" \
+            -t nxr:smoke -f packaging/container/Dockerfile "$RUNNER_TEMP/ctx"
+          docker run --rm nxr:smoke --version
+          # The binary is static, but TLS verification reads the system trust
+          # store through rustls-native-certs: this HEAD is the real HTTPS
+          # handshake the base image exists for, and a scratch base fails it.
+          docker run --rm nxr:smoke head https://github.com/
+
+      # A dispatch rehearses the build and the smoke above and stops here: a
+      # rehearsal must not move the latest tag.
+      - name: Push the multi-arch image
+        if: ${{ !inputs.dry-run }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          # GHCR paths are lowercase, and the repository name is not.
+          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # The default docker driver cannot push a manifest list: the
+          # container driver runs BuildKit in a container of its own.
+          # No platform is emulated, the build only copies files.
+          docker buildx create --name nxr-release --driver docker-container
+          docker buildx build --builder nxr-release --platform linux/amd64,linux/arm64 --push \
+            --build-arg VERSION="$version" \
+            --build-arg REVISION="$GITHUB_SHA" \
+            -t "$image:$version" -t "$image:latest" \
+            -f packaging/container/Dockerfile "$RUNNER_TEMP/ctx"
+          # The manifest list is the artifact, so the push counts only when
+          # both architectures read back from the registry: a half-filled list
+          # would hand an amd64 binary to an arm64 node.
+          manifests="$(docker buildx imagetools inspect "$image:$version")"
+          printf '%s\n' "$manifests"
+          for arch in linux/amd64 linux/arm64; do
+            case "$manifests" in
+              *"$arch"*) echo "$arch is served" ;;
+              *) echo "$image:$version serves no $arch: the manifest list is incomplete" >&2; exit 1 ;;
+            esac
+          done
+          echo "$image:$version and $image:latest are live"
 
   # Order matters: nexus-raw depends on nexus-raw-core by version, and the
   # crates go out only after the gate and every platform build agree the
@@ -575,7 +663,7 @@ jobs:
             # cache, so the poll reads the truth as soon as it lands.
             ok=0
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if curl -sf "https://registry.npmjs.org/$(echo "$name" | sed 's|/|%2F|')" | grep -q "\"$version\""; then
+              if curl -sf "https://registry.npmjs.org/${name//\//%2F}" | grep -q "\"$version\""; then
                 ok=1
                 break
               fi
@@ -620,7 +708,7 @@ jobs:
           # and the main version is not on the registry yet to survive it.
           npm pack "${{ github.workspace }}/pkg-main" --pack-destination /tmp/consumer-smoke
           npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "$addon_spec"
-          node -e '
+          node <<'EOF'
             const fs = require("fs");
             const nxr = require("@nexus-raw/nxr");
             const dts = fs.readFileSync(process.env.GITHUB_WORKSPACE + "/pkg-main/index.d.ts", "utf8");
@@ -639,7 +727,7 @@ jobs:
               }
             }
             console.log(`consumer smoke: core ok, ${declared.length} declared functions resolve (mode ${process.env.SMOKE_MODE})`);
-          '
+          EOF
           # The CLI rides the package: the bin wrapper must spawn the real
           # binary end to end. Both modes: the rehearsal installs the
           # published latest addon, which carries bin/ since 0.19.0, so the
@@ -792,9 +880,12 @@ jobs:
   # is confirmed visible on its registry, the tree gets its tag and its
   # release. A run that stops earlier leaves no tag, so a fix is a push and
   # a fresh dispatch, never a moved tag.
+  # The container job is part of the needs: it reads its pushed manifest list
+  # back from GHCR itself, and a failed push has to hold the tag back like any
+  # other artifact.
   finalize:
     name: Tag and publish the release
-    needs: [publish, build, node, npm, pypi, bridge]
+    needs: [publish, build, container, node, npm, pypi, bridge]
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -885,7 +976,7 @@ jobs:
       - name: Verify the checksums
         run: |
           cd dist
-          cat *.sha256 > SHA256SUMS
+          cat -- *.sha256 > SHA256SUMS
           sha256sum -c SHA256SUMS
 
       # The release notes are the changelog: the same section `just release`

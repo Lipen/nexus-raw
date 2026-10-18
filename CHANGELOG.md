@@ -5,7 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr` ships a container image: `ghcr.io/lipen/nexus-raw:<version>` is the static release binary on a distroless base that carries the trust store TLS verification reads, runs as `nonroot`, and is published for `linux/amd64` and `linux/arm64` by the release workflow, from the archives that release already built.
+  A `COPY --from=ghcr.io/lipen/nexus-raw:<version> /nxr /usr/local/bin/nxr` puts it in a downstream image.
 
 ## [0.19.1] - 2026-10-18
 

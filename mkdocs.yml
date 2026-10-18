@@ -52,6 +52,7 @@ nav:
       - Consume artifacts: how-to/consume.md
       - Integrate it: how-to/integrate.md
       - Use in CI: how-to/ci.md
+      - Run it as a container: how-to/containers.md
       - Audit a repository: how-to/audit.md
       - Keep the newest versions: how-to/retention.md
       - Compare two servers: how-to/compare.md
