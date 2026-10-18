@@ -198,6 +198,21 @@ Fix the cause (rebuild, or republish under a new version directory) and run agai
 A transfer never deletes and never overwrites a diverging object.
 Deletion is the explicit `nxr rm`.
 
+### Two publishers, one name
+
+Raw storage acknowledges each PUT on its own, so a second publisher writing the same name can win after your `up` already reported success.
+The bytes and the marker can even end up from different writers, which leaves the name diverged: a reader comparing the two refuses it.
+A publish that has to prove itself does not trust the acknowledgement, it re-reads the tree:
+
+```bash
+nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --bytes   # (1)!
+```
+
+1. The structural pass compares every marker against the search fact, and `--bytes` hashes every asset against its marker: that is the pass that proves the pair.
+
+The structural pass costs one small GET per marker, `--bytes` reads the content, so run the first as a habit and the second after a publish two jobs could have raced.
+The full pass and its two prices: [audit a repository](audit.md).
+
 ## Give consumers a machine-readable name list
 
 `nxr` never reads a list: `up` scans the whole source directory.
