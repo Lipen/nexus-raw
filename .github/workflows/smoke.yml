@@ -35,7 +35,7 @@ jobs:
           mkdir -p tmp-smoke && cd tmp-smoke
           echo '{"name":"os-smoke","private":true}' > package.json
           npm install --no-package-lock --no-save "@nexus-raw/nxr@latest"
-          node -e '
+          node <<'EOF'
             const fs = require("fs");
             const path = require("path");
             const nxr = require("@nexus-raw/nxr");
@@ -50,4 +50,4 @@ jobs:
               throw new Error(`os smoke (${process.platform}): the surface is missing ${missing.join(", ")}`);
             }
             console.log(`os smoke (${process.platform}): ${declared.length} declared functions resolve`);
-          '
+          EOF
