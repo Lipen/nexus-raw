@@ -53,8 +53,8 @@ The exit is 1: findings are data, not an instrument failure.
 A clean repository prints only the summary:
 
 ```console
-$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned
-audited 2, findings: none
+$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned/
+audited 2, findings: 0, bytes checked 0
 $ echo $?
 0
 ```
@@ -107,21 +107,23 @@ No request from `audit` mutates the repository, ever.
 Run it against production with read-only credentials: nothing can go wrong on the server side by construction (see [the invariant row](../reference/invariants.md)).
 `nxr doctor --deep` carries the same guarantee.
 
-## Honest degradation when search is dead
+## Refusal when search is dead
 
-When the search index refuses (400 or 404), the audit does not refuse with it: it runs on the tree and the markers and fully catches `orphan`, `dangling_marker` and `unparseable_marker`.
-The `diverged_fact` cross-check is not computed in that run, and the summary says so instead of staying silent:
+When the search index refuses, the audit refuses with the enumeration hint instead of running over an incomplete listing.
+A partial tree would silently shrink the checked set and report a clean repository that was never fully read.
+
+A search 404 is a data refusal (exit 1):
 
 ```console
 $ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/
-orphan releases/2.0.0/old.bin: bytes without marker
-error: cannot enumerate: the search endpoint answered 404
-hint: the audit needs the search listing and the server refused it
+error: cannot enumerate: https://nexus.example.com/service/rest/v1/search/assets?repository=raw-main: the search endpoint answered 404
+hint: repeat --name, use --names-from FILE, or use --ls when the server has the search API
 $ echo $?
 1
 ```
 
-An audit over an incomplete listing is not an audit: when the search API refuses, the run refuses with the enumeration hint rather than silently shrinking the checked set.
+A search 400 means the repository is missing or is not raw: exit 3 with the repository hint, not the enumeration one.
+
 A fresh upload missing from the not-yet-caught-up index is a different thing: the index answers, the fact for that one name is just not there yet, and the audit stays silent about it instead of inventing a finding.
 
 ## Filters, JSON and pacing

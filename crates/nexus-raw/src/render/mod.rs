@@ -226,7 +226,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                 paint.bold(&download.len().to_string()),
                 paint.bold(&skip.len().to_string())
             );
-            prog.files_total = upload.len() + download.len();
+            prog.files_total = upload.len() + download.len() + skip.len();
             if verbose {
                 for name in upload {
                     println!("{} {name}", paint.dim("↑"));

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{ArtifactName, Enumeration, Error, Nxr};
+use nexus_raw_core::{ArtifactName, Enumeration, Error, NamePrefix, Nxr};
 
 use crate::cmd::{enumeration_source, finish, make_ctx, make_nxr_with, Ctx};
 use crate::render::{Mode, Session};
@@ -484,7 +484,9 @@ async fn run_mv(
     // One resolution feeds both phases: the delete removes exactly what the pour poured.
     let names = src.enumerate(enum_src).await?;
     if !yes {
-        println!("will move:");
+        if !json {
+            println!("will move:");
+        }
         for a in src
             .mirror_plan(dst, Enumeration::Names(names.clone()))
             .await?
@@ -492,7 +494,9 @@ async fn run_mv(
             let (line, json_shape) = mirror_plan_line(&a);
             crate::cmd::print_line(json, &line, &json_shape);
         }
-        println!("will delete:");
+        if !json {
+            println!("will delete:");
+        }
         for a in src.rm_plan(Enumeration::Names(names)).await? {
             crate::cmd::print_line(json, &rm_plan_line(&a), &rm_action_json(&a));
         }
@@ -563,33 +567,30 @@ pub(crate) async fn audit(
         ));
     }
     let ctx = make_ctx(cli, repo)?;
-    let run = ctx.nxr.audit(bytes, sample).await?;
+    // Prefixes and names narrow the audit at discovery: markers outside the
+    // selection are never fetched, and the byte sample draws only from it.
+    let filter = nexus_raw_core::sync::audit::AuditFilter {
+        prefixes: prefixes
+            .iter()
+            .map(|p| NamePrefix::parse(p))
+            .collect::<Result<_, _>>()?,
+        names: names
+            .iter()
+            .map(|n| ArtifactName::parse(n))
+            .collect::<Result<_, _>>()?,
+    };
+    let run = ctx.nxr.audit_filtered(bytes, sample, &filter).await?;
     // The client pool was built with its own worker ceiling; an explicit
     // --workers rebuilds the facade when it differs from the flag.
     if let Some(w) = workers {
         let _ = w;
     }
 
-    // Prefix and name filters run client-side over the structural findings.
-    let keep = |name: &str| {
-        (names.is_empty() || names.iter().any(|n| n == name))
-            && (prefixes.is_empty()
-                || prefixes.iter().any(|p| {
-                    name == p || name.starts_with(&format!("{p}/")) || name.starts_with(p)
-                }))
-    };
-    let findings: Vec<_> = run
-        .verdict
-        .findings
-        .iter()
-        .filter(|f| keep(f.name.as_str()))
-        .collect();
+    let findings: Vec<_> = run.verdict.findings.iter().collect();
     let byte_findings: Vec<_> = run
         .byte_checks
         .iter()
-        .filter(|(n, c)| {
-            matches!(c, nexus_raw_core::sync::audit::ByteCheck::Mismatch { .. }) && keep(n.as_str())
-        })
+        .filter(|(_, c)| matches!(c, nexus_raw_core::sync::audit::ByteCheck::Mismatch { .. }))
         .collect();
 
     if json {
@@ -628,7 +629,7 @@ pub(crate) async fn audit(
                 // The transfer summary carries the same event name with its own
                 // counts, so the kind names which stream this line belongs to.
                 "kind": "audit",
-                "audited": run.verdict.findings.len() + run.byte_checks.len(),
+                "audited": run.audited,
                 "findings": findings.len() + byte_findings.len(),
                 "facts_available": run.verdict.facts_available,
                 "bytes_checked": run.byte_checks.len(),
@@ -650,7 +651,7 @@ pub(crate) async fn audit(
         };
         println!(
             "audited {}, findings: {}{}, bytes checked {}",
-            run.verdict.findings.len() + run.byte_checks.len(),
+            run.audited,
             findings.len() + byte_findings.len(),
             facts_note,
             run.byte_checks.len(),

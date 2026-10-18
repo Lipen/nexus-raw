@@ -46,7 +46,7 @@ _nxr() {
 _arguments "${_arguments_options[@]}" : \
 '-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
-'--segments=[Fetch through N concurrent byte-range requests (2 or more). File output only\: \`--segments\` with a stdout target is a misuse]:N:_default' \
+'--segments=[Fetch through N concurrent byte-range requests (2 to 64). File output only\: \`--segments\` with a stdout target is a misuse]:N:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
@@ -360,7 +360,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
-'--assets[List the object names under a directory URL]' \
+'--assets[List the object names under a version directory URL]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -369,7 +369,7 @@ _arguments "${_arguments_options[@]}" : \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':url -- A directory URL inside a raw repository, the repository root included:_default' \
+':url -- A directory URL inside a raw repository, the repository root included. `--assets` requires a version directory\: `/repository/<name>/<group…>/<version>/`:_default' \
 && ret=0
 ;;
 (channel)

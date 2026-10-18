@@ -47,6 +47,7 @@ $ nxr -R releases get https://other.example.com/repository/x/1.0/file -o file
 ```
 
 An alias may name a version directory, a repository root or a server root: the alias URL is exactly the base every relative path joins onto.
+`sha` is the one verb whose argument is also a local path: a relative target that exists on disk is hashed as a file, and only a target with no local file is joined onto the alias.
 
 ## Priority
 

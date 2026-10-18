@@ -570,6 +570,106 @@ fn get_resumes_from_part_with_range() {
     );
 }
 
+/// A cut transfer keeps the bytes it landed: the rerun the transport hint
+/// recommends resumes from the part instead of starting over.
+#[test]
+fn failed_get_keeps_the_part_for_the_rerun() {
+    let srv = server(Scenario::CutBody {
+        after_bytes: 100,
+        fake_length: false,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("big.bin");
+    let part = out.path().join("big.bin.part");
+
+    let failed = nxr(&[
+        "get",
+        "--continue",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&failed, 3, "the cut body is transport");
+    assert!(
+        part.exists(),
+        "a failed transfer must keep its partial file for the rerun"
+    );
+    assert_eq!(
+        std::fs::read(&part).unwrap().len(),
+        100,
+        "the part holds the bytes that landed before the cut"
+    );
+    assert!(!target.exists(), "nothing is renamed before the digest");
+
+    let again = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&again, 0, "the rerun resumes the retained part");
+    assert_eq!(std::fs::read(&target).unwrap(), content, "byte-perfect");
+    assert!(!part.exists(), "the completed part is renamed away");
+}
+
+/// A symlink at the predictable `.part` path is never read as resume state
+/// and never becomes the renamed output.
+#[test]
+#[cfg(unix)]
+fn get_continue_refuses_a_symlinked_part() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let url = format!("{}a.zip", dir_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("a.zip");
+    let part = out.path().join("a.zip.part");
+    let protected = out.path().join("protected.bin");
+    std::fs::write(&protected, b"keep me").unwrap();
+    std::os::unix::fs::symlink(&protected, &part).unwrap();
+
+    let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    assert!(
+        !got.status.success(),
+        "a symlinked part must fail, not be followed"
+    );
+    assert_eq!(std::fs::read(&protected).unwrap(), b"keep me");
+    assert!(!target.exists(), "no output is renamed from a symlink");
+}
+
+/// A part longer than the object answers 416: the client must prove it holds
+/// the whole object before finalizing, and restart from zero when it does not.
+#[test]
+fn get_continue_restarts_an_oversized_part() {
+    let srv = server(Scenario::Atomic);
+    let content: Vec<u8> = (0..1_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("big.bin");
+    let part = out.path().join("big.bin.part");
+    std::fs::write(&part, vec![0xEEu8; 2_000]).unwrap();
+
+    let got = nxr(&[
+        "get",
+        "--continue",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+        "--retry",
+        "1",
+    ]);
+    expect_exit(&got, 0, "the stale part restarts and completes");
+    assert_eq!(
+        std::fs::read(&target).unwrap(),
+        content,
+        "a 416 never blesses bytes the object does not carry"
+    );
+    assert!(!part.exists());
+}
+
 // ---- mirror ---------------------------------------------------------------
 
 /// The version document the mirror fixtures pour.
@@ -1018,6 +1118,27 @@ fn nxr_r(args: &[&str], cfg_dir: &tempfile::TempDir, env: &[(&str, &str)]) -> Ou
     cmd.output().expect("nxr binary runs")
 }
 
+/// The same invocation run from `cwd`: a relative argument under `-R` must be
+/// judged against the directory the user is actually in.
+fn nxr_r_in(
+    args: &[&str],
+    cfg_dir: &tempfile::TempDir,
+    env: &[(&str, &str)],
+    cwd: &std::path::Path,
+) -> Output {
+    let mut cmd = Command::new(NXR);
+    cmd.current_dir(cwd)
+        .args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .env("XDG_CONFIG_HOME", cfg_dir.path());
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("nxr binary runs")
+}
+
 /// -R expands a relative path argument onto the alias base and authenticates
 /// through the env variables the alias names: the round trip works end to end.
 #[test]
@@ -1283,7 +1404,67 @@ fn alias_doctor_expands_and_names_the_source() {
     assert!(!out.contains("resolved from -u flag"), "{out}");
 }
 
+/// `sha` through `-R`: a relative URL expands onto the alias base, while an
+/// existing local path stays a local path and is hashed without any request.
+#[test]
+fn alias_sha_expands_a_url_and_keeps_a_local_path() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    let cfg = TempDir::new().unwrap();
+    alias_config(&srv, &cfg);
+
+    let remote = nxr_r(
+        &["-R", "mock", "sha", "1.14.0/a.zip"],
+        &cfg,
+        &[("TEST_ALIAS_USER", "u"), ("TEST_ALIAS_PASS", "p")],
+    );
+    expect_exit(&remote, 0, "sha through the alias");
+    let after_remote = srv.requests().len();
+
+    let local_dir = TempDir::new().unwrap();
+    std::fs::write(local_dir.path().join("a.zip"), ALPHA).unwrap();
+    let local = nxr_r_in(
+        &["-R", "mock", "sha", "a.zip"],
+        &cfg,
+        &[("TEST_ALIAS_USER", "u"), ("TEST_ALIAS_PASS", "p")],
+        local_dir.path(),
+    );
+    expect_exit(&local, 0, "a relative local path is hashed locally");
+
+    assert_eq!(
+        stdout(&remote),
+        stdout(&local),
+        "the remote and local copies are the same bytes"
+    );
+    assert_eq!(
+        srv.requests().len(),
+        after_remote,
+        "a local sha must not send a request"
+    );
+}
+
 // ---- scenario coverage ----------------------------------------------------
+
+/// `sha` refuses a missing local file and a non-http URL as misuse (exit 2),
+/// the class the exit-code table promises.
+#[test]
+fn sha_misuse_is_exit_2() {
+    let missing = nxr(&["sha", "/no/such/local-file.bin"]);
+    expect_exit(&missing, 2, "a missing local file is misuse");
+    assert!(
+        stderr(&missing).contains("no such local file"),
+        "{}",
+        stderr(&missing)
+    );
+
+    let ftp = nxr(&["sha", "ftp://example.com/x.bin"]);
+    expect_exit(&ftp, 2, "a non-http URL is misuse");
+    assert!(
+        stderr(&ftp).contains("http(s)"),
+        "the refusal names the accepted schemes: {}",
+        stderr(&ftp)
+    );
+}
 
 /// The atomic scenario serves no such object: a GET of a missing name is a
 /// storage 404, a data fact (exit 1), not a transport failure (exit 3).
@@ -1317,9 +1498,11 @@ fn get_resume_validates_against_the_sibling() {
 
     let out = TempDir::new().unwrap();
     let target = out.path().join("a.zip");
-    // A foreign garbage part from another session or a crashed run.
+    // A foreign garbage part shorter than the object: the resume appends the
+    // real tail, so only the sibling digest can tell the mix from the object.
+    // (A part longer than the object is caught earlier, at the 416.)
     let part = out.path().join("a.zip.part");
-    std::fs::write(&part, vec![0xEEu8; 4096]).unwrap();
+    std::fs::write(&part, vec![0xEEu8; 10]).unwrap();
 
     let get = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
     expect_exit(&get, 1, "the diverging resume is refused");
@@ -1553,6 +1736,25 @@ fn flaky_up_recovers_in_one_invocation() {
         &nxr(&["up", src.path().to_str().unwrap(), &base]),
         0,
         "up through flaky",
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
+}
+
+/// retry-after-503: a 5xx that names its pause is waited out and the upload lands.
+#[test]
+fn retry_after_503_up_recovers() {
+    let srv = server(Scenario::RetryAfter503 {
+        retry_after_secs: 1,
+    });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = dir_url(&srv);
+
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "up through a 503 with Retry-After",
     );
     assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
     assert!(srv.store_get("1.14.0/a.zip.sha256").is_some());
@@ -1835,6 +2037,49 @@ fn golden_ndjson_audit_holds() {
     );
 }
 
+/// Prefixes select whole segments: `orph/` never picks `orphan/...`, the
+/// filter runs before any request, and `audited` counts the selected assets.
+#[test]
+fn audit_prefix_matches_whole_segments() {
+    let srv = server(Scenario::AuditLitter);
+    let repo = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+
+    let out = nxr(&["--json", "audit", &repo, "--prefix", "orphan/"]);
+    expect_exit(&out, 1, "the orphan is a finding under its own prefix");
+    let lines = ndjson(&out);
+    let findings: Vec<_> = lines
+        .iter()
+        .filter(|l| l["event"] == "finding")
+        .map(|l| l["name"].as_str().unwrap_or(""))
+        .collect();
+    assert_eq!(findings, ["orphan/app.bin"]);
+    let summary = lines.last().expect("the audit summary");
+    assert_eq!(summary["audited"], 1, "the selected set is one asset");
+    assert_eq!(summary["findings"], 1);
+
+    // A prefix that is not a whole segment selects nothing: `orph/` is not a
+    // parent of `orphan/`, while a naive `starts_with` would say it is.
+    let none = nxr(&["--json", "audit", &repo, "--prefix", "orph/"]);
+    expect_exit(&none, 0, "no findings under a prefix that matches nothing");
+    let summary = ndjson(&none).into_iter().last().expect("the summary");
+    assert_eq!(summary["audited"], 0);
+    assert_eq!(summary["findings"], 0);
+    assert_eq!(
+        summary["facts_available"], true,
+        "an empty selection does not make a live index unavailable"
+    );
+
+    // A prefix without the trailing slash is the same misuse every transfer
+    // command refuses: the grammar is one contract, not per-command.
+    let loose = nxr(&["audit", &repo, "--prefix", "orph"]);
+    expect_exit(&loose, 2, "a prefix without the trailing slash is misuse");
+    assert!(
+        stderr(&loose).contains("whole segments"),
+        "the refusal names the rule: {}",
+        stderr(&loose)
+    );
+}
+
 // ---- golden completions -----------------------------------------------------
 
 /// The completion scripts are part of the contract, pinned byte-exact by fixtures in tests/golden/.
@@ -2084,6 +2329,16 @@ fn doctor_exit_codes() {
     let broken = nxr(&["--retry", "0", "doctor"]);
     expect_exit(&broken, 2, "a setting the commands refuse fails the check");
     assert!(stderr(&broken).contains("hint:"));
+
+    // Deep probes talk to a server: without a URL they would silently do
+    // nothing and still report "all checks passed".
+    let deep = nxr(&["doctor", "--deep"]);
+    expect_exit(&deep, 2, "--deep requires a URL");
+    assert!(
+        stderr(&deep).contains("--deep"),
+        "the refusal names the flag: {}",
+        stderr(&deep)
+    );
 }
 
 /// doctor --json: one NDJSON line per check, names and booleans only, no secret ever appears in the detail field.
@@ -2915,6 +3170,34 @@ fn mv_plans_by_default_and_prints_both_plans() {
     assert!(text.contains("will delete:"), "{text}");
     assert!(text.contains("rm a.zip"), "{text}");
 
+    assert!(dst.store_get("1.14.0/a.zip").is_none(), "nothing moved");
+    assert!(src.store_get("1.14.0/a.zip").is_some(), "nothing deleted");
+}
+
+/// `mv --json` without `--yes` is one plan object per line: phase headers are
+/// human prose and must not leak into the NDJSON stream.
+#[test]
+fn mv_plan_json_is_pure_ndjson() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Atomic);
+
+    let out = nxr(&[
+        "--json",
+        "mv",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&out, 0, "a plan is exit 0");
+    let lines = ndjson(&out);
+    assert!(
+        lines.iter().all(|l| l.is_object()),
+        "every line is JSON: {lines:?}"
+    );
+    assert!(lines.iter().any(|l| l["plan"] == "copy"), "{lines:?}");
+    assert!(lines.iter().any(|l| l["action"] == "rm"), "{lines:?}");
     assert!(dst.store_get("1.14.0/a.zip").is_none(), "nothing moved");
     assert!(src.store_get("1.14.0/a.zip").is_some(), "nothing deleted");
 }
@@ -3751,6 +4034,46 @@ fn get_segments_degrades_on_a_tiny_object() {
     ]);
     expect_exit(&got, 0, "tiny segmented get");
     assert_eq!(std::fs::read(&target).unwrap(), b"012345");
+}
+
+/// The segment count is bounded and an empty object still completes: the
+/// split of zero bytes has no span to compute.
+#[test]
+fn get_segments_bounds_and_empty_object() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("empty.bin", b"");
+    let url = format!("{}empty.bin", root_url(&srv));
+
+    for n in ["0", "1", "65"] {
+        let out = TempDir::new().unwrap();
+        let got = nxr(&[
+            "get",
+            "--segments",
+            n,
+            &url,
+            "-o",
+            out.path().join("empty.bin").to_str().unwrap(),
+        ]);
+        expect_exit(&got, 2, "a segment count outside 2..=64 is misuse");
+        assert!(
+            stderr(&got).contains("between 2 and 64"),
+            "the refusal names the bound: {}",
+            stderr(&got)
+        );
+    }
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("empty.bin");
+    let got = nxr(&[
+        "get",
+        "--segments",
+        "4",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "an empty object has no span but must still land");
+    assert_eq!(std::fs::read(&target).unwrap(), b"");
 }
 
 /// `--segments` with a stdout target is a misuse, and stdout streaming stays single-stream.

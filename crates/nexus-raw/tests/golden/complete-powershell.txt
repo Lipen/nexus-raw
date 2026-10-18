@@ -63,7 +63,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         'nxr;get' {
             [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part')
             [CompletionResult]::new('--out', '--out', [CompletionResultType]::ParameterName, 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part')
-            [CompletionResult]::new('--segments', '--segments', [CompletionResultType]::ParameterName, 'Fetch through N concurrent byte-range requests (2 or more). File output only: `--segments` with a stdout target is a misuse')
+            [CompletionResult]::new('--segments', '--segments', [CompletionResultType]::ParameterName, 'Fetch through N concurrent byte-range requests (2 to 64). File output only: `--segments` with a stdout target is a misuse')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
@@ -348,7 +348,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
             [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
-            [CompletionResult]::new('--assets', '--assets', [CompletionResultType]::ParameterName, 'List the object names under a directory URL')
+            [CompletionResult]::new('--assets', '--assets', [CompletionResultType]::ParameterName, 'List the object names under a version directory URL')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
             [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')

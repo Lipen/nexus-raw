@@ -80,7 +80,7 @@ pub(crate) enum Cmd {
         /// Resume from an existing `<out>`.part through a Range request.
         #[arg(long = "continue")]
         cont: bool,
-        /// Fetch through N concurrent byte-range requests (2 or more).
+        /// Fetch through N concurrent byte-range requests (2 to 64).
         /// File output only: `--segments` with a stdout target is a misuse.
         #[arg(long, value_name = "N")]
         segments: Option<usize>,
@@ -311,9 +311,10 @@ pub(crate) enum Cmd {
     /// List the entries of a raw directory URL, at any tree depth (--assets: flat artifact names).
     Ls {
         /// A directory URL inside a raw repository, the repository root included.
+        /// `--assets` requires a version directory: `/repository/<name>/<group…>/<version>/`.
         #[arg(value_name = "URL")]
         url: String,
-        /// List the object names under a directory URL.
+        /// List the object names under a version directory URL.
         #[arg(long)]
         assets: bool,
     },
@@ -334,7 +335,7 @@ pub(crate) enum Cmd {
         #[arg(value_name = "URL")]
         url: Option<String>,
         /// Probe the server's behavior: range, content-length, search, repo type, version. Read-only.
-        #[arg(long)]
+        #[arg(long, requires = "url")]
         deep: bool,
         /// The object the deep probes target (default: a soft autolookup of the root).
         #[arg(long, value_name = "NAME", requires = "deep")]

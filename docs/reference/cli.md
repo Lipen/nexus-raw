@@ -87,7 +87,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 |:-----|:--------|
 | `-o, --out <FILE>` | output file. stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
-| `--segments <N>` | fetch through `N` concurrent byte-range requests (2 or more). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
+| `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
@@ -126,7 +126,7 @@ $ echo $?
 |:----:|:-----|
 | `0` | body delivered |
 | `1` | the URL answered 404 (the object is absent), or local I/O failure around the part file |
-| `2` | misuse: a non-http URL, or `--segments` with a stdout target |
+| `2` | misuse: a non-http URL, `--segments` with a stdout target, or a segment count outside `2..=64` |
 | `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
@@ -220,6 +220,7 @@ nxr sha <FILE|URL>
 ```
 
 The sha256 of a local file or a remote object, streamed.
+Under `-R`, a target that exists on disk stays a local path, and only a target with no local file joins the alias base.
 A local file never touches the network.
 
 ```console
@@ -747,7 +748,8 @@ $ echo $?
 0
 ```
 
-`--assets` lists the artifact names under a directory URL, the enumeration `down --ls` consumes.
+`--assets` lists the artifact names under a version directory (`/repository/<name>/<group…>/<version>/`), the enumeration `down --ls` consumes.
+The tree form (`ls <URL>`) works at any depth, the repository root included; `--assets` makes the same version-directory assumption the transfer commands make.
 It scopes the search with `q=<directory>/` exactly like the entry listing, and cuts the names client-side.
 Neither listing sends the `group` parameter: on one measured Nexus release it matched Maven coordinates rather than raw path prefixes, and nested listings lied.
 Treat both as conveniences only.
@@ -885,14 +887,14 @@ A refusal of the search listing (400/404) refuses the audit with the enumeration
 A fresh upload missing from the not-yet-caught-up index is not a finding: the tree and the markers are the truth, not the index.
 
 `--bytes` adds a download and sha256 check of every asset against its marker: the only mode that catches silent bitrot, at the price of reading every object.
-`--sample N` byte-checks a deterministic sample of N objects instead, with the seed printed in the summary, so a sampled run is reproducible.
+`--sample N` byte-checks a deterministic stride sample of N objects instead, so a sampled run selects the same objects and is reproducible.
 `--sample` without `--bytes` is misuse (exit 2).
 `audit` only reads: no request it makes mutates the repository (see [read-only diagnostics](../explanation/design.md#read-only-diagnostics)).
 
 | Flag | Meaning |
 |:-----|:--------|
 | `--bytes` | download every asset and sha256-check it against its marker: catches silent bitrot, costs a full read of the repository |
-| `--sample <N>` | byte-check a deterministic sample of N objects instead of all; the seed prints in the summary. Requires `--bytes` |
+| `--sample <N>` | byte-check a deterministic stride sample of N objects instead of all. Requires `--bytes` |
 | `--name <NAME>` | audit only this name, repeatable |
 | `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 | `--json` | NDJSON: one `finding` event per finding, then a final `summary` |
@@ -905,7 +907,7 @@ dangling_marker releases/2.0.0/app.zip: marker without bytes
 audited 412, findings: 2, bytes checked 0
 $ echo $?
 1
-$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned
+$ nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --prefix pinned/
 audited 2, findings: 0, bytes checked 0
 $ echo $?
 0
@@ -1074,6 +1076,7 @@ Missing credentials are a warning, not a failure: the run reports `none found` a
 | `--deep` | add read-only probes of the server itself: auth, range, content-length, search, repo-type, tls, version |
 | `--probe-name <NAME>` | the object the targeted probes (range, content-length) examine. Without it, one is found by a single listing of the repository root |
 
+`--deep` requires a URL: without one it is misuse (exit 2), because every deep probe talks to a server.
 With `--deep` every probe is independent: one probe refusing never stops the others, because doctor is a diagnosis, not a gate.
 A probe that needs an object (range, content-length) reports `skipped` with the reason when none exists: an empty repository before the first `up` is a normal case, and the verdict is then `skipped`, never `ok` and never `fail`.
 A warn is advice, not a failure: a stripped `Range`, an absent `Content-Length` and a dead search index each print a hint that names the how-to section, and the exit stays `0`.

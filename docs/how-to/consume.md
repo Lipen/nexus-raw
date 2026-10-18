@@ -129,6 +129,7 @@ The rules it plays by:
 
 - the object needs a `Content-Length` (a HEAD answers it) and a server that honors `Range`: both are true for stock Nexus.
 - a server or proxy that silently strips `Range` (the answer is `200`, not `206`) degrades the download to the single-stream path automatically, logged through the events: the artifact still lands, verified.
+- `N` is bounded to `2..=64`, and the fan-out still obeys `--workers`: the flag splits the object, it does not widen the transfer concurrency budget.
 - an object smaller than the segment count just gets smaller segments, down to one byte each, still exact.
 - `--segments` is a file-target flag: piped stdout stays a single stream, and `--continue` does not combine with it.
 

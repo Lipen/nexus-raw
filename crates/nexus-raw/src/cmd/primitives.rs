@@ -166,7 +166,24 @@ async fn run_head(ctx: &Ctx, url: &str) -> Result<(), Error> {
 pub(crate) async fn sha(cli: &Cli, target: &str) -> Result<(), Error> {
     // A local file needs no HTTP client at all.
     if !target.starts_with("http://") && !target.starts_with("https://") {
+        // A scheme that is not http(s) is a command-line mistake, not a
+        // missing local file: the exit code table promises 2 for both.
+        if let Some((scheme, _)) = target.split_once("://") {
+            return Err(Error::Misuse(format!(
+                "sha takes an http(s) URL or a local path, got a {scheme} URL"
+            )));
+        }
         let path = std::path::PathBuf::from(target);
+        match std::fs::metadata(&path) {
+            Ok(meta) if meta.is_file() => {}
+            Ok(_) => return Err(Error::Misuse(format!("not a file: {}", path.display()))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(Error::Misuse(format!(
+                    "no such local file or http(s) URL: {target}"
+                )))
+            }
+            Err(e) => return Err(Error::io(&path, e)),
+        }
         let d = nexus_raw_core::model::digest::sha256_file(&path).map_err(|e| Error::Io {
             path: path.display().to_string(),
             detail: e.to_string(),

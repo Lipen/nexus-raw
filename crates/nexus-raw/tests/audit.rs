@@ -66,7 +66,7 @@ fn clean_prefix_exits_zero() {
     // no search API refuses the listing (exit 1, the enumeration class),
     // because an audit over an incomplete listing is not an audit.
     let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
-    let out = nxr(&["audit", &repo_url(&srv), "--prefix", "clean"]);
+    let out = nxr(&["audit", &repo_url(&srv), "--prefix", "clean/"]);
     assert_eq!(
         out.status.code(),
         Some(0),

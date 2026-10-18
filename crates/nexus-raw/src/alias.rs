@@ -243,14 +243,7 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
             ]
         }
         C::Diff { src, .. } => vec![std::ptr::addr_of!(*src).cast_mut()],
-        C::Sha { target } => {
-            // A local path is common, and the alias join passes it through unchanged
-            // unless it looks relative to the alias. But sha of a local path
-            // has no scheme, so rewriting it would corrupt it. Skip: sha takes
-            // URLs only as `http(s)://…`, which never needs an alias.
-            let _ = target;
-            vec![]
-        }
+        C::Sha { target } => vec![std::ptr::addr_of!(*target).cast_mut()],
         C::Channel { op } => match op {
             crate::ChannelOp::Get { url } | crate::ChannelOp::Set { url, .. } => {
                 vec![std::ptr::addr_of!(*url).cast_mut()]
@@ -284,11 +277,19 @@ pub fn apply_remote(cli: &mut crate::Cli) -> Result<(), Error> {
     let aliases = Aliases::load(&path)?;
     let alias = aliases.get(&name)?;
 
-    for slot in url_slots(cli) {
-        // SAFETY: the pointers come from `&mut cli` fields taken just above,
-        // no aliasing exists in this scope, and each field is written once.
-        let url = unsafe { &mut *slot };
-        *url = join(&alias.url, url);
+    // `sha` takes a local path or a URL. A path that exists is a local file,
+    // not a URL slot: joining it onto the alias base would corrupt it.
+    let local_sha = matches!(
+        &cli.command,
+        crate::Cmd::Sha { target } if std::path::Path::new(target).exists()
+    );
+    if !local_sha {
+        for slot in url_slots(cli) {
+            // SAFETY: the pointers come from `&mut cli` fields taken just above,
+            // no aliasing exists in this scope, and each field is written once.
+            let url = unsafe { &mut *slot };
+            *url = join(&alias.url, url);
+        }
     }
 
     if cli.user.is_none() {
