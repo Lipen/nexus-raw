@@ -211,6 +211,17 @@ version v:
     # The README names the action by tag, so the tag follows the version: the
     # recipe example must not teach an action two minors behind the binary it installs.
     perl -pi -e "s/(uses: Lipen\/nexus-raw\@v)[0-9.]*/\${1}{{ v }}/" README.md
+    # The docs teach a dependency the same way the rust example does, with the
+    # loose minor. Nothing else rewrites those numbers, so the recipe moves them
+    # and the guard in version-check holds whatever the rewrite reaches.
+    minor="{{ v }}"
+    minor="${minor%.*}"
+    pages="$(grep -rlE 'nexus-raw-core = "[0-9][0-9.]*"' README.md README.ru.md crates/nexus-raw/README.md docs)"
+    [ -n "$pages" ] || { echo "version: no nexus-raw-core pin found in the pages" >&2; exit 1; }
+    for page in $pages; do
+      perl -pi -e "s/(nexus-raw-core = )\"[0-9.]*\"/\${1}\"$minor\"/" "$page"
+      grep -q "nexus-raw-core = \"$minor\"" "$page" || { echo "version: the dependency pin in $page did not move" >&2; exit 1; }
+    done
     # A silent perl miss is the 0.6.0 release killer: assert every pin.
     grep -q "version = \"{{ v }}\"" crates/nexus-raw/Cargo.toml || { echo "version: the nexus-raw dep pin did not move" >&2; exit 1; }
     grep -q "^version = \"{{ v }}\"" clients/python/pyproject.toml || { echo "version: the pyproject version did not move" >&2; exit 1; }
