@@ -40,7 +40,7 @@ cargo binstall nexus-raw
 A GitHub Actions workflow installs and runs `nxr` through the composite action shipped in this repository:
 
 ```yaml
-- uses: Lipen/nexus-raw@v0.19.1
+- uses: Lipen/nexus-raw@v0.20.0
   with:
     command: up
     args: ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/

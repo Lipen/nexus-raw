@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.20.0] - 2026-10-18
+
 ### Added
 
 - `nxr` ships a container image: `ghcr.io/lipen/nexus-raw:<version>` is the static release binary on a distroless base that carries the trust store TLS verification reads, runs as `nonroot`, and is published for `linux/amd64` and `linux/arm64` by the release workflow, from the archives that release already built.
@@ -411,7 +415,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/Lipen/nexus-raw/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/Lipen/nexus-raw/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/Lipen/nexus-raw/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/Lipen/nexus-raw/compare/v0.17.0...v0.18.0
