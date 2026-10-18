@@ -208,7 +208,7 @@ What the server ends up holding depends on the interleaving, and so does the che
 | the winner's bytes and the winner's marker | `nxr diff <local-dir> <url>`: the losing side's local digest disagrees with the remote marker, and a second `up` refuses on the same disagreement |
 | the winner's bytes and the loser's marker | the structural `nxr audit <URL>` flags a `diverged_fact` once the search index has caught up, and `nxr audit <URL> --bytes` hashes the stored bytes and needs no index at all |
 
-The second row is why `up` does not read its marker back after writing it: a read-back returns markers, and in that interleaving the marker is the interloper's own, so it agrees with itself.
+The second row is why `up` does not read its marker back after writing it: there the marker that survived is your own, so a read-back agrees with the digest you wrote while the bytes belong to the other writer.
 A read-back would catch only the first row, at one extra GET per artifact on every publish.
 The pass that proves the pair reads the content:
 
