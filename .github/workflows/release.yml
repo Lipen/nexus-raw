@@ -49,6 +49,9 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
       # The same checks `just check` asserts locally: nothing publishes
       # until the exact dispatched tree passes the full suite.
       - name: Run rustfmt
@@ -59,6 +62,29 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+      # The local gate runs the whole prek hook set, not only rustfmt and
+      # clippy: actionlint, the markdown rules and the hygiene hooks are part
+      # of what "the same checks" means.
+      - name: Run the prek hooks
+        run: uvx prek@0.5.5 run --all-files
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
+        with:
+          tool: cargo-deny@0.20.2
+
+      - name: Run cargo-deny
+        run: cargo deny --locked check
+
+      - name: Build the mock server
+        run: cargo build -p mock-nexus
+
+      - name: Run the python conformance suite
+        working-directory: clients/python
+        env:
+          MOCK_NEXUS_BIN: ${{ github.workspace }}/target/debug/mock-nexus
+        run: python3 test_conformance.py
 
       - name: Check the version agrees everywhere
         run: scripts/version-check.sh

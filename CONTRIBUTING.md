@@ -12,7 +12,7 @@ just check-docs   # the docs site builds and every link resolves
 just demo         # a real session against the mock server and stub payloads
 ```
 
-`just` is optional: every recipe is a thin wrapper over `cargo` or `uvx zensical`.
+`just` is optional: each recipe wraps `cargo`, `uvx`, or a repository script, and the recipe is the exact command the gate runs.
 
 The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`, the failure-injection server in `crates/mock-nexus`.
 Its scenario list is the contract: a scenario added for one client lands with the test that exercises it.

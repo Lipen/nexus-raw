@@ -52,20 +52,42 @@ runs:
       env:
         VERSION: '${{ inputs.version }}'
         ARCHIVE: '${{ steps.platform.outputs.archive }}'
+        # The caller's repository is not the action's: a composite action
+        # inherits `github.repository` from the workflow, so the release URL
+        # must come from `github.action_repository`. A local `uses: ./` has no
+        # action repository and falls back to the checkout's own.
+        ACTION_REPO: '${{ github.action_repository }}'
+        WORKFLOW_REPO: '${{ github.repository }}'
+        RUNNER_TEMP: '${{ runner.temp }}'
       run: |
         set -eu
+        repo="${ACTION_REPO:-$WORKFLOW_REPO}"
         if [ "$VERSION" = "latest" ]; then
-          url="https://github.com/${{ github.repository }}/releases/latest/download/${ARCHIVE}"
-          checksum_url="${url}.sha256"
+          base="https://github.com/${repo}/releases/latest/download"
         else
-          url="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ARCHIVE}"
-          checksum_url="${url}.sha256"
+          base="https://github.com/${repo}/releases/download/v${VERSION}"
         fi
-        curl --fail --silent --show-error --location -o "$ARCHIVE" "$url"
-        curl --fail --silent --show-error --location -o "${ARCHIVE}.sha256" "${checksum_url}"
-        echo "expected: $(cat "${ARCHIVE}.sha256")"
-        sha256sum --check --status <<< "$(cat "${ARCHIVE}.sha256")"
-        echo "path=$ARCHIVE" >> "$GITHUB_OUTPUT"
+        dest="${RUNNER_TEMP}/${ARCHIVE}"
+        curl --fail --silent --show-error --location -o "$dest" "${base}/${ARCHIVE}"
+        curl --fail --silent --show-error --location -o "${RUNNER_TEMP}/SHA256SUMS" "${base}/SHA256SUMS"
+        # The Windows build writes the sha256sum binary marker (`hash *file`),
+        # the other platforms write two spaces: match either separator.
+        line="$(awk -v f="$ARCHIVE" '$2 == f || $2 == "*" f' "${RUNNER_TEMP}/SHA256SUMS")"
+        if [ -z "$line" ]; then
+          echo "::error::SHA256SUMS of ${repo} has no entry for ${ARCHIVE}"
+          exit 2
+        fi
+        expected="${line%% *}"
+        if command -v sha256sum > /dev/null 2>&1; then
+          actual="$(sha256sum "$dest" | awk '{print $1}')"
+        else
+          actual="$(shasum -a 256 "$dest" | awk '{print $1}')"
+        fi
+        if [ "$expected" != "$actual" ]; then
+          echo "::error::checksum mismatch for ${ARCHIVE}: expected ${expected}, got ${actual}"
+          exit 1
+        fi
+        echo "path=$dest" >> "$GITHUB_OUTPUT"
 
     - name: 'Unpack and install'
       id: 'install'

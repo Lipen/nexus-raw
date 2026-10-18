@@ -8,7 +8,7 @@ default:
 
 # Tool switches, one place to change them.
 cargo := "cargo"
-prek := "uvx prek"
+prek := "uvx prek@0.5.5"
 
 # Usage example: `just cargo test -p nexus-raw-core`.
 [doc('Run any cargo subcommand with flags.')]
@@ -216,7 +216,7 @@ version v:
     # and the guard in version-check holds whatever the rewrite reaches.
     minor="{{ v }}"
     minor="${minor%.*}"
-    pages="$(grep -rlE 'nexus-raw-core = "[0-9][0-9.]*"' README.md README.ru.md crates/nexus-raw/README.md docs)"
+    pages="$(grep -rlE 'nexus-raw-core = "[0-9][0-9.]*"' README.md README.ru.md crates/nexus-raw/README.md docs examples/rust/README.md)"
     [ -n "$pages" ] || { echo "version: no nexus-raw-core pin found in the pages" >&2; exit 1; }
     for page in $pages; do
       perl -pi -e "s/(nexus-raw-core = )\"[0-9.]*\"/\${1}\"$minor\"/" "$page"
@@ -424,7 +424,7 @@ demo-cast *args:
 [doc('Serve the docs site with live reload (http://localhost:8000).')]
 [group('docs')]
 docs *args:
-    uvx zensical serve {{ args }}
+    uvx zensical@0.0.71 serve {{ args }}
 
 # A docs link or config typo fails the build instead of shipping broken pages.
 [doc('Build the docs, check hints, llms.txt and fail on issues.')]
@@ -435,7 +435,7 @@ check-docs *args:
     scripts/llms-check.sh
     scripts/check-bridge-surface.sh
     scripts/check-skill.sh
-    uvx zensical build --strict {{ args }}
+    uvx zensical@0.0.71 build --strict {{ args }}
 
 # The HEAD commit is green on CI: a push without a red tail.
 [doc('Wait for the CI on HEAD and report green or red.')]

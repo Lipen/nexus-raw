@@ -42,6 +42,56 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  # The hooks the local git hook runs, run by CI too: a contributor without
+  # prek installed otherwise skips actionlint, the markdown semicolon rule and
+  # the external-name check entirely. The tool versions live in prek.toml, so
+  # the local and CI gates cannot drift apart.
+  lint:
+    name: Hygiene (prek)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          components: clippy
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Run the prek hooks
+        run: uvx prek@0.5.5 run --all-files
+
+  # The action is the install path the README advertises: exercise it the way
+  # a consumer does, against the current release, on every runner flavor the
+  # action supports. It catches a wrong repository context, a missing release
+  # asset and a checksum that does not line up, before a consumer does.
+  action:
+    name: Composite action (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Run nxr through the action
+        uses: ./
+        with:
+          command: complete
+          args: bash
+
   # The manifest pins the minimum supported Rust version; this proves the
   # pinned toolchain still builds the workspace, cheaply and early.
   msrv:

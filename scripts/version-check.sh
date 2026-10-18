@@ -76,7 +76,7 @@ done
 # two pages through ten minors. Zero hits mean the pattern or the snippet
 # drifted, not that the pages are clean.
 doc_pins="$(grep -rEho --exclude-dir=assets 'nexus-raw-core = "[0-9][0-9.]*"' \
-    README.md README.ru.md crates/nexus-raw/README.md docs | sed 's/.*"\(.*\)"/\1/' | sort -u)"
+    README.md README.ru.md crates/nexus-raw/README.md docs examples/rust/README.md | sed 's/.*"\(.*\)"/\1/' | sort -u)"
 if [ -z "$doc_pins" ]; then
   echo "version-check: no nexus-raw-core dependency pin found in the pages" >&2
   failed=1
