@@ -276,30 +276,39 @@ jobs:
       fail-fast: false
       matrix:
         # The platform addons publish under the @nexus-raw scope.
+        # The addon name carries the libc (linux-x64-gnu) and the CLI artifact
+        # does not (linux-x64), so every entry names the build it stages: `bin`
+        # is that artifact name, and the download below reads it. The darwin
+        # legs coincide, which is why a mismatch here hid for a release.
         include:
           - name: linux-x64-gnu
+            bin: linux-x64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             platform-os: linux
             platform-cpu: x64
             platform-libc: glibc
           - name: linux-arm64-gnu
+            bin: linux-aarch64
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             platform-os: linux
             platform-cpu: arm64
             platform-libc: glibc
           - name: darwin-x64
+            bin: darwin-x64
             os: macos-latest
             target: x86_64-apple-darwin
             platform-os: darwin
             platform-cpu: x64
           - name: darwin-arm64
+            bin: darwin-arm64
             os: macos-latest
             target: aarch64-apple-darwin
             platform-os: darwin
             platform-cpu: arm64
           - name: win32-x64-msvc
+            bin: windows-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             platform-os: win32
@@ -344,7 +353,7 @@ jobs:
       - name: Download the CLI binary
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: bins-${{ matrix.name }}
+          name: bins-${{ matrix.bin }}
           path: ${{ runner.temp }}/bins
 
       - name: Stage the platform package
@@ -353,11 +362,11 @@ jobs:
           mkdir -p "npm/@nexus-raw/${{ matrix.name }}/bin"
           cp nexus-raw.*.node "npm/@nexus-raw/${{ matrix.name }}/index.node"
           # The CLI rides the same package: the nxr binary is the one the
-          # build job packed into bins-${{ matrix.name }} (downloaded above),
+          # build job packed into bins-${{ matrix.bin }} (downloaded above),
           # unpacked into bin/ next to the addon so the bin wrapper finds it
           # there. The windows archive ships nxr.exe: the wrapper already
           # expects the suffix on that platform.
-          tar -xzf "$RUNNER_TEMP/bins/nxr-${{ matrix.name }}.tar.gz" -C "npm/@nexus-raw/${{ matrix.name }}/bin"
+          tar -xzf "$RUNNER_TEMP/bins/nxr-${{ matrix.bin }}.tar.gz" -C "npm/@nexus-raw/${{ matrix.name }}/bin"
           node -e '
             const fs = require("fs");
             const main = JSON.parse(fs.readFileSync("package.json", "utf8"));
@@ -374,7 +383,9 @@ jobs:
               // The darwin legs carry no libc, so the field stays absent there.
               libc: process.argv[4] ? [process.argv[4]] : undefined,
               main: "index.node",
-              files: ["index.node", "bin/nxr"],
+              // The whole directory, not bin/nxr: the windows leg stages
+              // nxr.exe, and a plain path pattern would leave it behind.
+              files: ["index.node", "bin/"],
             };
             fs.writeFileSync("npm/@nexus-raw/" + process.argv[1] + "/package.json", JSON.stringify(pkg, null, 2) + "\n");
           ' "${{ matrix.name }}" "${{ matrix.platform-os }}" "${{ matrix.platform-cpu }}" "${{ matrix.platform-libc }}"
@@ -459,13 +470,19 @@ jobs:
             if (!fs.existsSync(`${dir}/index.node`)) {
               throw new Error(`${dir}: index.node is missing`);
             }
+            // The CLI rides the platform package: a staging that dropped it
+            // would publish an addon whose bin wrapper can never spawn.
+            const bin = fs.readdirSync(`${dir}/bin`).filter((f) => f.startsWith("nxr"));
+            if (bin.length === 0) {
+              throw new Error(`${dir}: bin carries no nxr binary`);
+            }
             if (pkg.name !== name) {
               throw new Error(`${dir}: package name ${pkg.name} does not match ${name}`);
             }
             if (pkg.version !== main.version) {
               throw new Error(`${dir}: version ${pkg.version} does not match the workspace ${main.version}`);
             }
-            console.log(`${pkg.name}@${pkg.version} ok`);
+            console.log(`${pkg.name}@${pkg.version} ok (${bin.join(", ")})`);
           }
           EOF
 
