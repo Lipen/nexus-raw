@@ -604,10 +604,8 @@ jobs:
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
           if [ -n "${{ inputs.dry-run && 'dry' || '' }}" ]; then
             addon_spec="@nexus-raw/nxr-linux-x64-gnu@latest"
-            mode=rehearsal
           else
             addon_spec="@nexus-raw/nxr-linux-x64-gnu@${version}"
-            mode=release
           fi
           mkdir -p /tmp/consumer-smoke && cd /tmp/consumer-smoke
           echo '{"name":"consumer-smoke","private":true,"dependencies":{"@nexus-raw/nxr":"'"$version"'"}}' > package.json
@@ -643,12 +641,13 @@ jobs:
             console.log(`consumer smoke: core ok, ${declared.length} declared functions resolve (mode ${process.env.SMOKE_MODE})`);
           '
           # The CLI rides the package: the bin wrapper must spawn the real
-          # binary end to end. Release mode only: the rehearsal's latest addon
-          # predates the bin/ folder.
-          if [ "$SMOKE_MODE" = release ]; then
-            ./node_modules/.bin/nxr --version
-            echo "consumer smoke: nxr --version ok"
-          fi
+          # binary end to end. Both modes: the rehearsal installs the
+          # published latest addon, which carries bin/ since 0.19.0, so the
+          # check rides the latest wrapper there and the staged one in a
+          # release. The release-only gate went away with that: this check is
+          # exactly what caught the non-executable binary.
+          ./node_modules/.bin/nxr --version
+          echo "consumer smoke: nxr --version ok"
         env:
           SMOKE_MODE: ${{ inputs.dry-run && 'rehearsal' || 'release' }}
 

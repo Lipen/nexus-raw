@@ -3,10 +3,13 @@
 #
 #   scripts/release.sh 0.12.0          everything the act would touch and
 #                                      every gate it must pass, drawn first
-#   scripts/release.sh 0.12.0 --yes    bump, changelog, push, dispatch, watch
+#   scripts/release.sh 0.12.0 --yes    bump, changelog, push, rehearse, dispatch, watch
 #
 # The preview is read-only: the remote checks are GETs, the tree is not
 # modified, nothing is pushed or published.
+# The act rehearses before it dispatches: the same workflow on the same
+# commit with dry-run=true, nothing published and no tag. A workflow that
+# cannot run fails there, while the version number is still unspent.
 # A repeat --yes call for the same number is the recovery path: the version
 # step is idempotent, the changelog date refreshes to today, the guards in
 # the workflow skip whatever is already published.
@@ -15,10 +18,10 @@ set -eu
 usage() {
   if [ "${1:-}" = "0" ]; then
     echo "usage: release.sh X.Y.Z [--yes]"
-    echo "  bumps the workspace, finalizes the changelog, pushes and dispatches the release"
+    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses and dispatches the release"
   else
     echo "usage: release.sh X.Y.Z [--yes]" >&2
-    echo "  bumps the workspace, finalizes the changelog, pushes and dispatches the release" >&2
+    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses and dispatches the release" >&2
   fi
   exit "${1:-2}"
 }
@@ -49,6 +52,41 @@ fi
 row() { printf '%s%-9s%s %s\n' "$DIM" "$1" "$N" "$2"; }
 # A continuation line under a row.
 cont() { printf '%s%9s%s %s\n' "" "" "$N" "$1"; }
+
+# The id of the run a dispatch just created on a commit, left in `run`.
+# The dispatch API is asynchronous: the run only appears in the list a few
+# seconds later, so the poll retries. `skip` is a run id to ignore, which
+# keeps the real dispatch's poll off the rehearsal run it follows.
+find_run() { # find_run <sha> <skip>
+  for _ in 1 2 3 4 5 6; do
+    sleep 5
+    run="$(gh run list --workflow=Release --commit "$1" --limit 20 --json databaseId \
+      --jq "[.[] | select(.databaseId != ${2:-0})][0].databaseId" 2>/dev/null || true)"
+    case "$run" in '' | null) run="" ;; *) return 0 ;; esac
+  done
+  return 1
+}
+
+# Stream a run to its conclusion and leave the verdict in `conclusion`.
+# The watch streams progress and dies quietly on a network hiccup; the loop
+# below owns the verdict. It polls the run state, not the watch exit code:
+# a failed run exits nonzero too, and retrying that would spin forever.
+settle() { # settle <run id>
+  echo "watching https://github.com/Lipen/nexus-raw/actions/runs/$1 until it settles (progress streams below)"
+  gh run watch "$1" --interval 30 > /dev/null 2>&1 || true
+  while :; do
+    if out="$(gh run view "$1" --json status,conclusion 2>/dev/null)"; then
+      status="$(jq -r '.status' <<<"$out")"
+      case "$status" in
+        completed) break ;;
+        *) sleep 30 ;;
+      esac
+    else
+      sleep 10
+    fi
+  done
+  conclusion="$(jq -r '.conclusion' <<<"$out")"
+}
 
 blockers=0
 notes=0
@@ -155,6 +193,9 @@ fi
 echo
 row pipeline "gate ${G}→${N} builds ${DIM}×5${N} ${G}→${N} crates ${DIM}×4${N} ${G}→${N} addons ${DIM}×5${N} ${G}→${N} npm ${DIM}×5${N} ${G}→${N} tag + release"
 cont "${DIM}linux-x64 · linux-aarch64 · darwin-x64 · darwin-arm64 · windows-x64${N}"
+row rehearsal "${DIM}the same pipeline ×2${N} ${G}→${N} dry-run first, the release second"
+cont "${DIM}--yes runs it on the bumped commit with dry-run=true, nothing published, no tag${N}"
+cont "${DIM}and dispatches the real run only once the rehearsal run is green${N}"
 
 # ---- verdict ------------------------------------------------------------
 echo
@@ -193,34 +234,29 @@ git push origin master
 sha="$(git rev-parse origin/master)"
 # The dispatch API takes a branch, not a raw SHA: master is the ref, and
 # the gate validates whatever HEAD it gets.
+
+# ---- the rehearsal ------------------------------------------------------
+# The same workflow on the same commit with `dry-run=true`: the gate, every
+# build and the staged npm install run, nothing is published and no tag is
+# created. A workflow that cannot run fails here, while the version number
+# is still unspent.
+echo "rehearsing the release on $sha"
+gh workflow run release.yml --ref master -F dry-run=true
+find_run "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
+rehearsal="$run"
+echo "the rehearsal appeared: https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal"
+settle "$rehearsal"
+if [ "$conclusion" != success ]; then
+  echo "release: the rehearsal ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal" >&2
+  exit 1
+fi
+
+# ---- the release --------------------------------------------------------
 echo "dispatching the release on $sha"
 gh workflow run release.yml --ref master
-run=""
-for _ in 1 2 3 4 5 6; do
-  sleep 5
-  run="$(gh run list --workflow=Release --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-  [ -n "$run" ] && break
-done
-[ -n "$run" ] || { echo "release: the dispatched run did not appear" >&2; exit 1; }
+find_run "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
 echo "the run appeared: https://github.com/Lipen/nexus-raw/actions/runs/$run"
-echo "watching it until it settles (progress streams below)"
-# The watch streams progress and dies quietly on a network hiccup; the loop
-# below owns the verdict. It polls the run state, not the watch exit code:
-# a failed run exits nonzero too, and retrying that would spin forever.
-echo "watching https://github.com/Lipen/nexus-raw/actions/runs/$run"
-gh run watch "$run" --interval 30 > /dev/null 2>&1 || true
-while :; do
-  if out="$(gh run view "$run" --json status,conclusion 2>/dev/null)"; then
-    status="$(jq -r '.status' <<<"$out")"
-    case "$status" in
-      completed) break ;;
-      *) sleep 30 ;;
-    esac
-  else
-    sleep 10
-  fi
-done
-conclusion="$(jq -r '.conclusion' <<<"$out")"
+settle "$run"
 if [ "$conclusion" != success ]; then
   echo "release: the run ended $conclusion, see https://github.com/Lipen/nexus-raw/actions/runs/$run" >&2
   exit 1
