@@ -932,8 +932,12 @@ jobs:
           [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
           for name in @nexus-raw/nxr @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
             ok=0
+            # The version document, not the packument `npm view` reads: the
+            # packument rides the registry CDN and the CLI caches a miss
+            # negatively, so a fresh publish can take minutes to show there
+            # while `/name/version` appears with the publish itself.
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if npm view "$name@$version" version > /dev/null 2>&1; then
+              if curl -sf "https://registry.npmjs.org/${name//\//%2F}/$version" > /dev/null 2>&1; then
                 ok=1
                 break
               fi
@@ -956,7 +960,7 @@ jobs:
           [ "$ok" = 1 ] || { echo "nexus-raw@$version is not on PyPI" >&2; fail=1; }
           ok=0
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
+            if curl -sf "https://registry.npmjs.org/nexus-raw/$version" > /dev/null 2>&1; then
               ok=1
               break
             fi
