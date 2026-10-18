@@ -24,3 +24,17 @@ The pinned image is pulled on first use.
   server cannot be asked to produce on demand.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429
   (no rate limiting locally).
+
+## The `q` page-cutter measurement (manual, not part of the battery)
+
+`search-pages.sh` seeds a few thousand names over several prefixes and depths
+and measures whether the search `q` parameter may cut the full walk that the
+listing pays today. It compares returned path sets per directory (the walk's
+set against the `q` set: dropped, extra, equal) and prints tables, plus the
+server's own request count per `nxr ls` from the request log.
+It is a measurement, not a gate, so it is not wired into the battery or CI.
+With the stack from `compose.yaml` up and bootstrapped:
+
+```sh
+sh stand/real-nexus/search-pages.sh both   # stage1 under nxr's page cap, stage2 past it
+```
