@@ -68,6 +68,8 @@ pub(crate) struct Shared {
     pub(crate) rate_first: Option<(usize, u64)>,
     /// Number of initial 503s per path (flaky).
     pub(crate) flaky_first: Option<u32>,
+    /// Retry-After seconds of the first 503 per path (retry-after-503).
+    pub(crate) pause_first_503: Option<u64>,
     /// Member addresses of a group instance, in member order.
     /// Empty for a hosted instance: a group is a separate deployment kind, not a scenario.
     pub(crate) members: Vec<SocketAddr>,
@@ -101,6 +103,7 @@ impl Shared {
         let cut_first_get = spec.cut_first_get;
         let rate_first = spec.rate_first;
         let flaky_first = spec.flaky_first;
+        let pause_first_503 = spec.pause_first_503;
         Self {
             store: Mutex::new(initial_store(&scenario, &base_url)),
             spec,
@@ -120,6 +123,7 @@ impl Shared {
             cut_first_get,
             rate_first,
             flaky_first,
+            pause_first_503,
             members: Vec::new(),
         }
     }

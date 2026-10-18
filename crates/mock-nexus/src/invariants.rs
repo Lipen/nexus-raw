@@ -157,6 +157,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         invariant: "One invocation recovers a 503 burst through retries.",
     },
     ScenarioDoc {
+        id: "retry-after-503",
+        name: "503 with a server pause.",
+        behavior: &[
+            "The first request per path (any method) gets `503 Service Unavailable` with a `Retry-After` pause of `retry_after_secs` seconds.",
+            "Later requests are served normally.",
+        ],
+        invariant: "A 5xx `Retry-After` pause replaces the backoff and shrinks the worker budget.",
+    },
+    ScenarioDoc {
         id: "rate-limit",
         name: "429 with Retry-After.",
         behavior: &[

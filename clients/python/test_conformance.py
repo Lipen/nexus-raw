@@ -193,10 +193,10 @@ def raw_get(url: str, auth: str | None = None) -> bytes | None:
 def raw_put(url: str, body: bytes) -> None:
     """One retry-free PUT that seeds the store directly, the `insert` of the Rust suite.
 
-    The seeding helper pays the scenario tolls it cannot bypass: a 429 costs its Retry-After, a 5xx a short backoff.
+    The seeding helper pays the scenario tolls it cannot bypass: a retryable status (429 or 5xx) costs its Retry-After pause.
     """
     parts = urllib.parse.urlsplit(url)
-    for attempt in range(4):
+    for _ in range(4):
         conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
         try:
             conn.request("PUT", parts.path or "/", body=body)
@@ -206,10 +206,8 @@ def raw_put(url: str, body: bytes) -> None:
             conn.close()
         if resp.status == 201:
             return
-        if resp.status == 429:
+        if resp.status == 429 or 500 <= resp.status < 600:
             time.sleep(float(resp.headers.get("Retry-After", "1")))
-        elif 500 <= resp.status < 600:
-            time.sleep(0.5 * (attempt + 1))
         else:
             break
     raise AssertionError(f"seed PUT {url} never stored, last status {resp.status}")
@@ -588,6 +586,21 @@ class Conformance(unittest.TestCase):
             nx.put(path, CONTENT)
             puts_of_bytes = [1 for m, p in nx.requests if m == "PUT" and p == wire_path(path)]
             self.assertGreaterEqual(len(puts_of_bytes), 3, "two 503s must cost two retries")
+            self.assertEqual(nx.get(path), CONTENT)
+
+    def test_retry_after_503(self):
+        """A 5xx that names its pause is waited out, not retried after the shorter backoff."""
+        with mock_server("retry-after-503", "--retry-after-secs", "1") as mock:
+            nx = self.client()
+            path = mock.url("a.zip")
+            started = time.monotonic()
+            nx.put(path, CONTENT, sha=False)
+            elapsed = time.monotonic() - started
+            self.assertGreaterEqual(elapsed, 0.9, "the 503 Retry-After pause must replace the backoff")
+            attempts = [1 for m, p in nx.requests if m == "PUT" and p == wire_path(path)]
+            self.assertEqual(len(attempts), 2, "one 503 then the success")
+            marker = nxr.format_marker("a.zip", hashlib.sha256(CONTENT).hexdigest()).encode()
+            raw_put(f"{path}.sha256", marker)
             self.assertEqual(nx.get(path), CONTENT)
 
     def test_rate_limit(self):

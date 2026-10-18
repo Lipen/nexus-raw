@@ -133,6 +133,15 @@ Later requests are served normally.
 
 **Pinned invariant:** One invocation recovers a 503 burst through retries.
 
+## `retry-after-503`
+
+503 with a server pause.
+
+The first request per path (any method) gets `503 Service Unavailable` with a `Retry-After` pause of `retry_after_secs` seconds.
+Later requests are served normally.
+
+**Pinned invariant:** A 5xx `Retry-After` pause replaces the backoff and shrinks the worker budget.
+
 ## `rate-limit`
 
 429 with Retry-After.

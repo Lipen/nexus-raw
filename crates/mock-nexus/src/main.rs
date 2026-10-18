@@ -222,6 +222,9 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "flaky" => Some(Scenario::Flaky {
             first_failures: flags.flaky,
         }),
+        "retry-after-503" => Some(Scenario::RetryAfter503 {
+            retry_after_secs: flags.retry_after_secs,
+        }),
         "rate-limit" => Some(Scenario::RateLimit {
             first_429s: flags.rate_429s,
             retry_after_secs: flags.retry_after_secs,
@@ -461,6 +464,12 @@ mod tests {
         assert_eq!(
             build_scenario("flaky", &flags),
             Some(Scenario::Flaky { first_failures: 3 })
+        );
+        assert_eq!(
+            build_scenario("retry-after-503", &flags),
+            Some(Scenario::RetryAfter503 {
+                retry_after_secs: 2
+            })
         );
         assert_eq!(
             build_scenario("rate-limit", &flags),

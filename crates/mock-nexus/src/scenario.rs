@@ -21,6 +21,7 @@ impl Scenario {
             Scenario::Auth403 { .. } => "auth-403",
             Scenario::DocDrift => "doc-drift",
             Scenario::Flaky { .. } => "flaky",
+            Scenario::RetryAfter503 { .. } => "retry-after-503",
             Scenario::RateLimit { .. } => "rate-limit",
             Scenario::Redirect { .. } => "redirect",
             Scenario::ReadOnly => "readonly",
@@ -60,6 +61,7 @@ pub const SCENARIOS: &[&str] = &[
     "auth-403",
     "doc-drift",
     "flaky",
+    "retry-after-503",
     "rate-limit",
     "redirect",
     "readonly",
@@ -138,6 +140,9 @@ pub enum Scenario {
     /// The first `first_failures` requests per path (any method) get 503 Service Unavailable.
     /// Later requests are served normally.
     Flaky { first_failures: u32 },
+    /// The first request per path (any method) gets 503 Service Unavailable with a `Retry-After` pause of `retry_after_secs`.
+    /// Later requests are served normally.
+    RetryAfter503 { retry_after_secs: u64 },
     /// The first `first_429s` requests per path (any method) answer `429 Too Many Requests` with a `Retry-After: <retry_after_secs>` header and an empty body.
     /// Later requests are served like [`Scenario::Atomic`].
     RateLimit {

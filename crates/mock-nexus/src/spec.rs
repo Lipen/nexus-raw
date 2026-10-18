@@ -24,6 +24,8 @@ pub struct Spec {
     pub rate_first: Option<(usize, u64)>,
     /// The first N requests per path answer 503.
     pub flaky_first: Option<u32>,
+    /// The first request per path answers 503 with a Retry-After of this many seconds.
+    pub pause_first_503: Option<u64>,
     /// Refuse every ranged GET with the whole body (200).
     pub ignore_range: bool,
     /// Drop markers instead of storing them.
@@ -90,6 +92,12 @@ impl Spec {
     /// Answer the first `n` requests per path with 503.
     pub fn with_flaky(mut self, n: u32) -> Self {
         self.flaky_first = Some(n);
+        self
+    }
+
+    /// Answer the first request per path with 503 and this Retry-After.
+    pub fn with_retry_after_503(mut self, retry_after_secs: u64) -> Self {
+        self.pause_first_503 = Some(retry_after_secs);
         self
     }
 
@@ -175,6 +183,9 @@ impl From<&Scenario> for Spec {
             }
             Scenario::DocDrift => spec.doc_drift = true,
             Scenario::Flaky { first_failures } => spec.flaky_first = Some(*first_failures),
+            Scenario::RetryAfter503 { retry_after_secs } => {
+                spec.pause_first_503 = Some(*retry_after_secs)
+            }
             Scenario::RateLimit {
                 first_429s,
                 retry_after_secs,

@@ -18,7 +18,7 @@ The interesting rules are all client-side and all present:
 - A 2xx without `Content-Length` is present-but-unverifiable, never absent (`head` reports `length=None`).
 - 401/403 fail fast with no retries.
   5xx and transport failures retry with backoff (4 attempts, 0.5s x 2^n, capped, jittered).
-  A 429 honors its `Retry-After` pause, clamped to 1..=60 seconds, in place of the backoff.
+  A retryable status (429 or 5xx) honors its `Retry-After` pause, clamped to 1..=60 seconds, in place of the backoff.
 - Redirects are never followed: a 301 surfaces as `HttpError` with the status.
 - The per-operation socket timeout is the stall watchdog: a frozen server aborts the attempt, a slow-but-moving transfer never trips it.
 - `ls` walks `/service/rest/v1/search/assets` with continuation tokens, capped at 1000 pages, and diagnoses a repository-scoped 400 as "missing or not raw".
@@ -67,7 +67,7 @@ Only the shipped module `nxr.py` is type-checked, the suite is lint-checked, so 
 What a real integrator must implement, at minimum, beyond the verbs:
 
 1. Basic auth attached to every request, resolved once per invocation.
-2. The retry classification: retry transport failures and 5xx with bounded backoff, honor `Retry-After` on 429, never retry 401/403, never follow redirects.
+2. The retry classification: retry transport failures and 5xx with bounded backoff, honor `Retry-After` on any retryable status, never retry 401/403, never follow redirects.
 3. An attempt-level stall bound (a read/write timeout), because a server can hold a connection forever.
 4. The marker order on upload, the digest check on download, and the strict marker parse.
 5. The lengthless-answer rule: a 2xx without `Content-Length` is unverifiable, never empty.

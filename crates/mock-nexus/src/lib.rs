@@ -6,7 +6,7 @@
 //! One request per connection, `Connection: close` on every response.
 //! GET honors resumable downloads: a single open `Range: bytes=N-` is answered with `206` and `Content-Range`, out-of-range starts get `416`.
 //! Any other `Range` form is ignored.
-//! A [`Scenario`] selects a failure mode: truncated PUT and GET bodies, connection resets, held uploads, missing `Content-Length`, slow links, drifted documents, flaky 503s, rate-limit 429s with `Retry-After`, redirects, and Basic-auth gating.
+//! A [`Scenario`] selects a failure mode: truncated PUT and GET bodies, connection resets, held uploads, missing `Content-Length`, slow links, drifted documents, flaky 503s, 503s with a `Retry-After` pause, rate-limit 429s with `Retry-After`, redirects, and Basic-auth gating.
 //!
 //! Rust conformance tests use the library API directly.
 //! The `mock-nexus` binary exposes the same scenarios to shell- and Python-driven tests:

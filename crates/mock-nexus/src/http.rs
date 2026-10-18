@@ -164,6 +164,22 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         return;
     }
 
+    // retry-after-503: the first request per path gets 503 with a server pause.
+    if let Some(retry_after_secs) = shared.pause_first_503 {
+        let seen = {
+            let mut seq = lock(&shared.first_request);
+            bump(&mut seq, path)
+        };
+        if seen < 1 {
+            log_request(shared, &req.method, path, Outcome::Status(503));
+            let mut resp = plain(503, b"retry-after-503\n", None);
+            resp.extra_headers
+                .push(("Retry-After", retry_after_secs.to_string()));
+            let _ = server::write_response(stream, &bodyless_for_head(&req.method, resp));
+            return;
+        }
+    }
+
     // rate-limit: the first N requests per path get 429 with a Retry-After hint and an empty body.
     if let Some((first_429s, retry_after_secs)) = shared.rate_first {
         let seen = {

@@ -327,6 +327,30 @@ fn flaky_serves_503_for_first_k_requests() {
 }
 
 #[test]
+fn retry_after_503_serves_one_pause_then_atomic() {
+    let server = MockNexus::start(Scenario::RetryAfter503 {
+        retry_after_secs: 7,
+    })
+    .unwrap();
+    server.insert("v1/a.bin", b"X");
+
+    let (status, headers, body) = exchange(server.addr(), "GET", "/v1/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 503);
+    assert_eq!(header_value(&headers, "retry-after"), Some("7"));
+    assert_eq!(body, b"retry-after-503\n");
+
+    // The pause is per path: a fresh path pays its own 503, the same path is served.
+    let (status, _, body) = exchange(server.addr(), "GET", "/v1/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"X");
+    let (status, headers, _) = exchange(server.addr(), "PUT", "/v1/b.bin", b"Y", &[]).unwrap();
+    assert_eq!(status, 503);
+    assert_eq!(header_value(&headers, "retry-after"), Some("7"));
+    let (status, _, _) = exchange(server.addr(), "PUT", "/v1/b.bin", b"Y", &[]).unwrap();
+    assert_eq!(status, 201);
+}
+
+#[test]
 fn foreign_marker_zeroes_stored_digest() {
     let server = MockNexus::start(Scenario::ForeignMarker).unwrap();
 

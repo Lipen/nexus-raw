@@ -386,7 +386,7 @@ class Nxr:
         """One logical request through the retry loop, returning `(status, headers, payload)`.
 
         Transport failures and 5xx retry with backoff.
-        A 429 honors its `Retry-After` pause in place of the backoff, clamped to 1..=60 seconds.
+        A retryable status (429 or 5xx) honors its `Retry-After` pause in place of the backoff, clamped to 1..=60 seconds.
         A 401/403 fails fast with no retries, like every other unexpected status.
         """
         attempt = 0
@@ -415,8 +415,8 @@ class Nxr:
                         status=status,
                         hint="the server kept failing: retry the operation later",
                     )
-                # The Retry-After pause belongs to the rate limit alone: a 5xx always backs off.
-                retry_after = headers.get("Retry-After") if status == 429 else None
+                # A retryable status carries the server's pause, 429 or 5xx alike.
+                retry_after = headers.get("Retry-After")
                 time.sleep(self._pause(retry_after, attempt))
                 continue
             if 200 <= status < 300:

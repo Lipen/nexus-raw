@@ -8,7 +8,7 @@ That narrowness is the point: every byte on the wire is either contract or failu
 ## The scenario table
 
 The full table with per-scenario wire behavior and the pinned invariant lives in [invariants](invariants.md), generated from the same Rust constant the `--print-scenarios` output prints.
-It covers: transport failures (`partial-put`, `cut-body`, `drop-connection`, `freeze-upload`), framing lies (`sizeless`, `foreign-marker`, `markerless`), pacing (`slow`, `flaky`, `rate-limit` with `Retry-After`), server edges (`redirect`, `readonly`, `no-service`, `search-400`), service-API shapes (status, repositories, EULA, assets pagination), client-ergonomics (`detail-in-hint`, `ignore-range`), and integrity litter for `nxr audit` (`audit-litter`).
+It covers: transport failures (`partial-put`, `cut-body`, `drop-connection`, `freeze-upload`), framing lies (`sizeless`, `foreign-marker`, `markerless`), pacing (`slow`, `flaky`, `retry-after-503`, `rate-limit` with `Retry-After`), server edges (`redirect`, `readonly`, `no-service`, `search-400`), service-API shapes (status, repositories, EULA, assets pagination), client-ergonomics (`detail-in-hint`, `ignore-range`), and integrity litter for `nxr audit` (`audit-litter`).
 
 ## Run the binary
 
