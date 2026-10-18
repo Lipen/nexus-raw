@@ -21,7 +21,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Every platform the release ships a binary for, minus the ones only
+        # the release build exercises: darwin has code paths linux never runs
+        # (no /proc, a different flock), and it was the untested one.
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -104,7 +107,7 @@ jobs:
       # deliberate patterns (a literal `$` in a sed script, an `ls` that picks
       # the first existing binary) that are notes, never bugs.
       - name: Shellcheck the scripts
-        run: uvx --from shellcheck-py==0.11.0.1 shellcheck -S warning $(git ls-files '*.sh')
+        run: git ls-files -z '*.sh' | xargs -0 -r uvx --from shellcheck-py==0.11.0.1 shellcheck -S warning
 
   clippy:
     name: Clippy
