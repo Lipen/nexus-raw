@@ -205,7 +205,7 @@ walk() {
 # Reads the walk and the q pages from `$WORK/paths.<stats label>`-side files: the q walk is passed as `q`, the full walk is `$WORK/paths.full`.
 row() {
     r_label="$1"; prefix="$2"; label_stats="$3"
-    read -r pages r_rows secs tc capped firstrows < "$WORK/stats.$label_stats"
+    read -r pages _ secs tc capped firstrows < "$WORK/stats.$label_stats"
     python3 - "$WORK/paths.full" "$WORK/paths.$label_stats" "$prefix" "$WORK/cmp" "$WORK/cmp.tags" <<'PY'
 import sys
 
