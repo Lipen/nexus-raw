@@ -29,6 +29,11 @@ use crate::model::name::{percent_decode, ArtifactName};
 use crate::model::sibling;
 pub use crate::transport::client::HeadInfo;
 
+/// The ceiling on `get --segments`: enough to saturate a link, small enough
+/// that the span vector and the staging directory stay bounded.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const MAX_SEGMENTS: usize = 64;
+
 /// The `get` result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,6 +66,8 @@ pub async fn get(
         let resumed_from = if cont {
             tokio::fs::symlink_metadata(&part)
                 .await
+                .ok()
+                .filter(std::fs::Metadata::is_file)
                 .map_or(0, |m| m.len())
         } else {
             0
@@ -69,21 +76,24 @@ pub async fn get(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let (size, digest) = match client
+        // A failed attempt leaves the part in place: it is the resume state of
+        // the rerun, and a stale or corrupt part is detected on the next run
+        // (prefix re-read, 416 check, sibling digest). Deleting it here made
+        // `get --continue` throw away every byte a transport failure had
+        // already landed, exactly when the resume promise matters most.
+        // `cont`, not `resumed_from > 0`: an attempt that cut mid-body creates
+        // the part, and the retry inside this call must resume it. The client
+        // refuses a symlink at the path on its own.
+        let (size, digest) = client
             .download_resumable((&name, Dir::Down), url, &part, cont, None)
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                tokio::fs::remove_file(&part).await.ok();
-                return Err(e);
-            }
-        };
-        // A resumed part is unvalidated until the bytes say otherwise: when a
-        // `.sha256` sibling exists (locally or on the server), the finished
-        // file is checked against it before the rename, and a divergence is
-        // a data error (exit 1), not a warning. The quiet-corruption guard.
-        if cont && resumed_from > 0 {
+            .await?;
+        // A `--continue` run may have composed a prefix with a tail across
+        // attempts (the first response cut, the retry resumed), so the guard
+        // runs whenever continue was asked, not only when a part existed
+        // before the call. When a `.sha256` sibling exists (locally or on the
+        // server), the finished file is checked against it before the rename,
+        // and a divergence is a data error (exit 1), not a warning.
+        if cont {
             let mut sibling = out.clone().into_os_string();
             sibling.push(".sha256");
             let expected = if tokio::fs::try_exists(&sibling).await.unwrap_or(false) {
@@ -256,6 +266,13 @@ pub async fn get_segmented(
     segments: usize,
     events: &crate::events::Progress,
 ) -> Result<GetOutcome, Error> {
+    // The ceiling lives where the fan-out is built: the facade and external
+    // callers of this primitive share one bound.
+    if !(2..=MAX_SEGMENTS).contains(&segments) {
+        return Err(Error::misuse(format!(
+            "segments must be between 2 and {MAX_SEGMENTS}, got {segments}"
+        )));
+    }
     // The name carries progress events, the URL does not: one label for the whole fan-out.
     let name = out
         .file_name()
@@ -274,6 +291,29 @@ pub async fn get_segmented(
             "the HEAD answer carries no Content-Length: the object cannot be split into ranges",
         ));
     };
+    let part = part_of(out);
+    // An empty object has no span to split: the part is born complete, and
+    // `total / segments` below would divide by zero.
+    if total == 0 {
+        // write_options, not fs::write: the part path is predictable and must
+        // never follow a symlink planted beside the output.
+        let mut empty = crate::transport::client::write_options(false)
+            .open(&part)
+            .await
+            .map_err(|e| Error::io(&part, e))?;
+        empty.flush().await.map_err(|e| Error::io(&part, e))?;
+        let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
+        verify_sibling(client, url, out, &part, &digest).await?;
+        tokio::fs::rename(&part, out)
+            .await
+            .map_err(|e| Error::io(out, e))?;
+        events.done(&name, Dir::Down, false, 0, Some(0)).await;
+        return Ok(GetOutcome {
+            size: 0,
+            digest: Some(digest),
+            resumed_from: 0,
+        });
+    }
     // Every segment spans at least one byte; spans are `total / segments` sized with
     // the remainder spread over the leading segments.
     let base = total / segments as u64;
@@ -288,7 +328,6 @@ pub async fn get_segmented(
     let base = total / segments as u64;
     let rem = total % segments as u64;
     let staging = temp_staging_dir(out).await?;
-    let part = part_of(out);
     let mut bounds: Vec<(u64, u64)> = Vec::with_capacity(segments);
     let mut start: u64 = 0;
     for i in 0..segments {
@@ -299,6 +338,9 @@ pub async fn get_segmented(
     debug_assert_eq!(start, total, "the spans must tile the object exactly");
 
     // Each segment streams into its own staging file, concurrently, retries included.
+    // The worker ceiling still applies: `--segments` splits the object, it does
+    // not widen the concurrency budget the rest of the tool obeys.
+    let workers = client.workers();
     let fetches: Vec<_> = bounds
         .iter()
         .enumerate()
@@ -306,7 +348,12 @@ pub async fn get_segmented(
             let file = staging.join(format!("segment-{i:04}.part"));
             let url = url.to_owned();
             let name = name.clone();
+            let workers = workers.clone();
             async move {
+                let _permit = workers
+                    .acquire_owned()
+                    .await
+                    .expect("the worker semaphore is never closed");
                 let done = client
                     .fetch_range((&name, Dir::Down), &url, start, end_incl, &file)
                     .await

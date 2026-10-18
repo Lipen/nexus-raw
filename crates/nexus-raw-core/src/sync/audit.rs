@@ -212,11 +212,50 @@ pub enum ByteCheck {
     },
 }
 
+/// The client-side narrowing of an audit: exact names and whole-segment
+/// prefixes, with the same grammar every transfer filter uses.
+/// An empty filter audits the whole tree.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AuditFilter {
+    /// Whole-segment prefixes (`bom/`).
+    pub prefixes: Vec<crate::model::name::NamePrefix>,
+    /// Exact object names.
+    pub names: Vec<ArtifactName>,
+}
+
+impl AuditFilter {
+    /// Whether the filter selects everything.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.prefixes.is_empty() && self.names.is_empty()
+    }
+
+    /// Whether an object name passes the filter.
+    #[must_use]
+    pub fn matches(&self, name: &str) -> bool {
+        (self.names.is_empty() || self.names.iter().any(|n| n.as_str() == name))
+            && (self.prefixes.is_empty()
+                || self.prefixes.iter().any(|p| name.starts_with(p.as_str())))
+    }
+
+    /// Whether a raw tree key passes the filter.
+    /// A marker key is judged by the object it marks: selecting a name never
+    /// leaves its sibling behind, which would report every audited asset as
+    /// an orphan.
+    #[must_use]
+    pub fn matches_key(&self, key: &str) -> bool {
+        self.matches(key.strip_suffix(".sha256").unwrap_or(key))
+    }
+}
+
 /// One full audit run: the structural verdict plus the byte pass when asked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditRun {
     /// The structural verdict over tree, markers and facts.
     pub verdict: AuditVerdict,
+    /// The number of non-marker objects the tree listing carried: the
+    /// denominator of `findings`, whether or not the byte pass ran.
+    pub audited: usize,
     /// The byte pass result per checked asset, when `bytes_mode` ran.
     pub byte_checks: BTreeMap<ArtifactName, ByteCheck>,
 }

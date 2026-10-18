@@ -137,6 +137,26 @@ pub struct NexusClient {
     aimd: std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>,
 }
 
+/// Parse a `Content-Range` value: `bytes start-end/total`, where the total may be `*`.
+/// Returns the start and end offsets (inclusive) and the total when the server names one.
+fn parse_content_range(value: &str) -> Option<(u64, u64, Option<u64>)> {
+    let rest = value.trim().strip_prefix("bytes ")?;
+    let (range, total) = rest.split_once('/')?;
+    let (start, end) = range.split_once('-')?;
+    let start = start.trim().parse().ok()?;
+    let end = end.trim().parse().ok()?;
+    let total = match total.trim() {
+        "*" => None,
+        n => Some(n.parse().ok()?),
+    };
+    Some((start, end, total))
+}
+
+/// Parse the total of a `416` answer: `Content-Range: bytes */total`.
+fn content_range_total(value: &str) -> Option<u64> {
+    value.trim().strip_prefix("bytes */")?.trim().parse().ok()
+}
+
 impl NexusClient {
     /// Build the client from `cfg`.
     ///
@@ -288,13 +308,14 @@ impl NexusClient {
         }
     }
 
-    /// A non-success status: 5xx and 429 are retryable, a 429 carries its
-    /// `Retry-After` pause, and a 401/403 is the auth verdict.
+    /// A non-success status: 5xx and 429 are retryable, and any retryable
+    /// status honors the `Retry-After` pause the server asked for (a Nexus
+    /// restart or a proxy overload answers `503 Retry-After: 30`).
+    /// A 401/403 is the auth verdict.
     async fn status_failure(&self, url: &str, resp: reqwest::Response) -> AttemptFailure {
         let status = resp.status();
-        let rate_limited = status.as_u16() == 429;
-        let retryable = (500..600).contains(&status.as_u16()) || rate_limited;
-        let retry_after = rate_limited.then(|| Self::retry_after(&resp)).flatten();
+        let retryable = (500..600).contains(&status.as_u16()) || status.as_u16() == 429;
+        let retry_after = retryable.then(|| Self::retry_after(&resp)).flatten();
         let error = match status.as_u16() {
             401 | 403 => Error::Auth {
                 url: url.to_owned(),
@@ -316,7 +337,7 @@ impl NexusClient {
         }
     }
 
-    /// The `Retry-After` pause of a 429: the seconds form only, clamped to 1..=60.
+    /// The `Retry-After` pause of a retryable status: the seconds form only, clamped to 1..=60.
     /// The HTTP-date form and unparseable values fall back to the regular backoff.
     fn retry_after(resp: &reqwest::Response) -> Option<std::time::Duration> {
         let raw = resp
@@ -659,11 +680,17 @@ impl NexusClient {
             let subject_name = subject_name.clone();
             Box::pin(async move {
                 // The prefix: existing part content when resuming.
+                // symlink_metadata, not metadata: a symlink at the predictable
+                // part path must never be read as resume state (the write open
+                // already refuses to follow one, the read side must too).
                 let mut prefix: u64 = 0;
                 let mut hasher = Sha256::new();
                 if resume {
-                    match tokio::fs::File::open(&part).await {
-                        Ok(mut f) => {
+                    match tokio::fs::symlink_metadata(&part).await {
+                        Ok(meta) if meta.is_file() => {
+                            let mut f = tokio::fs::File::open(&part)
+                                .await
+                                .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
                             let mut buf = [0u8; 64 * 1024];
                             loop {
                                 match f.read(&mut buf).await {
@@ -678,40 +705,151 @@ impl NexusClient {
                                 }
                             }
                         }
+                        Ok(_) => {
+                            return Err(AttemptFailure::stop(Error::io(
+                                &part,
+                                std::io::Error::other(
+                                    "the part path is not a regular file",
+                                ),
+                            )));
+                        }
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                         Err(e) => {
                             return Err(AttemptFailure::stop(Error::io(&part, e)));
                         }
                     }
                 }
-                let mut req = this.authorize(this.http.get(url));
-                if prefix > 0 {
-                    // Byte offsets are only meaningful against the stored representation.
-                    // The resume request must not negotiate a content-encoding.
-                    req = req
-                        .header(reqwest::header::RANGE, format!("bytes={prefix}-"))
-                        .header(reqwest::header::ACCEPT_ENCODING, "identity");
-                }
-                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                // One attempt may restart from zero once: a stale part or a
+                // shifted range is deterministic, not a transient failure, and
+                // must not spend the caller's retry budget.
+                let mut restarted = false;
+                let mut range_end_exclusive: Option<u64> = None;
+                let resp = loop {
+                    let mut req = this.authorize(this.http.get(url));
+                    if prefix > 0 {
+                        // Byte offsets are only meaningful against the stored representation.
+                        // The resume request must not negotiate a content-encoding.
+                        req = req
+                            .header(reqwest::header::RANGE, format!("bytes={prefix}-"))
+                            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                    }
+                    let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                    let status = resp.status().as_u16();
+                    if status == 416 && prefix > 0 {
+                        // The server refuses the range: the part is at or past the
+                        // stored object's end. Finalize only when the file on disk
+                        // still holds exactly the bytes that were hashed; otherwise
+                        // the part is stale or was changed under us, and resuming
+                        // it would rename bytes that the object never carried.
+                        // The 416 header is the current truth about the object
+                        // size: `Content-Range: bytes */total`. Only when it is
+                        // absent or unparseable does the caller's hint or a HEAD
+                        // stand in.
+                        let declared = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_RANGE)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(content_range_total);
+                        let total = match declared.or(total_hint) {
+                            Some(t) => Some(t),
+                            None => this.head_info(url).await.ok().and_then(|info| info.size),
+                        };
+                        let on_disk = tokio::fs::symlink_metadata(&part)
+                            .await
+                            .ok()
+                            .filter(std::fs::Metadata::is_file)
+                            .map(|m| m.len());
+                        if total == Some(prefix) && on_disk == Some(prefix) {
+                            // The crash-between-download-end-and-rename edge: the part
+                            // holds the whole object, the caller digest-checks and renames.
+                            let digest = Digest::from_hex_string(crate::model::digest::hex(
+                                &hasher.finalize(),
+                            ));
+                            return Ok((prefix, digest));
+                        }
+                        if restarted {
+                            return Err(AttemptFailure::stop(Error::transport(
+                                url,
+                                "the server keeps refusing the range after a restart from zero",
+                            )));
+                        }
+                        tokio::fs::remove_file(&part).await.ok();
+                        let total_text = total.map_or_else(
+                            || "an unknown size".to_owned(),
+                            |t| format!("{t} bytes"),
+                        );
+                        let disk_text = on_disk.map_or_else(
+                            || "no regular file".to_owned(),
+                            |n| format!("{n} bytes on disk"),
+                        );
+                        log::warn!(
+                            "the existing part is stale ({prefix} bytes hashed, {disk_text}, object {total_text}): restarting from zero"
+                        );
+                        prefix = 0;
+                        hasher = Sha256::new();
+                        restarted = true;
+                        continue;
+                    }
+                    if !(200..300).contains(&status) {
+                        return Err(this.status_failure(url, resp).await);
+                    }
+                    // 206 = the range was honored, append from `prefix`.
+                    // 200 = full body, restart from zero.
+                    let append = status == 206 && prefix > 0;
+                    if append {
+                        // A 206 must start exactly where the part ends and cover
+                        // the whole remaining suffix. A proxy that shifts or
+                        // shortens the span would otherwise assemble bytes that no
+                        // digest ever described.
+                        let parsed = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_RANGE)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(parse_content_range);
+                        let range_ok = parsed.and_then(|(start, end, total)| {
+                            let end_exclusive = end.checked_add(1)?;
+                            (start == prefix
+                                && total.is_none_or(|t| total_hint.is_none_or(|hint| hint == t))
+                                && total.or(total_hint).is_none_or(|t| end_exclusive == t))
+                            .then_some(end_exclusive)
+                        });
+                        let Some(end_exclusive) = range_ok else {
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the ranged answer still does not cover the part offset after a restart",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            hasher = Sha256::new();
+                            restarted = true;
+                            continue;
+                        };
+                        range_end_exclusive = Some(end_exclusive);
+                    }
+                    break resp;
+                };
                 let status = resp.status().as_u16();
-                if status == 416 && prefix > 0 {
-                    // The server refuses the range because it is already satisfied: the part holds the whole object.
-                    // This is the crash-between-download-end-and-rename edge: finalize the part and let the caller digest-check and rename.
-                    let digest =
-                        Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
-                    return Ok((prefix, digest));
-                }
-                if !(200..300).contains(&status) {
-                    return Err(this.status_failure(url, resp).await);
-                }
-                // 206 = the range was honored, append from `prefix`.
-                // 200 = full body, restart from zero.
                 let append = status == 206 && prefix > 0;
                 if !append {
                     prefix = 0;
                     hasher = Sha256::new();
                 }
-                let total = resp.content_length().map(|n| n + prefix).or(total_hint);
+                // `content_length()` is an exact body size hint: it is absent
+                // for a chunked or transparently decompressed body, where the
+                // encoded length on the wire says nothing about the bytes the
+                // stream yields. Only an exact hint can prove a cut transfer.
+                let exact = match resp.content_length() {
+                    Some(n) => Some(n.checked_add(prefix).ok_or_else(|| {
+                        AttemptFailure::stop(Error::transport(
+                            url,
+                            "the Content-Length plus the part offset overflows",
+                        ))
+                    })?),
+                    None => None,
+                };
+                let total = exact.or(total_hint);
                 progress.started(&subject_name, Dir::Down, total).await;
                 let mut body = resp.bytes_stream();
                 let mut file = write_options(append)
@@ -740,6 +878,46 @@ impl NexusClient {
                 file.flush()
                     .await
                     .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                // The digest covers the stream, the caller renames the file:
+                // they must describe the same bytes. A concurrent writer that
+                // truncated or extended the part fails here instead of landing
+                // a file no digest vouched for.
+                let on_disk = file
+                    .metadata()
+                    .await
+                    .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?
+                    .len();
+                if on_disk != done {
+                    return Err(AttemptFailure::again(Error::transport(
+                        url,
+                        format!(
+                            "the part on disk is {on_disk} bytes after the stream wrote {done}: retrying"
+                        ),
+                    )));
+                }
+                // The `Content-Range` end is authoritative even when the body
+                // is chunked and carries no exact `Content-Length`: a cleanly
+                // terminated short span is still a truncated download.
+                if let Some(expected_end) = range_end_exclusive {
+                    if done != expected_end {
+                        return Err(AttemptFailure::again(Error::transport(
+                            url,
+                            format!(
+                                "the ranged body ended at {done} of {expected_end} bytes: retrying"
+                            ),
+                        )));
+                    }
+                }
+                // A body that ends short of an exact advertised size is a cut
+                // transfer, never a complete object: retry instead of renaming.
+                if let Some(expected) = exact {
+                    if done != expected {
+                        return Err(AttemptFailure::again(Error::transport(
+                            url,
+                            format!("the body ended at {done} of {expected} bytes: retrying"),
+                        )));
+                    }
+                }
                 let digest = Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
                 Ok((done, digest))
             })
@@ -887,6 +1065,22 @@ impl NexusClient {
                 let producer_src = src.clone();
                 let producer_progress = progress.clone();
                 let producer_subject = subject_name.clone();
+                // The size in the plan may be older than the file: a build that
+                // rewrote it between classification and send would make the body
+                // disagree with Content-Length. Re-stat per attempt, and fail
+                // before a single byte reaches the wire.
+                let actual = match tokio::fs::metadata(&src).await {
+                    Ok(meta) => meta.len(),
+                    Err(e) => return Err(AttemptFailure::stop(Error::io(&src, e))),
+                };
+                if actual != size {
+                    return Err(AttemptFailure::stop(Error::io(
+                        &src,
+                        std::io::Error::other(format!(
+                            "the source changed since it was planned: {size} bytes planned, {actual} on disk"
+                        )),
+                    )));
+                }
                 let producer = tokio::spawn(async move {
                     let mut file = match tokio::fs::File::open(&producer_src).await {
                         Ok(f) => f,
@@ -897,9 +1091,26 @@ impl NexusClient {
                     };
                     let mut produced: u64 = 0;
                     loop {
-                        let mut buf = vec![0u8; UPLOAD_CHUNK];
+                        // Read exactly the declared size: a file that grew
+                        // after the plan contributes its planned prefix, never
+                        // a body that outruns Content-Length.
+                        if produced == size {
+                            break;
+                        }
+                        let want = (size - produced).min(UPLOAD_CHUNK as u64) as usize;
+                        let mut buf = vec![0u8; want];
                         match file.read(&mut buf).await {
-                            Ok(0) => break,
+                            Ok(0) => {
+                                // A file that shrank: the body cannot satisfy
+                                // the declared length. The next attempt re-stats
+                                // and reports the change as an I/O error.
+                                let _ = tx
+                                    .send(Err(std::io::Error::other(
+                                        "the source changed during the upload: the file ended early",
+                                    )))
+                                    .await;
+                                return;
+                            }
                             Ok(n) => {
                                 buf.truncate(n);
                                 produced += n as u64;

@@ -52,7 +52,13 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
                 .strip_prefix(dir)
                 .map_err(|_| Error::misuse(format!("scan root mismatch: {}", path.display())))?
                 .to_string_lossy()
-                .replace('\\', "/");
+                .into_owned();
+            // A backslash separates path components only on Windows. On Unix
+            // it is a legal filename byte, and rewriting it would silently
+            // turn `a\b.zip` into the remote name `a/b.zip`; the grammar then
+            // rejects either the phantom or the collision.
+            #[cfg(windows)]
+            let rel = rel.replace('\\', "/");
             names.push(ArtifactName::parse(&rel)?);
         }
     }
@@ -78,6 +84,22 @@ mod tests {
         let names = scan_dir(root).unwrap();
         let pretty: Vec<_> = names.iter().map(std::string::ToString::to_string).collect();
         assert_eq!(pretty, ["a.zip", "sub/b.json"]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn backslash_is_not_a_separator_on_unix() {
+        // `a\b.zip` is one legal filename on unix; rewriting the backslash
+        // would upload it as the two-segment name `a/b.zip` and could collide
+        // with a real `a/b.zip`. The grammar rejects the literal name instead.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("a\\b.zip"), b"x").unwrap();
+        let err = scan_dir(root).unwrap_err();
+        assert!(
+            matches!(err, Error::UnsafeName { .. }),
+            "expected the grammar to refuse the literal backslash: {err:?}"
+        );
     }
 
     #[test]

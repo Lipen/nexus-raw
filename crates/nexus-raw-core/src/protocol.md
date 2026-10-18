@@ -82,10 +82,10 @@ A service-API 404 (`service repos` against a server without the management API) 
 
 The transfer worker pool is adaptive (§7 retries).
 A directory transfer (`up`, `down`, `mirror`, and `mv`'s pour) starts with as many workers as `--workers` grants.
-When a retryable request fails with a `Retry-After` (a 429), the effective limit halves at once: the run stops acquiring new workers past the reduced limit, and permits still held are surrendered as their transfers finish.
+When a retryable request fails with a `Retry-After` (a 429, or a 5xx that asks for a pause), the effective limit halves at once: the run stops acquiring new workers past the reduced limit, and permits still held are surrendered as their transfers finish.
 The floor is 1 worker: some transfer always goes on.
 On a streak of successes (one step per four consecutive successes) the limit recovers one worker at a time, never exceeding the configured maximum.
-A single success after a 429 does not restore the limit: the recovery slope must fill first.
+A single success after a server-mandated pause does not restore the limit: the recovery slope must fill first.
 The wire behavior is unchanged: only how many transfers run at once.
 
 ## Range and segmented reads

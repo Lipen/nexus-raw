@@ -12,8 +12,8 @@ fn enum_names(v: &[&str]) -> Enumeration {
 }
 
 use nexus_raw_core::{
-    model::sibling, staging_dir, ArtifactName, Config, Digest, EntryKind, Enumeration, Error,
-    Event, Mode, Nxr, Summary,
+    model::sibling, staging_dir, ArtifactName, Config, Digest, Dir, EntryKind, Enumeration, Error,
+    Event, Mode, NexusClient, Nxr, Progress, Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -141,6 +141,31 @@ async fn stalled_upload_fails_within_the_stall_window() {
     );
     let puts = mock.requests().iter().filter(|r| r.method == "PUT").count();
     assert!(puts >= 2, "expected a retry, saw {puts} PUT attempts");
+}
+
+#[tokio::test]
+async fn upload_refuses_a_source_whose_size_changed() {
+    // The plan carries a size; a build that rewrote the file before the send
+    // would make the body disagree with Content-Length. The client re-stats
+    // per attempt and refuses before a byte reaches the wire.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    let src = local.path().join("a.bin");
+    std::fs::write(&src, CONTENT).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let client = NexusClient::new(&config(&mock, None), Progress::new(tx)).unwrap();
+    let url = format!("{}{VERSION}/a.bin", mock.base_url());
+
+    let err = client
+        .upload_file(("a.bin", Dir::Up), &url, &src, CONTENT.len() as u64 - 1)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Io { .. }), "got {err:?}");
+    assert!(
+        err.to_string().contains("changed since it was planned"),
+        "{err}"
+    );
+    assert!(mock.store_get(&format!("{VERSION}/a.bin")).is_none());
 }
 
 #[tokio::test]
@@ -480,6 +505,32 @@ async fn single_call_recovers_through_flaky() {
 }
 
 #[tokio::test]
+async fn retry_after_503_pauses_instead_of_backoff() {
+    // A 503 that names its pause is waited out, not retried after half a
+    // second: the byte probe and the marker probe each pay the second.
+    let mock = MockNexus::start(Scenario::RetryAfter503 {
+        retry_after_secs: 1,
+    })
+    .unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "a.zip", CONTENT);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let started = std::time::Instant::now();
+    nxr.up(local.path(), None, true, None).await.unwrap();
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed >= Duration::from_millis(1900),
+        "two one-second 503 pauses must replace the backoff, took {elapsed:?}"
+    );
+    assert_eq!(
+        mock.store_get(&format!("{VERSION}/a.zip")).unwrap(),
+        CONTENT
+    );
+}
+
+#[tokio::test]
 async fn retry_events_name_the_object_they_retry() {
     // A retried marker must never arrive as an unnamed event: the console line for it reads `↻ : retry 2 (…)`, and an NDJSON consumer cannot tell which object stalled.
     // Markers and other small objects travel by URL, so their name comes from the URL when the caller has no ArtifactName to pass.
@@ -638,6 +689,33 @@ async fn down_resume_of_complete_part_finalizes_without_refetch() {
         !resumed_206,
         "a complete part must not trigger a range fetch"
     );
+}
+
+#[tokio::test]
+async fn down_stale_part_restarts_without_spending_a_retry() {
+    // The 416 restart is deterministic: it happens inside one attempt, so a
+    // run with no retry budget still self-heals.
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let mut cfg = config(&mock, None);
+    cfg.retry_attempts = 1;
+    let nxr = Nxr::new(cfg, tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let part = part_path(dst.path(), &name);
+    std::fs::write(&part, b"stale-prefix-of-an-old-object").unwrap();
+
+    let summary = nxr
+        .down(dst.path(), Enumeration::Names(names(&["a.zip"])), false)
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+    assert!(!part.exists());
 }
 
 #[tokio::test]
@@ -2529,7 +2607,17 @@ async fn segmented_get_refuses_one_segment() {
         .await
         .unwrap_err();
     assert!(
-        matches!(err, nexus_raw_core::Error::Misuse(ref m) if m.contains("at least 2")),
+        matches!(&err, nexus_raw_core::Error::Misuse(m) if m.contains("between 2 and 64")),
+        "got {err:?}"
+    );
+    assert_eq!(err.exit_code(), 2);
+
+    let err = nxr
+        .get_segmented(&url, out.path().join("a.bin"), 65)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, nexus_raw_core::Error::Misuse(m) if m.contains("between 2 and 64")),
         "got {err:?}"
     );
     assert_eq!(err.exit_code(), 2);

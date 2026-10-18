@@ -160,7 +160,7 @@ impl Nxr {
     /// # Errors
     ///
     /// Returns the errors of [`Nxr::get`] plus any segment failure (transport, auth, HTTP),
-    /// [`Error::Mismatch`] on a sibling digest divergence, and [`Error::Misuse`] for `segments < 2`.
+    /// [`Error::Mismatch`] on a sibling digest divergence, and [`Error::Misuse`] outside `2..=64`.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn get_segmented(
         &self,
@@ -168,11 +168,6 @@ impl Nxr {
         out: PathBuf,
         segments: usize,
     ) -> Result<GetOutcome, Error> {
-        if segments < 2 {
-            return Err(Error::misuse(format!(
-                "segments must be at least 2, got {segments}: a single span is the plain get"
-            )));
-        }
         match primitive::get_segmented(&self.client, url, &out, segments, &self.events).await {
             // The server answers ranged GETs with the whole body: the plain path is the answer,
             // and the fallback is progress, never an error. The switch travels the events channel.
@@ -384,11 +379,35 @@ impl Nxr {
         bytes_mode: bool,
         sample: Option<usize>,
     ) -> Result<sync::audit::AuditRun, Error> {
+        self.audit_filtered(bytes_mode, sample, &sync::audit::AuditFilter::default())
+            .await
+    }
+
+    /// Audit a narrowed tree: [`Nxr::audit`] with an
+    /// [`AuditFilter`](sync::audit::AuditFilter) applied at discovery.
+    ///
+    /// The filter runs before any request: markers outside the selected names
+    /// or prefixes are never fetched, the byte pass samples only the selected
+    /// assets, and `audited` counts the selected objects.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Nxr::audit`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn audit_filtered(
+        &self,
+        bytes_mode: bool,
+        sample: Option<usize>,
+        filter: &sync::audit::AuditFilter,
+    ) -> Result<sync::audit::AuditRun, Error> {
         use sync::audit::{AuditInput, ByteCheck};
 
-        // 1. Discovery: the whole-tree search walk, markers included.
-        let tree_list = layout::ls::audit_tree(&self.client, &self.base).await?;
-        let facts: BTreeMap<ArtifactName, Option<Digest>> = tree_list
+        // 1. Discovery: the whole-tree search walk, markers included, then
+        // the client-side narrowing before a single marker is fetched.
+        let listed = layout::ls::audit_tree(&self.client, &self.base).await?;
+        // The cross-check facts come from the whole listing: a filter that
+        // selects nothing must not report a live index as unavailable.
+        let facts: BTreeMap<ArtifactName, Option<Digest>> = listed
             .iter()
             .filter_map(|(p, d)| {
                 // Grammar-clean, non-marker names carry a cross-check fact.
@@ -397,6 +416,14 @@ impl Nxr {
                     .flatten()
             })
             .collect();
+        let tree_list: Vec<_> = listed
+            .into_iter()
+            .filter(|(p, _)| filter.matches_key(p))
+            .collect();
+        let audited = tree_list
+            .iter()
+            .filter(|(p, _)| !p.ends_with(".sha256"))
+            .count();
 
         // 2. Marker bodies for every listed marker, worker-paced.
         let marker_keys: Vec<String> = tree_list
@@ -516,6 +543,7 @@ impl Nxr {
 
         Ok(sync::audit::AuditRun {
             verdict,
+            audited,
             byte_checks,
         })
     }

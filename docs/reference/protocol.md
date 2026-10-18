@@ -365,7 +365,7 @@ The transfer order follows the user's enumeration verbatim: no name is special.
 | auth | `Basic`, attached to every request when credentials resolve; `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
 | retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry, other 4xx never, except 429 |
-| 429 | retryable: a `Retry-After` pause in seconds (clamped to 1..=60) replaces the backoff, exhausting attempts is exit 3 |
+| `Retry-After` | any retryable status (429 or 5xx) honors a `Retry-After` pause in seconds, clamped to 1..=60. It replaces the backoff, and exhausting attempts is exit 3 |
 | backoff | 0.5 s × 2ⁿ per attempt, capped at 60 s, plus hash-based jitter ≤ 250 ms |
 | stall | no bytes for `--stall-secs` aborts the attempt as retryable (default 30 s) |
 | timeouts | connect timeout only, no total-per-artifact timeout, because a big artifact on a slow link is legitimate |
@@ -374,7 +374,7 @@ The transfer order follows the user's enumeration verbatim: no name is special.
 | compression | a GET body with `Content-Encoding: zstd` decodes transparently, and the client may send `Accept-Encoding: zstd` |
 
 Auth failures bypass the retry loop: a 401/403 is answered once and reported.
-5xx responses retry with backoff, which the output makes visible:
+5xx responses retry with the server's `Retry-After` pause when one is present, plain backoff otherwise, which the output makes visible:
 
 ```console
 $ nxr put https://nexus.example.com/repository/raw-main/flaky/app.bin -f extra.txt

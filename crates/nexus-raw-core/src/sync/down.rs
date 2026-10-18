@@ -158,10 +158,13 @@ pub(crate) async fn download_one(
     let part = part_path(dir, name);
     // Resuming means the pre-existing part content joins the digest: a stale part (the remote object changed between runs) would poison the check.
     // Without a remote sibling there is nothing to verify against, so markerless names always download from zero (§5.1).
-    // The client itself must not resume, not just the self-heal branch below.
+    // `resume` is the intent, and it stays true even when the part does not
+    // exist yet: an attempt that cuts mid-body creates the part, and the
+    // internal retry must resume it. The client refuses a symlink at the path
+    // on its own, so the read side is safe.
     let resume = expected.is_some() && !fresh;
-    // symlink_metadata, not metadata: a symlink at the part path must not be read for the prefix nor trusted for the resume decision.
-    // The NOFOLLOW write open would refuse it anyway, so fail the same way before any read.
+    // The stale-part verdict needs to know whether a regular non-empty part
+    // was there before this call.
     let resumed =
         resume && std::fs::symlink_metadata(&part).is_ok_and(|m| m.is_file() && m.len() > 0);
     let fetched = client
@@ -201,17 +204,17 @@ pub(crate) async fn download_one(
     }
     let final_bytes = bytes_path(dir, name);
     if let Some(parent) = final_bytes.parent() {
+        // The bytes are downloaded and digest-checked: a destination-side
+        // failure (a symlink in the way, a permission) must keep the part for
+        // the rerun instead of discarding a complete transfer.
         if let Err(e) = ensure_symlink_free(parent, dir) {
-            let _ = tokio::fs::remove_file(&part).await;
             return Err((name.clone(), Failure::Failed(e)));
         }
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            let _ = tokio::fs::remove_file(&part).await;
             return Err((name.clone(), Failure::Failed(Error::io(parent, e))));
         }
     }
     if let Err(e) = tokio::fs::rename(&part, &final_bytes).await {
-        let _ = tokio::fs::remove_file(&part).await;
         return Err((name.clone(), Failure::Failed(Error::io(&final_bytes, e))));
     }
     let marker = sibling::format_line(name.as_str(), &actual);
