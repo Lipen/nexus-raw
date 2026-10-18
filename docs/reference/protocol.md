@@ -326,6 +326,13 @@ The search API walks `/service/rest/v1/search/assets` with continuation tokens.
 It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
 Treat `--ls` output as a hint only.
 
+A directory listing (`ls`, `ls --assets`, and the `down --ls` enumeration at a version directory) asks the same endpoint with `q=<percent-encoded directory path>/`.
+`q` is a page cutter, never the answer: the server matches it loosely (a case-sensitive path substring, measured against the pinned 3.96.3), so the pages may carry a superset (a copy of the directory under another parent, or a name-continuing sibling when the trailing slash is missing), and the client-side whole-segment prefix filter turns that superset into exactly the directory's names.
+The property that a directory query never drops a name is versioned, not verified at run time: the search answer carries no count to compare against.
+The stand battery pins it against the pinned Nexus image (`stand/real-nexus/battery.sh`): a seeded directory's `q` listing must equal the repository-wide walk restricted to that directory.
+Repository-wide walks (`audit`, `diff --via search`, the `up --wait-index` visibility poll) send no `q`: there the page set has to be the repository, and a filter the audit trusts would be a hole in the audit.
+Every walk is bounded per invocation at 1000 pages of 50 rows (50 000 objects), and a walk that hits the bound refuses with `cannot enumerate`: never a silently truncated listing.
+
 If your consumers need a machine-readable name list, publish one as an ordinary artifact.
 `nxr` itself does not read it: the list belongs to the pipeline that consumes it.
 

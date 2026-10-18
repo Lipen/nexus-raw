@@ -165,12 +165,15 @@ async fn assets_absent_degrades_with_enumerate() {
     ));
 }
 
+/// The search `q` is the server's loose match and the prefix filter is the answer: a
+/// repository-wide walk covers all 5539 rows (111 pages at the server's 50), and the 10
+/// `asset-01` rows are one page.
 #[tokio::test]
 async fn assets_prefix_q_filters() {
     let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsPrefixQ).unwrap();
     let base = format!("{}repository/raw-main/", server.base_url());
     let nxr = client(base);
-    let (by_prefix, _) = nxr
+    let (by_prefix, summary) = nxr
         .service_assets(None, &["v0.9.0-assets".to_owned()])
         .await
         .unwrap();
@@ -179,8 +182,91 @@ async fn assets_prefix_q_filters() {
         35,
         "whole-segment prefix takes every asset"
     );
+    assert_eq!(
+        summary.pages, 111,
+        "5539 rows at 50 a page: the walk a listing used to cap at 100"
+    );
     let (by_q, _) = nxr.service_assets(Some("asset-01"), &[]).await.unwrap();
     assert_eq!(by_q.len(), 10, "asset-010..asset-019");
+}
+
+/// A directory listing asks the search with `q=<directory>/`, so the 300-name directory of a
+/// 5539-row repository costs 10 pages instead of 111, and stays complete.
+/// The loose match drags a copy of the directory under another parent into those pages, and the
+/// client-side prefix filter is what keeps it out of the answer.
+/// Before `q` this listing was a repository-wide walk past the 100-page bound: `Error::Enumerate`.
+#[tokio::test]
+async fn assets_prefix_q_scoped_listing_cuts_pages_and_keeps_the_names() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsPrefixQ).unwrap();
+    let base = format!("{}repository/raw-main/v1.1.0-dir/", server.base_url());
+    let nxr = client(base);
+    let (entries, hidden) = nxr.ls_entries_counted().await.unwrap();
+    assert_eq!(hidden, 0, "the generated rows carry no markers");
+    assert_eq!(entries.len(), 300, "exactly the directory's own names");
+    assert!(
+        entries
+            .iter()
+            .all(|e| e.kind == nexus_raw_core::EntryKind::File && e.name.starts_with("dir-")),
+        "no folder among flat files, and no foreign name"
+    );
+    assert!(
+        !entries.iter().any(|e| e.name.starts_with("decoy-")),
+        "the copy under another parent never surfaces"
+    );
+    let pages = server
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(
+        pages, 10,
+        "300 directory rows plus 200 decoy rows the loose q drags in, 50 a page"
+    );
+}
+
+/// The same directory through the artifact listing (`ls --assets`, the `down --ls` source):
+/// the scoped walk returns the flat names, decoy excluded.
+#[tokio::test]
+async fn assets_prefix_q_scoped_assets_listing_is_exact() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsPrefixQ).unwrap();
+    let base = format!("{}repository/raw-main/v1.1.0-dir/", server.base_url());
+    let nxr = client(base);
+    let names = nxr.ls_assets().await.unwrap();
+    assert_eq!(names.len(), 300);
+    assert!(names.iter().all(|n| n.as_str().starts_with("dir-")));
+    assert!(
+        !names.iter().any(|n| n.as_str().starts_with("decoy-")),
+        "the prefix filter, not the server's q, decides the answer"
+    );
+}
+
+/// A repository-wide listing (the repository root) still walks the repository under the bound:
+/// 5539 rows, 111 pages, every top-level folder listed.
+#[tokio::test]
+async fn assets_prefix_q_repository_root_walks_past_the_old_bound() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsPrefixQ).unwrap();
+    let base = format!("{}repository/raw-main/", server.base_url());
+    let nxr = client(base);
+    let entries = nxr.ls_entries().await.unwrap();
+    let dirs: Vec<&str> = entries
+        .iter()
+        .filter(|e| e.kind == nexus_raw_core::EntryKind::Dir)
+        .map(|e| e.name.as_str())
+        .collect();
+    assert_eq!(
+        dirs,
+        [
+            "backup",
+            "v0.9.0-assets",
+            "v1.0.0-bulk",
+            "v1.1.0-dir",
+            "v1.1.0-dir2"
+        ],
+        "the whole generated tree, no name lost to the page bound"
+    );
+    assert!(entries
+        .iter()
+        .all(|e| e.kind == nexus_raw_core::EntryKind::Dir));
 }
 
 #[tokio::test]

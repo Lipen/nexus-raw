@@ -328,11 +328,34 @@ class Conformance(unittest.TestCase):
             self.assertEqual(len(pages), 3, "4 pages total: the first has no token, 3 follow it")
 
     def test_assets_prefix_q(self):
-        """The server-side q filter narrows the walk: the client sends no q, so the full listing arrives complete."""
+        """The generated repository walks to the end under the per-walk bound: 5539 rows over 111 pages."""
         with mock_server("assets-prefix-q") as mock:
             nx = self.client()
             paths = nx.ls(mock.base, "raw-main")
-            self.assertEqual(len(paths), 35)
+            self.assertEqual(
+                len(paths),
+                5539,
+                "35 plain assets + 300 directory + 4 sibling + 5000 bulk + 200 decoy rows",
+            )
+            pages = [p for _, p in nx.requests if "continuationToken" in p]
+            self.assertEqual(len(pages), 110, "111 pages total: the first has no token, 110 follow it")
+
+    def test_assets_prefix_q_scoped_directory(self):
+        """A directory listing asks with q=<directory>/: 10 pages for 300 names, and the loose match's decoy is filtered out."""
+        with mock_server("assets-prefix-q") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main", directory="v1.1.0-dir")
+            self.assertEqual(len(paths), 300, "exactly the directory's own names")
+            self.assertTrue(all(p.startswith("/v1.1.0-dir/") for p in paths))
+            self.assertFalse(any(p.startswith("/backup/") for p in paths), "the copy under another parent stays out")
+            self.assertFalse(any(p.startswith("/v1.1.0-dir2/") for p in paths), "the sibling stays out")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(
+                len(searches),
+                10,
+                "q=v1.1.0-dir/ cuts the pages to 500 rows the loose match serves, at 50 a page",
+            )
+            self.assertIn("q=v1.1.0-dir%2F", searches[0], "the scope rides percent-encoded, trailing slash and all")
 
     def test_assets_absent(self):
         """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""
@@ -689,6 +712,15 @@ class Reference(unittest.TestCase):
         for reason, payload in broken.items():
             with self.assertRaises(ValueError, msg=reason):
                 nxr.parse_marker(payload)
+
+    def test_scope_filter_matches_whole_segments(self):
+        """The directory scope matches lead segments exactly: a name-continuing sibling and a copy under another parent stay out."""
+        scope = ["v1.1.0-dir"]
+        self.assertTrue(nxr._under("/v1.1.0-dir/a.bin", scope))
+        self.assertTrue(nxr._under("v1.1.0-dir/nested/a.bin", scope))
+        self.assertFalse(nxr._under("/v1.1.0-dir2/a.bin", scope), "a prefix is not a segment")
+        self.assertFalse(nxr._under("/backup/v1.1.0-dir/a.bin", scope), "a deeper copy is not the directory")
+        self.assertTrue(nxr._under("/anywhere/a.bin", []), "an empty scope is the repository-wide walk")
 
     def test_backoff_grows_and_caps(self):
         """The backoff doubles per attempt, caps at 60s, and the jitter stays within 250ms."""

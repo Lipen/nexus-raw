@@ -179,6 +179,51 @@ else
 fi
 expect_ok "verify passes offline on the mirror" "$NXR" verify "$WORK/dst"
 
+# 24-28. A directory listing asks the search API with `q=<directory>/` and keeps the prefix
+# filter client-side (the rule the protocol page names). The seeded fixture is the manual
+# measurement in miniature: the listing must equal the repository-wide walk restricted to
+# that directory, and the copy seeded under another parent, which the server's loose `q`
+# match rides, must never reach it.
+mkdir -p "$WORK/qsrc/bench/flat" "$WORK/qsrc/backup/bench/flat"
+for i in 1 2 3 4 5 6; do printf 'flat %s\n' "$i" > "$WORK/qsrc/bench/flat/q-$i.bin"; done
+for i in 1 2; do printf 'copy %s\n' "$i" > "$WORK/qsrc/backup/bench/flat/decoy-$i.bin"; done
+expect_ok "the directory fixture uploads" "$NXR" up "$WORK/qsrc" "$URL/" --workers 2
+
+# The index lags the writes: wait until the directory's last name is searchable.
+seen=0
+for _ in 1 2 3 4 5 6; do
+    if "$NXR" service assets "$URL/" --q 'bench/flat/' --json 2> /dev/null | grep -q 'q-6.bin'; then seen=1; break; fi
+    sleep 2
+done
+if [ "$seen" = 1 ]; then ok "the seeded directory reaches the search index"; else no "the seeded directory reaches the search index"; fi
+
+# The two sides of the comparison: the full walk (no q) reduced to the directory's artifacts,
+# and the listing of the directory (which asks with q and filters client-side).
+"$NXR" service assets "$URL/" --json 2> /dev/null |
+    grep -o '"path":"bench/flat/[^"]*"' | sed 's/^"path":"//; s/"$//' |
+    grep -v '\.sha256$' | sed 's|.*/||' | sort > "$WORK/walk-q.txt"
+"$NXR" ls "$URL/bench/flat/" --json 2> /dev/null |
+    grep -o '"entry":"[^"]*","kind":"file"' | sed 's/^"entry":"//; s/","kind":"file"$//' |
+    sort > "$WORK/ls-q.txt"
+if [ -s "$WORK/walk-q.txt" ] && cmp -s "$WORK/walk-q.txt" "$WORK/ls-q.txt"; then
+    ok "a directory listing equals the walk restricted to it"
+else
+    no "a directory listing equals the walk restricted to it"
+fi
+
+# The server's `q` is loose: the same query rides the copy under another parent, so the
+# equality above is the client-side filter's doing, not the server's narrowness.
+if "$NXR" service assets "$URL/" --q 'bench/flat/' --json 2> /dev/null | grep -q 'backup/bench/flat/decoy-1.bin'; then
+    ok "the server's q is a loose path substring"
+else
+    no "the server's q is a loose path substring"
+fi
+if "$NXR" ls "$URL/bench/flat/" 2> /dev/null | grep -q 'decoy-'; then
+    no "the listing never surfaces the loose match's copy"
+else
+    ok "the listing never surfaces the loose match's copy"
+fi
+
 # --- summary ----------------------------------------------------------------
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

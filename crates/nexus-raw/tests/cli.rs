@@ -3260,6 +3260,99 @@ fn ls_unknown_repository_prints_the_repository_hint() {
     );
 }
 
+/// A directory listing asks the search with `q=<directory>/`: the 300-name directory of a
+/// 5539-row repository lists in 10 pages, not the 111 a repository-wide walk costs (and not
+/// the 100-page bound a listing used to carry), and the loose match's decoy names stay out.
+#[test]
+fn ls_scopes_the_search_to_the_directory() {
+    let srv = server(Scenario::AssetsPrefixQ);
+    let out = nxr(&[
+        "ls",
+        &format!("{}repository/raw-main/v1.1.0-dir/", srv.base_url()),
+    ]);
+    expect_exit(
+        &out,
+        0,
+        "the scoped listing of a 300-name directory succeeds",
+    );
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 300, "exactly the directory's own names");
+    assert!(
+        lines.iter().all(|l| l.starts_with("dir-")),
+        "no foreign name among the entries"
+    );
+    let pages = srv
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(
+        pages, 10,
+        "300 directory rows plus 200 decoy rows the loose q drags in, 50 a page"
+    );
+
+    // The same directory as flat names (`--assets`), the enumeration `down --ls` consumes.
+    let out = nxr(&[
+        "ls",
+        "--assets",
+        &format!("{}repository/raw-main/v1.1.0-dir/", srv.base_url()),
+    ]);
+    expect_exit(&out, 0, "the artifact listing succeeds");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 300);
+    assert!(
+        !lines.iter().any(|l| l.starts_with("decoy-")),
+        "the copy under another parent never surfaces"
+    );
+}
+
+/// The server's `q` is loose (a path substring), the client's `--prefix` is exact: a value
+/// without the trailing slash drags the name-continuing sibling in, the measured
+/// `bench/flat` against `bench/flat2` case, and the whole-segment prefix drops it again.
+#[test]
+fn service_assets_loose_q_meets_the_prefix_filter() {
+    let srv = server(Scenario::AssetsPrefixQ);
+    let repo = format!("{}repository/raw-main/", srv.base_url());
+    let out = nxr(&["service", "assets", &repo, "--q", "v1.1.0-dir", "--json"]);
+    expect_exit(&out, 0, "the loose walk succeeds");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    let assets = v["assets"].as_array().expect("assets array");
+    assert_eq!(
+        assets.len(),
+        504,
+        "300 directory rows, 4 sibling rows and 200 decoy rows the loose q returns"
+    );
+    assert!(
+        assets.iter().any(|a| a["path"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("v1.1.0-dir2/")),
+        "without the slash the name-continuing sibling rides the answer"
+    );
+
+    // The prefix filter is the answer: exactly the directory's names, decoys gone.
+    let out = nxr(&[
+        "service",
+        "assets",
+        &repo,
+        "--q",
+        "v1.1.0-dir",
+        "--prefix",
+        "v1.1.0-dir",
+        "--json",
+    ]);
+    expect_exit(&out, 0, "the filtered walk succeeds");
+    let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
+    let assets = v["assets"].as_array().expect("assets array");
+    assert_eq!(assets.len(), 300, "the whole-segment prefix is exact");
+    assert!(assets.iter().all(|a| a["path"]
+        .as_str()
+        .unwrap_or_default()
+        .starts_with("v1.1.0-dir/")));
+}
+
 // ---- diff --via search ------------------------------------------------------
 
 /// The version-directory URL in repository shape: the search walk needs `/repository/<name>/`.

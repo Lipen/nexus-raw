@@ -729,7 +729,10 @@ When the enumerator hides markers, `ls` names the count in a trailing line (`N m
 |:-----|:--------|
 | `--assets` | flat artifact names under the directory URL instead of the entry tree |
 
-The listing goes through the Nexus search API in the repository scope, and the tree is cut client-side, so nested folders work on every server release.
+The listing asks the search API in the repository scope with `q=<directory>/` (percent-encoded), so the pages cover the directory instead of the whole repository, and the tree is cut client-side.
+`q` only saves requests: the server matches it loosely, so the pages may carry extra names, and the whole-segment prefix filter is what makes the answer exact.
+The walk is bounded at 1000 pages of 50 rows.
+Passing the bound is a `cannot enumerate` refusal, never a truncated list.
 This capture was taken against a live Nexus Repository with a neutralized host:
 
 ```console
@@ -745,15 +748,15 @@ $ echo $?
 ```
 
 `--assets` lists the artifact names under a directory URL, the enumeration `down --ls` consumes.
-Its server request filters by path group, and on one measured Nexus release that parameter matched Maven coordinates rather than raw path prefixes, so nested `--assets` listings could come back empty there.
-The entry listing above does not use that parameter and does not have the problem.
+It scopes the search with `q=<directory>/` exactly like the entry listing, and cuts the names client-side.
+Neither listing sends the `group` parameter: on one measured Nexus release it matched Maven coordinates rather than raw path prefixes, and nested listings lied.
 Treat both as conveniences only.
 `down` takes its names from the flags, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).
 
 | Exit | When |
 |:----:|:-----|
 | `0` | the search endpoint answered (including an empty directory) |
-| `1` | the search endpoint answered 404 (`cannot enumerate`) |
+| `1` | the search endpoint answered 404, or the walk passed its page bound (`cannot enumerate`) |
 | `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/...` |
 | `3` | transport or auth failure |
 
@@ -1018,6 +1021,7 @@ Human output is `size sha8 last-modified path`, the path last for copy-paste.
 The argument is a repository URL (the repository root or anything inside it): a server root is misuse, because the search needs a repository to scope to.
 The listing paginates through `continuationToken` automatically, up to 1000 pages.
 Two honest quirks: the result order is the server's, and an empty result right after a write may mean the search index lags for a few seconds.
+`--q` is a loose server-side substring, so it cuts the pages, not the answer: pair it with `--prefix` when the set has to be exact.
 
 | Exit | When |
 |:----:|:-----|

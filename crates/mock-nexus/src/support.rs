@@ -83,6 +83,27 @@ pub(super) fn query_param<'a>(target: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
+/// Decode the `%XX` escapes of a query value, the way the server hands the parameter to search.
+/// A malformed escape stays verbatim: a broken client gets an empty answer, never a panic.
+pub(super) fn percent_decode(value: &str) -> String {
+    let raw = value.as_bytes();
+    let mut out = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == b'%' && i + 2 < raw.len() {
+            let hex = |b: u8| (b as char).to_digit(16);
+            if let (Some(hi), Some(lo)) = (hex(raw[i + 1]), hex(raw[i + 2])) {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(raw[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Strip the body bytes off a response aimed at a HEAD request (RFC 9110 §9.3.2): the wire keeps `Content-Length` at the body length but sends nothing after the head.
 pub(super) fn bodyless_for_head(method: &str, mut resp: Resp) -> Resp {
     if method == "HEAD" {

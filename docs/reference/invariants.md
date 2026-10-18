@@ -260,9 +260,10 @@ The search API is absent.
 
 The search API honors q and gives the prefixes data.
 
-The search serves the generated assets, so `q` substrings and client-side whole-segment prefixes filter a real list.
+The search serves a generated repository: a 300-name directory, its name-continuing sibling, a 200-name copy of that directory under another parent, a 5000-name bulk and 35 plain assets, 50 rows a page.
+`q` matches a case-sensitive path substring after percent-decoding, the pinned server's loose match: `dir/` also matches a copy under another parent, and `dir` without the trailing slash drags the sibling in.
 
-**Pinned invariant:** A server-side `q` and a client-side prefix compose: both filters land on the same listing without a second enumeration.
+**Pinned invariant:** A server-side `q` and a client-side prefix compose: `q` cuts the pages (10 for the directory against 111 repository-wide) and the prefix filter turns the possible superset into exactly the directory's names.
 
 ## `eula-gate`
 

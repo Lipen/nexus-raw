@@ -10,6 +10,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `nxr` ships a container image: `ghcr.io/lipen/nexus-raw:<version>` is the static release binary on a distroless base that carries the trust store TLS verification reads, runs as `nonroot`, and is published for `linux/amd64` and `linux/arm64` by the release workflow, from the archives that release already built.
   A `COPY --from=ghcr.io/lipen/nexus-raw:<version> /nxr /usr/local/bin/nxr` puts it in a downstream image.
 
+### Fixed
+
+- Enumeration survives a repository bigger than 5000 objects: the search walk was capped at 100 pages of 50 rows, so `ls`, `down --ls`, `diff --via search` and `audit` refused with `cannot enumerate` past that size.
+  The bound is now per walk at 1000 pages, and a directory listing asks the search API with `q=<directory>/`, which cuts the pages down to that directory (13 to 61 pages instead of 122 on the measured 6095-object repository) while the client-side whole-segment filter stays the answer.
+  The property that a directory query never drops a name is versioned, not verified at run time: the stand battery pins it against the pinned Nexus image.
+
 ## [0.19.1] - 2026-10-18
 
 ### Fixed

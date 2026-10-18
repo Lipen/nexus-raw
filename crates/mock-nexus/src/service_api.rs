@@ -2,7 +2,8 @@
 //! The dispatch over the `/service/rest/...` paths (including the inline status answers) lives in `http`.
 //! These helpers build the bodies those endpoints answer with.
 
-use super::support::{lock, plain, query_param};
+use super::support::{lock, percent_decode, plain, query_param};
+use crate::scenario::Scenario;
 use crate::server::{Request, Resp};
 use crate::store::Shared;
 
@@ -14,33 +15,99 @@ const ASSETS_TOTAL: usize = 35;
 /// How many assets one search page carries under `continuationToken` pagination.
 const ASSETS_PAGE: usize = 10;
 
+/// The page the pinned Nexus really serves: 50 rows, whatever `pageSize` says.
+/// Measured on 3.96.3 (`stand/real-nexus/search-pages.sh`), so the page bound arithmetic
+/// of the `assets-prefix-q` fixture is the production arithmetic, not a mock convenience.
+const SEARCH_ROWS_PER_PAGE: usize = 50;
+
+/// The batch directory of the `assets-prefix-q` scenario: the directory a scoped listing asks for.
+const PREFIX_Q_DIR: usize = 300;
+
+/// The name-continuing sibling of the batch directory: only a `q` without the trailing slash
+/// drags it in, the `flat` against `flat2` case the measurement pins.
+const PREFIX_Q_SIBLING: usize = 4;
+
+/// A copy of the batch directory under another parent: the loose `q` match (a path substring)
+/// drags it into every scoped page, so only the client-side prefix filter keeps it out.
+const PREFIX_Q_DECOY: usize = 200;
+
+/// The bulk that takes the repository past 5000 rows: 5539 rows are 111 pages at 50 a page,
+/// past the 100-page bound a listing used to carry.
+const PREFIX_Q_BULK: usize = 5000;
+
+/// The generated search corpus of a scenario, in the order the server pages it.
+/// The paths carry the leading slash, the shape a real Nexus reports.
+fn corpus(scenario: &Scenario) -> Vec<String> {
+    let mut paths = Vec::new();
+    for i in 0..ASSETS_TOTAL {
+        paths.push(format!("/v0.9.0-assets/asset-{i:03}.bin"));
+    }
+    if *scenario == Scenario::AssetsPrefixQ {
+        for i in 0..PREFIX_Q_DIR {
+            paths.push(format!("/v1.1.0-dir/dir-{i:04}.bin"));
+        }
+        for i in 0..PREFIX_Q_SIBLING {
+            paths.push(format!("/v1.1.0-dir2/dir2-{i:02}.bin"));
+        }
+        for i in 0..PREFIX_Q_BULK {
+            paths.push(format!("/v1.0.0-bulk/bulk-{i:04}.bin"));
+        }
+        for i in 0..PREFIX_Q_DECOY {
+            paths.push(format!("/backup/v1.1.0-dir/decoy-{i:04}.bin"));
+        }
+    }
+    paths
+}
+
+/// The search `q` match of the pinned server: a case-sensitive substring over the path, taken
+/// after the client's percent-encoding is decoded.
+/// It is loose on purpose, exactly as measured: `ench/flat/` matches `/bench/flat/`, and a value
+/// without the trailing slash (`bench/flat`) drags the name-continuing `bench/flat2/` in.
+/// A superset is safe for a listing, which filters client-side.
+/// A narrower set would not be.
+pub(super) fn q_matches(q: &str, path: &str) -> bool {
+    path.contains(q)
+}
+
+/// One search row, the shape `/search/assets` reports.
+fn search_item(base: &str, path: &str, seed: usize) -> String {
+    let sha = format!("{seed:064x}");
+    format!(
+        "{{\"downloadUrl\":\"{base}/repository/raw-main{path}\",\"path\":\"{path}\",\"id\":\"raw-main:{seed:06}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
+    )
+}
+
 /// Serve one page of the generated asset list: items for the current token, plus the next token until the list is exhausted.
-/// `q`, when present, filters asset paths by substring, the way the real server does.
+/// `q`, when present, matches paths as a loose substring after decoding, the way the real server does.
 pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
-    let q = query_param(&req.target, "q");
+    let q = query_param(&req.target, "q").map(percent_decode);
     let token = query_param(&req.target, "continuationToken");
     let start = token.and_then(|t| t.parse::<usize>().ok()).unwrap_or(0);
-    let mut all = Vec::new();
-    for i in 0..ASSETS_TOTAL {
-        let path = format!("/v0.9.0-assets/asset-{i:03}.bin");
-        if let Some(q) = q {
-            if !path.contains(q) {
-                continue;
-            }
-        }
-        let sha = format!("{i:064x}");
-        let base = base_of(shared);
-        all.push(format!(
-            "{{\"downloadUrl\":\"{base}/repository/raw-main/v0.9.0-assets/asset-{i:03}.bin\",\"path\":\"{path}\",\"id\":\"raw-main:{i:03}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
-        ));
-    }
-    let total = all.len();
-    let page: Vec<String> = all.into_iter().skip(start).take(ASSETS_PAGE).collect();
+    let page_size = if shared.scenario == Scenario::AssetsPrefixQ {
+        SEARCH_ROWS_PER_PAGE
+    } else {
+        ASSETS_PAGE
+    };
+    let all = corpus(&shared.scenario);
+    let matching: Vec<usize> = all
+        .iter()
+        .enumerate()
+        .filter(|(_, path)| q.as_deref().is_none_or(|q| q_matches(q, path)))
+        .map(|(i, _)| i)
+        .collect();
+    let total = matching.len();
+    let base = base_of(shared);
+    let page: Vec<String> = matching
+        .into_iter()
+        .skip(start)
+        .take(page_size)
+        .map(|i| search_item(&base, &all[i], i))
+        .collect();
     let body = if start + page.len() < total {
         format!(
             "{{\"items\": [{}], \"continuationToken\": \"{}\"}}",
             page.join(", "),
-            start + ASSETS_PAGE
+            start + page_size
         )
     } else {
         format!("{{\"items\": [{}]}}", page.join(", "))

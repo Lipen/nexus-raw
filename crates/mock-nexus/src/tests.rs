@@ -925,3 +925,94 @@ fn preset_scenario_names_stay_canonical() {
     let server = MockNexus::start(Scenario::AuditLitter).unwrap();
     assert_eq!(server.scenario_name(), "audit-litter");
 }
+
+/// Walk a generated search through its continuation tokens: every `path`, in page order.
+fn search_paths(addr: SocketAddr, query: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut token: Option<String> = None;
+    loop {
+        let target = match &token {
+            None => format!("/service/rest/v1/search/assets?repository=raw-main{query}"),
+            Some(token) => format!(
+                "/service/rest/v1/search/assets?repository=raw-main{query}&continuationToken={token}"
+            ),
+        };
+        let (status, _, body) = exchange(addr, "GET", &target, b"", &[]).unwrap();
+        assert_eq!(status, 200, "the generated search answers");
+        let page: serde_json::Value = serde_json::from_slice(&body).expect("a JSON search page");
+        if let Some(items) = page["items"].as_array() {
+            paths.extend(
+                items
+                    .iter()
+                    .filter_map(|item| item["path"].as_str().map(str::to_owned)),
+            );
+        }
+        match page["continuationToken"].as_str() {
+            Some(next) => token = Some(next.to_owned()),
+            None => return paths,
+        }
+    }
+}
+
+/// assets-prefix-q: the search `q` is the pinned server's loose path substring.
+/// A directory value with the trailing slash cuts to that directory, and still drags a copy of
+/// it under another parent in.
+/// A value without the slash also drags the name-continuing sibling in, and percent-encoding is
+/// decoded before the match.
+#[test]
+fn assets_prefix_q_matches_loosely_like_the_pinned_server() {
+    let server = MockNexus::start(Scenario::AssetsPrefixQ).unwrap();
+
+    let scoped = search_paths(server.addr(), "&q=v1.1.0-dir%2F");
+    assert_eq!(
+        scoped.len(),
+        500,
+        "300 directory rows plus 200 decoy rows, the copy under another parent"
+    );
+    assert!(
+        scoped.iter().any(|p| p.starts_with("/backup/v1.1.0-dir/")),
+        "the loose match drags the copy in: the client filter is what drops it"
+    );
+    assert!(
+        !scoped.iter().any(|p| p.starts_with("/v1.1.0-dir2/")),
+        "the trailing slash keeps the name-continuing sibling out of the cut"
+    );
+    assert!(
+        !scoped.iter().any(|p| p.starts_with("/v1.0.0-bulk/")),
+        "the bulk stays out of a directory cut"
+    );
+
+    let unslashed = search_paths(server.addr(), "&q=v1.1.0-dir");
+    assert_eq!(
+        unslashed.len(),
+        504,
+        "the sibling rides a value without the trailing slash"
+    );
+    assert!(
+        unslashed.iter().any(|p| p.starts_with("/v1.1.0-dir2/")),
+        "without the slash the sibling is dragged in"
+    );
+
+    let sibling_only = search_paths(server.addr(), "&q=v1.1.0-dir2%2F");
+    assert_eq!(
+        sibling_only.len(),
+        4,
+        "the sibling directory cuts on its own"
+    );
+}
+
+/// The query value is percent-decoded before the match, and a malformed escape stays verbatim.
+#[test]
+fn query_percent_decoding_keeps_malformed_escapes() {
+    assert_eq!(
+        crate::support::percent_decode("v1.1.0-dir%2F"),
+        "v1.1.0-dir/"
+    );
+    assert_eq!(crate::support::percent_decode("pl%2Bus"), "pl+us");
+    assert_eq!(
+        crate::support::percent_decode("name%20with%20space"),
+        "name with space"
+    );
+    assert_eq!(crate::support::percent_decode("bad%2"), "bad%2");
+    assert_eq!(crate::support::percent_decode("plain"), "plain");
+}

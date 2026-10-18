@@ -5,12 +5,12 @@ use std::net::TcpStream;
 use std::time::Duration;
 
 use super::service_api::{
-    assets_page, audit_litter_page, base_of, seed_repositories_doc, EULA_DISCLAIMER,
+    assets_page, audit_litter_page, base_of, q_matches, seed_repositories_doc, EULA_DISCLAIMER,
 };
 use super::storage::{drift_or_store, range_span, transform_put};
 use super::support::{
-    answer_bad_request, bodyless_for_head, bump, forbidden, log_request, normalize_path, plain,
-    query_param, unauthorized,
+    answer_bad_request, bodyless_for_head, bump, forbidden, log_request, normalize_path,
+    percent_decode, plain, query_param, unauthorized,
 };
 use crate::group;
 use crate::scenario::Scenario;
@@ -320,6 +320,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                     } else {
                         // Store-backed: one item per stored object, markers included,
                         // repo-relative paths, the shape the search API reports.
+                        // `q` narrows the list with the same loose match the generated pages model.
+                        let q = query_param(&req.target, "q").map(percent_decode);
                         let keys: Vec<String> = lock(&shared.store)
                             .keys()
                             .cloned()
@@ -332,6 +334,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                                 }
                                 Some(segs.collect::<Vec<_>>().join("/"))
                             })
+                            .filter(|k| q.as_deref().is_none_or(|q| q_matches(q, k)))
                             .collect();
                         let items: Vec<String> = keys
                             .iter()

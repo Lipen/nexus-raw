@@ -46,6 +46,12 @@ The remote side of the delta report comes from the search API's per-asset facts 
 A searched asset that lacks a search-reported digest counts as changed, never equal: there is nothing to verify against.
 A search refusal (400 for an unknown repository, 404 for a missing endpoint) degrades honestly: the run refuses with the enumeration-family error, or with `--fallback` it announces the degradation and rebuilds the report from the probe-based enumeration.
 
+`ls` lists a directory through the same search API, scoped with `q=<percent-encoded directory path>/`, and the whole-segment path filter is applied client-side.
+`q` is a page cutter only: the server matches it loosely (a case-sensitive path substring), so the page set is a possible superset, and the filter is the answer.
+The property that a directory query never drops a name is versioned, not verified at run time, because the response carries no count: the stand battery pins it against the pinned Nexus image.
+Repository-wide walks (`audit`, `diff --via search`, the `up --wait-index` visibility poll) send no `q`: the page set there has to be the repository.
+Every walk is bounded at 1000 pages of 50 rows, and a walk that hits the bound refuses with an enumeration error, never a truncated listing.
+
 Deletion (`rm`, `point`) is the one deliberate extension (§5.4).
 DELETE is allowed for the objects of the enumerated version only: bytes, markers,
 the version document, the pointer file.

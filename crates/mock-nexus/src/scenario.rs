@@ -193,8 +193,13 @@ pub enum Scenario {
     /// The search API is absent (404): the honest degradation path for `service assets`.
     /// Storage behavior is [`Scenario::Atomic`].
     AssetsAbsent,
-    /// The search API serves the generated assets, so `q` and client-side prefixes have data to filter.
-    /// Behavior is identical to [`Scenario::AssetsPagination`]: the scenario pins the conformance name.
+    /// The search API serves a generated repository for `raw-main`: the 35 assets of
+    /// [`Scenario::AssetsPagination`], a 300-name directory, its name-continuing sibling,
+    /// a 200-name copy of that directory under another parent and a 5000-name bulk,
+    /// 50 rows a page, honoring `q` as the pinned server's loose path substring.
+    /// 5539 rows are 111 pages: a repository-wide walk is past the 100-page bound a listing
+    /// used to carry, while a scoped listing of the 300-name directory is 10.
+    /// Storage behavior is [`Scenario::Atomic`].
     AssetsPrefixQ,
     /// The CE 3.79 EULA gate: `GET /v1/system/eula` presents the disclaimer, PUT answers `403` with the EULA body until
     /// `POST /v1/system/eula` echoes it back with `accepted: true` (204), after which PUTs store normally.

@@ -45,7 +45,9 @@ MAX_BACKOFF = 60.0
 MAX_JITTER = 0.25
 
 # A hostile endpoint can emit continuation tokens forever: the walk gives up instead of scrolling.
-MAX_SEARCH_PAGES = 100
+# The bound is per walk, at the 50 rows a page the pinned Nexus serves: 1000 pages is 50 000 rows,
+# so a repository-wide walk fits and a 5000-name directory fits when the walk is scoped with `q`.
+MAX_SEARCH_PAGES = 1000
 # Upper bound for small GETs: siblings, channel tokens, search pages.
 # Mirrors the rust core's SMALL_CAP (transport/client.rs).
 SMALL_CAP = 16 * 1024 * 1024
@@ -284,17 +286,26 @@ class Nxr:
         """GET the object and hash it, without verification (the `nxr sha` primitive)."""
         return hashlib.sha256(self._send("GET", url)[2]).hexdigest()
 
-    def ls(self, base_url: str, repository: str) -> list[str]:
-        """List a repository through the search API, following continuation tokens.
+    def ls(self, base_url: str, repository: str, directory: str = "") -> list[str]:
+        """List a repository, or one directory of it, through the search API, following continuation tokens.
 
         Returns the raw asset paths, relative to the repository root.
+        `directory` scopes the walk the way a directory listing does: the search asks with
+        `q=<directory>/` (percent-encoded), which cuts the pages down to that directory, and the
+        client keeps only the paths under that whole-segment prefix.
+        The server's `q` is a loose path substring and may serve a superset (a copy of the directory under another parent).
+        The filter, not `q`, is what makes the answer exact.
         The walk is best-effort: the search API exists on common Nexus 3 releases but is not guaranteed.
         The server-side `group` parameter is deliberately not sent: on a real Nexus it matches Maven
-        coordinates rather than raw paths, which makes nested listings lie (a filter, if ever needed, belongs client-side).
+        coordinates rather than raw paths, which makes nested listings lie.
         """
         parts = urlsplit(base_url)
         endpoint = f"{parts.scheme}://{parts.netloc}/service/rest/v1/search/assets"
-        first_page = f"{endpoint}?{urlencode({'repository': repository})}"
+        query = {"repository": repository}
+        scope = [segment for segment in directory.split("/") if segment]
+        if scope:
+            query["q"] = "/".join(scope) + "/"
+        first_page = f"{endpoint}?{urlencode(query)}"
         paths: list[str] = []
         token: str | None = None
         for _page in range(MAX_SEARCH_PAGES):
@@ -323,7 +334,7 @@ class Nxr:
                 raise EnumerateError(f"cannot enumerate: {url}: the search response is not a JSON object") from None
             for item in page.get("items") or []:
                 path = item.get("path") if isinstance(item, dict) else None
-                if isinstance(path, str):
+                if isinstance(path, str) and _under(path, scope):
                     paths.append(path)
             token = page.get("continuationToken")
             if not isinstance(token, str):
@@ -512,6 +523,19 @@ class Nxr:
                 if secs >= 0:
                     return float(min(max(secs, 1), 60))
         return self._backoff(attempt)
+
+
+def _under(path: str, scope: list[str]) -> bool:
+    """True when `path` sits under the whole-segment `scope`: the client-side half of a scoped listing.
+
+    Lead segments match exactly and in order, so `v1.1.0-dir/` never takes `v1.1.0-dir2/` or a
+    copy under another parent, whatever the server's loose `q` served.
+    An empty scope is every path: the repository-wide walk.
+    """
+    if not scope:
+        return True
+    segments = [segment for segment in path.split("/") if segment]
+    return segments[: len(scope)] == scope
 
 
 def _marker_name(url: str) -> str:
