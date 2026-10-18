@@ -500,6 +500,9 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
+          # A skipped or published package is not a failure: without this the
+          # guard below reads an unset variable and fails a clean run.
+          fail=0
           for d in npm/npm-*/; do
             name="$(node -p "require('./$d/package.json').name")"
             if npm view "$name@$version" version > /dev/null 2>&1; then
