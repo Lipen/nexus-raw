@@ -15,7 +15,9 @@ use tokio::sync::{mpsc, Semaphore};
 use crate::config::Config;
 use crate::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::events::{Dir, Summary};
+use crate::error::DATA_EXIT;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::events::{Dir, Failure, Summary};
 use crate::events::{Event, Progress};
 use crate::layout;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1034,6 +1036,10 @@ impl Nxr {
                 LocalStatus::Complete(_) => summary.skipped += 1,
                 LocalStatus::Markerless | LocalStatus::Broken(_) | LocalStatus::Absent => {
                     summary.failed.push(n.to_string());
+                    summary.failures.push(Failure {
+                        name: n.to_string(),
+                        code: DATA_EXIT,
+                    });
                 }
             }
         }

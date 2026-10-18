@@ -199,6 +199,7 @@ pub fn fetch_one(
             downloaded: 1,
             skipped: 0,
             failed: Vec::new(),
+            failures: Vec::new(),
             removed: 0,
         }))));
     })

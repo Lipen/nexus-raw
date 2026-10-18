@@ -121,12 +121,12 @@ cargo run
 {"download":[],"event":"plan","skip":[],"upload":["app.bin","bom/data.json"]}
 {"done":4096,"event":"artifact","name":"app.bin","state":"uploading","total":4096}
 …
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"removed":0,"skipped":0,"uploaded":2}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"removed":0,"skipped":0,"uploaded":2}
 up: uploaded 2, skipped 0
 {"download":["app.bin","bom/data.json"],"event":"plan","skip":[],"upload":[]}
 …
 down: downloaded 2, skipped 0
-{"downloaded":2,"event":"summary","kind":"transfer","failed":[],"removed":0,"skipped":0,"uploaded":0}
+{"downloaded":2,"event":"summary","kind":"transfer","failed":[],"failures":[],"removed":0,"skipped":0,"uploaded":0}
 ```
 
 The event lines interleave: the printer task drains the channel while the transfers run.

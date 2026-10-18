@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::error::Error;
-use crate::events::Summary;
+use crate::events::{Failure, Summary};
 use crate::model::name::ArtifactName;
 use crate::transport::client::{DeleteOutcome, NexusClient};
 
@@ -53,6 +53,10 @@ pub async fn execute(
                 Ok(DeleteOutcome::Missing) => {}
                 Err(e) => {
                     summary.failed.push(name.to_string());
+                    summary.failures.push(Failure {
+                        name: name.to_string(),
+                        code: e.exit_code(),
+                    });
                     client.progress().summary(&summary);
                     return Err(e);
                 }

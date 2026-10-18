@@ -79,6 +79,10 @@ pub enum Error {
     RangeIgnored { url: String },
 }
 
+/// The exit code shared by every data verdict: mismatch, incomplete, missing,
+/// enumerate, read-only, a storage 404 and local I/O.
+pub(crate) const DATA_EXIT: u8 = 1;
+
 impl Error {
     /// Exit code: 0 ok, 1 data, 2 misuse, 3 transport.
     #[must_use]
@@ -88,13 +92,13 @@ impl Error {
             | Error::Incomplete { .. }
             | Error::Missing { .. }
             | Error::Enumerate { .. }
-            | Error::ReadOnly { .. } => 1,
+            | Error::ReadOnly { .. } => DATA_EXIT,
             Error::UnsafeName { .. } | Error::Misuse(_) => 2,
             Error::Auth { .. } | Error::Transport { .. } => 3,
             // A storage 404 is a data fact: the object or version is absent,
             // and a retry cannot change it. Scripts branch on it (0 proceed,
             // 1 absent, 3 retry later), so it must not share the transport class.
-            Error::Http { status: 404, .. } => 1,
+            Error::Http { status: 404, .. } => DATA_EXIT,
             Error::Http { .. } => 3,
             Error::ServiceMissing { .. } | Error::SearchRepoMissing { .. } => 3,
             // A hostile or broken server is the transport's problem: a retry
@@ -103,7 +107,7 @@ impl Error {
             Error::SmallObjectCap { .. } => 3,
             Error::ServerBody { .. } => 3,
             Error::RangeIgnored { .. } => 3,
-            Error::Io { .. } => 1,
+            Error::Io { .. } => DATA_EXIT,
         }
     }
 

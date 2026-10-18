@@ -2267,6 +2267,23 @@ fn failing_up_still_flushes_ndjson_events() {
             ["a.zip", "b.bin"],
             "both names reported: {events:?}"
         );
+        let mut failures: Vec<(&str, u64)> = summary["failures"]
+            .as_array()
+            .expect("failures is a list")
+            .iter()
+            .map(|f| {
+                (
+                    f["name"].as_str().expect("a failure name"),
+                    f["code"].as_u64().expect("a failure code"),
+                )
+            })
+            .collect();
+        failures.sort_unstable();
+        assert_eq!(
+            failures,
+            [("a.zip", 3), ("b.bin", 3)],
+            "the structured list carries the transport class: {events:?}"
+        );
     }
 
     // The auth variant: the failure precedes any transfer event, so the only line

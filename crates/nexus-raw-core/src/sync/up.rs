@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::error::Error;
-use crate::events::{Dir, Summary};
+use crate::events::{Dir, Failure, Summary};
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path, LocalStatus};
@@ -49,9 +49,14 @@ pub async fn execute(
     if let Some(Action::Upload { name, size, digest }) = claim_action {
         // Inline, not spawned: the claim must finish before anything starts.
         if let Err(e) = upload_one(&client, &dir, &dir_url, &name, size, digest, true).await {
+            let failure = Failure {
+                name: name.to_string(),
+                code: e.exit_code(),
+            };
             client.progress().summary(&Summary {
                 uploaded: 0,
-                failed: vec![name.to_string()],
+                failed: vec![failure.name.clone()],
+                failures: vec![failure],
                 ..Summary::default()
             });
             return Err(e);
@@ -112,6 +117,10 @@ pub async fn execute(
         match res {
             Ok(Ok(_)) => summary.uploaded += 1,
             Ok(Err((name, e))) => {
+                summary.failures.push(Failure {
+                    name: name.clone(),
+                    code: e.exit_code(),
+                });
                 failed.push(name);
                 log::error!("up failed: {e}");
                 if first_error.is_none()

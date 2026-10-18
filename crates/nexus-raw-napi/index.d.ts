@@ -72,8 +72,17 @@ export interface NxrEvent {
   /** `summary` only: names the call deleted (`rm`). */
   removed?: number
   failed?: string[]
+  /** `summary` only: the same names as `failed`, with their exit-code class. */
+  failures?: NxrFailure[]
   /** `summary` only: the stream this line closes. The audit summary (`'audit'`) is CLI-only. */
   kind?: 'transfer'
+}
+
+/** One name that did not land, with the exit-code class of its error. */
+export interface NxrFailure {
+  name: string
+  /** The exit code the failure would produce: 1 data, 2 misuse, 3 transport. */
+  code: number
 }
 
 /** The final summary of a transfer or verification. */
@@ -84,6 +93,8 @@ export interface NxrSummary {
   /** Names the call deleted (`rm`). Transfers never delete and stay at 0. */
   removed: number
   failed: string[]
+  /** The same names as `failed`, with their exit-code class. */
+  failures: NxrFailure[]
 }
 
 /** One dry-run action, shaped like the CLI `--json` dry-run lines. */

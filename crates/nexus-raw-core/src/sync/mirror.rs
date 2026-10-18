@@ -12,13 +12,13 @@ use std::sync::Arc;
 
 use sha2::Digest as _;
 
-use crate::error::{Error, Verdict};
-use crate::events::{Dir, Summary};
+use crate::error::{Error, Verdict, DATA_EXIT};
+use crate::events::{Dir, Failure, Summary};
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path, RemoteStatus};
-use crate::sync::down::{self, Failure};
+use crate::sync::down::{self, Outcome};
 use crate::sync::up;
 use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
@@ -204,14 +204,22 @@ pub(crate) async fn execute(
         match copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &action).await {
             Ok(Some(_)) => summary.uploaded += 1,
             Ok(None) => summary.skipped += 1,
-            Err((name, Failure::Failed(e))) => {
+            Err((name, Outcome::Failed(e))) => {
                 summary.failed = vec![name.to_string()];
+                summary.failures = vec![Failure {
+                    name: name.to_string(),
+                    code: e.exit_code(),
+                }];
                 log::error!("mirror claim failed: {e}");
                 client.progress().summary(&summary);
                 return Err(e);
             }
-            Err((name, Failure::Mismatch(detail))) => {
+            Err((name, Outcome::Mismatch(detail))) => {
                 summary.failed = vec![name.to_string()];
+                summary.failures = vec![Failure {
+                    name: name.to_string(),
+                    code: DATA_EXIT,
+                }];
                 client.progress().summary(&summary);
                 return Err(Error::Mismatch {
                     name: format!("{name}: {detail}"),
@@ -264,12 +272,20 @@ pub(crate) async fn execute(
             Ok(Ok(Some(_))) => summary.uploaded += 1,
             // The destination proved complete and identical after all: nothing was pushed.
             Ok(Ok(None)) => summary.skipped += 1,
-            Ok(Err((name, Failure::Failed(e)))) => {
+            Ok(Err((name, Outcome::Failed(e)))) => {
+                summary.failures.push(Failure {
+                    name: name.to_string(),
+                    code: e.exit_code(),
+                });
                 summary.failed.push(name.to_string());
                 log::error!("mirror failed: {e}");
                 first_error.get_or_insert(e);
             }
-            Ok(Err((name, Failure::Mismatch(detail)))) => {
+            Ok(Err((name, Outcome::Mismatch(detail)))) => {
+                summary.failures.push(Failure {
+                    name: name.to_string(),
+                    code: DATA_EXIT,
+                });
                 summary.failed.push(name.to_string());
                 mismatched.push(format!("{name}: {detail}"));
             }
@@ -303,7 +319,7 @@ async fn copy_one(
     src_url: &str,
     dst_url: &str,
     action: &MirrorAction,
-) -> Result<Option<u64>, (ArtifactName, Failure)> {
+) -> Result<Option<u64>, (ArtifactName, Outcome)> {
     let MirrorAction::Copy {
         name,
         size: size_hint,
@@ -313,7 +329,7 @@ async fn copy_one(
     else {
         return Err((
             action_name(action),
-            Failure::Failed(Error::misuse(
+            Outcome::Failed(Error::misuse(
                 "internal: a Skip never reaches the copy stage",
             )),
         ));
@@ -335,11 +351,11 @@ async fn copy_one(
     // The staged sibling always names the staged bytes: the staging step writes it from the bytes it received.
     let sib = sibling_path(staging, name);
     let raw = std::fs::read_to_string(&sib)
-        .map_err(|e| (name.clone(), Failure::Failed(Error::io(&sib, e))))?;
+        .map_err(|e| (name.clone(), Outcome::Failed(Error::io(&sib, e))))?;
     let digest = sibling::parse_line(&raw).map(|p| p.digest).map_err(|e| {
         (
             name.clone(),
-            Failure::Failed(Error::misuse(format!(
+            Outcome::Failed(Error::misuse(format!(
                 "internal: the staged sibling does not parse: {e}"
             ))),
         )
@@ -357,7 +373,7 @@ async fn copy_one(
         }
         return Err((
             name.clone(),
-            Failure::Mismatch(format!(
+            Outcome::Mismatch(format!(
                 "staged digest {digest} diverges from the destination marker {d}"
             )),
         ));
@@ -365,7 +381,7 @@ async fn copy_one(
     let staged = bytes_path(staging, name);
     let size = std::fs::metadata(&staged)
         .map(|m| m.len())
-        .map_err(|e| (name.clone(), Failure::Failed(Error::io(&staged, e))))?;
+        .map_err(|e| (name.clone(), Outcome::Failed(Error::io(&staged, e))))?;
     // The write side is the destination client: the source credentials never reach the destination host.
     up::upload_one(
         dst_client,
@@ -377,7 +393,7 @@ async fn copy_one(
         false,
     )
     .await
-    .map_err(|e| (name.clone(), Failure::Failed(e)))?;
+    .map_err(|e| (name.clone(), Outcome::Failed(e)))?;
     dst_client
         .progress()
         .done(name.as_str(), Dir::Up, false, size, Some(size))

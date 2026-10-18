@@ -534,7 +534,7 @@ The staging directory carries a lock: a second concurrent `mirror` for the same 
 {"done":0,"event":"artifact","name":"a.zip","state":"uploading","total":35}
 {"done":35,"event":"artifact","name":"a.zip","state":"uploading","total":35}
 {"done":35,"event":"artifact","name":"a.zip","state":"done","total":35}
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"removed":0,"skipped":0,"uploaded":1}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"removed":0,"skipped":0,"uploaded":1}
 ```
 
 | Exit | When |
@@ -624,7 +624,7 @@ A rerun emits `missing` events and still exits 0:
 {"event":"removed","name":"a.zip"}
 {"event":"removing","name":"b.bin"}
 {"event":"missing","name":"b.bin"}
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"removed":1,"skipped":1,"uploaded":0}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"removed":1,"skipped":1,"uploaded":0}
 ```
 
 Without `--yes` the `--json` output is one object per plan line:
@@ -1210,6 +1210,8 @@ Artifact lines arrive in worker completion order, not plan order.
 
 - `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
   Every `summary` carries `"kind"`: `"transfer"` for the streams above, `"audit"` for `nxr audit`, which reports its own counts under the same `event` name.
+  A transfer `summary` also carries `"failures"`: a list of `{"name","code"}` objects for the same artifacts as `failed`, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
+  `failed` keeps its legacy strings, so a digest mismatch there still reads `name: detail`, while `failures` always carries the bare name.
 - `head`, `sha`, `channel`, `point` and `doctor` print their objects described in their sections above.
 - the body of `get` without `-o` is the only thing on stdout: no events are printed in stdout mode, and `--json` without `-o` is refused as misuse (exit 2).
 - a failed run ends stdout with one `error` object before the non-zero exit, carrying the exit `code` and the `hint` that stderr carries:
@@ -1231,7 +1233,7 @@ A captured transfer stream:
 {"done":2,"event":"artifact","name":"manifest.json","state":"uploading","total":2}
 {"done":2,"event":"artifact","name":"manifest.json","state":"done","total":2}
 {"done":13,"event":"artifact","name":"extra.txt","state":"done","total":13}
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"skipped":3,"uploaded":2}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"skipped":3,"uploaded":2}
 ```
 
 The shapes are pinned by the golden files in `crates/nexus-raw/tests/golden/` and documented variant by variant in [the API page](api.md#events).

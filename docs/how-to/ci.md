@@ -73,7 +73,7 @@ $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json
 {"done":512,"event":"artifact","name":"pinned.xml","state":"done","total":512}
 {"done":8192,"event":"artifact","name":"bom/linux-x86_64.json","state":"done","total":8192}
 {"done":98304,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":98304}
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"skipped":0,"uploaded":4}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"skipped":0,"uploaded":4}
 ```
 
 The `summary` event is what a job gates on.
@@ -82,7 +82,7 @@ A re-run of the same job converges instead of transferring:
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --json \
   | jq -c 'select(.event=="summary")'
-{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"skipped":4,"uploaded":0}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":[],"failures":[],"skipped":4,"uploaded":0}
 ```
 
 `uploaded: 0` with everything `skipped` is the converged signature, and `failed` is the list to be empty.
@@ -94,7 +94,7 @@ The event kinds:
 | `plan` | `{"event":"plan","upload":[…],"download":[…],"skip":[…]}` |
 | `artifact` | `{"event":"artifact","name":"…","state":"uploading","done":0,"total":123}` |
 | `retrying` | `{"event":"retrying","name":"…","attempt":2,"reason":"…"}` |
-| `summary` | `{"event":"summary","kind":"transfer","uploaded":0,"downloaded":0,"skipped":0,"failed":[]}` |
+| `summary` | `{"event":"summary","kind":"transfer","uploaded":0,"downloaded":0,"skipped":0,"failed":[],"failures":[]}` |
 
 Artifact states: `uploading`, `downloading`, `done`, `skipped`.
 Byte progress is coalesced (at most one event per 200 ms per name), so a slow link does not flood the log.

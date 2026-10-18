@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- The transfer `summary` gains `failures`: the same artifacts as `failed`, as `{"name","code"}` objects whose code is the exit class (1 data, 2 misuse, 3 transport).
+  `failed` keeps its legacy strings (a mismatch still carries `name: detail`), so the new array is additive for consumers.
+  The Node bindings mirror the array on `NxrSummary`.
+
 ### Fixed
 
 - The composite action installs `nxr` again: it resolves the release from `github.action_repository` (the caller's repository was never the action's) and verifies the archive against the published `SHA256SUMS` instead of a per-archive `.sha256` asset that the release never uploaded.

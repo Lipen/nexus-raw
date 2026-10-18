@@ -13,7 +13,7 @@ fn enum_names(v: &[&str]) -> Enumeration {
 
 use nexus_raw_core::{
     model::sibling, staging_dir, ArtifactName, Config, Digest, Dir, EntryKind, Enumeration, Error,
-    Event, Mode, NexusClient, Nxr, Progress, Summary,
+    Event, Failure, Mode, NexusClient, Nxr, Progress, Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -122,7 +122,7 @@ async fn stalled_upload_fails_within_the_stall_window() {
     let mut cfg = config(&mock, None);
     cfg.stall_timeout = Duration::from_secs(1);
     cfg.retry_attempts = 2;
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).unwrap();
 
     let started = std::time::Instant::now();
@@ -135,6 +135,16 @@ async fn stalled_upload_fails_within_the_stall_window() {
     let result = result.unwrap_or_else(|_| panic!("upload hung past 30s under a frozen server"));
     let error = result.unwrap_err();
     assert_eq!(error.exit_code(), 3, "expected transport, got {error}");
+    let events = collect_events(&mut rx);
+    let summary = summary_of(&events).expect("the failed up emits its summary");
+    assert_eq!(
+        summary.failures,
+        vec![Failure {
+            name: "big.zip".into(),
+            code: 3,
+        }],
+        "the transport class rides the structured list"
+    );
     assert!(
         elapsed >= Duration::from_secs(1),
         "failed too fast to have watched the stall: {elapsed:?}"
@@ -738,7 +748,7 @@ async fn down_enumerates_explicit_names() {
 #[tokio::test]
 async fn down_digest_mismatch_refuses_and_drops_part() {
     let mock = MockNexus::start(Scenario::ForeignMarker).unwrap();
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let src = TempDir::new().unwrap();
     seed_complete(src.path(), "a.zip", CONTENT);
@@ -750,6 +760,21 @@ async fn down_digest_mismatch_refuses_and_drops_part() {
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Mismatch { .. }), "got {err:?}");
+    let events = collect_events(&mut rx);
+    let summary = summary_of(&events).expect("the refused down emits its summary");
+    assert!(
+        summary.failed[0].starts_with("a.zip: "),
+        "the legacy list keeps the detail: {:?}",
+        summary.failed
+    );
+    assert_eq!(
+        summary.failures,
+        vec![Failure {
+            name: "a.zip".into(),
+            code: 1,
+        }],
+        "the structured list carries the bare name and the data class"
+    );
     // The diverging part never survives: no bytes, no marker at the destination.
     assert!(!dst.path().join("a.zip").exists());
     assert!(!dst.path().join("a.zip.sha256").exists());
@@ -1311,6 +1336,20 @@ async fn verify_reports_local_state_without_network() {
     let events = collect_events(&mut rx);
     let s = summary_of(&events).unwrap();
     assert_eq!(s.failed.len(), 2);
+    assert_eq!(
+        s.failures,
+        vec![
+            Failure {
+                name: "a.zip".into(),
+                code: 1,
+            },
+            Failure {
+                name: "loose.bin".into(),
+                code: 1,
+            },
+        ],
+        "every incomplete local name is a data failure"
+    );
 }
 
 #[tokio::test]

@@ -27,6 +27,16 @@ impl Dir {
     }
 }
 
+/// One name that did not land, with the exit-code class of its error.
+/// [`Summary::failed`] keeps the legacy strings, which for a digest mismatch
+/// carry `name: detail`; this list always carries the bare name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Failure {
+    pub name: String,
+    /// The exit code the failure would produce: 1 data, 2 misuse, 3 transport.
+    pub code: u8,
+}
+
 /// Operation result.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Summary {
@@ -36,6 +46,8 @@ pub struct Summary {
     /// Names this call deleted (`rm`): transfers never delete, so they stay at 0.
     pub removed: usize,
     pub failed: Vec<String>,
+    /// The same names as [`Summary::failed`], with their exit-code class.
+    pub failures: Vec<Failure>,
 }
 
 /// Events the core emits.
@@ -175,6 +187,7 @@ impl Event {
                 "skipped": s.skipped,
                 "removed": s.removed,
                 "failed": s.failed,
+                "failures": s.failures,
             }),
         }
     }

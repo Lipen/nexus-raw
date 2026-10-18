@@ -3,6 +3,14 @@ use nexus_raw_core::{Delta, RmAction, Side, Summary};
 
 // ---- Node-facing result objects -------------------------------------------
 
+/// One name that did not land, with the exit-code class of its error.
+#[napi(object)]
+pub struct NxrFailure {
+    pub name: String,
+    /// The exit code the failure would produce: 1 data, 2 misuse, 3 transport.
+    pub code: u32,
+}
+
 /// The final summary of a transfer or verification.
 #[napi(object)]
 pub struct NxrSummary {
@@ -12,6 +20,8 @@ pub struct NxrSummary {
     /// Names the call deleted (`rm`). Transfers never delete and stay at 0.
     pub removed: u32,
     pub failed: Vec<String>,
+    /// The same names as `failed`, with their exit-code class.
+    pub failures: Vec<NxrFailure>,
 }
 
 impl From<&Summary> for NxrSummary {
@@ -22,6 +32,14 @@ impl From<&Summary> for NxrSummary {
             skipped: u32::try_from(s.skipped).unwrap_or(u32::MAX),
             removed: u32::try_from(s.removed).unwrap_or(u32::MAX),
             failed: s.failed.clone(),
+            failures: s
+                .failures
+                .iter()
+                .map(|f| NxrFailure {
+                    name: f.name.clone(),
+                    code: u32::from(f.code),
+                })
+                .collect(),
         }
     }
 }

@@ -4467,6 +4467,7 @@ mod tests {
             skipped: 1,
             removed: 0,
             failed: Vec::new(),
+            failures: Vec::new(),
         }))));
         assert_eq!(app.status, "uploaded 3, skipped 1 -> raw-main");
         let dl = app.transfer.as_ref().unwrap();
@@ -4567,6 +4568,7 @@ mod tests {
             skipped: 0,
             removed: 0,
             failed: Vec::new(),
+            failures: Vec::new(),
         }))));
         let dl = app.transfer.as_ref().unwrap();
         assert!(matches!(dl.outcome, Some(DlOutcome::Cancelled)));
@@ -5367,6 +5369,7 @@ mod tests {
             skipped: 0,
             removed: 0,
             failed: Vec::new(),
+            failures: Vec::new(),
         }))));
         assert!(app.local.as_ref().unwrap().loading, "the pane rereads");
         match rx.recv().await.unwrap() {

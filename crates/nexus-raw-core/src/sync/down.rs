@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
 
-use crate::error::Error;
-use crate::events::{Dir, Summary};
+use crate::error::{Error, DATA_EXIT};
+use crate::events::{Dir, Failure, Summary};
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
@@ -23,7 +23,7 @@ const PART_PREFIX: &str = ".nxr-part-";
 /// Cleaned up when the owning pid is dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
 
-pub(crate) enum Failure {
+pub(crate) enum Outcome {
     /// The digest diverges from the remote sibling: refuse without overwriting (§5.1).
     Mismatch(String),
     Failed(Error),
@@ -92,7 +92,7 @@ pub async fn execute(
                         Err(result.err().unwrap_or_else(|| {
                             (
                                 name.clone(),
-                                Failure::Failed(Error::misuse(
+                                Outcome::Failed(Error::misuse(
                                     "internal: a failed download carried no error",
                                 )),
                             )
@@ -112,12 +112,20 @@ pub async fn execute(
     while let Some(res) = set.join_next().await {
         match res {
             Ok(Ok(_)) => summary.downloaded += 1,
-            Ok(Err((name, Failure::Failed(e)))) => {
+            Ok(Err((name, Outcome::Failed(e)))) => {
+                summary.failures.push(Failure {
+                    name: name.to_string(),
+                    code: e.exit_code(),
+                });
                 failed.push(name.to_string());
                 log::error!("down failed: {e}");
                 first_error.get_or_insert(e);
             }
-            Ok(Err((name, Failure::Mismatch(detail)))) => {
+            Ok(Err((name, Outcome::Mismatch(detail)))) => {
+                summary.failures.push(Failure {
+                    name: name.to_string(),
+                    code: DATA_EXIT,
+                });
                 mismatched.push(format!("{name}: {detail}"));
             }
             Err(e) => return Err(Error::misuse(format!("task panicked: {e}"))),
@@ -153,7 +161,7 @@ pub(crate) async fn download_one(
     expected: Option<Digest>,
     fresh: bool,
     emit_done: bool,
-) -> Result<(), (ArtifactName, Failure)> {
+) -> Result<(), (ArtifactName, Outcome)> {
     let bytes_url = client.object_url(dir_url, name);
     let part = part_path(dir, name);
     // Resuming means the pre-existing part content joins the digest: a stale part (the remote object changed between runs) would poison the check.
@@ -178,7 +186,7 @@ pub(crate) async fn download_one(
         .await;
     let (done, actual) = match fetched {
         Ok(v) => v,
-        Err(e) => return Err((name.clone(), Failure::Failed(e))),
+        Err(e) => return Err((name.clone(), Outcome::Failed(e))),
     };
     if let Some(expected) = &expected {
         if &actual != expected {
@@ -196,7 +204,7 @@ pub(crate) async fn download_one(
             }
             return Err((
                 name.clone(),
-                Failure::Mismatch(format!(
+                Outcome::Mismatch(format!(
                     "downloaded digest {actual}, remote sibling {expected}"
                 )),
             ));
@@ -208,14 +216,14 @@ pub(crate) async fn download_one(
         // failure (a symlink in the way, a permission) must keep the part for
         // the rerun instead of discarding a complete transfer.
         if let Err(e) = ensure_symlink_free(parent, dir) {
-            return Err((name.clone(), Failure::Failed(e)));
+            return Err((name.clone(), Outcome::Failed(e)));
         }
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            return Err((name.clone(), Failure::Failed(Error::io(parent, e))));
+            return Err((name.clone(), Outcome::Failed(Error::io(parent, e))));
         }
     }
     if let Err(e) = tokio::fs::rename(&part, &final_bytes).await {
-        return Err((name.clone(), Failure::Failed(Error::io(&final_bytes, e))));
+        return Err((name.clone(), Outcome::Failed(Error::io(&final_bytes, e))));
     }
     let marker = sibling::format_line(name.as_str(), &actual);
     let sib_final = sibling_path(dir, name);
@@ -227,7 +235,7 @@ pub(crate) async fn download_one(
         f.flush().await
     };
     if let Err(e) = marker_write.await {
-        return Err((name.clone(), Failure::Failed(Error::io(&sib_final, e))));
+        return Err((name.clone(), Outcome::Failed(Error::io(&sib_final, e))));
     }
     if emit_done {
         client

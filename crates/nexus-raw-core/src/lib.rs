@@ -19,7 +19,7 @@ pub mod transport;
 // The flat public surface: wrappers import from the crate root.
 pub use crate::config::Config;
 pub use crate::error::{Error, Verdict};
-pub use crate::events::{Dir, Event, Progress, Summary};
+pub use crate::events::{Dir, Event, Failure, Progress, Summary};
 pub use crate::layout::ls::{Entry, EntryKind};
 pub use crate::layout::{ChannelOutcome, ClearOutcome};
 pub use crate::model::digest::Digest;
