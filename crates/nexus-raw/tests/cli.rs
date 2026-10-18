@@ -212,6 +212,29 @@ fn up_generates_markers_by_default() {
     );
 }
 
+/// A nested name keeps its relative path in the marker, on both sides: the shape another implementation publishes,
+/// and the one `sha256sum -c` resolves from the transferred root instead of only from the artifact's directory.
+#[test]
+fn up_marker_names_the_nested_path() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    std::fs::create_dir_all(src.path().join("bom")).unwrap();
+    write_file(src.path(), "bom/a.zip", ALPHA);
+
+    let up = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&up, 0, "up with a nested name");
+    assert_eq!(
+        srv.store_get("1.14.0/bom/a.zip.sha256").as_deref(),
+        Some(marker_line("bom/a.zip", ALPHA).as_bytes()),
+        "the remote marker names the artifact relative to the directory being transferred"
+    );
+    assert_eq!(
+        read_file(src.path(), "bom/a.zip.sha256"),
+        marker_line("bom/a.zip", ALPHA).into_bytes(),
+        "the generated local sibling carries the same name"
+    );
+}
+
 /// up --no-sha: bytes go up, no marker is generated or stored.
 #[test]
 fn up_no_sha_skips_markers() {
