@@ -43,7 +43,7 @@ mock scenario='atomic' *args:
 # The real-Nexus stand: a dockerized Nexus3, bootstrapped, driven by the same
 # battery the nightly job runs. Needs docker; the recipe dumps the server log
 # on failure and leaves no state behind either way.
-# Boot, bootstrap (waits, accepts the EULA, creates the repo), the 24-check battery, cleanup on any exit.
+# Boot, bootstrap (waits, accepts the EULA, creates the repo), the 29-check battery, cleanup on any exit.
 [doc('Run the real-Nexus stand against a local docker Nexus.')]
 [group('stand')]
 stand *args:
