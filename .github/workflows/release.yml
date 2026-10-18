@@ -274,22 +274,12 @@ jobs:
           cache-on-failure: true
 
       # A re-run after a transient failure mid-run must skip what is already
-      # out, or one bad moment would poison every retry forever.
+      # out, or one bad moment would poison every retry forever: the skip,
+      # race and fail verdicts live in the script.
       - name: Publish nexus-raw-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-core@$version is already on crates.io, skipping"
-          elif cargo publish --locked -p nexus-raw-core; then
-            echo "published"
-          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-core" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-core@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
-          else
-            echo "nexus-raw-core@$version publish failed and the version is not visible" >&2
-            exit 1
-          fi
+        run: scripts/publish-crate.sh nexus-raw-core
 
       # crates.io resolves a dependent only after the index carries the
       # dependency, which takes a moment after the upload.
@@ -301,34 +291,12 @@ jobs:
       - name: Publish mock-nexus
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
-            echo "mock-nexus@$version is already on crates.io, skipping"
-          elif cargo publish --locked -p mock-nexus; then
-            echo "published"
-          elif curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
-            echo "mock-nexus@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
-          else
-            echo "mock-nexus@$version publish failed and the version is not visible" >&2
-            exit 1
-          fi
+        run: scripts/publish-crate.sh mock-nexus
 
       - name: Publish nexus-raw
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw@$version is already on crates.io, skipping"
-          elif cargo publish --locked -p nexus-raw; then
-            echo "published"
-          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
-          else
-            echo "nexus-raw@$version publish failed and the version is not visible" >&2
-            exit 1
-          fi
+        run: scripts/publish-crate.sh nexus-raw
 
       - name: Wait for the index
         run: sleep 30
@@ -339,18 +307,7 @@ jobs:
       - name: Publish nexus-raw-tui
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          if curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-tui@$version is already on crates.io, skipping"
-          elif cargo publish --locked -p nexus-raw-tui; then
-            echo "published"
-          elif curl -sf "https://index.crates.io/ne/xu/nexus-raw-tui" | grep -q "\"vers\":\"$version\""; then
-            echo "nexus-raw-tui@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
-          else
-            echo "nexus-raw-tui@$version publish failed and the version is not visible" >&2
-            exit 1
-          fi
+        run: scripts/publish-crate.sh nexus-raw-tui
 
   node:
     name: Node addon ${{ matrix.name }}
@@ -596,25 +553,7 @@ jobs:
       # or the loop can never go green.
       - name: Publish the platform packages
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          # A skipped or published package is not a failure: without this the
-          # guard below reads an unset variable and fails a clean run.
-          fail=0
-          for d in npm/npm-*/; do
-            name="$(node -p "require('./$d/package.json').name")"
-            if npm view "$name@$version" version > /dev/null 2>&1; then
-              echo "$name@$version is already on the registry, skipping"
-            elif npm publish "$d" --provenance --access public; then
-              echo "published"
-            elif npm view "$name@$version" version > /dev/null 2>&1; then
-              echo "$name@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"
-            else
-              echo "$name@$version publish failed and the version is not visible" >&2
-              fail=1
-            fi
-          done
-          [ "$fail" = 0 ] || { echo "platform packages failed to publish" >&2; exit 1; }
+        run: scripts/npm-publish.sh npm/npm-*
 
       # The dev manifest stays free of version pins: the platform packages
       # do not exist between releases, and a frozen pnpm install would fail
@@ -653,29 +592,7 @@ jobs:
       # would silently break `require` for every consumer of this version.
       - name: The platform packages are on the registry
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          for name in @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
-            # The registry serves fresh publishes with a lag, and the npm CLI
-            # caches a missing packument negatively: one early 404 poisons
-            # every later npm view for minutes (caught live in the 0.11.1
-            # cycle). A plain curl to the registry origin carries no such
-            # cache, so the poll reads the truth as soon as it lands.
-            ok=0
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if curl -sf "https://registry.npmjs.org/${name//\//%2F}" | grep -q "\"$version\""; then
-                ok=1
-                break
-              fi
-              echo "$name@$version not visible yet (attempt $attempt), waiting"
-              sleep 30
-            done
-            if [ "$ok" != 1 ]; then
-              echo "refusing to publish @nexus-raw/nxr@$version: $name@$version is not on the registry, its optionalDependencies entry would fail to resolve" >&2
-              exit 1
-            fi
-            echo "$name@$version is on the registry"
-          done
+        run: scripts/check-npm-platform-packages.sh
 
       # The consumer smoke installs the staged main package the way a user
       # would (fresh sandbox, real resolve of the platform addon from the
@@ -741,22 +658,7 @@ jobs:
 
       - name: Publish the main package
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          if npm view "@nexus-raw/nxr@$version" version > /dev/null 2>&1; then
-            echo "@nexus-raw/nxr@$version is already on the registry, skipping"
-          elif npm publish ./pkg-main --provenance --access public; then
-            echo "published"
-          else
-            # A guard check can race the CDN (run A published, our check read
-            # the stale packument): the registry rejected the duplicate, and
-            # the version being visible now means that race is the whole story.
-            if npm view "@nexus-raw/nxr@$version" version > /dev/null 2>&1; then
-              echo "@nexus-raw/nxr@$version appeared after our publish attempt: the race went to a concurrent run, this is not a failure"
-            else
-              exit 1
-            fi
-          fi
+        run: scripts/npm-publish.sh pkg-main
 
   # The Python reference client ships to PyPI: the same stdlib-only nxr.py,
   # installable without a checkout. Trusted publishing, like npm: no token.
@@ -795,12 +697,7 @@ jobs:
       - name: Already on PyPI
         id: pypi-guard
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
-          if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -Eq "\"version\": ?\"$version\""; then
-            echo "nexus-raw@$version is already on PyPI, skipping the upload"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: scripts/pypi-guard.sh
 
       - name: Publish to PyPI
         if: ${{ !inputs.dry-run && steps.pypi-guard.outputs.skip != 'true' }}
@@ -840,41 +737,13 @@ jobs:
       # The bridge depends on the main package at the exact same version:
       # an install of the bridge before main lands fails ERESOLVE. The same
       # rule the npm job holds for its platform packages, one level down.
-      # The npm CLI caches a missing packument negatively, so the poll reads
-      # the registry origin directly.
       - name: The main package is on the registry
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
-          ok=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl -sf "https://registry.npmjs.org/@nexus-raw%2Fnxr" | grep -q "\"$version\""; then
-              ok=1
-              break
-            fi
-            echo "@nexus-raw/nxr@$version not visible yet (attempt $attempt), waiting"
-            sleep 30
-          done
-          [ "$ok" = 1 ] || { echo "refusing to publish the bridge: @nexus-raw/nxr@$version is not on the registry, its dependency would fail to resolve" >&2; exit 1; }
-          echo "@nexus-raw/nxr@$version is on the registry"
+        run: scripts/check-npm-main-package.sh
 
       - name: Publish the bridge
         if: ${{ !inputs.dry-run }}
-        run: |
-          version="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
-          if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
-            echo "nexus-raw@$version is already on the registry, skipping"
-          elif (cd packaging/npm-bridge && npm publish . --provenance --access public); then
-            echo "published"
-          else
-            # The same CDN-race fallback: a concurrent run's publish may have
-            # landed between our guard and our attempt.
-            if npm view "nexus-raw@$version" version > /dev/null 2>&1; then
-              echo "nexus-raw@$version appeared after our publish attempt: lost the race, not broken"
-            else
-              exit 1
-            fi
-          fi
+        run: scripts/npm-publish.sh packaging/npm-bridge
 
   # The last job, and the only one that touches tags: after every artifact
   # is confirmed visible on its registry, the tree gets its tag and its
@@ -903,73 +772,11 @@ jobs:
       # The gate checked the tag before anything ran; this re-checks the
       # outcome after everything ran. The 0.2.0 release once shipped green
       # with a package missing from the registry: the tag only lands when
-      # every artifact of this version is actually served.
+      # every artifact of this version is actually served, and the audit
+      # polls every registry with a budget before it judges.
       - name: Every artifact is visible on the registries
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          fail=0
-          for c in nexus-raw-core nexus-raw nexus-raw-tui; do
-            ok=0
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if curl -sf "https://index.crates.io/ne/xu/$c" | grep -q "\"vers\":\"$version\""; then
-                ok=1
-                break
-              fi
-              echo "$c@$version not visible yet (attempt $attempt), waiting"
-              sleep 30
-            done
-            [ "$ok" = 1 ] || { echo "$c@$version is not on crates.io" >&2; fail=1; }
-          done
-          ok=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl -sf "https://index.crates.io/mo/ck/mock-nexus" | grep -q "\"vers\":\"$version\""; then
-              ok=1
-              break
-            fi
-            echo "mock-nexus@$version not visible yet (attempt $attempt), waiting"
-            sleep 30
-          done
-          [ "$ok" = 1 ] || { echo "mock-nexus@$version is not on crates.io" >&2; fail=1; }
-          for name in @nexus-raw/nxr @nexus-raw/nxr-linux-x64-gnu @nexus-raw/nxr-linux-arm64-gnu @nexus-raw/nxr-darwin-x64 @nexus-raw/nxr-darwin-arm64 @nexus-raw/nxr-win32-x64-msvc; do
-            ok=0
-            # The version document, not the packument `npm view` reads: the
-            # packument rides the registry CDN and the CLI caches a miss
-            # negatively, so a fresh publish can take minutes to show there
-            # while `/name/version` appears with the publish itself.
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-              if curl -sf "https://registry.npmjs.org/${name//\//%2F}/$version" > /dev/null 2>&1; then
-                ok=1
-                break
-              fi
-              echo "$name@$version not visible yet (attempt $attempt), waiting"
-              sleep 30
-            done
-            [ "$ok" = 1 ] || { echo "$name@$version is not on npm" >&2; fail=1; }
-          done
-          ok=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            # The PyPI JSON serves `"version": "…"` with a space: the optional
-            # one keeps the check honest whatever the serializer chooses.
-            if curl -sf "https://pypi.org/pypi/nexus-raw/json" | grep -Eq "\"version\": ?\"$version\""; then
-              ok=1
-              break
-            fi
-            echo "nexus-raw@$version not visible on PyPI yet (attempt $attempt), waiting"
-            sleep 30
-          done
-          [ "$ok" = 1 ] || { echo "nexus-raw@$version is not on PyPI" >&2; fail=1; }
-          ok=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl -sf "https://registry.npmjs.org/nexus-raw/$version" > /dev/null 2>&1; then
-              ok=1
-              break
-            fi
-            echo "the npm bridge nexus-raw@$version not visible yet (attempt $attempt), waiting"
-            sleep 30
-          done
-          [ "$ok" = 1 ] || { echo "the npm bridge nexus-raw@$version is not on npm" >&2; fail=1; }
-          [ "$fail" = 0 ] || exit 1
-          echo "every artifact of $version is live"
+        run: scripts/registry-audit.sh
+
       - name: Collect the archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
