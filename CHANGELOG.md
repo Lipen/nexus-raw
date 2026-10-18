@@ -11,12 +11,21 @@ Nothing yet.
 
 ### Added
 
+- `npm install @nexus-raw/nxr` brings the CLI with it: every platform package carries the `nxr` binary next to the addon, and the bin wrapper spawns it, so a node project needs no separate download.
+- `nxr` ships an Agent Skill: `skills/nxr/` holds the command map, the machine contract, the recipes and the server quirks that are easy to get wrong.
+  `scripts/install-skill.sh` drops it into an agent's skill directory, and the how-to explains the format.
 - Every `summary` NDJSON line names its stream: a transfer carries `"kind":"transfer"`, the audit summary `"kind":"audit"`, and the napi event type declares it, so one stream is parseable without knowing which command wrote it.
 - The `--json` records pinned by goldens are a contract: their shapes hold, new fields are additive, and a consumer ignores unknown fields and key order.
   `error`, `rm` and `audit` join the pinned set.
 - The bench ecosystem gains its report pipeline: `just bench-report <tag>` runs the suite and writes `bench/reports/<tag>.json` plus a rendered `.md`.
   The record carries the ladders the run actually covered, the machine and the commit.
   `just bench-compare <a> <b>` prints the delta with each side's spread and warns when two records are not comparable.
+
+### Fixed
+
+- `nxr doctor` names a rejected probe as an auth failure: a 401 or 403 on the probe now points at the credentials instead of the network.
+- The Python reference client refuses a URL without a host as misuse (exit 2) instead of letting it fall through to a transport error.
+- `mock-nexus` seeds the search download URLs with the repository root slash they need, so a conformance suite driving the service API sees resolvable URLs.
 
 ## [0.18.0] - 2026-10-16
 
