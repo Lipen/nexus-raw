@@ -201,17 +201,25 @@ Deletion is the explicit `nxr rm`.
 ### Two publishers, one name
 
 Raw storage acknowledges each PUT on its own, so a second publisher writing the same name can win after your `up` already reported success.
-The bytes and the marker can even end up from different writers, which leaves the name diverged: a reader comparing the two refuses it.
-A publish that has to prove itself does not trust the acknowledgement, it re-reads the tree:
+What the server ends up holding depends on the interleaving, and so does the check that finds it:
+
+| What the name holds on the server | What reports it |
+|:--|:--|
+| the winner's bytes and the winner's marker | `nxr diff <local-dir> <url>`: the losing side's local digest disagrees with the remote marker, and a second `up` refuses on the same disagreement |
+| the winner's bytes and the loser's marker | the structural `nxr audit <URL>` flags a `diverged_fact` once the search index has caught up, and `nxr audit <URL> --bytes` hashes the stored bytes and needs no index at all |
+
+The second row is why `up` does not read its marker back after writing it: a read-back returns markers, and in that interleaving the marker is the interloper's own, so it agrees with itself.
+A read-back would catch only the first row, at one extra GET per artifact on every publish.
+The pass that proves the pair reads the content:
 
 ```bash
 nxr audit https://nexus.example.com/repository/raw-main/1.4.0/ --bytes   # (1)!
 ```
 
-1. The structural pass compares every marker against the search fact, and `--bytes` hashes every asset against its marker: that is the pass that proves the pair.
+1. The structural pass is metadata only and catches all four marker classes, while the byte pass downloads every asset and is the only one that also sees silent bitrot.
 
-The structural pass costs one small GET per marker, `--bytes` reads the content, so run the first as a habit and the second after a publish two jobs could have raced.
-The full pass and its two prices: [audit a repository](audit.md).
+Run the structural pass as a habit, since it costs one small GET per marker, and the byte pass after a publish two jobs could have raced.
+Both classes and both prices: [audit a repository](audit.md).
 
 ## Give consumers a machine-readable name list
 
