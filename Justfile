@@ -431,6 +431,7 @@ docs *args:
 [group('docs')]
 check-docs *args:
     scripts/check-hints.sh
+    scripts/check-cli-surface.sh
     scripts/llms-check.sh
     scripts/check-bridge-surface.sh
     scripts/check-skill.sh
