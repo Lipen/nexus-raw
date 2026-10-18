@@ -5,7 +5,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The composite action installs `nxr` again: it resolves the release from `github.action_repository` (the caller's repository was never the action's) and verifies the archive against the published `SHA256SUMS` instead of a per-archive `.sha256` asset that the release never uploaded.
+  The checksum check accepts the Windows binary-mode marker and falls back to `shasum` where GNU coreutils is absent.
+  A CI job runs the action end to end on Linux, Windows and macOS.
+- `get --continue` keeps the partial file when a transfer fails, so the rerun the hint recommends resumes instead of starting from zero.
+- A resumed download refuses a symlinked or concurrently changed part, validates the `Content-Range` end and the bytes on disk, and restarts a stale part inside the same attempt, so `--retry 1` still self-heals.
+- A `down` whose rename or destination check fails keeps the verified part for the rerun.
+- `Retry-After` is honored on every retryable status, not only `429`: a restarting Nexus that answers `503 Retry-After: 30` is waited out instead of retried after half a second.
+- `get --segments` accepts 2 to 64 spans, runs them under the same worker ceiling as every other transfer, and completes an empty object instead of dividing by zero.
+  A segment count outside the bounds is misuse (exit 2).
+- The uploader re-checks the source size per attempt and reads exactly the declared bytes, so a size change between the plan and the send is an I/O error instead of a body that disagrees with `Content-Length`.
+- `scan` rewrites backslashes only on Windows: on Unix a backslash is a filename byte and the grammar rejects it instead of uploading a phantom path.
+- `audit --prefix` obeys the same whole-segment grammar as every transfer filter, runs before marker and byte requests, and `audited` counts the objects the tree held rather than repeating the finding count.
+  `facts_available` reports whether the index answered, not whether the filter selected anything.
+- `mv --json` writes a pure NDJSON stream: the plan phase headers are human output.
+- `sha` expands `-R` aliases for relative URLs, keeps an existing local path local, and reports a missing file or a non-http scheme as misuse (exit 2).
+- The live progress counter counts skipped files in its total.
+- `doctor --deep` without a URL is refused as misuse instead of silently skipping every server probe and reporting "all checks passed".
+- The release gate runs the full `just check` set (prek, cargo-deny, Python conformance), CI runs the prek hooks, the docs workflow rebuilds on the files its checkers read, and zensical is pinned.
+- The Rust example README teaches the current minor and joins the version gate.
+
+### Added
+
+- `Nxr::audit_filtered` and `sync::audit::AuditFilter`: an audit narrowed by exact names and whole-segment prefixes before any request.
+- The `retry-after-503` mock scenario: the first request per path answers `503` with a `Retry-After` pause, so the 5xx pause is pinned without changing the plain-503 `flaky` contract.
 
 ## [0.20.0] - 2026-10-18
 
