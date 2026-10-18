@@ -106,36 +106,54 @@ pub async fn execute(
         skipped,
         ..Summary::default()
     };
-    let mut failed: Vec<String> = Vec::new();
-    let mut mismatched: Vec<String> = Vec::new();
+    let mut failed: Vec<(String, Failure)> = Vec::new();
+    let mut mismatched: Vec<(String, Failure)> = Vec::new();
     let mut first_error: Option<Error> = None;
     while let Some(res) = set.join_next().await {
         match res {
             Ok(Ok(_)) => summary.downloaded += 1,
             Ok(Err((name, Outcome::Failed(e)))) => {
-                summary.failures.push(Failure {
-                    name: name.to_string(),
-                    code: e.exit_code(),
-                });
-                failed.push(name.to_string());
+                failed.push((
+                    name.to_string(),
+                    Failure {
+                        name: name.to_string(),
+                        code: e.exit_code(),
+                    },
+                ));
                 log::error!("down failed: {e}");
                 first_error.get_or_insert(e);
             }
             Ok(Err((name, Outcome::Mismatch(detail)))) => {
-                summary.failures.push(Failure {
-                    name: name.to_string(),
-                    code: DATA_EXIT,
-                });
-                mismatched.push(format!("{name}: {detail}"));
+                mismatched.push((
+                    format!("{name}: {detail}"),
+                    Failure {
+                        name: name.to_string(),
+                        code: DATA_EXIT,
+                    },
+                ));
             }
             Err(e) => return Err(Error::misuse(format!("task panicked: {e}"))),
         }
     }
-    summary.failed = failed.iter().chain(mismatched.iter()).cloned().collect();
+    // Both lists follow the same order: the failed names, then the mismatches.
+    summary.failed = failed
+        .iter()
+        .map(|(legacy, _)| legacy.clone())
+        .chain(mismatched.iter().map(|(legacy, _)| legacy.clone()))
+        .collect();
+    summary.failures = failed
+        .iter()
+        .map(|(_, failure)| failure.clone())
+        .chain(mismatched.iter().map(|(_, failure)| failure.clone()))
+        .collect();
     client.progress().summary(&summary);
     if !mismatched.is_empty() {
         return Err(Error::Mismatch {
-            name: mismatched.join(", "),
+            name: mismatched
+                .iter()
+                .map(|(legacy, _)| legacy.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
             detail: "remote content diverges from its sha-sibling".to_owned(),
         });
     }

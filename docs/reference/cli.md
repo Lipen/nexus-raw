@@ -1210,7 +1210,7 @@ Artifact lines arrive in worker completion order, not plan order.
 
 - `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
   Every `summary` carries `"kind"`: `"transfer"` for the streams above, `"audit"` for `nxr audit`, which reports its own counts under the same `event` name.
-  A transfer `summary` also carries `"failures"`: a list of `{"name","code"}` objects for the same artifacts as `failed`, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
+  A transfer `summary` also carries `"failures"`: a list of `{"code","name"}` objects for the same artifacts as `failed`, in the same order, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
   `failed` keeps its legacy strings, so a digest mismatch there still reads `name: detail`, while `failures` always carries the bare name.
 - `head`, `sha`, `channel`, `point` and `doctor` print their objects described in their sections above.
 - the body of `get` without `-o` is the only thing on stdout: no events are printed in stdout mode, and `--json` without `-o` is refused as misuse (exit 2).

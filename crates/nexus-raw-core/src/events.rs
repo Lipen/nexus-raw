@@ -46,7 +46,8 @@ pub struct Summary {
     /// Names this call deleted (`rm`): transfers never delete, so they stay at 0.
     pub removed: usize,
     pub failed: Vec<String>,
-    /// The same names as [`Summary::failed`], with their exit-code class.
+    /// The same artifacts as [`Summary::failed`], in the same order: each entry
+    /// names the artifact whose legacy string sits at that index, with the exit-code class.
     pub failures: Vec<Failure>,
 }
 

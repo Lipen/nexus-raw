@@ -230,14 +230,14 @@ The classification that produces these verdicts is specified in [the symmetric d
 ## In NDJSON
 
 Transfer-level failures surface in the summary's `failed` list, its structured `failures` list, and in `retrying` events rather than as separate error objects.
-`failed` keeps the legacy strings, so a mismatch carries `name: detail`; `failures` carries `{"name","code"}` with the exit-code class.
+`failed` keeps the legacy strings, so a mismatch carries `name: detail`; `failures` carries `{"code","name"}` with the exit-code class.
 
 ```json
 {"attempt":2,"event":"retrying","name":"extra.txt","reason":"transport: https://nexus.example.com/repository/raw-main/flaky/app.bin: HTTP 503"}
 ```
 
 ```json
-{"downloaded":0,"event":"summary","kind":"transfer","failed":["app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"failures":[{"name":"app.bin","code":1}],"skipped":0,"uploaded":0}
+{"downloaded":0,"event":"summary","kind":"transfer","failed":["app.bin: downloaded digest bd4ef5a0775f7705a1758f3ecde220fd045cce6a3b3b816fc684aada794bc24a, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"failures":[{"code":1,"name":"app.bin"}],"skipped":0,"uploaded":0}
 ```
 
 The `error:` and `hint:` lines still go to stderr, and the process exit code still carries the class.

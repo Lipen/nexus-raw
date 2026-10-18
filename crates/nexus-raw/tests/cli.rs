@@ -1992,6 +1992,35 @@ fn golden_ndjson_error_holds() {
     );
 }
 
+/// A refused digest is the populated shape of `failures`: the legacy list keeps
+/// the detail, the structured list carries `{code, name}`, pinned byte-exact.
+#[test]
+fn golden_ndjson_failures_hold() {
+    let srv = server(Scenario::ForeignMarker);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        format!("{}  a.zip\n", "0".repeat(64)).as_bytes(),
+    );
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "--json",
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 1, "golden failures");
+    let port = srv.addr().port().to_string();
+    let normalized = stdout(&down).replace(&port, "PORT");
+    assert_golden(
+        &normalized,
+        "failures.ndjson",
+        "the failure ndjson changed: update tests/golden/failures.ndjson deliberately",
+    );
+}
+
 /// `rm` in one stream: the plan first, then the delete, then the rerun.
 /// The plan is the default (nothing is deleted without `--yes`), and the rerun
 /// re-enumerates the same name, collects a 404 and still exits 0.
@@ -2100,6 +2129,7 @@ fn golden(name: &str) -> String {
         "doctor.ndjson" => include_str!("golden/doctor.ndjson"),
         "diff.ndjson" => include_str!("golden/diff.ndjson"),
         "error.ndjson" => include_str!("golden/error.ndjson"),
+        "failures.ndjson" => include_str!("golden/failures.ndjson"),
         "rm.ndjson" => include_str!("golden/rm.ndjson"),
         "audit.ndjson" => include_str!("golden/audit.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
