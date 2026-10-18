@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.19.0] - 2026-10-18
+
 ### Added
 
 - Every `summary` NDJSON line names its stream: a transfer carries `"kind":"transfer"`, the audit summary `"kind":"audit"`, and the napi event type declares it, so one stream is parseable without knowing which command wrote it.
@@ -382,7 +386,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/Lipen/nexus-raw/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/Lipen/nexus-raw/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/Lipen/nexus-raw/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/Lipen/nexus-raw/compare/v0.15.0...v0.16.0
