@@ -72,7 +72,8 @@ $ cat dist/1.4.0/app-1.4.0.zip.sha256
 a8a242091894256798c34ed08c990bccb4a275883335d9209f9954b12e36ac1f  app-1.4.0.zip
 ```
 
-The name is the writer's: the transfer verbs write the artifact's name relative to the directory being transferred, and `put` writes the final URL segment.
+The name is the writer's: every writer names the artifact relative to the base it addressed.
+The transfer verbs address the directory being transferred, so their markers carry the artifact's name relative to it, and a single `put` addresses the object's own directory, so its marker carries the final URL segment.
 A reader compares the digest and ignores the name, so a marker written by another tool loads as long as the line parses and the digest matches.
 
 The parse is strict, because a loose parse would bless foreign markers:
