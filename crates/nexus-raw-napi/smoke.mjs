@@ -33,21 +33,34 @@ try {
   const events = []
   const summary = await nxr.verify(dir, { onEvent: (event) => events.push(event) })
   await flush()
-  assert.deepEqual(summary, { uploaded: 0, downloaded: 0, skipped: 1, removed: 0, failed: [] })
+  assert.deepEqual(summary, {
+    uploaded: 0,
+    downloaded: 0,
+    skipped: 1,
+    removed: 0,
+    failed: [],
+    failures: [],
+  })
   assert.equal(events.length, 1)
   assert.equal(events[0].event, 'summary')
   assert.deepEqual(events[0].failed, [])
+  assert.deepEqual(events[0].failures, [])
 
-  // An incomplete artifact rejects with the data exit code and a hint.
+  // An incomplete artifact rejects with the data exit code and a hint, and
+  // the summary event still names the failure with its exit-code class.
   writeFileSync(join(dir, 'b.txt'), 'orphan\n')
+  const failedEvents = []
   await assert.rejects(
-    nxr.verify(dir, { names: ['b.txt'] }),
+    nxr.verify(dir, { names: ['b.txt'], onEvent: (event) => failedEvents.push(event) }),
     (err) =>
       err instanceof Error &&
       err.exitCode === 1 &&
       err.code === 'NXR_EXIT_1' &&
       typeof err.hint === 'string',
   )
+  await flush()
+  const failedSummary = failedEvents.find((event) => event.event === 'summary')
+  assert.deepEqual(failedSummary.failures, [{ name: 'b.txt', code: 1 }])
 
   // A bad name rejects with the misuse exit code and the grammar hint.
   await assert.rejects(
