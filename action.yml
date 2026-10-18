@@ -78,25 +78,31 @@ runs:
           exit 2
         fi
         expected="${line%% *}"
+        # Hash by the bare name from RUNNER_TEMP: a `D:\...` operand makes
+        # GNU sha256sum escape the output line, and awk would keep the `\`.
         if command -v sha256sum > /dev/null 2>&1; then
-          actual="$(sha256sum "$dest" | awk '{print $1}')"
+          actual="$(cd "$RUNNER_TEMP" && sha256sum "$ARCHIVE" | awk '{print $1}')"
         else
-          actual="$(shasum -a 256 "$dest" | awk '{print $1}')"
+          actual="$(cd "$RUNNER_TEMP" && shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
         fi
         if [ "$expected" != "$actual" ]; then
           echo "::error::checksum mismatch for ${ARCHIVE}: expected ${expected}, got ${actual}"
           exit 1
         fi
-        echo "path=$dest" >> "$GITHUB_OUTPUT"
 
     - name: 'Unpack and install'
       id: 'install'
       shell: 'bash'
+      env:
+        ARCHIVE: '${{ steps.platform.outputs.archive }}'
+        RUNNER_TEMP: '${{ runner.temp }}'
       run: |
         set -eu
-        archive='${{ steps.download.outputs.path }}'
         mkdir -p "$RUNNER_TEMP/nxr-bin"
-        tar -xzf "$archive" -C "$RUNNER_TEMP/nxr-bin"
+        # Git for Windows tar treats an absolute `D:\...` source as a remote
+        # host: extract the bare archive name from the directory it sits in.
+        cd "$RUNNER_TEMP"
+        tar -xzf "$ARCHIVE" -C nxr-bin
         # The archive root holds the binary; windows keeps the .exe suffix.
         exe="$RUNNER_TEMP/nxr-bin/nxr"
         [ "${{ runner.os }}" = Windows ] && exe="${exe}.exe"
