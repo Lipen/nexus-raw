@@ -5,7 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The npm platform packages ship an executable `nxr`: the artifact hop between the addon job and the publish job flattens file modes, so the staged binary arrived without its exec bit and the published package could not spawn it.
+  The 0.19.0 platform packages are inert orphans (the main package never shipped at that version), and the publish job now restores the bit and refuses to pack a binary without it.
 
 ## [0.19.0] - 2026-10-18
 
