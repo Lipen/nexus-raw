@@ -116,6 +116,57 @@ The client-facing contract page rendered from the same table: [wire invariants](
 | `no-service` | the service REST endpoint answers `404` like a store miss. Storage is `atomic` | `service repos` refuses with exit 3 and the server-root hint. Every storage invariant is unaffected | core: `service_repos_missing_refuses_with_the_root_hint` · CLI: `service_repos_missing_prints_the_root_hint` · mock: the seeded document is simply absent |
 | `search-400` | the search API answers `400` when the `repository` parameter names an unknown repository. Served repositories and other requests behave like `atomic` | a repository-scoped search 400 is diagnosed: `ls` refuses with exit 3 and the missing-or-non-raw-repository hint, and a search 404 keeps the generic enumeration hint | core: `ls_unknown_repository_hinted_on_400_not_on_404` · CLI: `ls_unknown_repository_prints_the_repository_hint` · mock: `search_unknown_repo_answers_400_known_repos_pass_through` |
 
+## Client coverage
+
+The scenario matrix above is the server contract.
+This one is the client contract: every wire invariant against the implementations that claim it.
+
+| Invariant | `nexus-raw-core` | `nxr` | `@nexus-raw/nxr` | `clients/python` |
+|:----------|:----------------:|:-----:|:----------------:|:----------------:|
+| Completion is bytes plus a verified marker; a diverged complete object is never overwritten | yes | yes | via core | yes |
+| The marker is `sha256sum -c` format and follows the bytes of the same name | yes | yes | via core | yes |
+| The marker names the artifact relative to the addressed base | yes | yes | via core | yes |
+| A directory transfer refuses without an explicit enumeration source | yes | yes | via core | n/a |
+| Resume sends `Accept-Encoding: identity`; a complete part finalizes on `416` | yes | yes | via core | identity only |
+| A markerless remote is completed by computing the marker from the received bytes | yes | yes | via core | yes |
+| A foreign or unparseable marker refuses the name | yes | yes | via core | yes |
+| `up` never deletes a remote name | yes | yes | via core | n/a |
+| `mirror` refuses a diverged destination and never deletes | yes | yes | via core | n/a |
+| `rm` deletes the marker before the bytes, 404 is done, read-only is refused | yes | yes | via core | n/a |
+| Channels are ordinary token files; `--if-forward` is dotted-numeric | yes | yes | via core | yes |
+| Exit codes 0/1/2/3 and the `hint:` line are stable | yes | yes | via core | yes |
+| NDJSON shapes are additive and pinned by fixtures | yes | yes | n/a | n/a |
+| Credentials never echo and TLS verifies by default | yes | yes | via core | yes |
+| Names are `[A-Za-z0-9._-]` segments and `.sha256` is reserved | yes | yes | via core | yes |
+| Segmented transfers: bounds, single-stream fallback, per-span resume | yes | yes | n/a | n/a |
+| The clone fact cache is a hint, never authority | yes | yes | via core | n/a |
+
+`via core` means the binding calls the `Nxr` facade and carries no wire logic of its own.
+Its independent surface is checked by `scripts/check-bridge-surface.sh`, and the only additional behavior test is `diff_reports_the_four_states`; every other row inherits the core suite.
+`n/a` means the surface does not exist in that client, not that it is untested.
+
+The named pins behind the rows:
+
+| Invariant | Pinned by |
+|:----------|:----------|
+| bytes plus marker, never overwrite a divergence | core: `divergent_complete_refusal_is_wire_covered`, `down_digest_mismatch_refuses_and_drops_part` · CLI: `foreign_marker_down_refuses` · python: `test_foreign_marker` |
+| marker format and order | core: `up_generates_markers_by_default` · CLI: `up_generates_markers_by_default`, `put_get_roundtrip_with_sha_sibling` · python: `test_atomic_roundtrip` |
+| marker naming | core: `up_generates_markers_by_default` · CLI: `up_marker_names_the_nested_path` · python: `test_atomic_marker_names_the_decoded_segment` |
+| enumeration is explicit | core: `rm_without_names_refuses_with_enumeration_error`, `down_missing_name_is_data_error` · CLI: `down_without_enumeration_needs_a_source` |
+| identity and `416` | core: `down_resume_of_complete_part_finalizes_without_refetch`, `get_primitive_resumes_with_range` · CLI: `get_resume_with_matching_part_succeeds` · python: `test_atomic_get_sends_identity_encoding` |
+| markerless completion | core: `down_markerless_remote_writes_computed_marker` · CLI: `markerless_down_writes_computed_marker` · python: `test_markerless` |
+| foreign marker refusal | core: `down_digest_mismatch_refuses_and_drops_part` · CLI: `foreign_marker_down_refuses` · python: `test_foreign_marker` |
+| `up` never deletes | the protocol table and the `classify` unit path: a remote-only name is `mismatch`, never a delete |
+| `mirror` never deletes | core: `mirror_refuses_diverged_destination_untouched` · CLI: `mirror_refuses_a_diverged_destination` |
+| `rm` order and idempotency | core: `rm_removes_a_whole_version`, `second_rm_is_all_404_and_exits_clean`, `readonly_refuses_rm_and_changes_nothing` · CLI: `rm_removes_whole_version_and_reruns_clean`, `rm_readonly_refuses_and_keeps_bytes` |
+| channels and dotted order | core: `channel_set_get_and_forward_guard` · CLI: `channel_set_get_and_if_forward` · python: `test_atomic_channel`, `test_channel_set_refuses_multiline_tokens` |
+| exit codes and hints | core: `auth_403_surfaces_as_the_auth_error`, `redirect_refuses_reads_with_http_301` · CLI: `auth401_exit_codes`, `dead_base_exit_3`, `unsafe_name_is_misuse_exit_2` · python: `test_malformed_urls_are_misuse` |
+| NDJSON shapes | CLI: `golden_ndjson_up_down_hold`, `golden_ndjson_rm_holds`, `golden_ndjson_error_holds` |
+| credentials and TLS | core: `auth_gates_every_request` · CLI: `doctor_probe_rejects_rejected_credentials`, `doctor_exit_codes` · python: `test_auth_401`, `test_auth_403` |
+| name grammar | core: `scan_rejects_unsafe_names` · CLI: `unsafe_name_is_misuse_exit_2` · python: `test_put_refuses_unsafe_names` |
+| segmented transfers | core: `segmented_down_lands_the_same_bytes_as_one_stream`, `segmented_down_resumes_finished_spans`, `segmented_down_falls_back_when_range_is_ignored` · CLI: `down_segments_matches_the_single_stream`, `get_segments_matches_the_single_stream` |
+| clone cache | core: `clone_second_run_skips_and_writes_the_cache`, `clone_corrupt_cache_falls_back_to_hashing`, `clone_refuses_a_diverged_local_object` · CLI: `clone_copies_a_repository_and_skips_on_the_second_run` |
+
 ## The suites
 
 ```bash
