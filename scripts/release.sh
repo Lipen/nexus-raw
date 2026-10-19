@@ -226,12 +226,27 @@ python3 scripts/changelog-finalize.py "$v"
 just lock
 git add -u
 if git diff --cached --quiet; then
-  echo "release $v: the bump produced no changes, the version is already $v?" >&2
-  exit 1
+  # The recovery path: a previous --yes run pushed the bump commit and then a
+  # publish failed. Re-dispatch that same commit instead of inventing a new
+  # one; the workflow guards skip whatever is already on a registry.
+  current="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+  subject="$(git log -1 --format=%s)"
+  if [ "$current" != "$v" ] || [ "$subject" != "chore: bump the workspace to $v" ]; then
+    echo "release $v: the bump produced no changes, the version is already $v?" >&2
+    exit 1
+  fi
+  git fetch origin master
+  if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]; then
+    echo "release $v: the bump commit is not pushed (HEAD differs from origin/master)" >&2
+    exit 1
+  fi
+  echo "release $v: the bump is already committed and pushed, dispatching it again"
+  sha="$(git rev-parse origin/master)"
+else
+  git commit -m "chore: bump the workspace to $v"
+  git push origin master
+  sha="$(git rev-parse origin/master)"
 fi
-git commit -m "chore: bump the workspace to $v"
-git push origin master
-sha="$(git rev-parse origin/master)"
 # The dispatch API takes a branch, not a raw SHA: master is the ref, and
 # the gate validates whatever HEAD it gets.
 
