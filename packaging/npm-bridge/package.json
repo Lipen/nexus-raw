@@ -1,6 +1,6 @@
 {
   "name": "nexus-raw",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Renamed to @nexus-raw/nxr: this shim forwards to it, so `require('nexus-raw')` and `import 'nexus-raw'` keep resolving to the current package",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,7 @@
     "devops"
   ],
   "dependencies": {
-    "@nexus-raw/nxr": "0.20.0"
+    "@nexus-raw/nxr": "0.21.0"
   },
   "engines": {
     "node": ">= 18"
