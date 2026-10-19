@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.22.0] - 2026-10-20
+
 ### Added
 
 - `down --segments N` splits each artifact into `N` concurrent closed Range spans, 2..=64.
@@ -462,7 +466,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/Lipen/nexus-raw/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/Lipen/nexus-raw/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/Lipen/nexus-raw/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/Lipen/nexus-raw/compare/v0.19.0...v0.19.1
