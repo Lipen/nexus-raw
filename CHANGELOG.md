@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The transfer `summary` gains `failures`: the same artifacts as `failed`, as `{"name","code"}` objects whose code is the exit class (1 data, 2 misuse, 3 transport).
   `failed` keeps its legacy strings (a mismatch still carries `name: detail`), so the new array is additive for consumers.
   The Node bindings mirror the array on `NxrSummary`.
+- `Nxr::audit_filtered` and `sync::audit::AuditFilter`: an audit narrowed by exact names and whole-segment prefixes before any request.
+- The `retry-after-503` mock scenario: the first request per path answers `503` with a `Retry-After` pause, so the 5xx pause is pinned without changing the plain-503 `flaky` contract.
 
 ### Changed
 
@@ -37,11 +39,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `doctor --deep` without a URL is refused as misuse instead of silently skipping every server probe and reporting "all checks passed".
 - The release gate runs the full `just check` set (prek, cargo-deny, Python conformance), CI runs the prek hooks, the docs workflow rebuilds on the files its checkers read, and zensical is pinned.
 - The Rust example README teaches the current minor and joins the version gate.
-
-### Added
-
-- `Nxr::audit_filtered` and `sync::audit::AuditFilter`: an audit narrowed by exact names and whole-segment prefixes before any request.
-- The `retry-after-503` mock scenario: the first request per path answers `503` with a `Retry-After` pause, so the 5xx pause is pinned without changing the plain-503 `flaky` contract.
 
 ## [0.20.0] - 2026-10-18
 
