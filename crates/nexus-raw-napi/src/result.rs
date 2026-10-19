@@ -17,6 +17,9 @@ pub struct NxrSummary {
     pub uploaded: u32,
     pub downloaded: u32,
     pub skipped: u32,
+    /// Local markers a `clone` rewrote from bytes that already matched the
+    /// remote marker.
+    pub sealed: u32,
     /// Names the call deleted (`rm`). Transfers never delete and stay at 0.
     pub removed: u32,
     pub failed: Vec<String>,
@@ -30,6 +33,7 @@ impl From<&Summary> for NxrSummary {
             uploaded: u32::try_from(s.uploaded).unwrap_or(u32::MAX),
             downloaded: u32::try_from(s.downloaded).unwrap_or(u32::MAX),
             skipped: u32::try_from(s.skipped).unwrap_or(u32::MAX),
+            sealed: u32::try_from(s.sealed).unwrap_or(u32::MAX),
             removed: u32::try_from(s.removed).unwrap_or(u32::MAX),
             failed: s.failed.clone(),
             failures: s
@@ -51,6 +55,16 @@ pub struct NxrPlanAction {
     pub action: String,
     pub name: String,
     /// Byte size when the action transfers bytes.
+    pub size: Option<f64>,
+}
+
+/// One clone plan action, shaped like the CLI `clone --plan` lines.
+#[napi(object)]
+pub struct NxrClonePlanAction {
+    /// `download`, `skip` or `seal`.
+    pub action: String,
+    pub name: String,
+    /// Byte size when the action knows it.
     pub size: Option<f64>,
 }
 

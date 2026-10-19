@@ -102,6 +102,9 @@ Every method mirrors a CLI command one-to-one.
 | `delta_search(dir, prefixes)` | `Vec<Delta>` | `nxr diff --via search --ls` | the delta report built from the search index in O(pages) requests, a digestless asset never reads `Same` |
 | `get_segmented(url, out, segments)` | `GetOutcome` | `nxr get --segments N` | `N` concurrent byte-range spans assembled positionally, verified and renamed atomically, degraded to the single stream when `Range` is ignored |
 | `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
+| `down_with_segments(dir, enum_src, fresh, segments)` | `Summary` | `nxr down --segments N` | the same download with each artifact split into `N` concurrent Range spans |
+| `clone_plan(dir, prefixes, state, verify)` | `Vec<CloneAction>` | `nxr clone --plan` | the repository-wide clone plan, nothing written |
+| `clone_to(dir, prefixes, state, verify)` | `Summary` | `nxr clone` | verified repository clone with the optional local fact cache |
 | `mirror_plan(dst, enum_src)` | `Vec<MirrorAction>` | `mirror --dry-run` | probe both sides and classify, emit the plan, move nothing |
 | `mirror(dst, enum_src)` | `Summary` | `nxr mirror` | pour the enumerated names into a second facade's base: staged through the `down` machinery, written in `up`'s order |
 | `rm(enum_src)` | `Summary` | `nxr rm` | DELETE the enumerated names, marker before bytes: 404 is success, divergence is never checked |
@@ -220,7 +223,7 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 | `Removing { name }` | before a name's DELETEs go out | `{"event":"removing","name":"a.zip"}` |
 | `Removed { name }` | when at least one of the name's objects was deleted | `{"event":"removed","name":"a.zip"}` |
 | `Missing { name }` | when every DELETE of the name answered 404 | `{"event":"missing","name":"a.zip"}` |
-| `Summary(Summary)` | last event of every transfer | `{"event":"summary","kind":"transfer","uploaded":1,"downloaded":0,"skipped":2,"removed":0,"failed":[],"failures":[]}` |
+| `Summary(Summary)` | last event of every transfer | `{"event":"summary","kind":"transfer","uploaded":1,"downloaded":0,"skipped":2,"sealed":0,"removed":0,"failed":[],"failures":[]}` |
 
 `dir` renders as the state prefix: `Dir::Up` → `"uploading"`, `Dir::Down` → `"downloading"`.
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
@@ -233,7 +236,7 @@ A real stream, captured by `down --name app-1.4.0.zip --json` against the mock:
 {"done":0,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
 {"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"downloading","total":45}
 {"done":45,"event":"artifact","name":"app-1.4.0.zip","state":"done","total":45}
-{"downloaded":1,"event":"summary","kind":"transfer","failed":[],"failures":[],"skipped":0,"uploaded":0}
+{"downloaded":1,"event":"summary","kind":"transfer","failed":[],"failures":[],"sealed":0,"skipped":0,"uploaded":0}
 ```
 
 `head` and `channel set` print their final object instead of a stream: `head` → `{"content_type":…,"size":…,"status":…,"url":…}`, `channel set` → `{"from":…,"outcome":"written","token":…,"url":…}`.
@@ -249,7 +252,7 @@ Both are covered variant by variant in [errors and exit codes](errors.md).
 
 ## Node bindings
 
-The npm package `@nexus-raw/nxr` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsAssets`) and `serviceRepos`.
+The npm package `@nexus-raw/nxr` ships a subset of the `Nxr` facade to Node as promises: the primitives (`get`, `put`, `head`, `sha`), the directory transfers (`up`, `down`, `clone`, `clonePlan`, `rm`, `mirror`), the delta report (`diff`), `verify`, the channel and pointer operations, the search listings (`lsEntries`, `lsAssets`) and `serviceRepos`.
 Every command is one self-sufficient call: the URL in argv, credentials in the `auth` option or the environment, no config file.
 Each promise resolves to the command's result or rejects with an `Error` carrying `exitCode` and `hint`.
 An optional `onEvent` callback receives the JSON-parsed [`Event`](#events) objects, and a transfer promise resolves to the final summary.

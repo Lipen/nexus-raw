@@ -22,6 +22,9 @@ _nxr() {
             nxr,channel)
                 cmd="nxr__subcmd__channel"
                 ;;
+            nxr,clone)
+                cmd="nxr__subcmd__clone"
+                ;;
             nxr,complete)
                 cmd="nxr__subcmd__complete"
                 ;;
@@ -96,6 +99,9 @@ _nxr() {
                 ;;
             nxr__subcmd__help,channel)
                 cmd="nxr__subcmd__help__subcmd__channel"
+                ;;
+            nxr__subcmd__help,clone)
+                cmd="nxr__subcmd__help__subcmd__clone"
                 ;;
             nxr__subcmd__help,complete)
                 cmd="nxr__subcmd__help__subcmd__complete"
@@ -212,7 +218,7 @@ _nxr() {
 
     case "${cmd}" in
         nxr)
-            opts="-u -R -q -v -h -V --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help --version get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help"
+            opts="-u -R -q -v -h -V --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help --version get put head sha up down clone diff audit rm point mirror mv ls channel verify doctor service complete help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -470,6 +476,60 @@ _nxr() {
                 return 0
             fi
             case "${prev}" in
+                --user)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -u)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remote)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -R)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --workers)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --retry)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --connect-timeout-secs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --stall-secs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        nxr__subcmd__clone)
+            opts="-u -R -q -v -h --state --no-state --verify --dry-run --plan --prefix --user --remote --workers --retry --connect-timeout-secs --stall-secs --tls-insecure --json --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --state)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --prefix)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --user)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -834,7 +894,7 @@ _nxr() {
             return 0
             ;;
         nxr__subcmd__help)
-            opts="get put head sha up down diff audit rm point mirror mv ls channel verify doctor service complete help"
+            opts="get put head sha up down clone diff audit rm point mirror mv ls channel verify doctor service complete help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -892,6 +952,20 @@ _nxr() {
         nxr__subcmd__help__subcmd__channel__subcmd__set)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        nxr__subcmd__help__subcmd__clone)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

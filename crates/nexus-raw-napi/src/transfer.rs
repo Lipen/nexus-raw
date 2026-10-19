@@ -3,19 +3,20 @@ use std::path::Path;
 use napi::bindgen_prelude::Either;
 use napi::Result;
 use napi_derive::napi;
-use nexus_raw_core::{ArtifactName, Mode, Nxr};
+use nexus_raw_core::{ArtifactName, CloneAction, Mode, NamePrefix, Nxr, StateMode};
 use tokio::sync::mpsc;
 
 use crate::error::js_error;
 use crate::input::{parse_names, resolve_enumeration};
 use crate::mapping::{self, CommonOpts};
 use crate::opts::{
-    split_common, NxrAuth, NxrDiffOpts, NxrDownOpts, NxrMirrorOpts, NxrRmOpts, NxrUpOpts,
-    NxrVerifyOpts,
+    split_common, NxrAuth, NxrCloneOpts, NxrDiffOpts, NxrDownOpts, NxrMirrorOpts, NxrRmOpts,
+    NxrUpOpts, NxrVerifyOpts,
 };
 use crate::pump::{finish_pump, finish_pump_err, spawn_pump};
 use crate::result::{
-    NxrDeltaReport, NxrPlan, NxrPlanAction, NxrRmPlan, NxrRmPlanAction, NxrSummary,
+    NxrClonePlanAction, NxrDeltaReport, NxrPlan, NxrPlanAction, NxrRmPlan, NxrRmPlanAction,
+    NxrSummary,
 };
 
 // ---- L1 transfer -----------------------------------------------------------
@@ -144,6 +145,127 @@ pub async fn down(
     };
     finish_pump(pump).await?;
     Ok(NxrSummary::from(&summary))
+}
+
+/// Clone a repository into a local directory (`nxr clone`).
+///
+/// The optional fact cache lives under `dstDir` and skips re-hashing files
+/// whose size and mtime still match the last verified copy. `verify` ignores
+/// it. `state`/`noState` choose an explicit path or disable it.
+#[napi]
+pub async fn clone(
+    src_url: String,
+    dst_dir: String,
+    opts: Option<NxrCloneOpts>,
+) -> Result<NxrSummary> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let prefixes = parse_prefixes(o.prefixes)?;
+    let mode = clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false));
+    let pump = spawn_pump(rx, on_event);
+    let summary = nxr
+        .clone_to(
+            Path::new(&dst_dir),
+            &prefixes,
+            mode,
+            o.verify.unwrap_or(false),
+        )
+        .await;
+    drop(nxr);
+    let summary = match summary {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(NxrSummary::from(&summary))
+}
+
+/// The clone plan (`nxr clone --plan`): every action, nothing written.
+#[napi(js_name = "clonePlan")]
+pub async fn clone_plan(
+    src_url: String,
+    dst_dir: String,
+    opts: Option<NxrCloneOpts>,
+) -> Result<Vec<NxrClonePlanAction>> {
+    let o = opts.unwrap_or_default();
+    let (common, on_event) = split_common(
+        o.auth,
+        o.workers,
+        o.retry,
+        o.connect_timeout_ms,
+        o.stall_ms,
+        o.tls_insecure,
+        o.on_event,
+    );
+    let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
+    let prefixes = parse_prefixes(o.prefixes)?;
+    let mode = clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false));
+    let pump = spawn_pump(rx, on_event);
+    let actions = nxr
+        .clone_plan(
+            Path::new(&dst_dir),
+            &prefixes,
+            mode,
+            o.verify.unwrap_or(false),
+        )
+        .await;
+    drop(nxr);
+    let actions = match actions {
+        Ok(v) => v,
+        Err(e) => return Err(finish_pump_err(pump, e).await),
+    };
+    finish_pump(pump).await?;
+    Ok(actions.iter().map(clone_action).collect())
+}
+
+fn parse_prefixes(raw: Option<Vec<String>>) -> Result<Vec<NamePrefix>> {
+    raw.unwrap_or_default()
+        .iter()
+        .map(|p| NamePrefix::parse(p).map_err(js_error))
+        .collect()
+}
+
+fn clone_state_mode(state: Option<&str>, no_state: bool) -> StateMode<'_> {
+    if no_state {
+        StateMode::Off
+    } else if let Some(path) = state {
+        StateMode::At(Path::new(path))
+    } else {
+        StateMode::Default
+    }
+}
+
+fn clone_action(action: &CloneAction) -> NxrClonePlanAction {
+    match action {
+        CloneAction::Download { name, size, .. } => NxrClonePlanAction {
+            action: "download".into(),
+            name: name.to_string(),
+            size: size.map(|s| s as f64),
+        },
+        CloneAction::Skip { name, .. } => NxrClonePlanAction {
+            action: "skip".into(),
+            name: name.to_string(),
+            size: None,
+        },
+        CloneAction::Seal { name, .. } => NxrClonePlanAction {
+            action: "seal".into(),
+            name: name.to_string(),
+            size: None,
+        },
+    }
 }
 
 /// Compare a local directory against a remote one: the delta report (`nxr diff`).

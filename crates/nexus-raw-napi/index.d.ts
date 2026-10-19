@@ -90,6 +90,8 @@ export interface NxrSummary {
   uploaded: number
   downloaded: number
   skipped: number
+  /** Local markers a `clone` rewrote from bytes that already matched the remote marker. */
+  sealed: number
   /** Names the call deleted (`rm`). Transfers never delete and stay at 0. */
   removed: number
   failed: string[]
@@ -163,6 +165,25 @@ export interface NxrDownOpts extends NxrCommonOpts {
   fresh?: boolean
   /** Split each artifact into this many concurrent Range spans, 2..=64. The worker budget still caps the total concurrency. */
   segments?: number
+}
+
+export interface NxrCloneOpts extends NxrCommonOpts {
+  /** Where to keep the local fact cache. Default: `<dstDir>/.nxr-state.json`. */
+  state?: string
+  /** Disable the cache: hash every local file. */
+  noState?: boolean
+  /** Ignore the cache and hash every local file, even unchanged ones. */
+  verify?: boolean
+  /** Keep only names under these whole-segment prefixes. */
+  prefixes?: string[]
+}
+
+/** One clone plan action. */
+export interface NxrClonePlanAction {
+  action: 'download' | 'skip' | 'seal'
+  name: string
+  /** Byte size when the action knows it. */
+  size?: number
 }
 
 export interface NxrDiffOpts extends NxrCommonOpts {
@@ -290,6 +311,16 @@ export function up(srcDir: string, dstUrl: string, opts?: NxrUpOpts): Promise<Nx
  * server has the search API.
  */
 export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promise<NxrSummary>
+
+/**
+ * Clone a repository into a local directory (`nxr clone`).
+ * The optional fact cache lives under `dstDir` and skips re-hashing files
+ * whose size and mtime still match the last verified copy.
+ */
+export function clone(srcUrl: string, dstDir: string, opts?: NxrCloneOpts): Promise<NxrSummary>
+
+/** The clone plan: every action, nothing written (`nxr clone --plan`). */
+export function clonePlan(srcUrl: string, dstDir: string, opts?: NxrCloneOpts): Promise<NxrClonePlanAction[]>
 
 /**
  * Compare a local directory against a remote one: the delta report (`nxr diff`).

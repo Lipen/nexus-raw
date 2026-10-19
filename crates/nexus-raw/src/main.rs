@@ -171,6 +171,30 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
     },
+    /// Clone a raw repository into a local directory: verified, resumable, with an optional local fact cache.
+    Clone {
+        /// The repository directory URL: the repository root or any prefix inside it.
+        #[arg(value_name = "URL")]
+        url: String,
+        /// The target directory.
+        #[arg(value_name = "DIR")]
+        dst: PathBuf,
+        /// Where to keep the local fact cache (default: <DIR>/.nxr-state.json).
+        #[arg(long, value_name = "FILE", conflicts_with = "no_state")]
+        state: Option<PathBuf>,
+        /// Do not read or write the local fact cache: hash every local file.
+        #[arg(long)]
+        no_state: bool,
+        /// Ignore the cache and hash every local file, even unchanged ones.
+        #[arg(long)]
+        verify: bool,
+        /// Print the plan without transferring anything.
+        #[arg(long, visible_alias = "dry-run")]
+        plan: bool,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
+    },
     /// Compare a local directory against a remote one: the delta report.
     Diff {
         /// The local directory.

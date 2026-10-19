@@ -1,5 +1,5 @@
 {"download":["a.zip"],"event":"plan","skip":[],"upload":[]}
 {"done":0,"event":"artifact","name":"a.zip","state":"downloading","total":35}
 {"done":35,"event":"artifact","name":"a.zip","state":"downloading","total":35}
-{"downloaded":0,"event":"summary","failed":["a.zip: downloaded digest aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"failures":[{"code":1,"name":"a.zip"}],"kind":"transfer","removed":0,"skipped":0,"uploaded":0}
+{"downloaded":0,"event":"summary","failed":["a.zip: downloaded digest aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70, remote sibling 0000000000000000000000000000000000000000000000000000000000000000"],"failures":[{"code":1,"name":"a.zip"}],"kind":"transfer","removed":0,"sealed":0,"skipped":0,"uploaded":0}
 {"code":1,"error":"mismatch: a.zip: downloaded digest aa2dd75d2296c2e6f4ea7e54a8b17832287feca20ddbf33680292a6a28162f70, remote sibling 0000000000000000000000000000000000000000000000000000000000000000: remote content diverges from its sha-sibling","event":"error","hint":"the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object"}

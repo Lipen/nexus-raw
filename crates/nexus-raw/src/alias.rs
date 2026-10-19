@@ -242,7 +242,9 @@ fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
                 std::ptr::addr_of!(*dst).cast_mut(),
             ]
         }
-        C::Diff { src, .. } => vec![std::ptr::addr_of!(*src).cast_mut()],
+        C::Diff { src, .. } | C::Clone { url: src, .. } => {
+            vec![std::ptr::addr_of!(*src).cast_mut()]
+        }
         C::Sha { target } => vec![std::ptr::addr_of!(*target).cast_mut()],
         C::Channel { op } => match op {
             crate::ChannelOp::Get { url } | crate::ChannelOp::Set { url, .. } => {

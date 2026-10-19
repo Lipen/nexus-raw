@@ -45,6 +45,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
             [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
             [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('clone', 'clone', [CompletionResultType]::ParameterValue, 'Clone a raw repository into a local directory: verified, resumable, with an optional local fact cache')
             [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('audit', 'audit', [CompletionResultType]::ParameterValue, 'Audit a repository for integrity: the structural report, optionally byte-verified')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4): a plan by default, deletion with --yes')
@@ -185,6 +186,31 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
             [CompletionResult]::new('--ls', '--ls', [CompletionResultType]::ParameterName, 'Best-effort enumeration through the server search API')
             [CompletionResult]::new('--fresh', '--fresh', [CompletionResultType]::ParameterName, 'Ignore existing part files: every name downloads from zero')
+            [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
+            [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Emit one NDJSON event per line on stdout')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Print only the final summary line')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Print more detail: transfer starts and plan names')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'nxr;clone' {
+            [CompletionResult]::new('--state', '--state', [CompletionResultType]::ParameterName, 'Where to keep the local fact cache (default: <DIR>/.nxr-state.json)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
+            [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
+            [CompletionResult]::new('--remote', '--remote', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')
+            [CompletionResult]::new('--workers', '--workers', [CompletionResultType]::ParameterName, 'Parallel artifact transfers')
+            [CompletionResult]::new('--retry', '--retry', [CompletionResultType]::ParameterName, 'Attempts per HTTP request')
+            [CompletionResult]::new('--connect-timeout-secs', '--connect-timeout-secs', [CompletionResultType]::ParameterName, 'TCP connect timeout in seconds')
+            [CompletionResult]::new('--stall-secs', '--stall-secs', [CompletionResultType]::ParameterName, 'Fail a transfer when no bytes arrive for this many seconds')
+            [CompletionResult]::new('--no-state', '--no-state', [CompletionResultType]::ParameterName, 'Do not read or write the local fact cache: hash every local file')
+            [CompletionResult]::new('--verify', '--verify', [CompletionResultType]::ParameterName, 'Ignore the cache and hash every local file, even unchanged ones')
             [CompletionResult]::new('--plan', '--plan', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the plan without transferring anything')
             [CompletionResult]::new('--tls-insecure', '--tls-insecure', [CompletionResultType]::ParameterName, 'Skip TLS certificate verification')
@@ -653,6 +679,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             [CompletionResult]::new('sha', 'sha', [CompletionResultType]::ParameterValue, 'The sha256 of a file or URL')
             [CompletionResult]::new('up', 'up', [CompletionResultType]::ParameterValue, 'Upload a local directory (§5.2)')
             [CompletionResult]::new('down', 'down', [CompletionResultType]::ParameterValue, 'Download a remote directory into a local one (§5.2, §5.2.1)')
+            [CompletionResult]::new('clone', 'clone', [CompletionResultType]::ParameterValue, 'Clone a raw repository into a local directory: verified, resumable, with an optional local fact cache')
             [CompletionResult]::new('diff', 'diff', [CompletionResultType]::ParameterValue, 'Compare a local directory against a remote one: the delta report')
             [CompletionResult]::new('audit', 'audit', [CompletionResultType]::ParameterValue, 'Audit a repository for integrity: the structural report, optionally byte-verified')
             [CompletionResult]::new('rm', 'rm', [CompletionResultType]::ParameterValue, 'Delete the enumerated names from a remote directory (§5.4): a plan by default, deletion with --yes')
@@ -684,6 +711,9 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;help;down' {
+            break
+        }
+        'nxr;help;clone' {
             break
         }
         'nxr;help;diff' {

@@ -198,6 +198,7 @@ pub fn fetch_one(
             uploaded: 0,
             downloaded: 1,
             skipped: 0,
+            sealed: 0,
             failed: Vec::new(),
             failures: Vec::new(),
             removed: 0,

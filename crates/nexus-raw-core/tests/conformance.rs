@@ -12,8 +12,9 @@ fn enum_names(v: &[&str]) -> Enumeration {
 }
 
 use nexus_raw_core::{
-    model::sibling, staging_dir, ArtifactName, Config, Digest, Dir, EntryKind, Enumeration, Error,
-    Event, Failure, Mode, NexusClient, Nxr, Progress, Summary,
+    model::sibling, staging_dir, ArtifactName, CloneAction, Config, Digest, Dir, EntryKind,
+    Enumeration, Error, Event, Failure, Mode, NamePrefix, NexusClient, Nxr, Progress, StateMode,
+    Summary,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -922,6 +923,209 @@ async fn segmented_down_bounds_are_misuse() {
         );
     }
     assert!(!out.exists(), "a refused bound creates nothing");
+}
+
+// ---------------------------------------------------------------- clone
+
+fn clone_server() -> MockNexus {
+    // The store-backed search answer: the clone's enumeration source.
+    MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).unwrap()
+}
+
+fn seed_clone_repository(mock: &MockNexus) -> Nxr {
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let base = format!("{}repository/raw-main/", mock.base_url());
+    Nxr::new(config_at(base, None), tx).unwrap()
+}
+
+async fn seed_clone_tree(nxr: &Nxr) {
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+    seed_complete(src.path(), "sub/b.json", b"beta-bytes");
+    seed_complete(src.path(), "sub/deep/c.txt", b"gamma-bytes");
+    nxr.up(src.path(), None, true, None).await.unwrap();
+}
+
+#[tokio::test]
+async fn clone_copies_the_repository_and_verifies_offline() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    let summary = nxr
+        .clone_to(dst.path(), &[], StateMode::Off, false)
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 3);
+    assert_eq!(summary.skipped, 0);
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+    assert_eq!(
+        std::fs::read(dst.path().join("sub/b.json")).unwrap(),
+        b"beta-bytes"
+    );
+    assert_eq!(
+        std::fs::read(dst.path().join("sub/deep/c.txt")).unwrap(),
+        b"gamma-bytes"
+    );
+    let verified = nxr.verify(dst.path(), None).await.unwrap();
+    assert_eq!(verified.skipped, 3, "every cloned object verifies offline");
+}
+
+#[tokio::test]
+async fn clone_plan_writes_nothing() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    let actions = nxr
+        .clone_plan(dst.path(), &[], StateMode::Off, false)
+        .await
+        .unwrap();
+    assert_eq!(actions.len(), 3);
+    assert!(
+        actions
+            .iter()
+            .all(|a| matches!(a, CloneAction::Download { .. })),
+        "an empty destination plans downloads: {actions:?}"
+    );
+    assert_eq!(
+        std::fs::read_dir(dst.path()).unwrap().count(),
+        0,
+        "a plan writes nothing"
+    );
+}
+
+#[tokio::test]
+async fn clone_second_run_skips_and_writes_the_cache() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    let first = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    assert_eq!(first.downloaded, 3);
+    assert!(
+        dst.path().join(".nxr-state.json").is_file(),
+        "the default cache lands in the destination"
+    );
+
+    let second = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    assert_eq!(second.downloaded, 0);
+    assert_eq!(second.skipped, 3);
+}
+
+#[tokio::test]
+async fn clone_seals_a_missing_local_marker_without_refetching() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    nxr.clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    std::fs::remove_file(dst.path().join("sub/b.json.sha256")).unwrap();
+    let before = mock
+        .requests()
+        .iter()
+        .filter(|r| r.method == "GET" && r.path == "sub/b.json")
+        .count();
+
+    let summary = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    assert_eq!(summary.sealed, 1);
+    assert_eq!(summary.downloaded, 0);
+    assert_eq!(
+        std::fs::read_to_string(dst.path().join("sub/b.json.sha256")).unwrap(),
+        sibling::format_line("sub/b.json", &Digest::of_bytes(b"beta-bytes"))
+    );
+    let after = mock
+        .requests()
+        .iter()
+        .filter(|r| r.method == "GET" && r.path == "sub/b.json")
+        .count();
+    assert_eq!(before, after, "a seal must not fetch the bytes again");
+}
+
+#[tokio::test]
+async fn clone_corrupt_cache_falls_back_to_hashing() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    nxr.clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    std::fs::write(dst.path().join(".nxr-state.json"), b"{not json").unwrap();
+
+    let summary = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 0);
+    assert_eq!(summary.skipped, 3);
+}
+
+#[tokio::test]
+async fn clone_refuses_a_diverged_local_object() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    nxr.clone_to(dst.path(), &[], StateMode::Off, false)
+        .await
+        .unwrap();
+    let bytes = dst.path().join("a.zip");
+    let mut data = std::fs::read(&bytes).unwrap();
+    data[0] ^= 0xff;
+    std::fs::write(&bytes, &data).unwrap();
+
+    let err = nxr
+        .clone_to(dst.path(), &[], StateMode::Off, false)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Mismatch { .. }), "got {err:?}");
+    assert_eq!(
+        std::fs::read(&bytes).unwrap(),
+        data,
+        "the diverged bytes stay untouched"
+    );
+}
+
+#[tokio::test]
+async fn clone_prefix_narrows_the_repository() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    let prefix = vec![NamePrefix::parse("sub/").unwrap()];
+    let summary = nxr
+        .clone_to(dst.path(), &prefix, StateMode::Off, false)
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 2);
+    assert!(!dst.path().join("a.zip").exists());
+    assert_eq!(
+        std::fs::read(dst.path().join("sub/b.json")).unwrap(),
+        b"beta-bytes"
+    );
+    assert_eq!(
+        std::fs::read(dst.path().join("sub/deep/c.txt")).unwrap(),
+        b"gamma-bytes"
+    );
 }
 
 #[tokio::test]

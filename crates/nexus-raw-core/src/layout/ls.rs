@@ -142,6 +142,44 @@ pub async fn search_assets(
     Ok(names)
 }
 
+/// Every artifact name under a repository prefix, with the search-reported
+/// facts per name.
+///
+/// The prefix is any directory inside `/repository/<repo>/`, including the
+/// repository root: the walk is repository-wide (`q` only cuts pages) and the
+/// client-side whole-segment prefix filter is the correctness mechanism, the
+/// same rule every listing helper obeys.
+/// Leaf `.sha256` siblings are hidden, and names that fail the artifact
+/// grammar are skipped rather than failing the whole walk.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] when `base` does not point inside a repository,
+/// [`Error::SearchRepoMissing`] on a search 400 and [`Error::Enumerate`] on a
+/// search 404 or an unparseable page.
+pub async fn search_repo_assets(
+    client: &NexusClient,
+    base: &str,
+) -> Result<Vec<(ArtifactName, Option<Digest>, Option<u64>)>, Error> {
+    let (repo, prefix) = split_prefix(base)?;
+    let q = scope_path(&prefix);
+    let assets = walk(client, base, &repo, q.as_deref()).await?;
+    let mut out = Vec::new();
+    for asset in assets {
+        let rel = drop_segments(&asset.path, prefix.len());
+        if rel.is_empty() || rel.ends_with(".sha256") {
+            continue;
+        }
+        let Ok(name) = ArtifactName::parse(&rel) else {
+            continue;
+        };
+        out.push((name, asset.sha256, asset.size));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.dedup_by(|a, b| a.0 == b.0);
+    Ok(out)
+}
+
 /// The same walk as [`search_assets`], carrying the search-reported facts per name:
 /// the digest and size the server's index holds, so a comparison runs without
 /// a single per-name HEAD or sibling GET.

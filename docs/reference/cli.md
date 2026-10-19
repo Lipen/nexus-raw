@@ -436,6 +436,54 @@ The worker budget still caps the total concurrency: the flag widens one object, 
 A zero-byte object, a split that cannot give every span a byte, or a server that ignores Range falls back to the plain single-stream path.
 `--fresh` discards the staged spans too.
 
+## nxr clone
+
+```
+nxr clone <URL> <DIR> [--state FILE] [--no-state] [--verify] [--plan] [--prefix PREFIX]...
+```
+
+Clone a whole repository into a local directory: every artifact, every marker, verified against the storage.
+The URL is the repository root or any prefix inside it.
+The enumeration is the search API walked at that URL.
+A server without the search API refuses with `cannot enumerate`.
+
+| Flag | Meaning |
+|:-----|:--------|
+| `--state <FILE>` | keep the local fact cache at an explicit path |
+| `--no-state` | read and write no cache, hash every local file |
+| `--verify` | ignore the cache for this run, even where size and mtime match |
+| `--plan` | print `download`, `skip` and `seal` lines, write nothing (the `--dry-run` spelling works as an alias) |
+| `--prefix <PREFIX>` | keep only names under this whole-segment prefix, repeatable |
+
+The default cache is `<DIR>/.nxr-state.json`.
+It records the size, mtime and digest of every verified object, so an unchanged file is skipped without a read.
+The cache is an accelerator, never authority: a missing, corrupt or foreign cache means "hash everything".
+`verify`, `audit` and `doctor` never read it.
+
+A local object whose bytes match its remote marker but whose local marker is gone is sealed: the marker is written from the verified digest without fetching the bytes again.
+A local object that diverges from its own marker is never overwritten: the run refuses with `mismatch` (exit 1).
+
+Clone never deletes a local file that the repository does not list.
+A remote deletion stays on disk until you remove it.
+
+```console
+$ nxr clone https://nexus.example.com/repository/raw-main/ vendor/raw-main --plan
+download app-1.4.0.zip
+skip bom/linux-x86_64.json
+seal pinned.xml
+$ echo $?
+0
+```
+
+The `--json` plan lines carry `{"plan":"download|skip|seal","name":…}`; the summary gains `"sealed"`, the count of markers written without a transfer.
+
+| Exit | When |
+|:----:|:-----|
+| `0` | the copy converged |
+| `1` | data refusal: `cannot enumerate`, `mismatch`, `missing`. local I/O failures |
+| `2` | misuse: an unsafe `--prefix`, `--state` together with `--no-state` |
+| `3` | transport or auth failure |
+
 ## nxr diff
 
 ```

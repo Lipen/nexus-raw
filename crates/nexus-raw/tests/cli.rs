@@ -434,6 +434,95 @@ fn down_segments_bounds_are_misuse() {
     assert!(stderr(&out).contains("segments"), "{}", stderr(&out));
 }
 
+// ---- clone ----------------------------------------------------------------
+
+fn clone_repo_url(srv: &MockNexus) -> String {
+    format!("{}repository/raw-main/", srv.base_url())
+}
+
+/// `clone` copies a whole repository, writes the fact cache, and a second run
+/// converges without downloading anything.
+#[test]
+fn clone_copies_a_repository_and_skips_on_the_second_run() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    std::fs::create_dir_all(src.path().join("sub")).unwrap();
+    write_file(&src.path().join("sub"), "b.json", BETA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&["clone", &base, dst.path().to_str().unwrap()]);
+    expect_exit(&out, 0, "clone");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert_eq!(read_file(&dst.path().join("sub"), "b.json"), BETA);
+    assert!(
+        dst.path().join(".nxr-state.json").is_file(),
+        "the default cache lands in the destination"
+    );
+
+    let out = nxr(&["clone", &base, dst.path().to_str().unwrap()]);
+    expect_exit(&out, 0, "second clone");
+    assert!(
+        stdout(&out).contains("downloaded 0"),
+        "a converged clone downloads nothing: {}",
+        stdout(&out)
+    );
+}
+
+/// `clone --plan` prints the actions and writes nothing.
+#[test]
+fn clone_plan_writes_nothing() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&["clone", &base, dst.path().to_str().unwrap(), "--plan"]);
+    expect_exit(&out, 0, "clone --plan");
+    assert!(stdout(&out).contains("download a.zip"), "{}", stdout(&out));
+    assert_eq!(
+        std::fs::read_dir(dst.path()).unwrap().count(),
+        0,
+        "a plan writes nothing"
+    );
+}
+
+/// `clone --json` carries the additive `sealed` count in the summary.
+#[test]
+fn clone_json_summary_carries_sealed() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&["clone", &base, dst.path().to_str().unwrap(), "--json"]);
+    expect_exit(&out, 0, "clone --json");
+    assert!(
+        stdout(&out).contains(r#""event":"summary""#),
+        "{}",
+        stdout(&out)
+    );
+    assert!(stdout(&out).contains(r#""sealed":0"#), "{}", stdout(&out));
+}
+
 /// A foreign manifest.json on the server is ignored: enumeration comes only from flags.
 /// down without --name/--ls refuses even when a manifest-looking file exists.
 #[test]

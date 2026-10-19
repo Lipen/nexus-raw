@@ -178,6 +178,36 @@ pub struct NxrDownOpts {
     pub segments: Option<u32>,
 }
 
+/// `clone` options: the local fact cache and the name scope.
+#[derive(Default)]
+#[napi(object, object_to_js = false)]
+pub struct NxrCloneOpts {
+    /// Explicit credentials.
+    /// They win over the env fallback.
+    pub auth: Option<NxrAuth>,
+    /// Parallel artifact transfers, 1..=64, default 8.
+    pub workers: Option<u32>,
+    /// Attempts per HTTP request, default 4.
+    pub retry: Option<u32>,
+    /// TCP connect timeout in milliseconds, default 15000.
+    pub connect_timeout_ms: Option<u32>,
+    /// Fail a transfer when no bytes move for this long, default 30000.
+    pub stall_ms: Option<u32>,
+    /// Skip TLS certificate verification, default false.
+    pub tls_insecure: Option<bool>,
+    /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
+    #[napi(ts_type = "(event: object) => void")]
+    pub on_event: Option<EventCallback>,
+    /// Where to keep the local fact cache. Default: `<dstDir>/.nxr-state.json`.
+    pub state: Option<String>,
+    /// Disable the cache: hash every local file.
+    pub no_state: Option<bool>,
+    /// Ignore the cache and hash every local file, even unchanged ones.
+    pub verify: Option<bool>,
+    /// Keep only names under these whole-segment prefixes.
+    pub prefixes: Option<Vec<String>>,
+}
+
 /// `diff` options: how the remote directory is enumerated.
 #[derive(Default)]
 #[napi(object, object_to_js = false)]

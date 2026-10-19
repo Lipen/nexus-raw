@@ -4,4 +4,4 @@
 {"done":35,"event":"artifact","name":"a.zip","state":"uploading","total":35}
 {"attempt":2,"event":"retrying","name":"a.zip.sha256","reason":"transport: http://127.0.0.1:PORT/1.14.0/a.zip.sha256: HTTP 429"}
 {"done":35,"event":"artifact","name":"a.zip","state":"done","total":35}
-{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":0,"skipped":0,"uploaded":1}
+{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":0,"sealed":0,"skipped":0,"uploaded":1}

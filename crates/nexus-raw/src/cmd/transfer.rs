@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use nexus_raw_core::{ArtifactName, Enumeration, Error, NamePrefix, Nxr};
+use nexus_raw_core::{ArtifactName, CloneAction, Enumeration, Error, NamePrefix, Nxr, StateMode};
 
 use crate::cmd::{enumeration_source, finish, make_ctx, make_nxr_with, Ctx};
 use crate::render::{Mode, Session};
@@ -144,6 +144,69 @@ async fn run_down(
         .down_with_segments(dst, enum_src, fresh, segments)
         .await?;
     Ok(())
+}
+
+/// Clone a repository into a local directory (`nxr clone`).
+///
+/// The plan prints one line per name (`download`, `skip`, `seal`) and writes
+/// nothing. The real run drives the core clone: verified downloads, sealed
+/// local markers, and an optional fact cache under the destination.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn clone_repo(
+    cli: &Cli,
+    url: &str,
+    dst: &Path,
+    state: Option<&Path>,
+    no_state: bool,
+    verify: bool,
+    plan: bool,
+    prefixes: &[String],
+) -> Result<(), Error> {
+    let ctx = make_ctx(cli, url)?;
+    let prefixes: Vec<NamePrefix> = prefixes
+        .iter()
+        .map(|p| NamePrefix::parse(p))
+        .collect::<Result<_, _>>()?;
+    let state_mode = if no_state {
+        StateMode::Off
+    } else if let Some(path) = state {
+        StateMode::At(path)
+    } else {
+        StateMode::Default
+    };
+    let result = if plan {
+        for action in ctx
+            .nxr
+            .clone_plan(dst, &prefixes, state_mode, verify)
+            .await?
+        {
+            let (line, shape) = clone_plan_line(&action);
+            crate::cmd::print_line(cli.json, &line, &shape);
+        }
+        Ok(())
+    } else {
+        ctx.nxr.clone_to(dst, &prefixes, state_mode, verify).await?;
+        Ok(())
+    };
+    finish(ctx).await;
+    result
+}
+
+fn clone_plan_line(action: &CloneAction) -> (String, serde_json::Value) {
+    match action {
+        CloneAction::Download { name, size, .. } => (
+            format!("download {name}"),
+            serde_json::json!({"plan": "download", "name": name.as_str(), "size": size}),
+        ),
+        CloneAction::Skip { name, .. } => (
+            format!("skip {name}"),
+            serde_json::json!({"plan": "skip", "name": name.as_str()}),
+        ),
+        CloneAction::Seal { name, .. } => (
+            format!("seal {name}"),
+            serde_json::json!({"plan": "seal", "name": name.as_str()}),
+        ),
+    }
 }
 
 /// The delta of a local directory against a remote one (`nxr diff`).

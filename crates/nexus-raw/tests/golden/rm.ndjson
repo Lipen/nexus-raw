@@ -1,7 +1,7 @@
 {"action":"rm","name":"a.zip","size":35}
 {"event":"removing","name":"a.zip"}
 {"event":"removed","name":"a.zip"}
-{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":1,"skipped":0,"uploaded":0}
+{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":1,"sealed":0,"skipped":0,"uploaded":0}
 {"event":"removing","name":"a.zip"}
 {"event":"missing","name":"a.zip"}
-{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":0,"skipped":1,"uploaded":0}
+{"downloaded":0,"event":"summary","failed":[],"failures":[],"kind":"transfer","removed":0,"sealed":0,"skipped":1,"uploaded":0}

@@ -802,6 +802,109 @@ impl Nxr {
         .await
     }
 
+    /// The clone plan: every repository artifact against the local tree.
+    ///
+    /// The enumeration is the search API walked at the invocation base, so a
+    /// repository root works as well as a version directory.
+    /// A local fact cache (`StateMode`) skips re-hashing files whose size and
+    /// mtime still match the last verified copy; `verify` ignores it.
+    /// Nothing is written.
+    ///
+    /// # Errors
+    ///
+    /// Returns the search enumeration errors, the first transport/auth failure
+    /// of the remote probes, and the first [`Error::Mismatch`] or
+    /// [`Error::Missing`] verdict.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn clone_plan(
+        &self,
+        dir: &Path,
+        prefixes: &[crate::model::name::NamePrefix],
+        state: crate::sync::StateMode<'_>,
+        verify: bool,
+    ) -> Result<Vec<crate::sync::CloneAction>, Error> {
+        Ok(self.clone_prepare(dir, prefixes, state, verify).await?.0)
+    }
+
+    /// Clone the repository at the invocation base into `dir`.
+    ///
+    /// Downloads ride the verified `down` machinery, a local object whose
+    /// bytes already match its remote marker gets its missing marker written
+    /// (`sealed`), and a complete matching copy is skipped.
+    /// A local file that diverges from its own marker is never overwritten:
+    /// the run refuses with exit 1.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`Self::clone_plan`], plus the first transport/auth/HTTP
+    /// failure of the downloads.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn clone_to(
+        &self,
+        dir: &Path,
+        prefixes: &[crate::model::name::NamePrefix],
+        state_mode: crate::sync::StateMode<'_>,
+        verify: bool,
+    ) -> Result<Summary, Error> {
+        let (actions, state, state_path) = self
+            .clone_prepare(dir, prefixes, state_mode, verify)
+            .await?;
+        self.events.plan_clone(&actions);
+        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+        self.client.attach_aimd(aimd.clone());
+        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
+        sync::clone::execute(
+            self.client.clone(),
+            dir.to_owned(),
+            self.base.clone(),
+            actions,
+            state,
+            state_path,
+            aimd,
+        )
+        .await
+    }
+
+    /// The shared clone preparation: enumerate, classify, load the cache.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn clone_prepare(
+        &self,
+        dir: &Path,
+        prefixes: &[crate::model::name::NamePrefix],
+        state_mode: crate::sync::StateMode<'_>,
+        verify: bool,
+    ) -> Result<
+        (
+            Vec<crate::sync::CloneAction>,
+            crate::sync::clone::CloneState,
+            Option<PathBuf>,
+        ),
+        Error,
+    > {
+        let names: Vec<ArtifactName> =
+            crate::layout::ls::search_repo_assets(&self.client, &self.base)
+                .await?
+                .into_iter()
+                .map(|(name, _, _)| name)
+                .filter(|name| prefixes.is_empty() || prefixes.iter().any(|p| p.matches(name)))
+                .collect();
+        if names.is_empty() {
+            return Err(Error::Enumerate {
+                url: self.base.clone(),
+                reason: "the repository holds no artifacts under the selected prefixes".into(),
+            });
+        }
+        let state_path = state_mode.path(dir);
+        let state = state_path.as_deref().map_or_else(
+            || sync::clone::CloneState::empty(&self.base),
+            |path| sync::clone::CloneState::load(path, &self.base),
+        );
+        let locals = sync::clone::local_facts(dir, names.clone(), state.clone(), verify).await;
+        let remotes = self.remote_states_for(names.iter()).await?;
+        let actions = sync::clone::classify(locals, remotes)?;
+        Ok((actions, state, state_path))
+    }
+
     /// Delete the enumerated names from the remote directory (§5.4).
     ///
     /// The enumeration source is mandatory, like `down`.

@@ -312,7 +312,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             println!("{}", paint.yellow(&format!("○ {name} missing")));
         }
         Event::Summary(s) => {
-            let text = if s.removed > 0 {
+            let mut text = if s.removed > 0 {
                 format!("removed {}, skipped {}", s.removed, s.skipped)
             } else {
                 format!(
@@ -320,6 +320,9 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                     s.uploaded, s.downloaded, s.skipped
                 )
             };
+            if s.sealed > 0 {
+                text.push_str(&format!(", sealed {}", s.sealed));
+            }
             println!(
                 "{}",
                 if s.failed.is_empty() {

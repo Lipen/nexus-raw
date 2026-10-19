@@ -321,6 +321,17 @@ The Nexus version this client targets answers `500` instead of `416` when a Rang
 `nxr` never ranges a zero-length object: a `Range` header goes out only when the part already holds bytes, and a complete part of a zero-byte object is empty, so the request is a plain unconditional GET.
 That makes the quirk upstream behavior worth knowing rather than a client contract.
 
+## A clone cache is a hint, not a state file
+
+`clone` re-reads the local tree on every run, so it can skip a file whose size, mtime and marker digest still match the last verified copy.
+That cache lives at `<DIR>/.nxr-state.json` and is an accelerator, never authority.
+A missing, corrupt or foreign cache means "hash everything", not "trust me".
+`--verify` ignores the cache for one run, and `verify`, `audit` and `doctor` never read it.
+The cache never decides existence: the local `stat` and the remote probes do.
+
+The model stays curl-like because the cache is optional and local to a clone.
+No other command reads it, and no correctness rule depends on it.
+
 ## Enumeration is explicit
 
 A raw repository has no guaranteed directory listing.

@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The spans assemble into the usual part file, one pass hashes it, and the marker check decides the rename.
   The worker budget still caps the total concurrency, and a zero-byte object, an unsplittable one or a server that ignores Range falls back to the single-stream path.
   The core exposes the same transfer as `Nxr::down_with_segments`, and the Node bindings accept `segments` on `NxrDownOpts`.
+- `nxr clone` copies a whole repository into a local directory: every artifact and marker is verified, an interrupted run resumes, and a local object whose bytes match its remote marker but whose local marker is gone is sealed without fetching the bytes again.
+  An optional local fact cache (`<DIR>/.nxr-state.json`, `--state`, `--no-state`, `--verify`) skips re-hashing files whose size, mtime and marker digest still agree.
+  A missing, corrupt or foreign cache falls back to hashing.
+  The summary gains the additive `sealed` count, and the Node bindings expose `clone()` and `clonePlan()`.
 
 ## [0.21.0] - 2026-10-19
 

@@ -193,6 +193,34 @@ _arguments "${_arguments_options[@]}" : \
 ':dst -- The target directory:_files' \
 && ret=0
 ;;
+(clone)
+_arguments "${_arguments_options[@]}" : \
+'(--no-state)--state=[Where to keep the local fact cache (default\: <DIR>/.nxr-state.json)]:FILE:_files' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
+'-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--remote=[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
+'--workers=[Parallel artifact transfers]:N:_default' \
+'--retry=[Attempts per HTTP request]:N:_default' \
+'--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
+'--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'--no-state[Do not read or write the local fact cache\: hash every local file]' \
+'--verify[Ignore the cache and hash every local file, even unchanged ones]' \
+'--plan[Print the plan without transferring anything]' \
+'--dry-run[Print the plan without transferring anything]' \
+'--tls-insecure[Skip TLS certificate verification]' \
+'--json[Emit one NDJSON event per line on stdout]' \
+'-q[Print only the final summary line]' \
+'--quiet[Print only the final summary line]' \
+'-v[Print more detail\: transfer starts and plan names]' \
+'--verbose[Print more detail\: transfer starts and plan names]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':url -- The repository directory URL\: the repository root or any prefix inside it:_default' \
+':dst -- The target directory:_files' \
+&& ret=0
+;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
@@ -759,6 +787,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(clone)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -881,6 +913,7 @@ _nxr_commands() {
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'clone:Clone a raw repository into a local directory\: verified, resumable, with an optional local fact cache' \
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)\: a plan by default, deletion with --yes' \
@@ -945,6 +978,11 @@ _nxr__subcmd__channel__subcmd__set_commands() {
     local commands; commands=()
     _describe -t commands 'nxr channel set commands' commands "$@"
 }
+(( $+functions[_nxr__subcmd__clone_commands] )) ||
+_nxr__subcmd__clone_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr clone commands' commands "$@"
+}
 (( $+functions[_nxr__subcmd__complete_commands] )) ||
 _nxr__subcmd__complete_commands() {
     local commands; commands=()
@@ -984,6 +1022,7 @@ _nxr__subcmd__help_commands() {
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
 'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'clone:Clone a raw repository into a local directory\: verified, resumable, with an optional local fact cache' \
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
 'rm:Delete the enumerated names from a remote directory (§5.4)\: a plan by default, deletion with --yes' \
@@ -1022,6 +1061,11 @@ _nxr__subcmd__help__subcmd__channel__subcmd__get_commands() {
 _nxr__subcmd__help__subcmd__channel__subcmd__set_commands() {
     local commands; commands=()
     _describe -t commands 'nxr help channel set commands' commands "$@"
+}
+(( $+functions[_nxr__subcmd__help__subcmd__clone_commands] )) ||
+_nxr__subcmd__help__subcmd__clone_commands() {
+    local commands; commands=()
+    _describe -t commands 'nxr help clone commands' commands "$@"
 }
 (( $+functions[_nxr__subcmd__help__subcmd__complete_commands] )) ||
 _nxr__subcmd__help__subcmd__complete_commands() {

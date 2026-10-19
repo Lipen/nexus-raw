@@ -122,6 +122,27 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             )
             .await
         }
+        Cmd::Clone {
+            url,
+            dst,
+            state,
+            no_state,
+            verify,
+            plan,
+            prefix,
+        } => {
+            transfer::clone_repo(
+                cli,
+                url,
+                dst,
+                state.as_deref(),
+                *no_state,
+                *verify,
+                *plan,
+                prefix,
+            )
+            .await
+        }
         Cmd::Rm {
             src,
             name,

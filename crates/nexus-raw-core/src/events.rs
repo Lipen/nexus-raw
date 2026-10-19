@@ -43,6 +43,9 @@ pub struct Summary {
     pub uploaded: usize,
     pub downloaded: usize,
     pub skipped: usize,
+    /// Local markers a `clone` rewrote from bytes that already matched the
+    /// remote marker. Other operations leave it at 0.
+    pub sealed: usize,
     /// Names this call deleted (`rm`): transfers never delete, so they stay at 0.
     pub removed: usize,
     pub failed: Vec<String>,
@@ -186,6 +189,7 @@ impl Event {
                 "uploaded": s.uploaded,
                 "downloaded": s.downloaded,
                 "skipped": s.skipped,
+                "sealed": s.sealed,
                 "removed": s.removed,
                 "failed": s.failed,
                 "failures": s.failures,
@@ -323,6 +327,30 @@ impl Progress {
         }
         let _ = self.tx.send(Event::Plan {
             upload,
+            download,
+            skip,
+        });
+    }
+
+    /// Plan event for a clone: downloads face the network, skips and seals
+    /// touch nothing and land in `skip`, so the transfer schema stays untouched.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn plan_clone(&self, actions: &[crate::sync::clone::CloneAction]) {
+        let mut download = Vec::new();
+        let mut skip = Vec::new();
+        for a in actions {
+            match a {
+                crate::sync::clone::CloneAction::Download { name, .. } => {
+                    download.push(name.to_string());
+                }
+                crate::sync::clone::CloneAction::Skip { name, .. }
+                | crate::sync::clone::CloneAction::Seal { name, .. } => {
+                    skip.push(name.to_string());
+                }
+            }
+        }
+        let _ = self.tx.send(Event::Plan {
+            upload: Vec::new(),
             download,
             skip,
         });
