@@ -342,13 +342,22 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                             .keys()
                             .cloned()
                             .filter_map(|k| {
+                                // The repository collection is a service document
+                                // the store happens to carry, not an asset the
+                                // search sees.
+                                if k.starts_with("service/") {
+                                    return None;
+                                }
                                 // Strip the `repository/<repo>/` prefix the store keys
                                 // carry when it is there; a root-style store key passes as is.
-                                let mut segs = k.split('/');
-                                if segs.next() == Some("repository") {
-                                    segs.next()?;
+                                if let Some(rest) = k.strip_prefix("repository/") {
+                                    return Some(
+                                        rest.split_once('/')
+                                            .map_or(rest, |(_, rel)| rel)
+                                            .to_owned(),
+                                    );
                                 }
-                                Some(segs.collect::<Vec<_>>().join("/"))
+                                Some(k)
                             })
                             .filter(|k| q.as_deref().is_none_or(|q| q_matches(q, k)))
                             .collect();
