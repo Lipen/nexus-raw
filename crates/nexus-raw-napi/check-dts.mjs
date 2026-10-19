@@ -28,7 +28,7 @@ const BINDING_ONLY_EXPORTS = new Set(['__napiBindingTarget'])
 
 const stripComments = (s) => s.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '')
 // `X | undefined | null` on an optional option is the same optional type;
-// strip the exact sequence, keep meaningful unions like `string | Buffer`.
+// strip the exact sequence, keep meaningful unions like `string | Uint8Array`.
 // A multi-line param list may end in a trailing comma before the `)`.
 const normType = (s) => s.replace(/\s+/g, '').replaceAll('|undefined|null', '').replace(/,$/, '')
 
@@ -81,6 +81,15 @@ const problems = []
 
 const indexFns = parseFunctions(indexSrc)
 const bindingFns = parseFunctions(bindingSrc)
+// A shipped `.d.ts` must not name `Buffer`: consumers without @types/node
+// would get TS2591. `Uint8Array` accepts a Node Buffer and needs no typings.
+for (const fns of [indexFns, bindingFns]) {
+  for (const [name, sig] of fns) {
+    if (/\bBuffer\b/.test(sig)) {
+      problems.push(`function ${name} uses the Node-only Buffer type; use Uint8Array`)
+    }
+  }
+}
 for (const [name, sig] of indexFns) {
   if (!bindingFns.has(name)) problems.push(`function ${name} exists only in index.d.ts`)
   else if (bindingFns.get(name) !== sig) {

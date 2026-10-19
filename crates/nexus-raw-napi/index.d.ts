@@ -265,9 +265,10 @@ export function get(url: string, opts?: NxrGetOpts): Promise<NxrGetResult>
 
 /**
  * PUT a file path or an exact byte body, optionally with its sha-sibling.
- * A string source is a file path (like the CLI `-f`). A Buffer is the exact bytes.
+ * A string source is a file path (like the CLI `-f`).
+ * A `Uint8Array` (including a Node `Buffer`) is the exact bytes.
  */
-export function put(url: string, source: string | Buffer, opts?: NxrPutOpts): Promise<NxrPutResult>
+export function put(url: string, source: string | Uint8Array, opts?: NxrPutOpts): Promise<NxrPutResult>
 
 /** HEAD a URL: status, size, content type. */
 export function head(url: string, opts?: NxrCommonOpts): Promise<NxrHeadResult>

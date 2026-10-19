@@ -11,6 +11,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `failed` keeps its legacy strings (a mismatch still carries `name: detail`), so the new array is additive for consumers.
   The Node bindings mirror the array on `NxrSummary`.
 
+### Changed
+
+- The `put` source type is `Uint8Array` instead of `Buffer`.
+  A Node `Buffer` is a `Uint8Array`, so existing callers stay compatible, and the shipped declarations no longer need `@types/node`.
+
 ### Fixed
 
 - The composite action installs `nxr` again: it resolves the release from `github.action_repository` (the caller's repository was never the action's) and verifies the archive against the published `SHA256SUMS` instead of a per-archive `.sha256` asset that the release never uploaded.

@@ -113,6 +113,37 @@ try {
     absent.closeAllConnections()
   }
 
+  // put accepts a Node Buffer and a plain Uint8Array: the byte branch stages
+  // through a temp file, so the loopback sink proves both runtime shapes.
+  const putBodies = []
+  const sink = http.createServer((req, res) => {
+    if (req.method !== 'PUT') {
+      res.statusCode = 201
+      res.end()
+      return
+    }
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => {
+      putBodies.push(Buffer.concat(chunks))
+      res.statusCode = 201
+      res.end()
+    })
+  })
+  await new Promise((resolve) => sink.listen(0, '127.0.0.1', resolve))
+  try {
+    const base = `http://127.0.0.1:${sink.address().port}/raw/`
+    const fromBuffer = Buffer.from('buffer bytes\n')
+    const fromArray = new Uint8Array([0, 1, 2, 255])
+    await nxr.put(`${base}buffer.bin`, fromBuffer)
+    await nxr.put(`${base}array.bin`, fromArray)
+    assert.deepEqual(putBodies[0], fromBuffer)
+    assert.deepEqual(putBodies[1], Buffer.from(fromArray))
+  } finally {
+    sink.close()
+    sink.closeAllConnections()
+  }
+
   // A throw inside onEvent rejects the command promise instead of crashing the process.
   // The command itself succeeds here, so the rejection carries the callback failure only.
   await assert.rejects(

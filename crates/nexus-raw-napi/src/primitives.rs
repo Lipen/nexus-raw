@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use napi::bindgen_prelude::{Buffer, Either};
+use napi::bindgen_prelude::{Either, Uint8Array};
 use napi::Result;
 use napi_derive::napi;
 use nexus_raw_core::model::digest;
@@ -51,11 +51,11 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
 /// PUT a file path or an exact byte body, optionally with its sha-sibling.
 ///
 /// A string source is a file path (like the CLI `-f`).
-/// A Buffer is the exact bytes, staged through a temporary file.
+/// A `Uint8Array` (including a Node `Buffer`) is the exact bytes, staged through a temporary file.
 #[napi]
 pub async fn put(
     url: String,
-    source: Either<String, Buffer>,
+    source: Either<String, Uint8Array>,
     opts: Option<NxrPutOpts>,
 ) -> Result<NxrPutResult> {
     let o = opts.unwrap_or_default();
