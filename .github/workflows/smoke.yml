@@ -30,6 +30,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Build the mock server
+        run: cargo build -q -p mock-nexus
       - name: Install and load the published package
         run: |
           mkdir -p tmp-smoke && cd tmp-smoke
@@ -51,3 +54,15 @@ jobs:
             }
             console.log(`os smoke (${process.platform}): ${declared.length} declared functions resolve`);
           EOF
+      - name: Run the published example flow
+        run: |
+          mkdir -p tmp-example && cd tmp-example
+          echo '{"name":"published-example","private":true}' > package.json
+          npm install --no-package-lock --no-save "@nexus-raw/nxr@latest"
+          cp ../examples/node/publish-and-consume.mjs .
+          if [ -f ../target/debug/mock-nexus.exe ]; then
+            export MOCK_NEXUS_BIN="../target/debug/mock-nexus.exe"
+          else
+            export MOCK_NEXUS_BIN="../target/debug/mock-nexus"
+          fi
+          node publish-and-consume.mjs
