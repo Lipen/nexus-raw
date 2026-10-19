@@ -5,9 +5,12 @@
 #
 #   check-npm-platform-packages.sh
 #
-# Polls each package through scripts/registry-probe.sh with a 12-attempt,
+# Polls each package through scripts/registry-probe.sh with a 20-attempt,
 # 30-second-apart budget and refuses the publish on the first one that never
 # appears.
+# A platform document can trail its publish by ten minutes on a slow npm
+# evening: the 0.22.0 arm64 package was still invisible when the old budget
+# ran out, and the rerun found it on the registry minutes later.
 #
 # Exit codes: 0 every package is on the registry, 1 one is missing, 2 bad input.
 set -eu
@@ -35,7 +38,7 @@ for name in \
   @nexus-raw/nxr-darwin-arm64 \
   @nexus-raw/nxr-win32-x64-msvc
 do
-  "$here/registry-probe.sh" npm "$name" "$version" 12 30 || {
+  "$here/registry-probe.sh" npm "$name" "$version" 20 30 || {
     echo "refusing to publish @nexus-raw/nxr@$version: $name@$version is not on the registry, its optionalDependencies entry would fail to resolve" >&2
     exit 1
   }
