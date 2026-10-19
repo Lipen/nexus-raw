@@ -67,7 +67,8 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
 - Redirects are never followed, so a 301 surfaces as a plain transport error (exit 3).
 - TLS verification is on, and `--tls-insecure` is the only way off.
 - `--json` is machine output, and the shape depends on the command:
-  - `up`, `down`, `mirror` and `rm` print one NDJSON event per line and end on a `summary` event carrying `uploaded`, `downloaded`, `skipped`, `removed` and `failed`.
+  - `up`, `down`, `mirror` and `rm` print one NDJSON event per line and end on a `summary` event carrying `uploaded`, `downloaded`, `skipped`, `removed`, `failed` and `failures`.
+    `failures` is `[{code, name}]` with the exit class (1 data, 2 misuse, 3 transport), in the same order as `failed`.
   - `put` and `get -o` print `artifact` events and then one result object shaped like `{"ok":true,…}`.
   - `verify` prints a `summary` event and, when names failed, a closing `error` object.
   - `audit` prints one `finding` event per finding and then a `summary` event carrying `audited` and `findings`.

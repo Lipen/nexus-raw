@@ -131,3 +131,11 @@ nxr up dist/1.4.0/ "$NEXUS/repository/releases/1.4.0/" --json | tail -1
 
 The last line of a transfer is the `summary` event, so `tail -1` gets it without parsing the stream.
 Branch on the `failed` array inside that event, or on the exit code, whichever the pipeline already uses.
+`failed` carries the human strings, while `failures` carries `{code, name}` in the same order, so a mixed run can be split by class:
+
+```sh
+nxr up dist/1.4.0/ "$NEXUS/repository/releases/1.4.0/" --json \
+  | jq -r 'select(.event=="summary") | .failures[] | "\(.code) \(.name)"'
+```
+
+Codes: `1` data, `2` misuse, `3` transport.

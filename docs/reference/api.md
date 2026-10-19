@@ -121,6 +121,7 @@ One parameter deserves its one-liner:
 `None` scans the directory.
 
 Failures collect per name into `Summary.failed` (legacy strings) and `Summary.failures` (the same names with their exit-code class) while the rest of the transfer completes.
+`Failure` is `{ name: String, code: u8 }`, where `code` is the exit-code class: 1 data, 2 misuse, 3 transport.
 Refusals (`Verdict`) abort before any byte moves and convert into `Error` (see [errors](#errors)).
 
 ## L0: transport and primitives
