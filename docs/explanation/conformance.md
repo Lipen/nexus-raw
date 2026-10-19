@@ -123,7 +123,7 @@ This one is the client contract: every wire invariant against the implementation
 
 | Invariant | `nexus-raw-core` | `nxr` | `@nexus-raw/nxr` | `clients/python` |
 |:----------|:----------------:|:-----:|:----------------:|:----------------:|
-| Completion is bytes plus a verified marker; a diverged complete object is never overwritten | yes | yes | via core | yes |
+| Completion is bytes plus a verified marker. A diverged complete object is never overwritten | yes | yes | via core | yes |
 | The marker is `sha256sum -c` format and follows the bytes of the same name | yes | yes | via core | yes |
 | The marker names the artifact relative to the addressed base | yes | yes | via core | yes |
 | A directory transfer refuses without an explicit enumeration source | yes | yes | via core | n/a |
@@ -133,7 +133,7 @@ This one is the client contract: every wire invariant against the implementation
 | `up` never deletes a remote name | yes | yes | via core | n/a |
 | `mirror` refuses a diverged destination and never deletes | yes | yes | via core | n/a |
 | `rm` deletes the marker before the bytes, 404 is done, read-only is refused | yes | yes | via core | n/a |
-| Channels are ordinary token files; `--if-forward` is dotted-numeric | yes | yes | via core | yes |
+| Channels are ordinary token files. `--if-forward` is dotted-numeric | yes | yes | via core | yes |
 | Exit codes 0/1/2/3 and the `hint:` line are stable | yes | yes | via core | yes |
 | NDJSON shapes are additive and pinned by fixtures | yes | yes | n/a | n/a |
 | Credentials never echo and TLS verifies by default | yes | yes | via core | yes |
@@ -142,7 +142,8 @@ This one is the client contract: every wire invariant against the implementation
 | The clone fact cache is a hint, never authority | yes | yes | via core | n/a |
 
 `via core` means the binding calls the `Nxr` facade and carries no wire logic of its own.
-Its independent surface is checked by `scripts/check-bridge-surface.sh`, and the only additional behavior test is `diff_reports_the_four_states`; every other row inherits the core suite.
+Its independent surface is checked by `scripts/check-bridge-surface.sh`, and the only additional behavior test is `diff_reports_the_four_states`.
+Every other row inherits the core suite.
 `n/a` means the surface does not exist in that client, not that it is untested.
 
 The named pins behind the rows:

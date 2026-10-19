@@ -126,7 +126,7 @@ The summary event gains `"sealed"`, the count of markers written without a trans
 ## What clone does not do
 
 - It never deletes a local file that the repository does not list.
-  A clone is additive; a removed remote name stays on disk until you remove it.
+  A clone is additive. A removed remote name stays on disk until you remove it.
 - It does not follow a redirected URL or accept a server without the search API.
 - It does not write the cache when `--no-state` is set or during `--plan`.
 - It does not replace `down`: `down` remains the transfer for an explicit name list.
