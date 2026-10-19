@@ -65,8 +65,8 @@ It pushes nothing and dispatches nothing.
 `scripts/release.sh X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then rehearses `.github/workflows/release.yml` on that commit with `dry-run=true`.
 The rehearsal runs the gate, every build and the npm staging with nothing published and no tag, and the act stops there when it is red: a workflow that cannot run costs minutes instead of the version number.
 Only a green rehearsal dispatches the real run, which the act then watches to its verdict.
-After a green run the act points `examples/node` at the published version, refreshes its lock, runs the demo against the registry and pushes the `chore: the node example follows X.Y.Z` commit.
-`just example-pin X.Y.Z` does the same step by hand when a run needs to be resumed.
+`examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.
+The published package is covered by the release consumer smoke and the daily `smoke.yml` install of `@latest`.
 
 The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and only then the finalize job creates the tag and the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.

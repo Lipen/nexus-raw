@@ -276,37 +276,6 @@ release *args:
     # `-h` and `--yes` included.
     exec scripts/release.sh "$@"
 
-# The node example tracks the published package, not the workspace.
-# The registry has the version only after the release run, so this recipe runs
-# post-release: it moves the pin, refreshes the lock, smokes the published
-# package and pushes the chore commit. `just release --yes` calls it.
-[doc('Point the node example at a released version, refresh its lock and smoke it.')]
-[group('release')]
-example-pin v:
-    #!/bin/sh
-    set -eu
-    perl -pi -e "s/(\"\@nexus-raw\/nxr\": \")[^\"]*(\")/\${1}{{ v }}\${2}/" examples/node/package.json
-    grep -q "\"@nexus-raw/nxr\": \"{{ v }}\"" examples/node/package.json || { echo "example-pin: the pin did not move" >&2; exit 1; }
-    i=1
-    while ! (cd examples/node && pnpm install --no-frozen-lockfile --reporter=silent); do
-      if [ "$i" -ge 5 ]; then
-        echo "example-pin: pnpm install still cannot resolve {{ v }}" >&2
-        exit 1
-      fi
-      i=$((i + 1))
-      sleep 10
-    done
-    cargo build -q -p mock-nexus
-    (cd examples/node && node publish-and-consume.mjs)
-    git add examples/node/package.json examples/node/pnpm-lock.yaml
-    if git diff --cached --quiet; then
-      echo "example-pin: already follows {{ v }}"
-      exit 0
-    fi
-    git commit -S -m "chore: the node example follows {{ v }}"
-    git push origin master
-    echo "example-pin: pushed the {{ v }} pin"
-
 [doc('Assert the version agrees everywhere and that no page pins it.')]
 [group('check')]
 [group('release')]
@@ -323,13 +292,13 @@ build *args:
 build-release:
     {{ cargo }} build --release -p nexus-raw
 
-# Links the npm package, then claim-first up, channel, down and verify.
+# Links the local npm package, then claim-first up, channel, down and verify.
 [doc('Run the Node example against the mock.')]
 [group('examples')]
 example-node:
     cargo build -q -p mock-nexus
-    cargo build -q -p nexus-raw-napi
-    cd examples/node && pnpm install && node publish-and-consume.mjs
+    (cd crates/nexus-raw-napi && pnpm ci --reporter=silent && pnpm run build:debug)
+    cd examples/node && pnpm install --lockfile=false && node publish-and-consume.mjs
 
 # The panel stand, exactly the README's run: build the addon and the mock,
 # serve the mock on :8099, seed a three-level tree, start the panel on :8123.
@@ -394,7 +363,7 @@ wasm-smoke:
 # The node example resolves against the registry, so it only refreshes once
 # the released version is actually published; before a release that lock is
 # expected to stay stale. Run after every release, commit the result.
-# Workspace, napi, panel, node (post-release), rust and sandbox examples.
+# Workspace, napi, panel, rust and sandbox examples.
 [doc('Refresh every lockfile in the repo.')]
 [group('examples')]
 lock:
@@ -412,8 +381,7 @@ lock:
     echo "examples/wasm-sandbox Cargo.lock: refreshed"
     cargo metadata --manifest-path bench/Cargo.toml --format-version 1 > /dev/null
     echo "bench Cargo.lock: refreshed"
-    # examples/node pins the released package exactly and is never bumped here: a demo tracks a shipped version, not the workspace.
-    # The release act moves it with `just example-pin` after the registry has the version.
+    # examples/node links to the local crate through a local link dependency and carries no registry lock; it is not refreshed here.
     echo "---"
     git status --short | grep -E "Cargo.lock|pnpm-lock.yaml" || echo "everything was already fresh"
 

@@ -58,7 +58,7 @@ elif [ "$rust_pin" != "$minor" ]; then
 fi
 
 # The standalone example locks must record nexus-raw-core at the workspace version: a lock left behind pins a number nobody released, and nothing rebuilds the lock until `just lock`.
-# examples/node is exempt: its pnpm lock resolves only once the registry has the release.
+# examples/node links to the local crate and carries no registry pin or lock; the release consumer smoke pins the exact tarball.
 # bench/Cargo.lock counts too: the bench workspace is standalone, and a stale one makes `just bench`, which runs `cargo bench --locked`, refuse before it measures anything.
 for lock in examples/rust/Cargo.lock examples/wasm-sandbox/Cargo.lock bench/Cargo.lock; do
   lock_ver="$(sed -n '/^name = "nexus-raw-core"$/ { n; s/^version = "\(.*\)"$/\1/p }' "$lock")"

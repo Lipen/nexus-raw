@@ -323,7 +323,7 @@ jobs:
         run: cargo build -q -p mock-nexus
 
       - name: Run the Node smoke
-        run: cd examples/node && pnpm ci && node publish-and-consume.mjs
+        run: cd examples/node && pnpm install --lockfile=false && node publish-and-consume.mjs
 
   # macOS builds the addon for the host triple (no prebuilt packages are
   # involved in a local build) and the demo is plain Node plus a spawned
@@ -376,7 +376,7 @@ jobs:
         run: cargo build -q -p mock-nexus
 
       - name: Run the Node smoke
-        run: cd examples/node && pnpm ci && node publish-and-consume.mjs
+        run: cd examples/node && pnpm install --lockfile=false && node publish-and-consume.mjs
 
   # Windows stays at compile-and-load: the demo spawns the mock binary by a
   # POSIX-style path (target/debug/mock-nexus), which a Windows process

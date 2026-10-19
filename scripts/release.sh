@@ -3,7 +3,7 @@
 #
 #   scripts/release.sh 0.12.0          everything the act would touch and
 #                                      every gate it must pass, drawn first
-#   scripts/release.sh 0.12.0 --yes    bump, changelog, push, rehearse, dispatch, watch, post-release pin
+#   scripts/release.sh 0.12.0 --yes    bump, changelog, push, rehearse, dispatch, watch
 #
 # The preview is read-only: the remote checks are GETs, the tree is not
 # modified, nothing is pushed or published.
@@ -18,10 +18,10 @@ set -eu
 usage() {
   if [ "${1:-}" = "0" ]; then
     echo "usage: release.sh X.Y.Z [--yes]"
-    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses, dispatches the release and pins the node example"
+    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses and dispatches the release"
   else
     echo "usage: release.sh X.Y.Z [--yes]" >&2
-    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses, dispatches the release and pins the node example" >&2
+    echo "  bumps the workspace, finalizes the changelog, pushes, rehearses and dispatches the release" >&2
   fi
   exit "${1:-2}"
 }
@@ -196,7 +196,6 @@ cont "${DIM}linux-x64 · linux-aarch64 · darwin-x64 · darwin-arm64 · windows-
 row rehearsal "${DIM}the same pipeline ×2${N} ${G}→${N} dry-run first, the release second"
 cont "${DIM}--yes runs it on the bumped commit with dry-run=true, nothing published, no tag${N}"
 cont "${DIM}and dispatches the real run only once the rehearsal run is green${N}"
-row example "${DIM}examples/node → $v${N} ${DIM}pin + lock + smoke after the tag${N}"
 
 # ---- verdict ------------------------------------------------------------
 echo
@@ -223,7 +222,7 @@ fi
 just version "$v"
 python3 scripts/changelog-finalize.py "$v"
 # Every workspace lockfile follows the bump inside the same commit.
-# examples/node tracks the published package, so it moves after the release run.
+# examples/node links to the local crate, so it has no registry lock to move.
 just lock
 git add -u
 if git diff --cached --quiet; then
@@ -263,10 +262,3 @@ if [ "$conclusion" != success ]; then
   exit 1
 fi
 echo "released: https://github.com/Lipen/nexus-raw/releases/tag/v$v"
-# The example tracks the published package, not the workspace: the registry
-# has the version only after the release run, so this is the first moment the
-# pin and its lock can move. The recipe also smokes the published package.
-if ! just example-pin "$v"; then
-  echo "release: the release is out, but examples/node still follows the old version; rerun just example-pin $v" >&2
-  exit 1
-fi

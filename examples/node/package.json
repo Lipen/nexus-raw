@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.26.0",
-  "description": "An external npm consumer of nexus-raw from the npm registry",
+  "description": "A runnable consumer of the local nexus-raw addon; the published package is checked by the nightly smoke",
   "scripts": {
     "start": "node publish-and-consume.mjs"
   },
   "dependencies": {
-    "@nexus-raw/nxr": "0.21.0"
+    "@nexus-raw/nxr": "link:../../crates/nexus-raw-napi"
   }
 }
