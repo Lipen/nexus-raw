@@ -1622,6 +1622,35 @@ async fn rm_removes_a_whole_version() {
     drop(rx);
 }
 
+#[tokio::test]
+async fn up_claim_failure_reports_the_structured_failure() {
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+    let local = TempDir::new().unwrap();
+    seed_complete(local.path(), "version.json", DOC);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(repo_url(&group), None), tx).unwrap();
+    let claim = ArtifactName::parse("version.json").unwrap();
+
+    let err = nxr
+        .up(local.path(), None, true, Some(claim))
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 3, "a refused PUT is an HTTP error: {err}");
+    let events = collect_events(&mut rx);
+    let summary = summary_of(&events).expect("the refused claim emits its summary");
+    assert_eq!(summary.uploaded, 0);
+    assert_eq!(summary.failed, vec!["version.json"]);
+    assert_eq!(
+        summary.failures,
+        vec![Failure {
+            name: "version.json".into(),
+            code: 3,
+        }]
+    );
+}
+
 /// Deletion is idempotent: the second rm sees only 404s and still succeeds.
 #[tokio::test]
 async fn second_rm_is_all_404_and_exits_clean() {
@@ -1657,7 +1686,7 @@ async fn second_rm_is_all_404_and_exits_clean() {
 async fn readonly_refuses_rm_and_changes_nothing() {
     let mock = MockNexus::start(Scenario::ReadOnly).unwrap();
     let local = TempDir::new().unwrap();
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     publish_version(&nxr, &mock, &local).await;
 
@@ -1667,6 +1696,16 @@ async fn readonly_refuses_rm_and_changes_nothing() {
         err.exit_code(),
         1,
         "read-only refusal is a data verdict: {err}"
+    );
+    let events = collect_events(&mut rx);
+    let summary = summary_of(&events).expect("the refused rm emits its summary");
+    assert_eq!(summary.failed, vec!["a.zip"]);
+    assert_eq!(
+        summary.failures,
+        vec![Failure {
+            name: "a.zip".into(),
+            code: 1,
+        }]
     );
     assert!(
         err.to_string().contains("read-only"),
