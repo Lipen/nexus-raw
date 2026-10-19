@@ -91,7 +91,8 @@ nxr verify vendor/prebuilt
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
 | `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
-| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--plan]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер |
+| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--segments N] [--plan] [--prefix P]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер. `--segments` режет каждый артефакт на параллельные Range-запросы |
+| `nxr clone <URL> <DIR> [--state FILE] [--no-state] [--verify] [--plan] [--prefix P]` | клон всего репозитория: проверенные загрузки, запечатывание локальных маркеров, необязательный кэш фактов, который не перехэширует неизменённые файлы |
 | `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет |
 | `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
 | `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
