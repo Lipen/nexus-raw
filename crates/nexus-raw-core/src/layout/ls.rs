@@ -146,9 +146,13 @@ pub async fn search_assets(
 /// facts per name.
 ///
 /// The prefix is any directory inside `/repository/<repo>/`, including the
-/// repository root: the walk is repository-wide (`q` only cuts pages) and the
-/// client-side whole-segment prefix filter is the correctness mechanism, the
-/// same rule every listing helper obeys.
+/// repository root.
+/// The walk is repository-wide even when a prefix is given: `q` is a loose
+/// server substring match, and a clone is a backup whose page set must be
+/// complete, so a `q` miss would be a silent hole the client-side prefix
+/// filter could not recover.
+/// The whole-segment prefix filter is applied client-side and is the exact
+/// answer.
 /// Leaf `.sha256` siblings are hidden, and names that fail the artifact
 /// grammar are skipped rather than failing the whole walk.
 ///
@@ -162,8 +166,7 @@ pub async fn search_repo_assets(
     base: &str,
 ) -> Result<Vec<(ArtifactName, Option<Digest>, Option<u64>)>, Error> {
     let (repo, prefix) = split_prefix(base)?;
-    let q = scope_path(&prefix);
-    let assets = walk(client, base, &repo, q.as_deref()).await?;
+    let assets = walk(client, base, &repo, None).await?;
     let mut out = Vec::new();
     for asset in assets {
         let rel = drop_segments(&asset.path, prefix.len());
