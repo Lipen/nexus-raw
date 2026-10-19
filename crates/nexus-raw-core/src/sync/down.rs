@@ -11,6 +11,7 @@ use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 use crate::model::sibling;
 use crate::model::state::{bytes_path, sibling_path};
+use crate::primitive::{assemble, MAX_SEGMENTS};
 use crate::sync::diff::Action;
 use crate::transport::aimd::WorkerLimit;
 use crate::transport::client::NexusClient;
@@ -19,6 +20,13 @@ use sha2::Digest as _;
 /// The stable part-file prefix: `<prefix><128-bit sha256 hex>` per artifact name.
 /// A part survives an interrupted run so a rerun resumes it.
 const PART_PREFIX: &str = ".nxr-part-";
+/// The segmented staging prefix: the same 128-bit name token, so the directory
+/// belongs to exactly one artifact and survives an interrupted run.
+const SEGMENT_PREFIX: &str = ".nxr-segments-";
+/// The staging manifest: the object size and the segment count the files were
+/// cut for. A mismatch discards the staging area instead of assembling a
+/// tiling that no longer matches the object.
+const SEGMENT_MANIFEST: &str = "manifest";
 /// Legacy temp prefix from pre-resume versions.
 /// Cleaned up when the owning pid is dead.
 const ORPHAN_PREFIX: &str = ".nxr-tmp-";
@@ -29,14 +37,26 @@ pub(crate) enum Outcome {
     Failed(Error),
 }
 
-/// The stable part-file path for a name inside `dir`.
+/// The 128-bit name token shared by the part file and the segmented staging
+/// directory.
 ///
-/// The digest is a 128-bit truncation of SHA-256 over the encoded name: two distinct names colliding into one part file would interleave writes, so the space stays far beyond birthday reach for any plausible directory.
+/// Two distinct names colliding into one part file would interleave writes, so
+/// the space stays far beyond birthday reach for any plausible directory.
+fn name_token(name: &ArtifactName) -> String {
+    let digest = sha2::Sha256::digest(name.encoded().as_bytes());
+    digest[..16].iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The stable part-file path for a name inside `dir`.
 #[must_use]
 pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
-    let digest = sha2::Sha256::digest(name.encoded().as_bytes());
-    let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();
-    dir.join(format!("{PART_PREFIX}{hex}"))
+    dir.join(format!("{PART_PREFIX}{}", name_token(name)))
+}
+
+/// The segmented staging directory of a name inside `dir`.
+#[cfg(not(target_arch = "wasm32"))]
+fn segment_dir(dir: &Path, name: &ArtifactName) -> PathBuf {
+    dir.join(format!("{SEGMENT_PREFIX}{}", name_token(name)))
 }
 
 /// Download the artifacts.
@@ -45,6 +65,9 @@ pub fn part_path(dir: &Path, name: &ArtifactName) -> PathBuf {
 /// The Summary event goes out before the error returns.
 /// Part files resume by default.
 /// `fresh` starts every name from zero.
+/// `segments` splits each artifact into that many concurrent Range spans; the
+/// worker budget still caps the network concurrency, so the flag widens one
+/// object, never the run.
 ///
 /// # Errors
 ///
@@ -56,7 +79,26 @@ pub async fn execute(
     actions: Vec<Action>,
     fresh: bool,
     workers: Arc<WorkerLimit>,
+    segments: Option<usize>,
 ) -> Result<Summary, Error> {
+    if let Some(n) = segments {
+        if !(2..=MAX_SEGMENTS).contains(&n) {
+            return Err(Error::misuse(format!(
+                "segments must be between 2 and {MAX_SEGMENTS}, got {n}"
+            )));
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    if segments.is_some() {
+        return Err(Error::misuse(
+            "segmented downloads are not available on this target",
+        ));
+    }
+    // The artifact slot bounds how many segmented artifacts build their span
+    // futures at once. It is deliberately separate from the AIMD budget: a
+    // slot is not a connection, so holding one cannot starve the spans.
+    #[cfg(not(target_arch = "wasm32"))]
+    let slots = segments.map(|_| Arc::new(tokio::sync::Semaphore::new(workers.limit().max(1))));
     let mut set = tokio::task::JoinSet::new();
     let mut skipped = 0usize;
     for action in actions {
@@ -70,6 +112,38 @@ pub async fn execute(
                     .await;
             }
             Action::Download { name, size, digest } => {
+                // Segmented downloads take a slot, not a worker permit: their
+                // span futures acquire the workers one Range at a time.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let (Some(n), Some(slots)) = (segments, slots.as_ref()) {
+                    let slot = slots
+                        .clone()
+                        .acquire_owned()
+                        .await
+                        .map_err(|e| Error::misuse(format!("segment slot closed: {e}")))?;
+                    let client = client.clone();
+                    let dir = dir.clone();
+                    let dir_url = dir_url.clone();
+                    let workers = workers.clone();
+                    set.spawn(async move {
+                        let result = download_segmented(
+                            &client,
+                            &dir,
+                            &dir_url,
+                            &name,
+                            size,
+                            digest,
+                            fresh,
+                            n,
+                            workers.clone(),
+                            true,
+                        )
+                        .await;
+                        drop(slot);
+                        settle(result, name, &workers)
+                    });
+                    continue;
+                }
                 // The AIMD budget admits the task under the current limit (§7):
                 // the permit settles with the task's outcome when it finishes.
                 let permit = workers.acquire().await.map_err(Error::misuse)?;
@@ -84,20 +158,7 @@ pub async fn execute(
                     // The permit is dropped first, so a decrease that landed
                     // mid-task reclaims it in `release_*` as owed.
                     drop(permit);
-                    if result.is_ok() {
-                        workers.release_success();
-                        Ok(name)
-                    } else {
-                        workers.release_failure();
-                        Err(result.err().unwrap_or_else(|| {
-                            (
-                                name.clone(),
-                                Outcome::Failed(Error::misuse(
-                                    "internal: a failed download carried no error",
-                                )),
-                            )
-                        }))
-                    }
+                    settle(result, name, &workers)
                 });
             }
         }
@@ -228,11 +289,27 @@ pub(crate) async fn download_one(
             ));
         }
     }
+    finish_download(client, dir, name, &part, actual, done, size_hint, emit_done).await
+}
+
+/// Rename the verified part into place and write its local marker.
+///
+/// The bytes are already digest-checked: a destination-side failure (a symlink
+/// in the way, a permission) keeps the part for the rerun instead of
+/// discarding a complete transfer.
+#[allow(clippy::too_many_arguments)]
+async fn finish_download(
+    client: &NexusClient,
+    dir: &Path,
+    name: &ArtifactName,
+    part: &Path,
+    actual: Digest,
+    done: u64,
+    total: Option<u64>,
+    emit_done: bool,
+) -> Result<(), (ArtifactName, Outcome)> {
     let final_bytes = bytes_path(dir, name);
     if let Some(parent) = final_bytes.parent() {
-        // The bytes are downloaded and digest-checked: a destination-side
-        // failure (a symlink in the way, a permission) must keep the part for
-        // the rerun instead of discarding a complete transfer.
         if let Err(e) = ensure_symlink_free(parent, dir) {
             return Err((name.clone(), Outcome::Failed(e)));
         }
@@ -240,7 +317,7 @@ pub(crate) async fn download_one(
             return Err((name.clone(), Outcome::Failed(Error::io(parent, e))));
         }
     }
-    if let Err(e) = tokio::fs::rename(&part, &final_bytes).await {
+    if let Err(e) = tokio::fs::rename(part, &final_bytes).await {
         return Err((name.clone(), Outcome::Failed(Error::io(&final_bytes, e))));
     }
     let marker = sibling::format_line(name.as_str(), &actual);
@@ -258,9 +335,264 @@ pub(crate) async fn download_one(
     if emit_done {
         client
             .progress()
-            .done(name.as_str(), Dir::Down, false, done, size_hint)
+            .done(name.as_str(), Dir::Down, false, done, total)
             .await;
     }
+    Ok(())
+}
+
+/// Settle one artifact's outcome into the worker budget.
+fn settle(
+    result: Result<(), (ArtifactName, Outcome)>,
+    name: ArtifactName,
+    workers: &WorkerLimit,
+) -> Result<ArtifactName, (ArtifactName, Outcome)> {
+    match result {
+        Ok(()) => {
+            workers.release_success();
+            Ok(name)
+        }
+        Err(e) => {
+            workers.release_failure();
+            Err(e)
+        }
+    }
+}
+
+/// The split of `total` into `segments` contiguous closed ranges.
+#[cfg(not(target_arch = "wasm32"))]
+fn split_bounds(total: u64, segments: usize) -> Vec<(u64, u64)> {
+    let base = total / segments as u64;
+    let rem = total % segments as u64;
+    let mut bounds = Vec::with_capacity(segments);
+    let mut start = 0;
+    for i in 0..segments {
+        let len = base + u64::from(i < rem as usize);
+        bounds.push((start, start + len - 1));
+        start += len;
+    }
+    debug_assert_eq!(start, total, "the spans must tile the object exactly");
+    bounds
+}
+
+/// The staging manifest, when it names exactly this object and split.
+#[cfg(not(target_arch = "wasm32"))]
+async fn read_manifest(staging: &Path) -> Option<(u64, usize)> {
+    let text = tokio::fs::read_to_string(staging.join(SEGMENT_MANIFEST))
+        .await
+        .ok()?;
+    let mut words = text.split_whitespace();
+    let total = words.next()?.parse().ok()?;
+    let segments = words.next()?.parse().ok()?;
+    words.next().is_none().then_some((total, segments))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn write_manifest(staging: &Path, total: u64, segments: usize) -> Result<(), Error> {
+    let path = staging.join(SEGMENT_MANIFEST);
+    let mut f = crate::transport::client::write_options(false)
+        .open(&path)
+        .await
+        .map_err(|e| Error::io(&path, e))?;
+    f.write_all(format!("{total} {segments}\n").as_bytes())
+        .await
+        .map_err(|e| Error::io(&path, e))?;
+    f.flush().await.map_err(|e| Error::io(&path, e))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn segment_complete(path: &Path, span: u64) -> bool {
+    tokio::fs::symlink_metadata(path)
+        .await
+        .is_ok_and(|m| m.is_file() && m.len() == span)
+}
+
+/// The plain single-stream transfer, under one worker permit.
+///
+/// The segmented path falls back here when the object is too small to split,
+/// when its size is unknown, or when the server ignores Range.
+#[allow(clippy::too_many_arguments)]
+#[cfg(not(target_arch = "wasm32"))]
+async fn single_stream(
+    client: &NexusClient,
+    dir: &Path,
+    dir_url: &str,
+    name: &ArtifactName,
+    size_hint: Option<u64>,
+    expected: Option<Digest>,
+    fresh: bool,
+    workers: Arc<WorkerLimit>,
+    emit_done: bool,
+) -> Result<(), (ArtifactName, Outcome)> {
+    let permit = workers
+        .acquire()
+        .await
+        .map_err(|e| (name.clone(), Outcome::Failed(Error::misuse(e))))?;
+    let result = download_one(
+        client, dir, dir_url, name, size_hint, expected, fresh, emit_done,
+    )
+    .await;
+    drop(permit);
+    result
+}
+
+/// GET one artifact through `segments` concurrent Range spans.
+///
+/// Each span streams into its own file under a stable hidden staging
+/// directory. A completed span is kept across runs, so a rerun fetches only the
+/// spans that did not finish. The spans assemble positionally into the stable
+/// part file, one pass hashes it, and the marker check decides the rename,
+/// exactly like the single-stream path.
+#[allow(clippy::too_many_arguments)]
+#[cfg(not(target_arch = "wasm32"))]
+async fn download_segmented(
+    client: &NexusClient,
+    dir: &Path,
+    dir_url: &str,
+    name: &ArtifactName,
+    size_hint: Option<u64>,
+    expected: Option<Digest>,
+    fresh: bool,
+    segments: usize,
+    workers: Arc<WorkerLimit>,
+    emit_done: bool,
+) -> Result<(), (ArtifactName, Outcome)> {
+    let bytes_url = client.object_url(dir_url, name);
+    let total = match size_hint {
+        Some(total) => total,
+        None => match client.head_info(&bytes_url).await {
+            Ok(info) if (200..300).contains(&info.status) => match info.size {
+                Some(total) => total,
+                None => {
+                    return single_stream(
+                        client, dir, dir_url, name, None, expected, fresh, workers, emit_done,
+                    )
+                    .await;
+                }
+            },
+            Ok(info) => {
+                return Err((
+                    name.clone(),
+                    Outcome::Failed(Error::Http {
+                        status: info.status,
+                        url: bytes_url,
+                    }),
+                ));
+            }
+            Err(e) => return Err((name.clone(), Outcome::Failed(e))),
+        },
+    };
+    // A zero-byte object, or a split that cannot give every span a byte: the
+    // plain path does the job without a staging area.
+    if total == 0 || total < segments as u64 {
+        return single_stream(
+            client,
+            dir,
+            dir_url,
+            name,
+            Some(total),
+            expected,
+            fresh,
+            workers,
+            emit_done,
+        )
+        .await;
+    }
+    let part = part_path(dir, name);
+    let staging = segment_dir(dir, name);
+    let bounds = split_bounds(total, segments);
+    if fresh || read_manifest(&staging).await != Some((total, segments)) {
+        let _ = tokio::fs::remove_dir_all(&staging).await;
+        tokio::fs::create_dir_all(&staging)
+            .await
+            .map_err(|e| (name.clone(), Outcome::Failed(Error::io(&staging, e))))?;
+        write_manifest(&staging, total, segments)
+            .await
+            .map_err(|e| (name.clone(), Outcome::Failed(e)))?;
+    }
+    let fetches: Vec<_> = bounds
+        .iter()
+        .enumerate()
+        .map(|(i, &(start, end_incl))| {
+            let file = staging.join(format!("segment-{i:04}.part"));
+            let bytes_url = bytes_url.clone();
+            let name = name.clone();
+            let workers = workers.clone();
+            async move {
+                let span = end_incl - start + 1;
+                if segment_complete(&file, span).await {
+                    return Ok::<(usize, u64), (usize, Error)>((i, 0));
+                }
+                let _permit = workers.acquire().await.map_err(|e| (i, Error::misuse(e)))?;
+                client
+                    .fetch_range(
+                        (name.as_str(), Dir::Down),
+                        &bytes_url,
+                        start,
+                        end_incl,
+                        &file,
+                    )
+                    .await
+                    .map(|done| (i, done))
+                    .map_err(|e| (i, e))
+            }
+        })
+        .collect();
+    for staged in futures_util::future::join_all(fetches).await {
+        if let Err((_, e)) = staged {
+            if matches!(e, Error::RangeIgnored { .. }) {
+                // The server answered a span with the whole body: the plain
+                // path is the documented degradation, and the staging area is
+                // worthless now.
+                let _ = tokio::fs::remove_dir_all(&staging).await;
+                let _ = tokio::fs::remove_file(&part).await;
+                return single_stream(
+                    client,
+                    dir,
+                    dir_url,
+                    name,
+                    Some(total),
+                    expected,
+                    true,
+                    workers,
+                    emit_done,
+                )
+                .await;
+            }
+            return Err((name.clone(), Outcome::Failed(e)));
+        }
+    }
+    if let Err(e) = assemble(&bounds, &staging, &part, total).await {
+        return Err((name.clone(), Outcome::Failed(e)));
+    }
+    let actual = match crate::model::digest::sha256_file(&part) {
+        Ok(d) => d,
+        Err(e) => return Err((name.clone(), Outcome::Failed(Error::io(&part, e)))),
+    };
+    if let Some(expected) = &expected {
+        if &actual != expected {
+            let _ = tokio::fs::remove_file(&part).await;
+            let _ = tokio::fs::remove_dir_all(&staging).await;
+            return Err((
+                name.clone(),
+                Outcome::Mismatch(format!(
+                    "downloaded digest {actual}, remote sibling {expected}"
+                )),
+            ));
+        }
+    }
+    finish_download(
+        client,
+        dir,
+        name,
+        &part,
+        actual,
+        total,
+        Some(total),
+        emit_done,
+    )
+    .await?;
+    let _ = tokio::fs::remove_dir_all(&staging).await;
     Ok(())
 }
 

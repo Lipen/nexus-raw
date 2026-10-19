@@ -405,7 +405,7 @@ pub async fn get_segmented(
 /// Assemble the staged segments positionally into `part`: every segment file opens,
 /// seeks to its start offset and streams its bytes in one pass, no full-file buffer.
 #[cfg(not(target_arch = "wasm32"))]
-async fn assemble(
+pub(crate) async fn assemble(
     bounds: &[(u64, u64)],
     staging: &Path,
     part: &Path,

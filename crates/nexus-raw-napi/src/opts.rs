@@ -173,6 +173,9 @@ pub struct NxrDownOpts {
     pub ls: Option<bool>,
     /// Ignore existing part files: every name downloads from zero.
     pub fresh: Option<bool>,
+    /// Split each artifact into this many concurrent Range spans, 2..=64.
+    /// The worker budget still caps the total concurrency.
+    pub segments: Option<u32>,
 }
 
 /// `diff` options: how the remote directory is enumerated.

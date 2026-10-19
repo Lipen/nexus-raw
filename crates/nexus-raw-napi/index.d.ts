@@ -161,6 +161,8 @@ export interface NxrDownOpts extends NxrCommonOpts {
   ls?: boolean
   /** Ignore existing part files: every name downloads from zero. */
   fresh?: boolean
+  /** Split each artifact into this many concurrent Range spans, 2..=64. The worker budget still caps the total concurrency. */
+  segments?: number
 }
 
 export interface NxrDiffOpts extends NxrCommonOpts {

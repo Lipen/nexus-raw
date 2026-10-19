@@ -124,6 +124,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -s v -l verbose -d 'Print mo
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l segments -d 'Split each artifact into N concurrent byte-range requests (2 to 64). The worker budget still caps the total concurrency' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r

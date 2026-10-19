@@ -113,9 +113,15 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             names_from,
             ls,
             fresh,
+            segments,
             plan,
             prefix,
-        } => transfer::down(cli, src, dst, name, names_from, *ls, *fresh, *plan, prefix).await,
+        } => {
+            transfer::down(
+                cli, src, dst, name, names_from, *ls, *fresh, *plan, *segments, prefix,
+            )
+            .await
+        }
         Cmd::Rm {
             src,
             name,

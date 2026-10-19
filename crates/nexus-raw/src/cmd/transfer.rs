@@ -110,12 +110,13 @@ pub(crate) async fn down(
     ls: bool,
     fresh: bool,
     plan: bool,
+    segments: Option<usize>,
     prefixes: &[String],
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, src)?;
     let enum_src =
         enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
-    let result = run_down(&ctx, dst, enum_src, fresh, plan).await;
+    let result = run_down(&ctx, dst, enum_src, fresh, plan, segments).await;
     finish(ctx).await;
     result
 }
@@ -126,6 +127,7 @@ async fn run_down(
     enum_src: Enumeration,
     fresh: bool,
     plan: bool,
+    segments: Option<usize>,
 ) -> Result<(), Error> {
     if plan {
         let names = ctx.nxr.enumerate(enum_src).await?;
@@ -138,7 +140,9 @@ async fn run_down(
         }
         return Ok(());
     }
-    ctx.nxr.down(dst, enum_src, fresh).await?;
+    ctx.nxr
+        .down_with_segments(dst, enum_src, fresh, segments)
+        .await?;
     Ok(())
 }
 

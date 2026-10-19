@@ -5,7 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `down --segments N` splits each artifact into `N` concurrent closed Range spans, 2..=64.
+  A finished span survives an interrupted run, so a rerun fetches only the unfinished spans.
+  The spans assemble into the usual part file, one pass hashes it, and the marker check decides the rename.
+  The worker budget still caps the total concurrency, and a zero-byte object, an unsplittable one or a server that ignores Range falls back to the single-stream path.
+  The core exposes the same transfer as `Nxr::down_with_segments`, and the Node bindings accept `segments` on `NxrDownOpts`.
 
 ## [0.21.0] - 2026-10-19
 

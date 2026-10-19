@@ -173,6 +173,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         'nxr;down' {
             [CompletionResult]::new('--name', '--name', [CompletionResultType]::ParameterName, 'One explicit name (repeatable)')
             [CompletionResult]::new('--names-from', '--names-from', [CompletionResultType]::ParameterName, 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name')
+            [CompletionResult]::new('--segments', '--segments', [CompletionResultType]::ParameterName, 'Split each artifact into N concurrent byte-range requests (2 to 64). The worker budget still caps the total concurrency')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')

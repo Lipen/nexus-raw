@@ -368,6 +368,72 @@ fn down_explicit_name() {
     assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
 }
 
+/// `down --segments` splits each artifact over closed Range requests and lands
+/// the same bytes as one stream.
+#[test]
+fn down_segments_matches_the_single_stream() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    write_file(src.path(), "big.bin", &content);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "big.bin",
+        "--segments",
+        "4",
+    ]);
+    expect_exit(&down, 0, "down --segments");
+    assert_eq!(
+        read_file(dst.path(), "big.bin"),
+        content,
+        "the assembled spans must be byte-exact"
+    );
+    let ranged = srv
+        .requests()
+        .iter()
+        .filter(|r| {
+            r.method == "GET"
+                && r.path == "1.14.0/big.bin"
+                && matches!(r.outcome, Outcome::Status(206))
+        })
+        .count();
+    assert_eq!(
+        ranged,
+        4,
+        "four spans must ride four Range requests: {:?}",
+        srv.requests()
+    );
+}
+
+/// A segment count outside 2..=64 is misuse: exit 2, before any transfer.
+#[test]
+fn down_segments_bounds_are_misuse() {
+    let srv = server(Scenario::Atomic);
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+        "--segments",
+        "1",
+    ]);
+    expect_exit(&out, 2, "down --segments 1");
+    assert!(stderr(&out).contains("segments"), "{}", stderr(&out));
+}
+
 /// A foreign manifest.json on the server is ignored: enumeration comes only from flags.
 /// down without --name/--ls refuses even when a manifest-looking file exists.
 #[test]

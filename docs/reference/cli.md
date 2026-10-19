@@ -356,7 +356,7 @@ A search-dead server refuses the wait with `cannot enumerate` (exit 1): there is
 ## nxr down
 
 ```
-nxr down <SRC_URL> <DST_DIR> [--name NAME]... [--names-from FILE]... [--ls] [--fresh] [--plan] [--prefix PREFIX]
+nxr down <SRC_URL> <DST_DIR> [--name NAME]... [--names-from FILE]... [--ls] [--fresh] [--segments N] [--plan] [--prefix PREFIX]
 ```
 
 Download a remote directory into a local one, the mirror of `up`.
@@ -369,6 +369,7 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 | `--names-from <FILE>` | read names from a file, one per line (`-` is stdin); repeatable, combines with `--name` |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
+| `--segments <N>` | split each artifact into `N` concurrent Range spans, 2..=64. The worker budget still caps the total concurrency |
 | `--plan` | probe the server and print the plan without writing into `DST_DIR` (the `--dry-run` spelling works as an alias) |
 | `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |
 
@@ -420,13 +421,20 @@ $ echo $?
 |:----:|:-----|
 | `0` | plan executed, local copies complete |
 | `1` | data refusal: `cannot enumerate`, `missing`, `mismatch` with the remote sibling. local I/O failures |
-| `2` | misuse: an unsafe `--name` |
+| `2` | misuse: an unsafe `--name`, a `--segments` count outside 2..=64 |
 | `3` | transport or auth failure |
 
 Part files are named `.nxr-part-<32 hex>` and are stable per artifact name, so a rerun finds its resume fuel without a state file.
 `--fresh` ignores the parts and downloads every name from zero.
 A resumed part that belongs to an older remote version fails the digest check and is discarded once: the name restarts from zero under the same digest check.
 A fresh download that still diverges refuses the run (exit 1), so nothing divergent is ever written.
+
+`--segments N` splits each artifact into `N` concurrent closed Range spans.
+Each span streams into a hidden staging directory `.nxr-segments-<32 hex>`, and a finished span survives a killed run, so a rerun fetches only the spans that did not finish.
+The spans assemble into the usual part file, one pass hashes the result, and the marker check decides the rename.
+The worker budget still caps the total concurrency: the flag widens one object, never the run.
+A zero-byte object, a split that cannot give every span a byte, or a server that ignores Range falls back to the plain single-stream path.
+`--fresh` discards the staged spans too.
 
 ## nxr diff
 

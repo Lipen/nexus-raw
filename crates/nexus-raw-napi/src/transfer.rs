@@ -130,7 +130,12 @@ pub async fn down(
         }
     };
     let summary = nxr
-        .down(Path::new(&dst_dir), enum_src, o.fresh.unwrap_or(false))
+        .down_with_segments(
+            Path::new(&dst_dir),
+            enum_src,
+            o.fresh.unwrap_or(false),
+            o.segments.map(|n| n as usize),
+        )
         .await;
     drop(nxr);
     let summary = match summary {

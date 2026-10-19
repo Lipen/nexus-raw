@@ -297,6 +297,12 @@ $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o a
 `down` resumes each name's part file the same way by default, and `--fresh` ignores the parts to start every name from zero.
 A resumed part that belongs to an older remote version fails the digest check: `nxr` discards that part once and restarts the name from zero under the same digest check, so a rerun after a remote update self-heals instead of refusing.
 Only a fresh download that still diverges from the sibling refuses the run with exit 1.
+
+`down --segments N` splits one artifact into `N` concurrent closed Range spans.
+Each span streams into a stable hidden staging directory (`.nxr-segments-<32 hex>`), and a finished span survives a killed run, so a rerun fetches only the unfinished spans.
+The spans assemble positionally into the usual part file, one read pass hashes it, and the marker check decides the rename.
+The worker budget still caps the total concurrency: the flag widens one object, never the run.
+A zero-byte object, a split that cannot give every span a byte, or a server that answers a ranged GET with the whole body falls back to the single-stream path.
 Uploads cannot resume: a PUT is byte-exact and replayed whole, which is safe because PUTs are idempotent.
 A server-side cut of the first PUT attempt demonstrates the replay: the retry sends the object from byte zero, and the stored content is complete.
 

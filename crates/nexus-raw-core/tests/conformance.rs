@@ -728,6 +728,202 @@ async fn down_stale_part_restarts_without_spending_a_retry() {
     assert!(!part.exists());
 }
 
+/// The hidden staging directory a segmented download uses for one name.
+fn segment_dir(dst: &Path, name: &str) -> std::path::PathBuf {
+    let part = part_path(dst, &ArtifactName::parse(name).unwrap());
+    let token = part
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .replace(".nxr-part-", "");
+    dst.join(format!(".nxr-segments-{token}"))
+}
+
+fn ranged_gets(mock: &MockNexus, path: &str) -> usize {
+    mock.requests()
+        .iter()
+        .filter(|r| {
+            r.method == "GET" && r.path == path && matches!(r.outcome, Outcome::Status(206))
+        })
+        .count()
+}
+
+#[tokio::test]
+async fn segmented_down_lands_the_same_bytes_as_one_stream() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let summary = nxr
+        .down_with_segments(
+            dst.path(),
+            Enumeration::Names(names(&["big.bin"])),
+            false,
+            Some(4),
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(
+        std::fs::read(dst.path().join("big.bin")).unwrap(),
+        content,
+        "the assembled spans must be byte-exact"
+    );
+    assert_eq!(
+        ranged_gets(&mock, &format!("{VERSION}/big.bin")),
+        4,
+        "four spans must ride four Range requests"
+    );
+    assert!(
+        !segment_dir(dst.path(), "big.bin").exists(),
+        "the staging area only outlives a failed run"
+    );
+}
+
+#[tokio::test]
+async fn segmented_down_resumes_finished_spans() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    // A previous run finished the first span before it died.
+    let dst = TempDir::new().unwrap();
+    let staging = segment_dir(dst.path(), "big.bin");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("segment-0000.part"), &content[..25_000]).unwrap();
+    std::fs::write(staging.join("manifest"), b"100000 4\n").unwrap();
+
+    let summary = nxr
+        .down_with_segments(
+            dst.path(),
+            Enumeration::Names(names(&["big.bin"])),
+            false,
+            Some(4),
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("big.bin")).unwrap(), content);
+    assert_eq!(
+        ranged_gets(&mock, &format!("{VERSION}/big.bin")),
+        3,
+        "the finished span must be reused, not fetched again"
+    );
+}
+
+#[tokio::test]
+async fn segmented_down_fresh_refetches_every_span() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let staging = segment_dir(dst.path(), "big.bin");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("segment-0000.part"), &content[..25_000]).unwrap();
+    std::fs::write(staging.join("manifest"), b"100000 4\n").unwrap();
+
+    nxr.down_with_segments(
+        dst.path(),
+        Enumeration::Names(names(&["big.bin"])),
+        true,
+        Some(4),
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(dst.path().join("big.bin")).unwrap(), content);
+    assert_eq!(
+        ranged_gets(&mock, &format!("{VERSION}/big.bin")),
+        4,
+        "--fresh ignores the staged spans"
+    );
+}
+
+#[tokio::test]
+async fn segmented_down_falls_back_when_range_is_ignored() {
+    let mock = MockNexus::start(Scenario::IgnoreRange).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..50_000u32).map(|i| (i % 199) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let summary = nxr
+        .down_with_segments(
+            dst.path(),
+            Enumeration::Names(names(&["big.bin"])),
+            false,
+            Some(4),
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("big.bin")).unwrap(), content);
+    assert_eq!(
+        ranged_gets(&mock, &format!("{VERSION}/big.bin")),
+        0,
+        "an ignore-range server never answers 206"
+    );
+}
+
+#[tokio::test]
+async fn segmented_down_degrades_on_a_tiny_object() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "tiny.bin", b"abc");
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    nxr.down_with_segments(
+        dst.path(),
+        Enumeration::Names(names(&["tiny.bin"])),
+        false,
+        Some(8),
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(dst.path().join("tiny.bin")).unwrap(), b"abc");
+    assert!(!segment_dir(dst.path(), "tiny.bin").exists());
+}
+
+#[tokio::test]
+async fn segmented_down_bounds_are_misuse() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let dst = TempDir::new().unwrap();
+    let out = dst.path().join("out");
+
+    for n in [1usize, 65] {
+        let err = nxr
+            .down_with_segments(&out, Enumeration::Names(names(&["a.zip"])), false, Some(n))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::Misuse(ref m) if m.contains("segments")),
+            "{n}: {err:?}"
+        );
+    }
+    assert!(!out.exists(), "a refused bound creates nothing");
+}
+
 #[tokio::test]
 async fn down_enumerates_explicit_names() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();

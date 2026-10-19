@@ -737,6 +737,39 @@ impl Nxr {
         enum_src: Enumeration,
         fresh: bool,
     ) -> Result<Summary, Error> {
+        self.down_with_segments(dir, enum_src, fresh, None).await
+    }
+
+    /// Download with each artifact split into `segments` concurrent Range
+    /// spans (`down --segments`).
+    ///
+    /// The worker budget still caps the network concurrency: the flag widens
+    /// one object, never the run. A zero-byte object, a split that cannot give
+    /// every span a byte, or a server that ignores Range falls back to the
+    /// plain single-stream path.
+    /// A finished span survives an interrupted run, so a rerun fetches only
+    /// the spans that did not finish.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`Self::down`], plus [`Error::Misuse`] when `segments` is
+    /// outside 2..=64.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn down_with_segments(
+        &self,
+        dir: &Path,
+        enum_src: Enumeration,
+        fresh: bool,
+        segments: Option<usize>,
+    ) -> Result<Summary, Error> {
+        if let Some(n) = segments {
+            if !(2..=crate::primitive::MAX_SEGMENTS).contains(&n) {
+                return Err(Error::misuse(format!(
+                    "segments must be between 2 and {}, got {n}",
+                    crate::primitive::MAX_SEGMENTS
+                )));
+            }
+        }
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| Error::io(dir, e))?;
@@ -764,6 +797,7 @@ impl Nxr {
             actions,
             fresh,
             aimd,
+            segments,
         )
         .await
     }

@@ -160,6 +160,10 @@ pub(crate) enum Cmd {
         /// Ignore existing part files: every name downloads from zero.
         #[arg(long)]
         fresh: bool,
+        /// Split each artifact into N concurrent byte-range requests (2 to 64).
+        /// The worker budget still caps the total concurrency.
+        #[arg(long, value_name = "N")]
+        segments: Option<usize>,
         /// Print the plan without transferring anything.
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,
