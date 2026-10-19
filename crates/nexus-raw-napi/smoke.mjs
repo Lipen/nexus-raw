@@ -37,6 +37,7 @@ try {
     uploaded: 0,
     downloaded: 0,
     skipped: 1,
+    sealed: 0,
     removed: 0,
     failed: [],
     failures: [],

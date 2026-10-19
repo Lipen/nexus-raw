@@ -320,7 +320,7 @@ export function down(srcUrl: string, dstDir: string, opts?: NxrDownOpts): Promis
 export function clone(srcUrl: string, dstDir: string, opts?: NxrCloneOpts): Promise<NxrSummary>
 
 /** The clone plan: every action, nothing written (`nxr clone --plan`). */
-export function clonePlan(srcUrl: string, dstDir: string, opts?: NxrCloneOpts): Promise<NxrClonePlanAction[]>
+export function clonePlan(srcUrl: string, dstDir: string, opts?: NxrCloneOpts): Promise<Array<NxrClonePlanAction>>
 
 /**
  * Compare a local directory against a remote one: the delta report (`nxr diff`).
