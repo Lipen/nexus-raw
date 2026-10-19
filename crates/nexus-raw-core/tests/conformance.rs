@@ -836,6 +836,12 @@ const DOC: &[u8] = br#"{"schema_version":1,"version":"1.0.0","artifacts":["a.zip
 
 /// Seed a source repository through `up`: two payloads, the version document and the manifest enumerating them, every name with its marker.
 async fn seed_source(mock: &MockNexus) -> Nxr {
+    seed_source_with_receiver(mock).await.0
+}
+
+/// The seeding run with its event stream: the mirror reports its own summary on
+/// the source facade, so a failure test needs the receiver.
+async fn seed_source_with_receiver(mock: &MockNexus) -> (Nxr, mpsc::UnboundedReceiver<Event>) {
     let local = TempDir::new().unwrap();
     seed_complete(local.path(), "a.zip", CONTENT);
     seed_complete(local.path(), "b.bin", b"second payload");
@@ -845,10 +851,10 @@ async fn seed_source(mock: &MockNexus) -> Nxr {
         br#"{"artifacts":["version.json","a.zip","b.bin","manifest.json"]}"#,
     )
     .unwrap();
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(mock, None), tx).unwrap();
     nxr.up(local.path(), None, true, None).await.unwrap();
-    nxr
+    (nxr, rx)
 }
 
 /// Every object the fixture puts into a repository: bytes and markers, in manifest order.
@@ -982,6 +988,37 @@ async fn mirror_refuses_diverged_destination_untouched() {
     );
     assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip")), 0);
     assert_eq!(dst_mock.put_count(&format!("{VERSION}/a.zip.sha256")), 0);
+}
+
+#[tokio::test]
+async fn mirror_failure_reports_the_structured_failure() {
+    let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (src, mut rx) = seed_source_with_receiver(&src_mock).await;
+    // Drop the seeding events: the mirror's summary must be the next one.
+    let _ = collect_events(&mut rx);
+
+    // The destination group refuses every PUT with 405: the staged bytes never land.
+    let first = MockNexus::start(Scenario::Atomic).unwrap();
+    let second = MockNexus::start(Scenario::Atomic).unwrap();
+    let group = MockNexus::start_group(&[&first, &second]).unwrap();
+    let (dst_tx, _dst_rx) = mpsc::unbounded_channel();
+    let dst = Nxr::new(config_at(repo_url(&group), None), dst_tx).unwrap();
+
+    let err = src
+        .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 3, "a refused PUT is an HTTP error: {err}");
+    let events = collect_events(&mut rx);
+    let summary = summary_of(&events).expect("the failed mirror emits its summary");
+    assert_eq!(summary.failed, vec!["a.zip"]);
+    assert_eq!(
+        summary.failures,
+        vec![Failure {
+            name: "a.zip".into(),
+            code: 3,
+        }]
+    );
 }
 
 #[tokio::test]
