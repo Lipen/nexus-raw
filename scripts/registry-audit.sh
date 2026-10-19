@@ -6,9 +6,12 @@
 #   registry-audit.sh
 #
 # The crates index, npm and PyPI are probed for the workspace version
-# through scripts/registry-probe.sh, each with a 12-attempt,
-# 30-second-apart budget. A miss is recorded and the audit continues, so one
-# pass names every missing artifact; the exit code judges the whole set.
+# through scripts/registry-probe.sh, each with a 20-attempt,
+# 30-second-apart budget.
+# The npm document can trail its publish by ten minutes, the same lag that
+# held the 0.22.0 platform package.
+# A miss is recorded and the audit continues, so one pass names every
+# missing artifact, and the exit code judges the whole set.
 #
 # Exit codes: 0 every artifact is visible, 1 something is missing, 2 bad input.
 set -eu
@@ -28,7 +31,7 @@ here="$(dirname "$0")"
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 [ -n "$version" ] || { echo "registry-audit: no workspace version in Cargo.toml" >&2; exit 1; }
 
-attempts=12
+attempts=20
 interval=30
 fail=0
 for crate in nexus-raw-core nexus-raw nexus-raw-tui mock-nexus; do
