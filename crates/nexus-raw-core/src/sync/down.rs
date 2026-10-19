@@ -501,7 +501,15 @@ async fn download_segmented(
     let part = part_path(dir, name);
     let staging = segment_dir(dir, name);
     let bounds = split_bounds(total, segments);
-    if fresh || read_manifest(&staging).await != Some((total, segments)) {
+    // The staging path is predictable beside the destination. A planted
+    // symlink or a non-directory must never be followed as resume state.
+    let sane = tokio::fs::symlink_metadata(&staging)
+        .await
+        .is_ok_and(|meta| meta.is_dir());
+    if !sane {
+        let _ = tokio::fs::remove_file(&staging).await;
+    }
+    if fresh || !sane || read_manifest(&staging).await != Some((total, segments)) {
         let _ = tokio::fs::remove_dir_all(&staging).await;
         tokio::fs::create_dir_all(&staging)
             .await

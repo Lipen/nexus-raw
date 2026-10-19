@@ -905,6 +905,44 @@ async fn segmented_down_degrades_on_a_tiny_object() {
 }
 
 #[tokio::test]
+#[cfg(unix)]
+async fn segmented_down_replaces_a_symlinked_staging_dir() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    let dst = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let staging = segment_dir(dst.path(), "big.bin");
+    std::os::unix::fs::symlink(outside.path(), &staging).unwrap();
+
+    let summary = nxr
+        .down_with_segments(
+            dst.path(),
+            Enumeration::Names(names(&["big.bin"])),
+            false,
+            Some(4),
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("big.bin")).unwrap(), content);
+    assert_eq!(
+        std::fs::read_dir(outside.path()).unwrap().count(),
+        0,
+        "no span may land through the planted symlink"
+    );
+    assert!(
+        !staging.exists(),
+        "the real staging dir is removed after the assembly"
+    );
+}
+
+#[tokio::test]
 async fn segmented_down_bounds_are_misuse() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();

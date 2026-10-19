@@ -11,6 +11,7 @@
 //! ignores it entirely. `verify`, `audit` and `doctor` never read it.
 
 use std::collections::BTreeMap;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -143,7 +144,13 @@ impl CloneState {
                 std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
             }
         }
-        std::fs::write(path, bytes).map_err(|e| Error::io(path, e))
+        // The cache path lives in a user-chosen directory: a planted symlink
+        // must never redirect the write. O_NOFOLLOW refuses it on unix.
+        let mut f = crate::transport::client::write_options_blocking(false)
+            .open(path)
+            .map_err(|e| Error::io(path, e))?;
+        f.write_all(&bytes).map_err(|e| Error::io(path, e))?;
+        f.flush().map_err(|e| Error::io(path, e))
     }
 
     fn digest_of(&self, name: &ArtifactName, size: u64, mtime_ns: u64) -> Option<Digest> {
