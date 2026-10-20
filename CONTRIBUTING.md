@@ -67,10 +67,14 @@ The rehearsal runs the gate, every build and the npm staging with nothing publis
 Only a green rehearsal dispatches the real run, which the act then watches to its verdict.
 `examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.
 The published package is covered by the release consumer smoke and the daily `smoke.yml` install of `@latest`.
+The release's own `verify` job is the version-specific gate: it installs the exact published version, runs the published example against the mock, and checks the CLI.
 
-The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and only then the finalize job creates the tag and the GitHub release with the notes taken from the same changelog section.
+The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then the `verify` job installs the exact published version and runs the published example.
+The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
+Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
-A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, and a hotfix on master rides the fresh dispatch.
+A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, `verify` runs again, and `finalize` repeats the idempotent promotion and tag.
+A hotfix on master rides the fresh dispatch.
 A permanent registry refusal burns the number: bump and go again.
 The tag is created by the workflow and is not signed: the signed commits and the npm provenance carry the trust.
 

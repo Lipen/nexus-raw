@@ -6,6 +6,9 @@
 # The platform packages (`npm/npm-*`), the staged main package (`pkg-main`)
 # and the bridge (`packaging/npm-bridge`) all go out through here: the name
 # and the version come from each `<dir>/package.json`.
+# NPM_TAG selects the dist-tag, `latest` by default.
+# A release publishes main and the bridge under `next` and promotes them to
+# `latest` only after the published example passes.
 # A package already on the registry is skipped, a package that appears only
 # after our failed attempt lost a race to a concurrent run (not a failure),
 # and a package that never appears fails the run. Every package is attempted
@@ -15,14 +18,19 @@
 set -eu
 
 usage() {
-  echo "usage: npm-publish.sh <package-dir>..."
+  echo "usage: NPM_TAG=<tag> npm-publish.sh <package-dir>..."
   echo "  publishes each staged package dir, skipping versions already on the registry"
+  echo "  NPM_TAG defaults to latest"
 }
 usage_err() { usage >&2; exit 2; }
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
 esac
 [ "$#" -ge 1 ] || usage_err
+tag="${NPM_TAG:-latest}"
+case "$tag" in
+  ''|*[!A-Za-z0-9._-]*) usage_err ;;
+esac
 for dir in "$@"; do
   case "$dir" in
     -*) usage_err ;;
@@ -40,7 +48,7 @@ for dir in "$@"; do
   fi
   if "$here/registry-probe.sh" npm "$name" "$version"; then
     echo "$name@$version is already on the registry, skipping"
-  elif ( cd "$dir" && npm publish . --provenance --access public ); then
+  elif ( cd "$dir" && npm publish . --provenance --access public --tag "$tag" ); then
     echo "published"
   elif "$here/registry-probe.sh" npm "$name" "$version"; then
     echo "$name@$version appeared after our publish attempt: lost the race to a concurrent run, not broken"

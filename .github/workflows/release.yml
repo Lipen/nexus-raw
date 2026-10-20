@@ -670,8 +670,10 @@ jobs:
         env:
           SMOKE_MODE: ${{ inputs.dry-run && 'rehearsal' || 'release' }}
 
-      - name: Publish the main package
+      - name: Publish the main package under next
         if: ${{ !inputs.dry-run }}
+        env:
+          NPM_TAG: next
         run: scripts/npm-publish.sh pkg-main
 
   # The Python reference client ships to PyPI: the same stdlib-only nxr.py,
@@ -748,25 +750,23 @@ jobs:
       - name: The surface mirrors the main package
         run: scripts/check-bridge-surface.sh
 
-      - name: Publish the bridge
+      - name: Publish the bridge under next
         if: ${{ !inputs.dry-run }}
+        env:
+          NPM_TAG: next
         run: scripts/npm-publish.sh packaging/npm-bridge
 
-  # The last job, and the only one that touches tags: after every artifact
-  # is confirmed visible on its registry, the tree gets its tag and its
-  # release. A run that stops earlier leaves no tag, so a fix is a push and
-  # a fresh dispatch, never a moved tag.
-  # The container job is part of the needs: it reads its pushed manifest list
-  # back from GHCR itself, and a failed push has to hold the tag back like any
-  # other artifact.
-  finalize:
-    name: Tag and publish the release
-    needs: [publish, build, container, node, npm, pypi, bridge]
+  # The published release, not the staged tree: every exact version must be
+  # served, and the example must install and run from the registry before
+  # `latest` moves or the tag lands.
+  # Main and the bridge are on `next` while this runs, so a consumer of
+  # `latest` stays on the previous stable version.
+  verify:
+    name: Verify the published release
+    needs: [publish, pypi, npm, bridge]
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -776,14 +776,60 @@ jobs:
         with:
           node-version: 24
 
-      # The gate checked the tag before anything ran; this re-checks the
-      # outcome after everything ran. The 0.2.0 release once shipped green
-      # with a package missing from the registry: the tag only lands when
-      # every artifact of this version is actually served, and the audit
-      # polls every registry with a budget before it judges.
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+
+      - name: Build the mock server
+        run: cargo build -q -p mock-nexus
+
       - name: Every artifact is visible on the registries
         run: scripts/registry-audit.sh
 
+      - name: Run the published example
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          mkdir -p tmp-example && cd tmp-example
+          echo '{"name":"published-example","private":true}' > package.json
+          npm install --no-package-lock --no-save "@nexus-raw/nxr@$version"
+          cp ../examples/node/publish-and-consume.mjs .
+          if [ -f ../target/debug/mock-nexus.exe ]; then
+            export MOCK_NEXUS_BIN="../target/debug/mock-nexus.exe"
+          else
+            export MOCK_NEXUS_BIN="../target/debug/mock-nexus"
+          fi
+          node publish-and-consume.mjs
+          ./node_modules/.bin/nxr --version
+
+  # The last job, and the only one that touches tags: after verify confirms
+  # every artifact is served and the published example runs, the tree gets
+  # its tag and its release. A run that stops earlier leaves no tag, so a fix
+  # is a push and a fresh dispatch, never a moved tag.
+  # The container job is part of the needs: it reads its pushed manifest list
+  # back from GHCR itself, and a failed push has to hold the tag back like any
+  # other artifact.
+  finalize:
+    name: Tag and publish the release
+    needs: [verify, build, container]
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      # npm dist-tag authenticates through the same trusted publishing
+      # exchange the publishes use; no long-lived token lives in the repo.
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      # The audit and the published example already ran in verify; this job
+      # only promotes, tags and uploads.
       - name: Collect the archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -816,6 +862,21 @@ jobs:
               end = s.index('\n## [', start + 1)
               open('/tmp/notes.md', 'w').write(s[start:end].rstrip() + '\n')
           PYEOF
+
+      - name: Promote the npm packages to latest
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          npm dist-tag add "@nexus-raw/nxr@$version" latest
+          npm dist-tag add "nexus-raw@$version" latest
+          # Read the tag back: the tag step must not land on a stale latest.
+          for name in @nexus-raw/nxr nexus-raw; do
+            got="$(npm dist-tag ls "$name" | sed -n 's/^latest: //p')"
+            [ "$got" = "$version" ] || {
+              echo "promote: $name latest is $got, expected $version" >&2
+              exit 1
+            }
+          done
+          echo "promote: @nexus-raw/nxr and nexus-raw latest -> $version"
 
       - name: Create the tag and the release
         env:
