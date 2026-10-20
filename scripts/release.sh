@@ -223,6 +223,10 @@ echo
 printf '%srelease %s%s %s· the real act%s\n\n' "$B" "$v" "$N" "$DIM" "$N"
 
 # The same gates the preview drew, enforced this time.
+if [ "$blockers" -gt 0 ]; then
+  echo "release $v: $blockers blocking checks, resolve them first" >&2
+  exit 1
+fi
 if [ -n "$(git status --porcelain)" ]; then
   echo "release $v: the tree is dirty, commit or stash first (a --yes run commits only its own bump)" >&2
   exit 1
