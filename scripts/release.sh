@@ -148,7 +148,11 @@ rc=0
 git ls-remote --exit-code origin "refs/tags/v$v" >/dev/null 2>&1 || rc=$?
 case "$rc" in
   0)
-    tag_sha="$(git ls-remote origin "refs/tags/v$v" | cut -f1)"
+    # An annotated tag advertises its peeled commit; a lightweight tag has
+    # only the direct ref. Prefer the peeled SHA so the comparison is
+    # against the commit either way.
+    tag_sha="$(git ls-remote origin "refs/tags/v$v^{}" | cut -f1)"
+    [ -n "$tag_sha" ] || tag_sha="$(git ls-remote origin "refs/tags/v$v" | cut -f1)"
     head_sha="$(git rev-parse HEAD)"
     current="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
     if [ "$tag_sha" = "$head_sha" ] && [ "$current" = "$v" ]; then
