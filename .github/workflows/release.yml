@@ -613,31 +613,20 @@ jobs:
           fs.writeFileSync("pkg-main/package.json", JSON.stringify(pkg, null, 2) + "\n");
           EOF
 
-      # The main package declares the platform packages as its
-      # optionalDependencies: publishing it while one of them is missing
-      # would silently break `require` for every consumer of this version.
-      - name: The platform packages are on the registry
-        if: ${{ !inputs.dry-run }}
-        run: scripts/check-npm-platform-packages.sh
-
       # The consumer smoke installs the staged main package the way a user
-      # would (fresh sandbox, real resolve of the platform addon from the
-      # registry) and requires the surface. It catches a "green CI, dead
+      # would and requires the surface. It catches a "green CI, dead
       # package" — a publish whose loader cannot resolve its addon — before
       # the main package goes out, which is the point of no return.
+      # The addon comes from the staged platform tarball, not the registry:
+      # the publish job no longer waits for npm propagation, and the final
+      # audit checks the registry before the tag.
       # The step runs in the rehearsal too: it burned two real releases by
-      # never executing before the dispatch. In a rehearsal the addon resolves
-      # from the published latest (the fresh one is not built for all targets
-      # yet) and the surface check covers the core only: a method added in
-      # this release is absent from the published addon binary.
+      # never executing before the dispatch. The surface check covers the
+      # core in a rehearsal: a method added in this release is absent from
+      # the published addon binary.
       - name: Consumer smoke of the staged package
         run: |
           version="$(node -p "require('./crates/nexus-raw-napi/package.json').version")"
-          if [ -n "${{ inputs.dry-run && 'dry' || '' }}" ]; then
-            addon_spec="@nexus-raw/nxr-linux-x64-gnu@latest"
-          else
-            addon_spec="@nexus-raw/nxr-linux-x64-gnu@${version}"
-          fi
           mkdir -p /tmp/consumer-smoke && cd /tmp/consumer-smoke
           echo '{"name":"consumer-smoke","private":true,"dependencies":{"@nexus-raw/nxr":"'"$version"'"}}' > package.json
           # The staged package installs as a tarball, not a file: spec: a
@@ -647,10 +636,10 @@ jobs:
           # tarball OK). The tarball lands as a real copy: the addon sits as
           # its sibling, the exact layout a fresh user install produces.
           # One reify for both specs: a second install would re-reconcile the
-          # tree against package.json and drop the first package (npm/cli#4828),
-          # and the main version is not on the registry yet to survive it.
+          # tree against package.json and drop the first package (npm/cli#4828).
           npm pack "${{ github.workspace }}/pkg-main" --pack-destination /tmp/consumer-smoke
-          npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "$addon_spec"
+          npm pack "${{ github.workspace }}/npm/npm-linux-x64-gnu" --pack-destination /tmp/consumer-smoke
+          npm install --no-package-lock --no-save "./nexus-raw-nxr-${version}.tgz" "./nexus-raw-nxr-linux-x64-gnu-${version}.tgz"
           node <<'EOF'
             const fs = require("fs");
             const nxr = require("@nexus-raw/nxr");
@@ -672,11 +661,9 @@ jobs:
             console.log(`consumer smoke: core ok, ${declared.length} declared functions resolve (mode ${process.env.SMOKE_MODE})`);
           EOF
           # The CLI rides the package: the bin wrapper must spawn the real
-          # binary end to end. Both modes: the rehearsal installs the
-          # published latest addon, which carries bin/ since 0.19.0, so the
-          # check rides the latest wrapper there and the staged one in a
-          # release. The release-only gate went away with that: this check is
-          # exactly what caught the non-executable binary.
+          # binary end to end. Both modes install the staged addon, so the
+          # check is identical in a rehearsal and a release. It is exactly
+          # what caught the non-executable binary.
           ./node_modules/.bin/nxr --version
           echo "consumer smoke: nxr --version ok"
         env:
@@ -759,13 +746,6 @@ jobs:
 
       - name: The surface mirrors the main package
         run: scripts/check-bridge-surface.sh
-
-      # The bridge depends on the main package at the exact same version:
-      # an install of the bridge before main lands fails ERESOLVE. The same
-      # rule the npm job holds for its platform packages, one level down.
-      - name: The main package is on the registry
-        if: ${{ !inputs.dry-run }}
-        run: scripts/check-npm-main-package.sh
 
       - name: Publish the bridge
         if: ${{ !inputs.dry-run }}
