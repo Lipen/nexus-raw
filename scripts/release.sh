@@ -147,7 +147,16 @@ gpins_msg=""
 rc=0
 git ls-remote --exit-code origin "refs/tags/v$v" >/dev/null 2>&1 || rc=$?
 case "$rc" in
-  0) gtag=2; gtag_msg="v$v already exists on origin"; blockers=$((blockers + 1)) ;;
+  0)
+    tag_sha="$(git ls-remote origin "refs/tags/v$v" | cut -f1)"
+    head_sha="$(git rev-parse HEAD)"
+    current="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+    if [ "$tag_sha" = "$head_sha" ] && [ "$current" = "$v" ]; then
+      gtag=1; gtag_msg="v$v already points at HEAD, the finalize can resume"; notes=$((notes + 1))
+    else
+      gtag=2; gtag_msg="v$v already exists on origin"; blockers=$((blockers + 1))
+    fi
+    ;;
   2) gtag=0; gtag_msg="v$v is free" ;;
   *) gtag=1; gtag_msg="origin unreachable, skipped"; notes=$((notes + 1)) ;;
 esac
