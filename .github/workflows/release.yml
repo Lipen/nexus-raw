@@ -614,9 +614,10 @@ jobs:
           EOF
 
       # The consumer smoke installs the staged main package the way a user
-      # would and requires the surface. It catches a "green CI, dead
-      # package" — a publish whose loader cannot resolve its addon — before
-      # the main package goes out, which is the point of no return.
+      # would and requires the surface.
+      # It catches a "green CI, dead package": a publish whose loader cannot
+      # resolve its addon, before the main package goes out, which is the
+      # point of no return.
       # The addon comes from the staged platform tarball, not the registry:
       # the publish job no longer waits for npm propagation, and the final
       # audit checks the registry before the tag.
