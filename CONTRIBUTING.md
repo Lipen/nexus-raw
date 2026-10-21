@@ -65,8 +65,10 @@ It pushes nothing and dispatches nothing.
 `scripts/release.sh X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then rehearses `.github/workflows/release.yml` on that commit with `dry-run=true`.
 The rehearsal runs the gate, every build and the npm staging with nothing published and no tag, and the act stops there when it is red: a workflow that cannot run costs minutes instead of the version number.
 The bump push also starts the full CI matrix on the same commit.
-The act waits for that run in parallel with the rehearsal, so a red Windows or macOS lane stops the release before any publish.
-Only a green CI run and a green rehearsal dispatch the real run, which the act then watches to its verdict.
+The release gate waits for that run server-side, so a red Windows or macOS lane stops the release before any publish.
+A manual dispatch on a later day checks the same run, so the release does not depend on the terminal that pushed the bump.
+The act still waits for the rehearsal as a convenience.
+The workflow continues on its own if the terminal goes away.
 `examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.
 The published package is covered by the release consumer smoke and the daily `smoke.yml` install of `@latest`.
 The release's own `verify` job is the version-specific gate: it installs the exact published version, runs the published example against the mock, and checks the CLI.
@@ -76,6 +78,7 @@ The npm main package and the bridge publish under `next`, so `latest` stays on t
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
 A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, `verify` runs again, and `finalize` repeats the idempotent promotion and tag.
+A bump that was pushed but never dispatched is a resumable state: a later `--yes` reuses the pushed tree, and a manual `gh workflow run release.yml --ref master` runs the same gate, verify and tag.
 A CI failure before the dispatch takes a fix on top of the pushed bump.
 The repeat reuses that pushed tree because the version is already set.
 A hotfix on master rides the fresh dispatch.

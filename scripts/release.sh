@@ -53,14 +53,15 @@ row() { printf '%s%-9s%s %s\n' "$DIM" "$1" "$N" "$2"; }
 # A continuation line under a row.
 cont() { printf '%s%9s%s %s\n' "" "" "$N" "$1"; }
 
-# The id of a workflow run on a commit, left in `run`.
-# The dispatch API is asynchronous: the run only appears a few seconds later,
-# so the poll retries. `skip` is a run id to ignore.
-find_run() { # find_run <workflow> <sha> <skip>
+# The id of the release run a dispatch just created on a commit, left in
+# `run`. The dispatch API is asynchronous: the run only appears a few seconds
+# later, so the poll retries. `skip` is a run id to ignore, which keeps the
+# real dispatch's poll off the rehearsal run it follows.
+find_run() { # find_run <sha> <skip>
   for _ in 1 2 3 4 5 6; do
     sleep 5
-    run="$(gh run list --workflow="$1" --commit "$2" --limit 20 --json databaseId \
-      --jq "[.[] | select(.databaseId != ${3:-0})][0].databaseId" 2>/dev/null || true)"
+    run="$(gh run list --workflow=Release --commit "$1" --limit 20 --json databaseId \
+      --jq "[.[] | select(.databaseId != ${2:-0})][0].databaseId" 2>/dev/null || true)"
     case "$run" in '' | null) run="" ;; *) return 0 ;; esac
   done
   return 1
@@ -273,24 +274,11 @@ fi
 # is still unspent.
 echo "rehearsing the release on $sha"
 gh workflow run release.yml --ref master -F dry-run=true
-find_run Release "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
+find_run "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
 rehearsal="$run"
 echo "the rehearsal appeared: https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal"
-
-# The bump push also triggers the full CI matrix on the same commit.
-# Wait for it while the rehearsal runs: the release gate is the ubuntu core,
-# and a red Windows or macOS lane must stop the release before any publish.
-echo "waiting for CI on $sha"
-find_run CI "$sha" "" || { echo "release: the CI run did not appear" >&2; gh run cancel "$rehearsal" >/dev/null 2>&1 || true; exit 1; }
-ci_run="$run"
-settle "$ci_run"
-if [ "$conclusion" != success ]; then
-  echo "release: CI ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$ci_run" >&2
-  gh run cancel "$rehearsal" >/dev/null 2>&1 || true
-  exit 1
-fi
-
-# The rehearsal has been running in parallel with CI.
+# The rehearsal gate waits for the full CI matrix on this commit, so a red
+# Windows or macOS lane stops it before any publish.
 settle "$rehearsal"
 if [ "$conclusion" != success ]; then
   echo "release: the rehearsal ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal" >&2
@@ -300,7 +288,7 @@ fi
 # ---- the release --------------------------------------------------------
 echo "dispatching the release on $sha"
 gh workflow run release.yml --ref master
-find_run Release "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
+find_run "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
 echo "the run appeared: https://github.com/Lipen/nexus-raw/actions/runs/$run"
 settle "$run"
 if [ "$conclusion" != success ]; then
