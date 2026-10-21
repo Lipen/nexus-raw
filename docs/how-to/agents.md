@@ -17,8 +17,10 @@
 | что в raw-папке? | `nxr ls <dir-url>` | по строке на entry | 0 |
 | то же, для скрипта | `nxr ls <dir-url> --json` | NDJSON: `{"entry":...,"kind":...}` | 0 |
 | скачать файл | `nxr get <url> -o <file>` | байты на диске, digest сверён | 0 |
+| скачать файл в 8 спанов | `nxr get <url> -o <file> --segments 8` | байты на диске, digest сверён | 0 |
 | скачать в stdout | `nxr get <url>` (без `-o`) | поток в stdout | 0 |
 | скачать папку | `nxr down <dir-url> --names-from list.txt` | `downloaded N` | 0 |
+| склонировать репозиторий | `nxr clone <repo-url> <dst-dir>` | клон с кэшем фактов | 0 |
 | загрузить папку | `nxr up <dir> <dir-url>` | `uploaded N` + `.sha256`-маркеры | 0 |
 | чем отличаются? | `nxr diff <dir> <dir-url> --ls` | дельта: local/remote/same | 0 |
 | перенести версию | `nxr mirror <src-url> <dst-url> --names-from list.txt` | `uploaded N, downloaded N` | 0 |

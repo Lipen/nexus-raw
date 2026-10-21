@@ -32,7 +32,9 @@ Intent to command:
 | server refuses writes | `nxr service eula <url> --accept` |
 | raw dir listing | `nxr ls <dir-url>` (`--json` for NDJSON) |
 | fetch one file | `nxr get <url> -o <file>` |
+| fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch a directory | `nxr down <dir-url> --names-from list.txt` |
+| clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | push a directory | `nxr up <dir> <dir-url>` |
 | compare local vs remote | `nxr diff <dir> <dir-url> --ls` |
 | move a version | `nxr mv <src-url> <dst-url> --ls` |
