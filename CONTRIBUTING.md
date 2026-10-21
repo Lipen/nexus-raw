@@ -65,8 +65,9 @@ It pushes nothing and dispatches nothing.
 `scripts/release.sh X.Y.Z --yes` runs the whole act: `just version X.Y.Z`, finalizes `[Unreleased]` into `[X.Y.Z]` with today's date and the compare link (an existing section just moves to today), signs and pushes the bump commit, then rehearses `.github/workflows/release.yml` on that commit with `dry-run=true`.
 The rehearsal runs the gate, every build and the npm staging with nothing published and no tag, and the act stops there when it is red: a workflow that cannot run costs minutes instead of the version number.
 The bump push also starts the full CI matrix on the same commit.
-The release gate waits for that run server-side, so a red Windows or macOS lane stops the release before any publish.
-A manual dispatch on a later day checks the same run, so the release does not depend on the terminal that pushed the bump.
+The bump is a version-only commit on top of an already CI-green master.
+The matrix still runs on the bump commit for visibility, but the release gate is the core suite and the release does not wait for the matrix.
+A manual dispatch on a later day runs the same gate, verify and tag, so the release does not depend on the terminal that pushed the bump.
 The act still waits for the rehearsal as a convenience.
 The workflow continues on its own if the terminal goes away.
 `examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.

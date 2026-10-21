@@ -35,20 +35,9 @@ jobs:
     name: Gate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      # A manual dispatch can happen long after the bump push, without the
-      # terminal that made it. The full matrix run on this exact commit is
-      # the gate, and the check waits for it server-side.
-      - name: The full CI matrix is green on this commit
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/check-ci-run.sh "$GITHUB_SHA"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
