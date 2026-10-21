@@ -4,7 +4,8 @@
 It is a companion binary, not a subcommand of `nxr`: the CLI stays a portable curl, and the mount carries the platform-specific FUSE dependency on its own.
 
 The mount is read-only today.
-It answers listings, attributes and reads; every write gets `EROFS`.
+It answers listings, attributes and reads.
+Every write gets `EROFS`.
 
 ## Run it
 
@@ -56,3 +57,9 @@ Listings and attributes are cached for two seconds, so a rapid `ls -R` does not 
 | `--stall-secs` | 30 | Fail a request when no bytes arrive for this long. |
 | `--block-kib` | 256 | One read block in KiB. |
 | `--cache-mib` | 256 | Read-block cache budget in MiB. |
+
+## Verify
+
+`just mount-smoke` drives the whole path against the mock server on Linux.
+It seeds a tree, waits out the search lag, mounts, compares the tree byte for byte, checks the size and the digest, and confirms that a write is refused.
+The script skips with exit 0 when the platform or `/dev/fuse` is missing.

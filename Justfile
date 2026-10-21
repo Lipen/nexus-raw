@@ -40,6 +40,12 @@ tui *args:
 mount url mnt *args:
     {{ cargo }} run -p nexus-raw-mount --quiet -- {{ url }} {{ mnt }} {{ args }}
 
+# The end-to-end check: mock server, mount, tree comparison, digest, EROFS.
+[doc('Smoke the mount against the mock server (Linux).')]
+[group('mount')]
+mount-smoke:
+    scripts/mount-smoke.sh
+
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
 [doc('Serve the mock Nexus.')]
