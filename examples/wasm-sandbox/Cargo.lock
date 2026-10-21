@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-raw-core"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "base64",
  "futures-util",
