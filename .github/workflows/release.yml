@@ -1,12 +1,14 @@
 name: Release
 
-# A dispatch is the release. `just release X.Y.Z` bumps the version,
-# finalizes the changelog, pushes master and dispatches this workflow on
-# that exact commit. The pipeline gates on the full suite, builds every
-# platform, publishes the crates, the container image, the addons and the
-# npm packages, and only then the finalize job creates the tag and the GitHub
-# release: a tag now attests a tree that shipped whole, and a failed run leaves
-# no tag.
+# A dispatch is the release.
+# `just release X.Y.Z` bumps the version, finalizes the changelog, pushes
+# master and dispatches this workflow on that exact commit.
+# The pipeline gates on the core suite and the docs check, builds every
+# platform, publishes the crates, the container image, the addons, the npm
+# platform packages, and main and the bridge under `next`.
+# It verifies the published release, then promotes `latest`, creates the tag
+# and the GitHub release.
+# A tag attests a tree that shipped whole, and a failed run leaves no tag.
 # `dry-run` runs the gate and every build and rehearsed staging without
 # publishing anything and without creating a tag: the way to test this
 # workflow without spending a version number.
@@ -52,8 +54,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
-      # The same checks `just check` asserts locally: nothing publishes
-      # until the exact dispatched tree passes the full suite.
+      # The same checks `just check` asserts locally, plus the docs gate:
+      # nothing publishes until the exact dispatched tree passes.
       - name: Run rustfmt
         run: cargo fmt --all -- --check
 

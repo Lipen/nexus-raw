@@ -71,10 +71,11 @@ A manual dispatch on a later day runs the same gate, verify and tag, so the rele
 The act still waits for the rehearsal as a convenience.
 The workflow continues on its own if the terminal goes away.
 `examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.
-The published package is covered by the release consumer smoke and the daily `smoke.yml` install of `@latest`.
-The release's own `verify` job is the version-specific gate: it installs the exact published version, runs the published example against the mock, and checks the CLI.
+The staged package is covered by the npm job's consumer smoke.
+The published package is covered by the `verify` job and the daily `smoke.yml` install of `@latest`.
+The `verify` job installs the exact published version, runs the published example against the mock, and checks the CLI.
 
-The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then the `verify` job installs the exact published version and runs the published example.
+The workflow gates on the core suite and the docs check, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then verifies the published release.
 The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
