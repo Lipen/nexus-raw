@@ -33,7 +33,7 @@ The search API is an index, not the store, and it is the only enumeration source
   That is index lag, not a lost write.
 - A repository filled by a foreign publisher can be indexed partially: some subtrees appear, some do not.
   When a listing looks short, confirm a specific name with `head` or `get` instead of trusting the listing.
-- `ls --assets`, `down --ls`, `service assets` and `mirror --ls` all read that same index and inherit the same blind spot.
+- `ls --assets`, `down --ls`, `diff --via search`, `mirror --ls`, `mv --ls`, `rm --ls`, `clone`, `audit` and `service assets` all read that same index and inherit the same blind spot.
 - Adds and deletes in the store are visible to a direct `get`/`head` immediately, whatever the index says.
 
 ## Transfer mechanics
