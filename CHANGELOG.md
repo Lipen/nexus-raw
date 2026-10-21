@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The binary is a separate crate, so `nxr` keeps no FUSE dependency and stays portable.
 - `Nxr::read_range`, a byte span into memory that slices the whole body when the server ignores `Range`, and `Nxr::ls_at`, a listing of any directory URL: the two core paths the mount is built on.
 - `NexusClient::get_range`, the transport primitive behind `read_range`.
+- The wasm sandbox lists and uploads.
+  `nxr_put` PUTs the bytes and the `.sha256` marker, the proxy forwards PUT with a request-body cap, and both the Node fake and the ServiceWorker fake store it.
+  `Nxr::put_bytes` is part of the wasm surface: it is an in-memory POST-free path, not a file operation.
 
 ## [0.22.1] - 2026-10-21
 

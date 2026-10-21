@@ -1,8 +1,8 @@
 # nxr wasm sandbox
 
 The GO/NO-GO spike for running `nexus-raw-core` in the browser.
-`src/lib.rs` exports one call, `nxr_ls(dir_url, auth)`, on top of the wasm-compatible slice of core: transport, `ls`, channels, pointers.
-Everything that touches the local filesystem is native-only and gated out by `cfg(target_arch = "wasm32")` in the core crate.
+`src/lib.rs` exports two calls on top of the wasm-compatible slice of core: `nxr_ls(dir_url, auth)` for the listing and `nxr_put(file_url, bytes, auth)` for an upload, bytes and the `.sha256` marker.
+Everything that touches the local filesystem is native-only and gated out by `cfg(target_arch = "wasm32")` in the core crate. The in-memory PUT is not a file operation, so it rides the same wasm build.
 
 ## Build and run
 
@@ -53,12 +53,21 @@ Upstream mode forwards only what the page needs, and the guards all default to t
 --allow-host HOST           lets a request name HOST in its Host header; repeatable, empty by default
 --rate-limit N              proxied requests per 10 seconds per client; 60 by default, 0 turns it off
 --max-response-bytes N      caps an upstream answer; 8388608 by default
+--max-request-bytes N       caps a proxied PUT body; 100 MiB by default
 ```
 
 The allowlist is a guard against turning the sandbox into a relay, not a routing table: the proxy dials `--upstream` and nothing else, whatever a request asks for.
-A request is forwarded only when it is `GET` or `HEAD`, targets an origin-form path under `/repository/` or `/service/rest/`, and names this origin (or an `--allow-host` entry) in its `Host` header.
+A request is forwarded only when it is `GET`, `HEAD` or `PUT`, targets an origin-form path under `/repository/` or `/service/rest/`, and names this origin (or an `--allow-host` entry) in its `Host` header.
 Everything else is refused without touching the network: a forward-proxy request (`curl --proxy http://localhost:8134 http://elsewhere/`, an absolute-form target) answers `403`, another host in `Host` answers `403`, a path outside the two prefixes answers `404` locally, a client past its window answers `429` with `Retry-After`, and an upstream answer past the cap is cut off with `502`.
 `--allow-host` exists for reaching the sandbox under another name (a container, a tunnel), where the browser's `Host` is not the loopback origin.
+
+## Uploads
+
+The upload form (or a drop on the listing) calls `nxr_put`: the bytes are PUT first, then the `.sha256` marker, the same order and shape as `nxr put`.
+The fake stores both in the shared tree, and the search lists them.
+The client hides the marker, so the new name appears after the refresh.
+The static ServiceWorker fake accepts PUT the same way, so a backend-free page can upload too.
+With `--upstream`, the proxy forwards the PUT body and the `Authorization` header to the real Nexus, capped by `--max-request-bytes`.
 
 ## Static hosting: the page carries its own Nexus
 
@@ -83,7 +92,7 @@ The mechanics:
 node smoke.mjs
 ```
 
-Three layers, in order: the fake module's pagination and 404 arm, the built wasm under plain node (a full listing of the demo repository, one injected 500 burned on the way), and the page in a headless chromium against a backend-free static server, where the only path to a listing is the ServiceWorker.
+Three layers, in order: the fake module's pagination and 404 arm, the built wasm under plain node (a full listing of the demo repository, one injected 500 burned on the way, an upload re-listed with its digest), and the page in a headless chromium against a backend-free static server, where the only path to a listing is the ServiceWorker.
 The browser run waits for the page's beacon and asserts it (`rows > 0`, `failed = ""`), and asserts that the browser never touched the backend that is not there.
 With neither a driver nor a chromium binary the browser layer is skipped. `--require-browser` makes its absence fatal.
 Two environment variables tune the browser run: `NXR_WASM_DRIVER` names a `playwright-core` module path for setups that carry one (the CLI's dump quiescence wait is brittle in sandboxed environments), `NXR_WASM_BROWSER` names a chromium-family binary for the CLI path.
@@ -97,5 +106,5 @@ The fake and the proxy both answer `/repository/*` and `/service/rest/*` directl
 ## Why a proxy at all
 
 A real Nexus sends no CORS headers, so the browser cannot call it directly.
-The proxy forwards GET and HEAD with query and `Authorization` intact and answers 405 to anything else.
+The proxy forwards GET, HEAD and PUT with query, `Authorization` and the body intact, and answers 405 to anything else.
 The `fetch`-based reqwest backend needs no other change: TLS and timeouts are the browser's business.

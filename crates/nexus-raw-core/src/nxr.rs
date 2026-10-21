@@ -20,7 +20,6 @@ use crate::error::DATA_EXIT;
 use crate::events::{Dir, Failure, Summary};
 use crate::events::{Event, Progress};
 use crate::layout;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest::Digest;
 use crate::model::name::ArtifactName;
 #[cfg(not(target_arch = "wasm32"))]
@@ -208,7 +207,7 @@ impl Nxr {
     }
 
     /// PUT an in-memory body, optionally with its sha-sibling marker
-    /// (spec §5.1, the `put --stdin` path).
+    /// (spec §5.1: the `put --stdin` path, and the browser upload path on wasm).
     ///
     /// The bytes are already whole in memory: Content-Length is just `body.len()`,
     /// and the digest is computed on the buffer, no extra pass.
@@ -220,7 +219,6 @@ impl Nxr {
     ///
     /// Returns transport, auth or HTTP errors from the uploads and
     /// [`Error::UnsafeName`] when the final URL segment cannot carry a marker.
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn put_bytes(
         &self,
         url: &str,

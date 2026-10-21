@@ -88,7 +88,7 @@ Quirks that are not bugs:
 - [Run it as a container](https://lipen.github.io/nexus-raw/how-to/containers/): the release image, a transfer with docker run, COPY --from into a downstream image
 - [Named remotes](https://lipen.github.io/nexus-raw/how-to/config/): the -R alias file: one TOML, read only when named
 - [Run the demo](https://lipen.github.io/nexus-raw/how-to/demo/): a scripted tour: publish, consume, refuse, repair
-- [Run the browser sandbox](https://lipen.github.io/nexus-raw/how-to/wasm/): nxr compiled to wasm, serving a fake or a real Nexus
+- [Run the browser sandbox](https://lipen.github.io/nexus-raw/how-to/wasm/): nxr compiled to wasm, listing and uploading against a fake or a real Nexus
 - [When it breaks](https://lipen.github.io/nexus-raw/how-to/troubleshoot/): symptom to cause to fix, plus server quirks
 
 ## Reference

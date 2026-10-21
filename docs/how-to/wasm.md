@@ -1,8 +1,8 @@
 # Run the browser sandbox
 
-The wasm sandbox is the proof that the read surface of the core runs in a browser: `nexus-raw-core` compiled to `wasm32-unknown-unknown`, listing a raw Nexus directory from a page.
+The wasm sandbox is the proof that the core runs in a browser: `nexus-raw-core` compiled to `wasm32-unknown-unknown`, listing a raw Nexus directory and uploading files from a page.
 The same protocol code answers as on the command line: the transport issues the search requests, the pagination walks the continuation tokens, and the `.sha256` markers arrive and are hidden by the client.
-What stays native is the write half: the filesystem-bound slice of the core is gated out of the wasm build.
+What stays native is the filesystem-bound slice: `up`, `down`, `clone` and the rest that touch a local directory. The in-memory PUT is not a file operation, so `nxr_put` carries it to the browser.
 
 The code lives in `examples/wasm-sandbox/`, a standalone crate like the other examples.
 Its [README](https://github.com/lipen/nexus-raw/blob/master/examples/wasm-sandbox/README.md) carries the full detail.
@@ -35,7 +35,7 @@ just wasm --upstream http://127.0.0.1:8081
 ```
 
 The sandbox server becomes a guarded same-origin proxy.
-A real Nexus sends no CORS headers, so the browser cannot call it directly, and the proxy owns that hop: it forwards `GET` and `HEAD` for `/repository/*` and `/service/rest/*`, and dials the `--upstream` host and nothing else.
+A real Nexus sends no CORS headers, so the browser cannot call it directly, and the proxy owns that hop: it forwards `GET`, `HEAD` and `PUT` for `/repository/*` and `/service/rest/*`, and dials the `--upstream` host and nothing else.
 The guards default to the strict end:
 
 | Flag | Default | Meaning |
@@ -43,10 +43,17 @@ The guards default to the strict end:
 | `--allow-host HOST` | empty | lets a request name `HOST` in its `Host` header, repeatable |
 | `--rate-limit N` | 60 | proxied requests per 10 seconds per client, then `429` with `Retry-After` |
 | `--max-response-bytes N` | 8388608 | cuts an upstream answer off at the cap with `502` |
+| `--max-request-bytes N` | 104857600 | caps a proxied `PUT` body, then `413` |
 
 A forward-proxy request (`curl --proxy ...`) answers `403`: the proxy is a facade for the page, not a relay.
 A `400` or `404` on the listing means the upstream has no searchable repository under that name, or it is not raw.
 The page says so in its error block.
+
+## Upload
+
+The page's upload form (or a drop on the listing) calls `nxr_put`: the bytes are PUT first, then the `.sha256` marker, the same order and shape as `nxr put`.
+The fake stores both and the search lists them, so the client hides the marker and the new name appears after the refresh.
+With `--upstream`, the proxy forwards the PUT body and the `Authorization` header to the real Nexus.
 
 ## Static hosting, no backend
 
@@ -64,5 +71,5 @@ Three constraints apply:
 ## What CI watches
 
 The `wasm` job builds the crate for `wasm32`, regenerates the wasm-bindgen glue at the locked version and runs the smoke.
-The smoke drives the fake module, then the built wasm under plain node (a full listing, one injected failure retried on the way), then the page in a headless browser against a backend-free static server, where the only path to a listing is the ServiceWorker.
+The smoke drives the fake module, then the built wasm under plain node (a full listing, one injected failure retried on the way, an upload re-listed with its digest), then the page in a headless browser against a backend-free static server, where the only path to a listing is the ServiceWorker.
 A break in the read surface fails the build, not a browser console.

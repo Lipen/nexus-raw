@@ -39,6 +39,16 @@ const STATIC_FILES = new Map([
   ['/fake-nexus.mjs', 'fake-nexus.mjs'],
 ])
 
+// Buffer a request body for the fake's PUT arm.
+function readBody(req) {
+  return new Promise((resolve) => {
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', () => resolve(''))
+  })
+}
+
 // One server, two temperaments: `withApi` answers the nexus endpoints (for the node
 // run of the wasm), otherwise every nexus request is refused (for the browser run,
 // where a listing is only possible through the ServiceWorker).
@@ -64,7 +74,8 @@ function startServer(withApi) {
         res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
         return res.end('no backend here: the ServiceWorker fake should have answered\n')
       }
-      const fake = fakeNexus(url.pathname, url.searchParams)
+      const body = req.method === 'PUT' ? await readBody(req) : ''
+      const fake = fakeNexus(url.pathname, url.searchParams, req.method, body)
       res.writeHead(fake.status, { 'content-type': 'text/plain; charset=utf-8' })
       return res.end(fake.body)
     }
@@ -231,6 +242,15 @@ async function main() {
     faults.failFirst = 0
     assert.deepEqual(retried, rows)
     assert.equal(faults.hits, 3)
+    // The upload path: bytes in, the marker out, and the next listing sees the name.
+    const payload = new TextEncoder().encode('uploaded from wasm\n')
+    const put = JSON.parse(await glue.nxr_put(`${api.url}/repository/demo/upload.txt`, payload, null))
+    assert.equal(put.bytes, payload.length)
+    assert.match(put.digest, /^[0-9a-f]{64}$/)
+    const after = JSON.parse(await glue.nxr_ls(`${api.url}/repository/demo/`, null))
+    assert.ok(after.some((row) => row.name === 'upload.txt' && !row.dir), 'the uploaded file is listed')
+    assert.ok(!after.some((row) => row.name.endsWith('.sha256')), 'the marker stays hidden')
+    console.log('smoke: wasm upload: bytes, digest and the re-listed name checked')
     // The page pings the same beacon; the smoke pings it like the page does.
     await fetch(`${api.url}/beacon?rows=${rows.length}&failed=`)
     const beacon = api.beacons.at(-1)

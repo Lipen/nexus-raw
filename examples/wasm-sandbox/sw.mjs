@@ -18,7 +18,7 @@ self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return
+  if (event.request.method !== 'GET' && event.request.method !== 'PUT') return
   const url = new URL(event.request.url)
   // The page may be reached under a deployment prefix: strip it by handing the fake
   // the path from the mount root on. The search root wins when both appear, because
@@ -27,11 +27,16 @@ self.addEventListener('fetch', (event) => {
   const repositoryAt = mountAt(url.pathname, REPOSITORY)
   const at = searchAt >= 0 && (repositoryAt < 0 || searchAt > repositoryAt) ? searchAt : repositoryAt
   if (at < 0) return
-  const fake = fakeNexus(url.pathname.slice(at), url.searchParams)
-  event.respondWith(new Response(fake.body, {
-    status: fake.status,
-    headers: { 'content-type': 'text/plain; charset=utf-8' },
-  }))
+  event.respondWith((async () => {
+    const body = event.request.method === 'PUT'
+      ? new Uint8Array(await event.request.arrayBuffer())
+      : ''
+    const fake = fakeNexus(url.pathname.slice(at), url.searchParams, event.request.method, body)
+    return new Response(fake.body, {
+      status: fake.status,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+  })())
 })
 
 // Where a mount root starts such that it begins the pathname or follows a `/`.

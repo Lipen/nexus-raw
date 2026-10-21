@@ -43,6 +43,7 @@ const PROXIED_PREFIXES = ['/repository/', '/service/rest/']
 const RATE_WINDOW_MS = 10_000
 const DEFAULT_RATE_LIMIT = 60
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+const DEFAULT_MAX_REQUEST_BYTES = 100 * 1024 * 1024
 
 // The real-Nexus hop guards, in order: origin-form target, GET/HEAD only,
 // a proxied prefix, an allowlisted Host, then the per-client rate limit.
@@ -60,9 +61,9 @@ function proxyNexus(req, res, guards) {
   if (!req.url?.startsWith('/')) {
     return deny(403, 'the sandbox proxy is same-origin: it answers origin-form targets only, not forward-proxy requests\n')
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'PUT') {
     res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' })
-    return res.end('the sandbox proxy forwards GET and HEAD only\n')
+    return res.end('the sandbox proxy forwards GET, HEAD and PUT only\n')
   }
   if (!PROXIED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
     return deny(404, 'the sandbox proxy forwards repository and service paths only\n')
@@ -82,6 +83,8 @@ function proxyNexus(req, res, guards) {
   // An absent Authorization must stay absent: some upstreams treat an empty header as broken auth.
   const headers = {}
   if (req.headers.authorization) headers.authorization = req.headers.authorization
+  if (req.headers['content-type']) headers['content-type'] = req.headers['content-type']
+  if (req.headers['content-length']) headers['content-length'] = req.headers['content-length']
   const out = httpRequest(
     {
       protocol: target.protocol,
@@ -122,10 +125,53 @@ function proxyNexus(req, res, guards) {
   )
   res.on('close', () => out.destroy())
   out.on('error', (err) => {
-    res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
-    res.end(`upstream ${guards.upstream} unreachable: ${err.message}\n`)
+    if (!res.headersSent) {
+      res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end(`upstream ${guards.upstream} unreachable: ${err.message}\n`)
+    }
   })
-  out.end()
+  if (req.method === 'PUT') {
+    let received = 0
+    req.on('data', (chunk) => {
+      received += chunk.length
+      if (received > guards.maxRequestBytes) {
+        console.log(`proxy cut ${url.pathname}: request body over the ${guards.maxRequestBytes} byte cap`)
+        req.destroy()
+        if (!res.headersSent) {
+          res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' })
+          res.end(`request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`)
+        }
+      }
+    })
+    req.pipe(out)
+  } else {
+    out.end()
+  }
+}
+
+// Buffer a request body up to the cap; `null` means the cap was crossed.
+function readBody(req, cap) {
+  return new Promise((resolve) => {
+    const chunks = []
+    let size = 0
+    let settled = false
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > cap) {
+        settled = true
+        req.destroy()
+        resolve(null)
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      if (!settled) resolve(Buffer.concat(chunks))
+    })
+    req.on('error', () => {
+      if (!settled) resolve(null)
+    })
+  })
 }
 
 // One bucket per client address: at most `rateLimit` forwarded requests per window,
@@ -165,6 +211,7 @@ function parseArgs(argv) {
     allowHosts: [],
     rateLimit: DEFAULT_RATE_LIMIT,
     maxResponseBytes: DEFAULT_MAX_RESPONSE_BYTES,
+    maxRequestBytes: DEFAULT_MAX_REQUEST_BYTES,
   }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--port') args.port = numberArg(argv[++i], '--port')
@@ -177,6 +224,7 @@ function parseArgs(argv) {
     }
     else if (argv[i] === '--rate-limit') args.rateLimit = numberArg(argv[++i], '--rate-limit')
     else if (argv[i] === '--max-response-bytes') args.maxResponseBytes = numberArg(argv[++i], '--max-response-bytes')
+    else if (argv[i] === '--max-request-bytes') args.maxRequestBytes = numberArg(argv[++i], '--max-request-bytes')
     else usage(`unknown argument: ${argv[i]}`)
   }
   return args
@@ -185,7 +233,8 @@ function parseArgs(argv) {
 function usage(message) {
   console.error(`${message}
 usage: node serve.mjs [--port 8134] [--upstream URL] [--fail-first N]
-                      [--allow-host HOST]... [--rate-limit N] [--max-response-bytes N]`)
+                      [--allow-host HOST]... [--rate-limit N] [--max-response-bytes N]
+                      [--max-request-bytes N]`)
   process.exit(2)
 }
 
@@ -211,6 +260,7 @@ const guards = {
   allowedHosts: new Set(),
   rateLimit: parsed.rateLimit,
   maxResponseBytes: parsed.maxResponseBytes,
+  maxRequestBytes: parsed.maxRequestBytes,
   clients: new Map(),
 }
 
@@ -252,7 +302,12 @@ const server = createServer(async (req, res) => {
   }
   // Everything below is the nexus, address-wise.
   if (upstream) return proxyNexus(req, res, guards)
-  const fake = fakeNexus(url.pathname, url.searchParams)
+  const body = req.method === 'PUT' ? await readBody(req, guards.maxRequestBytes) : ''
+  if (body === null) {
+    res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' })
+    return res.end(`request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`)
+  }
+  const fake = fakeNexus(url.pathname, url.searchParams, req.method, body)
   res.writeHead(fake.status, { 'content-type': 'text/plain; charset=utf-8' })
   res.end(fake.body)
 })

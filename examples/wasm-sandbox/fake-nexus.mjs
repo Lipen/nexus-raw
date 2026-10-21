@@ -41,9 +41,16 @@ export function searchAssets(query) {
   }
 }
 
-// The fake Nexus answers GETs for objects and the search endpoint, 404 otherwise.
+// The fake Nexus answers GETs for objects and the search endpoint, stores PUTs in
+// the same tree, and 404s otherwise.
 // A `--fail-first N` run answers 500 (retryable) for the first N search requests.
-export function fakeNexus(path, query) {
+export function fakeNexus(path, query, method = 'GET', body = '') {
+  if (method === 'PUT') {
+    const key = path.slice(1)
+    if (!key) return { status: 400, body: 'a PUT needs an object path\n' }
+    demoTree.set(key, body)
+    return { status: 201, body: '' }
+  }
   if (path === '/service/rest/v1/search/assets') {
     faults.hits++
     if (faults.hits <= faults.failFirst) {
