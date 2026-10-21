@@ -53,15 +53,14 @@ row() { printf '%s%-9s%s %s\n' "$DIM" "$1" "$N" "$2"; }
 # A continuation line under a row.
 cont() { printf '%s%9s%s %s\n' "" "" "$N" "$1"; }
 
-# The id of the run a dispatch just created on a commit, left in `run`.
-# The dispatch API is asynchronous: the run only appears in the list a few
-# seconds later, so the poll retries. `skip` is a run id to ignore, which
-# keeps the real dispatch's poll off the rehearsal run it follows.
-find_run() { # find_run <sha> <skip>
+# The id of a workflow run on a commit, left in `run`.
+# The dispatch API is asynchronous: the run only appears a few seconds later,
+# so the poll retries. `skip` is a run id to ignore.
+find_run() { # find_run <workflow> <sha> <skip>
   for _ in 1 2 3 4 5 6; do
     sleep 5
-    run="$(gh run list --workflow=Release --commit "$1" --limit 20 --json databaseId \
-      --jq "[.[] | select(.databaseId != ${2:-0})][0].databaseId" 2>/dev/null || true)"
+    run="$(gh run list --workflow="$1" --commit "$2" --limit 20 --json databaseId \
+      --jq "[.[] | select(.databaseId != ${3:-0})][0].databaseId" 2>/dev/null || true)"
     case "$run" in '' | null) run="" ;; *) return 0 ;; esac
   done
   return 1
@@ -243,21 +242,21 @@ python3 scripts/changelog-finalize.py "$v"
 just lock
 git add -u
 if git diff --cached --quiet; then
-  # The recovery path: a previous --yes run pushed the bump commit and then a
-  # publish failed. Re-dispatch that same commit instead of inventing a new
-  # one; the workflow guards skip whatever is already on a registry.
+  # The recovery path: a previous --yes run pushed the version bump, and a
+  # publish or the tag failed, or CI failed before the dispatch and the fix
+  # sits on top. Re-dispatch the pushed tree instead of inventing a new
+  # commit; the workflow guards skip whatever is already on a registry.
   current="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-  subject="$(git log -1 --format=%s)"
-  if [ "$current" != "$v" ] || [ "$subject" != "chore: bump the workspace to $v" ]; then
-    echo "release $v: the bump produced no changes, the version is already $v?" >&2
+  if [ "$current" != "$v" ]; then
+    echo "release $v: the bump produced no changes and the workspace is at $current" >&2
     exit 1
   fi
   git fetch origin master
   if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]; then
-    echo "release $v: the bump commit is not pushed (HEAD differs from origin/master)" >&2
+    echo "release $v: the version is already $v but HEAD is not pushed" >&2
     exit 1
   fi
-  echo "release $v: the bump is already committed and pushed, dispatching it again"
+  echo "release $v: the version is already set and pushed, dispatching it again"
   sha="$(git rev-parse origin/master)"
 else
   git commit -m "chore: bump the workspace to $v"
@@ -274,9 +273,24 @@ fi
 # is still unspent.
 echo "rehearsing the release on $sha"
 gh workflow run release.yml --ref master -F dry-run=true
-find_run "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
+find_run Release "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
 rehearsal="$run"
 echo "the rehearsal appeared: https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal"
+
+# The bump push also triggers the full CI matrix on the same commit.
+# Wait for it while the rehearsal runs: the release gate is the ubuntu core,
+# and a red Windows or macOS lane must stop the release before any publish.
+echo "waiting for CI on $sha"
+find_run CI "$sha" "" || { echo "release: the CI run did not appear" >&2; gh run cancel "$rehearsal" >/dev/null 2>&1 || true; exit 1; }
+ci_run="$run"
+settle "$ci_run"
+if [ "$conclusion" != success ]; then
+  echo "release: CI ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$ci_run" >&2
+  gh run cancel "$rehearsal" >/dev/null 2>&1 || true
+  exit 1
+fi
+
+# The rehearsal has been running in parallel with CI.
 settle "$rehearsal"
 if [ "$conclusion" != success ]; then
   echo "release: the rehearsal ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal" >&2
