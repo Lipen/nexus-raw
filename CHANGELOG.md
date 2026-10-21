@@ -5,7 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The shipped `nxr` skill teaches `clone` and `--segments`, lists every command that reads the search index, and includes `mv` in the enumeration contract.
 
 ## [0.22.0] - 2026-10-20
 
