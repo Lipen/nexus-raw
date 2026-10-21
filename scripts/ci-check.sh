@@ -55,7 +55,16 @@ verdict() { # $1 = conclusion, $2 = run id
 # Find the check run of this commit: not a nightly, not a release.
 run=""
 while :; do
-  run="$(gh run list --workflow CI --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+  # A quick second push cancels the first run. Prefer the newest run that
+  # was not cancelled; a green older run for the same commit is a verdict.
+  run="$(gh run list --workflow CI --commit "$sha" --limit 10 \
+    --json databaseId,conclusion \
+    --jq '[.[] | select(.conclusion != "cancelled")][0].databaseId // empty' 2>/dev/null || true)"
+  if [ -z "$run" ]; then
+    # Everything on this commit was cancelled, or nothing appeared yet.
+    run="$(gh run list --workflow CI --commit "$sha" --limit 1 \
+      --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+  fi
   if [ -n "$run" ]; then break; fi
   if [ "$quick" -eq 1 ]; then
     echo "ci-check: no CI run found for $short" >&2
@@ -74,7 +83,23 @@ ticks=0
 while :; do
   if out="$(gh run view "$run" --json status,conclusion 2>/dev/null)"; then
     status="$(jq -r '.status' <<<"$out")"
-    [ "$status" = completed ] && break
+    if [ "$status" = completed ]; then
+      conclusion="$(jq -r '.conclusion' <<<"$out")"
+      # The run we started watching can be the cancelled ancestor of a
+      # replacement that appeared a moment later. Switch to the newer one.
+      if [ "$conclusion" = cancelled ] && [ "$quick" -eq 0 ]; then
+        newer="$(gh run list --workflow CI --commit "$sha" --limit 1 \
+          --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+        if [ -n "$newer" ] && [ "$newer" != "$run" ]; then
+          say "a newer run $newer replaced $run, watching it"
+          run="$newer"
+          last=""
+          ticks=0
+          continue
+        fi
+      fi
+      break
+    fi
     if [ "$status" != "$last" ]; then
       say "$short is $status (run $run)"
       last="$status"
