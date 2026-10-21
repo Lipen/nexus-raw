@@ -41,7 +41,25 @@ The rerun prints an empty plan: convergence is provable, not assumed.
 A local checkout against a server is `diff`: the same name-and-digest report, one side on disk.
 
 ```bash
-nxr diff ./dist/1.4.0 https://prod.example.com/repository/raw-main/1.4.0/
+nxr diff ./dist/1.4.0 https://prod.example.com/repository/raw-main/1.4.0/ --ls
 ```
 
 An empty report: the local tree is exactly what the server serves.
+`diff` needs an enumeration source like the transfers: `--ls` for the search API, or `--name`/`--names-from` for an explicit list.
+
+## Compare without probing every object
+
+`diff --via search --ls` takes the remote side from the search API's per-asset facts (name, digest, size), the same listing `nxr service assets` reads.
+One paged listing replaces the HEAD-and-sibling pair per name, so a big tree compares in O(pages) requests.
+
+```bash
+nxr diff ./dist/1.4.0 https://nexus.example.com/repository/raw-main/1.4.0/ --via search --ls
+```
+
+`--prefix` filters the search facts client-side.
+`--name`/`--names-from` are refused with `--via search` because the listing is the name source.
+With `--fallback` they become the degraded source: a server without the search API announces the refusal, then the report is rebuilt from the probe-based enumeration.
+
+A searched asset that reports no digest counts as `diverged`, never as `same`.
+A search refusal is `cannot enumerate`, exit 1, never a false clean delta.
+The full rules live in the [CLI reference](../reference/cli.md).
