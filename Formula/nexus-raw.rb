@@ -5,7 +5,7 @@
 #   brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
 #   brew install lipen/nexus-raw/nexus-raw
 # Regenerate with `just brew-formula <version>` after a release.
-class Nxr < Formula
+class NexusRaw < Formula
   desc "Verified, resumable directory transfers for Sonatype Nexus raw"
   homepage "https://github.com/Lipen/nexus-raw"
   version "0.22.1"

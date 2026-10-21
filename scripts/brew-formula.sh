@@ -110,7 +110,7 @@ rendered="$tmp/nexus-raw.rb"
 #   brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
 #   brew install lipen/nexus-raw/nexus-raw
 # Regenerate with `just brew-formula <version>` after a release.
-class Nxr < Formula
+class NexusRaw < Formula
 HEAD
   printf '  desc "Verified, resumable directory transfers for Sonatype Nexus raw"\n'
   printf '  homepage "https://github.com/Lipen/nexus-raw"\n'
