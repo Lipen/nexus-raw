@@ -321,6 +321,19 @@ The Nexus version this client targets answers `500` instead of `416` when a Rang
 `nxr` never ranges a zero-length object: a `Range` header goes out only when the part already holds bytes, and a complete part of a zero-byte object is empty, so the request is a plain unconditional GET.
 That makes the quirk upstream behavior worth knowing rather than a client contract.
 
+## Segmented transfers are an optional assembly
+
+A single artifact can be split into `N` closed Range spans (`--segments N`, 2..=64).
+The spans stage as separate files under `.nxr-segments-<32 hex>`, assemble positionally into the usual part, and one pass hashes the result.
+A finished span survives a killed run; an unfinished one starts over.
+
+The worker budget still caps total concurrency: spans and whole artifacts acquire the same permits, so `--segments` changes the shape of a transfer but not the number of connections.
+The spans request `Accept-Encoding: identity`, because byte offsets only address the stored representation; a compressible object can therefore transfer more bytes than a compressed single stream.
+When a server answers a ranged GET with `200` and the whole body, the staged spans are discarded and the object falls back to the single stream.
+A zero-byte or unsplittable object takes the single stream from the start.
+
+Segments are opt-in because the win depends on the link and the server: one large artifact on a high-latency path benefits, many small artifacts usually do not.
+
 ## A clone cache is a hint, not a state file
 
 `clone` re-reads the local tree on every run, so it can skip a file whose size, mtime and marker digest still match the last verified copy.
