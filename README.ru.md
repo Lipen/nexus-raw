@@ -86,7 +86,7 @@ nxr verify vendor/prebuilt
 
 | Команда | Делает |
 |:--------|:-------|
-| `nxr get <URL> [-o FILE] [--continue]` | GET в файл (через `.part`, докачка через Range) или stdout |
+| `nxr get <URL> [-o FILE] [--continue] [--segments N]` | GET в файл (через `.part`, докачка через Range или `N` параллельных спанов) или stdout |
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
