@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The Homebrew formula, `Formula/nexus-raw.rb`, with this repository as its tap (`brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw`).
+  `just brew-formula` regenerates it from a release's `SHA256SUMS`, and `scripts/brew-formula.sh --check` verifies it.
 - `nxr-mount` (Linux): a read-only FUSE view of a raw repository.
   Listings go through the search API, reads are lazy ranged GETs over a bounded block cache, and `.sha256` markers stay hidden.
   Every write answers `EROFS`.
