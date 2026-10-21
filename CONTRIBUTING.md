@@ -75,6 +75,7 @@ The published package is covered by the release consumer smoke and the daily `sm
 The release's own `verify` job is the version-specific gate: it installs the exact published version, runs the published example against the mock, and checks the CLI.
 
 The workflow gates on the full suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then the `verify` job installs the exact published version and runs the published example.
+The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.

@@ -86,6 +86,12 @@ jobs:
           MOCK_NEXUS_BIN: ${{ github.workspace }}/target/debug/mock-nexus
         run: python3 test_conformance.py
 
+      # The same docs gate as the Docs workflow and `just check-docs`: a
+      # broken link, a stale CLI page or a drifted bridge surface holds the
+      # release back before anything publishes.
+      - name: Check the docs
+        run: scripts/check-docs.sh
+
       - name: Check the version agrees everywhere
         run: scripts/version-check.sh
 

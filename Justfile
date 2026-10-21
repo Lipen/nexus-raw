@@ -430,12 +430,7 @@ docs *args:
 [doc('Build the docs, check hints, llms.txt and fail on issues.')]
 [group('docs')]
 check-docs *args:
-    scripts/check-hints.sh
-    scripts/check-cli-surface.sh
-    scripts/llms-check.sh
-    scripts/check-bridge-surface.sh
-    scripts/check-skill.sh
-    uvx zensical@0.0.71 build --strict {{ args }}
+    scripts/check-docs.sh {{ args }}
 
 # The HEAD commit is green on CI: a push without a red tail.
 [doc('Wait for the CI on HEAD and report green or red.')]
