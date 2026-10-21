@@ -506,7 +506,7 @@ A local file without its marker is hashed on the fly, so an unfinished local cop
 An entry diverges by `size`, by `sha`, or is `unverifiable` when no digest pair and no size contrast exists anywhere (a markerless pair of equal size, for example).
 
 ```console
-$ nxr diff dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+$ nxr diff dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/ --ls
 same app-1.4.0.zip
 missing-local pinned.xml
 missing-remote release-notes.txt
@@ -695,7 +695,7 @@ Without `--yes` the `--json` output is one object per plan line:
 Move a version between repositories: `mirror` pours it into the destination, then `rm` deletes the same names at the source.
 
 ```console
-$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
+$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/ --ls
 ```
 
 The enumeration lives at the source, with the same sources as `mirror`: repeatable `--name`, `--names-from`, `--ls`, `--prefix`.
@@ -713,7 +713,7 @@ A read-only source (a group repository, for example) pours fine and then refuses
 Without `--yes` `mv` prints two plans and moves nothing:
 
 ```console
-$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/
+$ nxr mv https://nexus.example.com/repository/raw-main/1.14.0/ https://nexus.example.com/repository/raw-archive/1.14.0/ --ls
 will move:
 copy a.zip
 will delete:

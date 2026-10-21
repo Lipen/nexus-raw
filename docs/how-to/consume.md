@@ -85,7 +85,7 @@ Two consequences:
 Delete a file (or lose it to a crashed build) and run the same command again:
 
 ```console
-$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ --ls
 plan: 0 to upload, 1 to download, 2 up to date
 ○ app-1.4.0.zip skipped
 ○ bom/linux-x86_64.json skipped
