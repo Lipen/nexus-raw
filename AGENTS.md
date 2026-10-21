@@ -48,11 +48,11 @@ The canonical protocol text is kept outside this repository.
 | the TUI (keys, config, presets, smoke) | `crates/nexus-raw-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
-| the lint/test gate | [Justfile](Justfile), [prek.toml](prek.toml) |
+| the lint/test gate and the shared docs gate | [Justfile](Justfile), [prek.toml](prek.toml), `scripts/check-docs.sh` |
 | the recorded session and the landing animation | `examples/demo/README.md` |
 | the version agreement check | `scripts/version-check.sh` |
 | a quickstart's commands and outputs | `docs/tutorials/` (rust, node, ops) |
-| the release pipeline and the platform matrix | `.github/workflows/release.yml`, [CONTRIBUTING.md](CONTRIBUTING.md) |
+| the release pipeline, the tag rule and the published consumer gate | `.github/workflows/release.yml`, `scripts/check-release-tag.sh`, `scripts/verify-published.sh`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | the benches and the baseline workflow | `bench/README.md`, the harness in `bench/src/lib.rs` |
 | the Python reference client and its conformance suite | `clients/python/nxr.py`, `clients/python/test_conformance.py` (the skip table and the drift rule) |
 

@@ -80,6 +80,7 @@ The release gate also runs the same docs check as the Docs workflow and `just ch
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
+The gate refuses a tag that already points at another commit, so a manual dispatch cannot move a tag or publish under an existing version.
 A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, `verify` runs again, and `finalize` repeats the idempotent promotion and tag.
 A bump that was pushed but never dispatched is a resumable state: a later `--yes` reuses the pushed tree, and a manual `gh workflow run release.yml --ref master` runs the same gate, verify and tag.
 A CI failure before the dispatch takes a fix on top of the pushed bump.
