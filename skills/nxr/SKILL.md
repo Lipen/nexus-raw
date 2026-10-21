@@ -64,7 +64,7 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
 - Every error prints one `hint:` line on stderr saying what to check next.
   The hint ends with `server says: <first body line>` when the server sent one.
 - Enumeration needs a source: a repeatable `--name`, a `--names-from FILE` (`-` reads stdin), or `--ls` for the server search API.
-  Without one, `down`, `diff`, `rm` and `mirror` refuse with `cannot enumerate`.
+  Without one, `down`, `diff`, `mirror`, `mv` and `rm` refuse with `cannot enumerate`.
   `clone` enumerates the repository itself through the search API and refuses with the same error when the API is absent.
 - `rm` and `mv` are plan-by-default: they print what they would do and touch nothing until `--yes`.
 - Redirects are never followed, so a 301 surfaces as a plain transport error (exit 3).
