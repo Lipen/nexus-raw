@@ -4,8 +4,8 @@ name: Release
 # `just release X.Y.Z` bumps the version, finalizes the changelog, pushes
 # master and dispatches this workflow on that exact commit.
 # The pipeline gates on the core suite and the docs check, builds every
-# platform, publishes the crates, the container image, the addons, the npm
-# platform packages, and main and the bridge under `next`.
+# platform, publishes the crates, the container image, the addons, then the
+# npm platform packages, and main and the bridge under `next`.
 # It verifies the published release, then promotes `latest`, creates the tag
 # and the GitHub release.
 # A tag attests a tree that shipped whole, and a failed run leaves no tag.
@@ -765,8 +765,8 @@ jobs:
         run: scripts/npm-publish.sh packaging/npm-bridge
 
   # The published release, not the staged tree: every exact version must be
-  # served, and the example must install and run from the registry before
-  # `latest` moves or the tag lands.
+  # served, and the example and the bridge must install and resolve from the
+  # registry before `latest` moves or the tag lands.
   # Main and the bridge are on `next` while this runs, so a consumer of
   # `latest` stays on the previous stable version.
   verify:
@@ -827,9 +827,9 @@ jobs:
           EOF
 
   # The last job, and the only one that touches tags: after verify confirms
-  # every artifact is served and the published example runs, the tree gets
-  # its tag and its release. A run that stops earlier leaves no tag, so a fix
-  # is a push and a fresh dispatch, never a moved tag.
+  # every artifact is served and the published example and bridge resolve,
+  # the tree gets its tag and its release. A run that stops earlier leaves no
+  # tag, so a fix is a push and a fresh dispatch, never a moved tag.
   # The container job is part of the needs: it reads its pushed manifest list
   # back from GHCR itself, and a failed push has to hold the tag back like any
   # other artifact.

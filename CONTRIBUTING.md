@@ -75,7 +75,7 @@ The staged package is covered by the npm job's consumer smoke.
 The published package is covered by the `verify` job and the daily `smoke.yml` install of `@latest`.
 The `verify` job installs the exact published main package and the bridge, runs the published example against the mock, and checks the CLI and the bridge surface.
 
-The workflow gates on the core suite and the docs check, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then verifies the published release.
+The workflow gates on the core suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then verifies the published release.
 The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
