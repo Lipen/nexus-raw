@@ -300,7 +300,7 @@ fi
 # ---- the release --------------------------------------------------------
 echo "dispatching the release on $sha"
 gh workflow run release.yml --ref master
-find_run "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
+find_run Release "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
 echo "the run appeared: https://github.com/Lipen/nexus-raw/actions/runs/$run"
 settle "$run"
 if [ "$conclusion" != success ]; then
