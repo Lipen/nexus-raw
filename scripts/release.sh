@@ -131,11 +131,19 @@ fi
 
 # ---- the gates ---------------------------------------------------------
 # Green collapses to one line; a note or a block unfolds every row.
-gtree=0; gtag=0; gcrates=0; gpins=0
+gbranch=0; gtree=0; gtag=0; gcrates=0; gpins=0
+gbranch_msg="master"
 gtree_msg="clean"
 gtag_msg=""
 gcrates_msg=""
 gpins_msg=""
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$branch" = master ]; then
+  gbranch=0; gbranch_msg="master"
+else
+  gbranch=2; gbranch_msg="$branch, not master"; blockers=$((blockers + 1))
+fi
 
 [ -z "$(git status --porcelain)" ] || {
   n="$(git status --porcelain | wc -l | tr -d ' ')"
@@ -183,10 +191,10 @@ fi
 
 echo
 if [ "$blockers" -eq 0 ] && [ "$notes" -eq 0 ]; then
-  row checks "${G}all clear${N} ${DIM}· tree · tag · crates · pins${N}"
+  row checks "${G}all clear${N} ${DIM}· branch · tree · tag · crates · pins${N}"
 else
   first=1
-  for gate in "tree:$gtree:$gtree_msg" "tag:$gtag:$gtag_msg" "crates:$gcrates:$gcrates_msg" "pins:$gpins:$gpins_msg"; do
+  for gate in "branch:$gbranch:$gbranch_msg" "tree:$gtree:$gtree_msg" "tag:$gtag:$gtag_msg" "crates:$gcrates:$gcrates_msg" "pins:$gpins:$gpins_msg"; do
     name="${gate%%:*}"; rest="${gate#*:}"; st="${rest%%:*}"; msg="${rest#*:}"
     case "$st" in
       0) m="${G}   ok${N}" ;;
