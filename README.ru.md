@@ -90,12 +90,12 @@ nxr verify vendor/prebuilt
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
+| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
 | `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--segments N] [--plan] [--prefix P]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер. `--segments` режет каждый артефакт на параллельные Range-запросы |
 | `nxr clone <URL> <DIR> [--state FILE] [--no-state] [--verify] [--plan] [--prefix P]` | клон всего репозитория: проверенные загрузки, запечатывание локальных маркеров, необязательный кэш фактов, который не перехэширует неизменённые файлы |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет |
-| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
-| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
+| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--via search [--fallback]]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет. `--via search` читает удалённые факты из search-листинга |
+| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
+| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes] [--src-user U] [--dst-user U]` | mirror в приёмник, затем удаление в источнике: план по умолчанию, `--yes` двигает (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
 | `nxr ls <URL> [--assets]` | листинг raw-дерева каталога на любой глубине (папки с `/`). `--assets`: плоские имена артефактов |
@@ -104,9 +104,13 @@ nxr verify vendor/prebuilt
 | `nxr verify <DIR>` | локально байты + маркер + digest, без сети |
 | `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
 | `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
+| `nxr service status <URL>` | живость сервера и записываемость за URL |
+| `nxr service repo <URL> [--detail]` | что за репозиторий за URL. `--detail` добавляет полные настройки (только nx-admin) |
+| `nxr service assets <URL> [--q Q] [--prefix P]` | все ассеты репозитория через search API, любого формата |
+| `nxr service eula <URL> [--accept]` | EULA-гейт сервера. `--accept` открывает его (nx-admin) |
 | `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
 
-`down`, `diff`, `mirror` и `rm` берут перечисление явно: повторяемый `--name`, `--names-from FILE` (по одному имени в строке, `-` это stdin) или best-effort `--ls` при наличии на сервере search API.
+`down`, `diff`, `mirror`, `mv` и `rm` берут перечисление явно: повторяемый `--name`, `--names-from FILE` (по одному имени в строке, `-` это stdin) или best-effort `--ls` при наличии на сервере search API.
 Без источника команда отказывает.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
