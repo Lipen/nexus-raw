@@ -266,6 +266,13 @@ else
 fi
 # The dispatch API takes a branch, not a raw SHA: master is the ref, and
 # the gate validates whatever HEAD it gets.
+# A push that lands after the bump would make the workflow run on someone
+# else's tree, so check the ref again immediately before each dispatch.
+git fetch origin master
+if [ "$(git rev-parse origin/master)" != "$sha" ]; then
+  echo "release $v: master moved after the bump, nothing was dispatched" >&2
+  exit 1
+fi
 
 # ---- the rehearsal ------------------------------------------------------
 # The same workflow on the same commit with `dry-run=true`: the gate, every
@@ -277,8 +284,7 @@ gh workflow run release.yml --ref master -F dry-run=true
 find_run "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
 rehearsal="$run"
 echo "the rehearsal appeared: https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal"
-# The rehearsal gate waits for the full CI matrix on this commit, so a red
-# Windows or macOS lane stops it before any publish.
+# The rehearsal gate runs the core suite and the docs check on this commit.
 settle "$rehearsal"
 if [ "$conclusion" != success ]; then
   echo "release: the rehearsal ended $conclusion, nothing was dispatched, see https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal" >&2
@@ -286,6 +292,13 @@ if [ "$conclusion" != success ]; then
 fi
 
 # ---- the release --------------------------------------------------------
+# The rehearsal took long enough for a hotfix to land: dispatch only while
+# master still points at the bump commit.
+git fetch origin master
+if [ "$(git rev-parse origin/master)" != "$sha" ]; then
+  echo "release $v: master moved during the rehearsal, nothing was dispatched" >&2
+  exit 1
+fi
 echo "dispatching the release on $sha"
 gh workflow run release.yml --ref master
 find_run "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
