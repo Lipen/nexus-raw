@@ -79,6 +79,9 @@ The workflow gates on the core suite, builds every platform, publishes the crate
 The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.
 Only after `verify` passes does the finalize job promote both to `latest`, create the tag and publish the GitHub release with the notes taken from the same changelog section.
+The promotion runs through npm trusted publishing too.
+It needs npm 11.21.0 or later, which the finalize job installs, and **Allow npm dist-tag** enabled in the trusted publisher configuration of both `@nexus-raw/nxr` and the unscoped `nexus-raw` bridge.
+The dist-tag permission is separate from publish and is off by default.
 A tag attests a tree that shipped whole: a failed run leaves no tag.
 The gate refuses a tag that already points at another commit, so a manual dispatch cannot move a tag or publish under an existing version.
 A repeat `scripts/release.sh X.Y.Z --yes` is the recovery path: the guards skip whatever is already published, `verify` runs again, and `finalize` repeats the idempotent promotion and tag.
