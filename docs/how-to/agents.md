@@ -20,9 +20,9 @@
 | скачать в stdout | `nxr get <url>` (без `-o`) | поток в stdout | 0 |
 | скачать папку | `nxr down <dir-url> --names-from list.txt` | `downloaded N` | 0 |
 | загрузить папку | `nxr up <dir> <dir-url>` | `uploaded N` + `.sha256`-маркеры | 0 |
-| чем отличаются? | `nxr diff <dir> <dir-url>` | дельта: local/remote/same | 0 |
+| чем отличаются? | `nxr diff <dir> <dir-url> --ls` | дельта: local/remote/same | 0 |
 | перенести версию | `nxr mirror <src-url> <dst-url> --names-from list.txt` | `uploaded N, downloaded N` | 0 |
-| переименовать версию | `nxr mv <src-url> <dst-url>` | mirror + удаление источника | 0 |
+| переименовать версию | `nxr mv <src-url> <dst-url> --names-from list.txt` | mirror + удаление источника | 0 |
 | удалить версию | `nxr rm <dir-url> --names-from list.txt` | маркер удалён первым, затем байты | 0 |
 | снять pointer | `nxr point <ptr-url>` | pointer-файл удалён | 0 |
 | проверить локально | `nxr verify <dir>` | digest и маркеры сходятся | 0 |
