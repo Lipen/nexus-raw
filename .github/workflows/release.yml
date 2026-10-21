@@ -841,6 +841,19 @@ jobs:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
 
+      # A tag created during the build must stop the release before `latest`
+      # moves; the create step checks again just before the upload.
+      - name: The release tag is still free or points at this commit
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          [ -n "$version" ] || { echo "release: no version in Cargo.toml" >&2; exit 1; }
+          rc=0
+          scripts/check-release-tag.sh "$version" || rc=$?
+          case "$rc" in
+            0|3) : ;;
+            *) echo "release: the tag v$version is not free and does not point at this commit (check-release-tag exit $rc)" >&2; exit 1 ;;
+          esac
+
       # The audit and the published example already ran in verify; this job
       # only promotes, tags and uploads.
       - name: Collect the archives
