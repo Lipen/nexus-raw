@@ -325,6 +325,8 @@ That makes the quirk upstream behavior worth knowing rather than a client contra
 
 A single artifact can be split into `N` closed Range spans (`--segments N`, 2..=64).
 The spans stage as separate files under `.nxr-segments-<32 hex>`, assemble positionally into the usual part, and one pass hashes the result.
+The staging directory carries a `manifest` with the object size and the span count.
+A mismatch means the object changed between runs, so the staging is discarded instead of assembling a tiling that no longer matches.
 A finished span survives a killed run.
 An unfinished one starts over.
 
