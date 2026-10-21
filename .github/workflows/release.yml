@@ -840,6 +840,13 @@ jobs:
         with:
           node-version: 24
 
+      # dist-tags through trusted publishing need npm 11.21.0 or later, and
+      # 12.2.0 on the 12 line. The bundled CLI on the Node 24 image can be
+      # older: it publishes through OIDC but falls back to a token for
+      # dist-tag.
+      - name: npm CLI with dist-tag trusted publishing
+        run: npm install -g npm@11.21.0
+
       # No registry-url here: setup-node would write the GitHub token into
       # .npmrc, and npm would use that instead of the trusted-publisher OIDC
       # exchange. The trusted publisher covers publish and dist-tag.
