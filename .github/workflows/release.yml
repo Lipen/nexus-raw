@@ -839,7 +839,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-          registry-url: "https://registry.npmjs.org"
+
+      # No registry-url here: setup-node would write the GitHub token into
+      # .npmrc, and npm would use that instead of the trusted-publisher OIDC
+      # exchange. The trusted publisher covers publish and dist-tag.
 
       # A tag created during the build must stop the release before `latest`
       # moves; the create step checks again just before the upload.
