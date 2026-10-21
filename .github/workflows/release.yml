@@ -882,9 +882,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          # The tag is never moved: an existing vX.Y.Z must point at this
+          # commit, or the release is for a different tree. The local release
+          # script checks this in its preview; a manual dispatch needs it too.
+          tag="v$version"
+          sha="$(git rev-parse HEAD)"
+          if git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+            remote="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+            [ -n "$remote" ] || remote="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
+            if [ "$remote" != "$sha" ]; then
+              echo "release: $tag already points at $remote, not $sha" >&2
+              exit 1
+            fi
+          fi
           # Idempotent like every publish guard: a rerun after a half-done
           # finalize skips the create and refreshes the uploads.
-          if gh release view "v$version" > /dev/null 2>&1; then
+          if gh release view "$tag" > /dev/null 2>&1; then
             echo "release v$version already exists, keeping it"
           else
             if [ -s /tmp/notes.md ]; then
