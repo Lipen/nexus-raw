@@ -41,7 +41,7 @@ if [ -z "$fusermount" ]; then
   exit 0
 fi
 
-here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+here=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$here"
 cargo build -q -p mock-nexus -p nexus-raw -p nexus-raw-mount
 target_dir=$(cargo metadata --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')

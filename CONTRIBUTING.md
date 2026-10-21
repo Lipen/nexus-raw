@@ -75,6 +75,17 @@ The staged package is covered by the npm job's consumer smoke.
 The published package is covered by the `verify` job and the daily `smoke.yml` run of the same consumer script against `@latest`.
 The `verify` job runs `scripts/verify-published.sh` on the exact version: it installs the published main package and the bridge, runs the example, checks the CLI, and resolves the bridge through `require` and named ESM imports.
 
+The Homebrew formula is a post-release artifact: it can only name a version whose assets exist.
+After the workflow publishes, regenerate it from the release's `SHA256SUMS` and commit the result:
+
+```bash
+just brew-formula X.Y.Z
+git add Formula/nexus-raw.rb
+git commit -S -m "chore: bump the brew formula to X.Y.Z"
+```
+
+`scripts/brew-formula.sh --check` verifies the committed formula against its own release.
+
 The workflow gates on the core suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then verifies the published release.
 The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.
 The npm main package and the bridge publish under `next`, so `latest` stays on the previous stable version while the release is verified.

@@ -51,6 +51,7 @@ nav:
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
       - Clone a repository: how-to/clone.md
+      - Install with Homebrew: how-to/brew.md
       - Integrate it: how-to/integrate.md
       - Use in CI: how-to/ci.md
       - Run it as a container: how-to/containers.md

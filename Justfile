@@ -46,6 +46,12 @@ mount url mnt *args:
 mount-smoke:
     scripts/mount-smoke.sh
 
+# Regenerate the tap formula from a release's SHA256SUMS (`--check` compares).
+[doc('Render the Homebrew formula from a release.')]
+[group('brew')]
+brew-formula *args:
+    scripts/brew-formula.sh {{ args }}
+
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
 [doc('Serve the mock Nexus.')]

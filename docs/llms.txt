@@ -83,6 +83,7 @@ Quirks that are not bugs:
 - [Compare two servers](https://lipen.github.io/nexus-raw/how-to/compare/): staging vs prod through mirror --dry-run, the plan is the delta
 - [Consume artifacts](https://lipen.github.io/nexus-raw/how-to/consume/): down, unpack, digest verification
 - [Clone a repository](https://lipen.github.io/nexus-raw/how-to/clone/): a verified local copy, the update run, the fact cache and the seal
+- [Install with Homebrew](https://lipen.github.io/nexus-raw/how-to/brew/): the tap in this repository, upgrade and regeneration
 - [Use in CI](https://lipen.github.io/nexus-raw/how-to/ci/): credentials, caching, the retry contract
 - [Run it as a container](https://lipen.github.io/nexus-raw/how-to/containers/): the release image, a transfer with docker run, COPY --from into a downstream image
 - [Named remotes](https://lipen.github.io/nexus-raw/how-to/config/): the -R alias file: one TOML, read only when named

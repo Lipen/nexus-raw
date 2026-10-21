@@ -37,6 +37,13 @@ Prebuilt binaries ride on [GitHub Releases](https://github.com/Lipen/nexus-raw/r
 cargo binstall nexus-raw
 ```
 
+With Homebrew on macOS and Linux, through the tap in this repository:
+
+```bash
+brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
+brew install lipen/nexus-raw/nexus-raw
+```
+
 A GitHub Actions workflow installs and runs `nxr` through the composite action shipped in this repository:
 
 ```yaml

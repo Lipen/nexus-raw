@@ -37,6 +37,13 @@
 cargo binstall nexus-raw
 ```
 
+Через Homebrew на macOS и Linux (tap живёт в этом репозитории):
+
+```bash
+brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
+brew install lipen/nexus-raw/nexus-raw
+```
+
 Из npm, нативный аддон ставится готовым пакетом:
 
 ```bash
