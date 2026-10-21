@@ -25,6 +25,20 @@ nxr up dist/1.4.0/ "$NEXUS/repository/releases/1.4.0/"
 Finished names are skipped, and the `<name>.part` files left by the killed run are the resume fuel.
 Use `--fresh` when you want every name to start from zero instead.
 
+## Download one large artifact through concurrent ranges
+
+```sh
+nxr get "$NEXUS/repository/releases/1.4.0/app.zip" -o app.zip --segments 8
+```
+
+Each span is a closed Range request, and a finished span survives a killed run, so a rerun fetches only the unfinished spans.
+The worker budget still caps the total concurrency, and a server that ignores Range degrades to the single stream.
+The same flag works on a directory fetch:
+
+```sh
+nxr down "$NEXUS/repository/releases/1.4.0/" dist/ --names-from names.txt --segments 8
+```
+
 ## Verify the local copy without the network
 
 ```sh
@@ -33,6 +47,17 @@ nxr verify dist/1.4.0/
 
 Exit 0 means bytes, markers and digests agree.
 Exit 1 names the incomplete or diverging entries, and the `summary` event lists them under `failed`.
+
+## Clone a repository for backup
+
+```sh
+nxr clone "$NEXUS/repository/releases/" backup/releases/
+```
+
+The clone enumerates the repository through the search API, verifies every artifact against its remote marker, and writes a local marker for an object whose bytes already match.
+A rerun is the update: unchanged files skip without a hash, and the optional cache lives at `backup/releases/.nxr-state.json`.
+An object that diverges from its marker is refused rather than overwritten.
+The clone never deletes a local name the repository no longer lists.
 
 ## Compare before publishing
 

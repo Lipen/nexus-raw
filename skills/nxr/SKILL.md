@@ -1,6 +1,6 @@
 ---
 name: nxr
-description: Transfer artifacts to and from a Sonatype Nexus raw repository with the nxr CLI (curl-shaped, URL in argv, credentials from -u or env, no config file). Use when publishing, downloading, mirroring, renaming or deleting version directories, or verifying and auditing Nexus raw artifacts, or when a task mentions nxr, Nexus raw, .sha256 marker siblings, or channel and pointer refs.
+description: Transfer artifacts to and from a Sonatype Nexus raw repository with the nxr CLI (curl-shaped, URL in argv, credentials from -u or env, no config file). Use when publishing, downloading, cloning, mirroring, renaming or deleting version directories, or verifying and auditing Nexus raw artifacts, or when a task mentions nxr, Nexus raw, .sha256 marker siblings, or channel and pointer refs.
 license: MIT
 ---
 
@@ -40,8 +40,10 @@ Values never appear in logs, `--json` output or error messages.
 | the server refuses writes with 403 | `nxr service eula <url> --accept` |
 | list a directory | `nxr ls <dir-url>` and `--assets` for flat names |
 | fetch one file | `nxr get <url> -o <file>` |
+| fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | stream one file to stdout | `nxr get <url>` |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
+| clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | publish a directory | `nxr up <src-dir> <dir-url>` |
 | what differs locally versus remote | `nxr diff <dir> <dir-url> --names-from list.txt` |
 | copy a version between repositories | `nxr mirror <src-url> <dst-url> --names-from list.txt` |
@@ -63,6 +65,7 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
   The hint ends with `server says: <first body line>` when the server sent one.
 - Enumeration needs a source: a repeatable `--name`, a `--names-from FILE` (`-` reads stdin), or `--ls` for the server search API.
   Without one, `down`, `diff`, `rm` and `mirror` refuse with `cannot enumerate`.
+  `clone` enumerates the repository itself through the search API and refuses with the same error when the API is absent.
 - `rm` and `mv` are plan-by-default: they print what they would do and touch nothing until `--yes`.
 - Redirects are never followed, so a 301 surfaces as a plain transport error (exit 3).
 - TLS verification is on, and `--tls-insecure` is the only way off.
