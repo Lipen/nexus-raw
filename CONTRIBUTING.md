@@ -72,8 +72,8 @@ The act still waits for the rehearsal as a convenience.
 The workflow continues on its own if the terminal goes away.
 `examples/node` links to `crates/nexus-raw-napi` through a local link dependency, so it runs the source under test and needs no post-release pin.
 The staged package is covered by the npm job's consumer smoke.
-The published package is covered by the `verify` job and the daily `smoke.yml` install of `@latest`.
-The `verify` job installs the exact published main package and the bridge, runs the published example against the mock, and checks the CLI, the bridge CJS surface and its named ESM imports.
+The published package is covered by the `verify` job and the daily `smoke.yml` run of the same consumer script against `@latest`.
+The `verify` job runs `scripts/verify-published.sh` on the exact version: it installs the published main package and the bridge, runs the example, checks the CLI, and resolves the bridge through `require` and named ESM imports.
 
 The workflow gates on the core suite, builds every platform, publishes the crates in dependency order, the node addons and the npm packages, and then verifies the published release.
 The release gate also runs the same docs check as the Docs workflow and `just check-docs`, so a broken link or a stale CLI page stops the release before anything publishes.

@@ -34,36 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       - name: Build the mock server
         run: cargo build -q -p mock-nexus
-      - name: Install and load the published package
-        run: |
-          mkdir -p tmp-smoke && cd tmp-smoke
-          echo '{"name":"os-smoke","private":true}' > package.json
-          npm install --no-package-lock --no-save "@nexus-raw/nxr@latest"
-          node <<'EOF'
-            const fs = require("fs");
-            const path = require("path");
-            const nxr = require("@nexus-raw/nxr");
-            const entry = require.resolve("@nexus-raw/nxr");
-            const dts = fs.readFileSync(path.join(path.dirname(entry), "index.d.ts"), "utf8");
-            const declared = [...dts.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
-            if (declared.length < 10) {
-              throw new Error(`os smoke: only ${declared.length} functions parsed from index.d.ts, the d.ts shape drifted`);
-            }
-            const missing = declared.filter((m) => typeof nxr[m] !== "function");
-            if (missing.length > 0) {
-              throw new Error(`os smoke (${process.platform}): the surface is missing ${missing.join(", ")}`);
-            }
-            console.log(`os smoke (${process.platform}): ${declared.length} declared functions resolve`);
-          EOF
-      - name: Run the published example flow
-        run: |
-          mkdir -p tmp-example && cd tmp-example
-          echo '{"name":"published-example","private":true}' > package.json
-          npm install --no-package-lock --no-save "@nexus-raw/nxr@latest"
-          cp ../examples/node/publish-and-consume.mjs .
-          if [ -f ../target/debug/mock-nexus.exe ]; then
-            export MOCK_NEXUS_BIN="../target/debug/mock-nexus.exe"
-          else
-            export MOCK_NEXUS_BIN="../target/debug/mock-nexus"
-          fi
-          node publish-and-consume.mjs
+      # The same published-consumer gate the release verify job runs, on
+      # every desktop OS: main, CLI, example, bridge require and bridge ESM.
+      - name: Run the published consumer checks
+        run: scripts/verify-published.sh latest

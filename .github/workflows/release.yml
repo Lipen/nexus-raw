@@ -793,49 +793,11 @@ jobs:
       - name: Every artifact is visible on the registries
         run: scripts/registry-audit.sh
 
-      - name: Run the published example
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          mkdir -p tmp-example && cd tmp-example
-          echo '{"name":"published-example","private":true}' > package.json
-          npm install --no-package-lock --no-save "@nexus-raw/nxr@$version"
-          cp ../examples/node/publish-and-consume.mjs .
-          if [ -f ../target/debug/mock-nexus.exe ]; then
-            export MOCK_NEXUS_BIN="../target/debug/mock-nexus.exe"
-          else
-            export MOCK_NEXUS_BIN="../target/debug/mock-nexus"
-          fi
-          node publish-and-consume.mjs
-          ./node_modules/.bin/nxr --version
-
-      # The legacy name resolves the same surface from the registry.
-      # `check-bridge-surface.sh` compares the export lists statically; this
-      # installs the published shim and requires it, the consumer path.
-      - name: Run the published bridge
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          mkdir -p tmp-bridge && cd tmp-bridge
-          echo '{"name":"bridge-smoke","private":true}' > package.json
-          npm install --no-package-lock --no-save "nexus-raw@$version"
-          node <<'EOF'
-            const nxr = require("nexus-raw")
-            const missing = ["up", "down", "clone", "verify"].filter((m) => typeof nxr[m] !== "function")
-            if (missing.length > 0) {
-              throw new Error(`bridge smoke: the surface is missing ${missing.join(", ")}`)
-            }
-            console.log("bridge smoke: the legacy require resolves the current surface")
-          EOF
-          # The dot-assignment shape exists so cjs-module-lexer resolves named
-          # ESM imports. A real .mjs file proves that path, not just require().
-          cat > smoke.mjs <<'EOF'
-            import { up, down, clone, verify } from "nexus-raw"
-            const missing = [up, down, clone, verify].filter((fn) => typeof fn !== "function")
-            if (missing.length > 0) {
-              throw new Error("bridge ESM smoke: named imports are missing")
-            }
-            console.log("bridge ESM smoke: named imports resolve")
-          EOF
-          node smoke.mjs
+      # One consumer gate for the release and the nightly smoke: the exact
+      # published main package and the bridge, the example, the CLI and both
+      # bridge module systems.
+      - name: Run the published consumer checks
+        run: scripts/verify-published.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 
   # The last job, and the only one that touches tags: after verify confirms
   # every artifact is served and the published example and bridge resolve,
