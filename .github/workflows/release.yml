@@ -41,6 +41,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      # The tag is never moved: an existing vX.Y.Z must point at this commit.
+      # This runs before any build or publish, so a manual dispatch on a
+      # different tree cannot publish under an existing version.
+      - name: The release tag is free or points at this commit
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          [ -n "$version" ] || { echo "release: no version in Cargo.toml" >&2; exit 1; }
+          tag="v$version"
+          sha="$(git rev-parse HEAD)"
+          rc=0
+          git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null 2>&1 || rc=$?
+          case "$rc" in
+            0)
+              remote="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+              [ -n "$remote" ] || remote="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
+              if [ "$remote" != "$sha" ]; then
+                echo "release: $tag already points at $remote, not $sha" >&2
+                exit 1
+              fi
+              ;;
+            2) : ;;
+            *)
+              echo "release: cannot check $tag (git ls-remote exit $rc)" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
