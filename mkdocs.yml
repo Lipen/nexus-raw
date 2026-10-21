@@ -64,6 +64,7 @@ nav:
   - Reference:
       - reference/cli.md
       - reference/tui.md
+      - The mount: reference/mount.md
       - Wire protocol: reference/protocol.md
       - Wire invariants: reference/invariants.md
       - The mock server: reference/mock.md

@@ -5,7 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr-mount` (Linux): a read-only FUSE view of a raw repository.
+  Listings go through the search API, reads are lazy ranged GETs over a bounded block cache, and `.sha256` markers stay hidden.
+  Every write answers `EROFS`.
+  The binary is a separate crate, so `nxr` keeps no FUSE dependency and stays portable.
+- `Nxr::read_range`, a byte span into memory that slices the whole body when the server ignores `Range`, and `Nxr::ls_at`, a listing of any directory URL: the two core paths the mount is built on.
+- `NexusClient::get_range`, the transport primitive behind `read_range`.
 
 ## [0.22.1] - 2026-10-21
 

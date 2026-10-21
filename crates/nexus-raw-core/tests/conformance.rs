@@ -3175,3 +3175,69 @@ async fn segmented_get_refuses_one_segment() {
     );
     assert_eq!(err.exit_code(), 2);
 }
+
+// ------------------------------------------------- read_range and ls_at (nxr-mount)
+
+/// A ranged read returns exactly the requested span, past-EOF is empty, and an absent object is `None`.
+#[tokio::test]
+async fn read_range_returns_the_requested_span() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let content: Vec<u8> = (0..=255u8).cycle().take(4096).collect();
+    mock.insert(&format!("{VERSION}/a.bin"), &content);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}{VERSION}/a.bin", mock.base_url());
+
+    let span = nxr.read_range(&url, 100, 50).await.unwrap().unwrap();
+    assert_eq!(span, &content[100..150], "the 206 span is exact");
+
+    let past = nxr.read_range(&url, 8192, 16).await.unwrap().unwrap();
+    assert!(past.is_empty(), "a read past EOF is empty");
+
+    let absent = nxr
+        .read_range(&format!("{}{VERSION}/absent.bin", mock.base_url()), 0, 16)
+        .await
+        .unwrap();
+    assert!(absent.is_none(), "an absent object is None");
+}
+
+/// A server that ignores `Range` answers with the whole body: the span is sliced out.
+#[tokio::test]
+async fn read_range_slices_when_the_server_ignores_range() {
+    let mock = MockNexus::start(Scenario::IgnoreRange).unwrap();
+    let content: Vec<u8> = (0..=255u8).cycle().take(4096).collect();
+    mock.insert(&format!("{VERSION}/a.bin"), &content);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}{VERSION}/a.bin", mock.base_url());
+
+    let span = nxr.read_range(&url, 100, 50).await.unwrap().unwrap();
+    assert_eq!(
+        span,
+        &content[100..150],
+        "the whole body is sliced to the span"
+    );
+}
+
+/// `ls_at` lists a directory that is not the invocation base.
+#[tokio::test]
+async fn ls_at_lists_any_directory_url() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let page = serde_json::json!({
+        "items": [
+            {"path": "2.0.0/app.zip"},
+            {"path": "2.0.0/app.zip.sha256"},
+            {"path": "2.0.0/needs.json"},
+        ],
+    });
+    mock.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let entries = nxr
+        .ls_at(&format!("{}repository/raw/2.0.0/", mock.base_url()))
+        .await
+        .unwrap();
+    let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+    assert_eq!(names, ["app.zip", "needs.json"], "the marker is hidden");
+}

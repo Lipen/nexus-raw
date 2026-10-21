@@ -99,6 +99,7 @@ Quirks that are not bugs:
 - [The mock server](https://lipen.github.io/nexus-raw/reference/mock/): failure scenarios, Spec composition, seed-dir and config
 - [Rust API](https://lipen.github.io/nexus-raw/reference/api/): the `Nxr` facade, events and configuration
 - [The TUI](https://lipen.github.io/nexus-raw/reference/tui/): keys, presets and config of the terminal browser
+- [The mount](https://lipen.github.io/nexus-raw/reference/mount/): the read-only FUSE view of a repository
 
 ## Optional
 

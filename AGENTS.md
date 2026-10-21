@@ -1,6 +1,6 @@
 # Working in nexus-raw
 
-This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, the `nxr-tui` terminal browser, and the `mock-nexus` failure-scenario server that the conformance tests run against.
+This repository ships nexus-raw, a general-purpose client for Sonatype Nexus raw storage: the `nxr` CLI, the `nexus-raw-core` Rust library, the `nxr-tui` terminal browser, the `nxr-mount` read-only FUSE view (Linux), and the `mock-nexus` failure-scenario server that the conformance tests run against.
 `nxr` is curl for a Nexus raw repository: URL in argv, credentials from `-u` or env, nothing required on disk.
 A named remote (`-R/--remote`) reads `~/.config/nxr/config.toml`, and only an invocation that names one touches the file.
 [README.md](README.md) is the user-facing entry.
@@ -46,6 +46,7 @@ The canonical protocol text is kept outside this repository.
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
 | CLI flags, credentials order, output examples | [README.md](README.md) |
 | the TUI (keys, config, presets, smoke) | `crates/nexus-raw-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
+| the mount (`nxr-mount`, FUSE semantics, its limits) | [docs/reference/mount.md](docs/reference/mount.md), `crates/nexus-raw-mount/src/` |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
 | the lint/test gate and the shared docs gate | [Justfile](Justfile), [prek.toml](prek.toml), `scripts/check-docs.sh` |
@@ -86,6 +87,7 @@ New fields are additive.
 | `docs/`, `mkdocs.yml` | the documentation site (zensical, Material stack), served by `just docs` with live reload |
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `@nexus-raw/nxr`, plus the unscoped `nexus-raw` bridge): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 | `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
+| `crates/nexus-raw-mount/` | the `nxr-mount` binary: a read-only FUSE view of a repository (Linux, pure-Rust `fuser`, no libfuse at build time), a companion to `nxr` and a second consumer of the core facade |
 | `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package), `examples/panel` (the web panel on the napi bindings, `just panel`), `examples/wasm-sandbox` (the browser sandbox, `just wasm`) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just panel` / `just wasm` / `just example-rust` |
 | `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches over the core (`scan`, `diff`, `up`, `down`, `down-slow`) and the real binary (`cli`), the environment-driven dataset and worker ladders, the deterministic tree generator, and the report pipeline (`just bench-report`, `just bench-compare`); the workflow and the measurement rules live in `bench/README.md` |
 |`clients/python/`|the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite. ruff and ty gate it, and `just check` runs the suite|

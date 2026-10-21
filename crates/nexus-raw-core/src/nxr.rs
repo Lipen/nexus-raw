@@ -256,6 +256,28 @@ impl Nxr {
         primitive::head(&self.client, url).await
     }
 
+    /// Read a byte range into memory (the `nxr-mount` read path).
+    ///
+    /// `None` means the object is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors, and [`Error::Misuse`] when `start + len` overflows.
+    pub async fn read_range(
+        &self,
+        url: &str,
+        start: u64,
+        len: u64,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        if len == 0 {
+            return Ok(Some(Vec::new()));
+        }
+        let Some(end_incl) = start.checked_add(len - 1) else {
+            return Err(Error::misuse("the byte range overflows u64"));
+        };
+        self.client.get_range(url, start, end_incl).await
+    }
+
     /// The sha256 of a file or URL (spec §5.1).
     ///
     /// # Errors
@@ -1233,6 +1255,17 @@ impl Nxr {
     /// The same as [`Self::ls_entries`].
     pub async fn ls_entries_counted(&self) -> Result<(Vec<layout::ls::Entry>, usize), Error> {
         layout::ls::search_entries_counted(&self.client, &self.base).await
+    }
+
+    /// List the entries of any directory URL through the search API
+    /// (the `nxr-mount` readdir path).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] when `url` is not a directory URL and [`Error::Enumerate`]
+    /// when the search endpoint is unavailable or unparseable.
+    pub async fn ls_at(&self, url: &str) -> Result<Vec<layout::ls::Entry>, Error> {
+        layout::ls::search_entries(&self.client, url).await
     }
 
     /// Artifact names under this base via the search API (experimental).

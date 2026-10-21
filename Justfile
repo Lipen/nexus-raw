@@ -33,6 +33,13 @@ tui *args:
     @set -- {{ args }} && { [ "${1:-}" = -- ] && shift || :; } && \
         exec {{ cargo }} run -p nexus-raw-tui --quiet -- "$@"
 
+# Linux only: the read-only FUSE view of a repository.
+# Usage: `just mount http://127.0.0.1:8080/repository/raw /mnt/nexus`.
+[doc('Mount a repository as a local directory (Linux, read-only).')]
+[group('mount')]
+mount url mnt *args:
+    {{ cargo }} run -p nexus-raw-mount --quiet -- {{ url }} {{ mnt }} {{ args }}
+
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
 [doc('Serve the mock Nexus.')]

@@ -470,6 +470,58 @@ impl NexusClient {
         .await
     }
 
+    /// GET a byte range into memory.
+    ///
+    /// The mount read path: a `Range` request answered with `206` returns the span,
+    /// a `200` means the server ignored `Range` and the span is sliced out of the whole body,
+    /// a `404` returns `None`, and a `416` (the span starts at or past the end) returns an empty body.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
+    pub async fn get_range(
+        &self,
+        url: &str,
+        start: u64,
+        end_incl: u64,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        self.with_retries(None, url, |this: &Self, url: &str| {
+            Box::pin(async move {
+                let req = this
+                    .authorize(this.http.get(url))
+                    .header(reqwest::header::RANGE, format!("bytes={start}-{end_incl}"))
+                    // Byte offsets are only meaningful against the stored representation.
+                    .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status().as_u16();
+                match status {
+                    200 | 206 => {}
+                    404 => return Ok(None),
+                    416 => {
+                        // The span starts at or past the object's end: a read past EOF is empty.
+                        return Ok(Some(Vec::new()));
+                    }
+                    _ => return Err(this.status_failure(url, resp).await),
+                }
+                let body = resp.bytes().await.map_err(|e| this.wrap_send_err(url, e))?;
+                if status == 206 {
+                    return Ok(Some(body.to_vec()));
+                }
+                // The server ignored `Range`: slice the requested span out of the whole body.
+                let lo = usize::try_from(start).unwrap_or(usize::MAX).min(body.len());
+                let hi = usize::try_from(end_incl)
+                    .unwrap_or(usize::MAX)
+                    .saturating_add(1)
+                    .min(body.len());
+                if lo >= hi {
+                    return Ok(Some(Vec::new()));
+                }
+                Ok(Some(body[lo..hi].to_vec()))
+            })
+        })
+        .await
+    }
+
     /// PUT a small object whole.
     ///
     /// # Errors

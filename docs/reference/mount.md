@@ -1,0 +1,58 @@
+# The mount
+
+`nxr-mount` turns a Nexus raw repository into a local directory: `ls`, `cat`, `diff -r` and `cp -r` read from the repository lazily.
+It is a companion binary, not a subcommand of `nxr`: the CLI stays a portable curl, and the mount carries the platform-specific FUSE dependency on its own.
+
+The mount is read-only today.
+It answers listings, attributes and reads; every write gets `EROFS`.
+
+## Run it
+
+```bash
+nxr-mount https://nexus.example/repository/raw /mnt/nexus
+```
+
+The URL is the repository directory to mount.
+Credentials come from `-u user:pass`, `NXR_AUTH` (base64) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order, exactly like `nxr`.
+`--tls-insecure` skips certificate verification, and `--workers` caps parallel requests and FUSE dispatch threads.
+
+Unmount with `fusermount3 -u /mnt/nexus`.
+
+## How the tree is read
+
+A raw repository has no directories: a path is a directory while any object sits under it.
+The mount therefore resolves a node in two steps:
+
+1. `HEAD` the URL.
+   A `200` makes it a file, with the size from `Content-Length`.
+2. On a `404`, list the URL through the search API.
+   A non-empty listing makes it a directory, an empty one makes the path `ENOENT`.
+
+`.sha256` markers are hidden from listings, exactly as `nxr ls` hides them.
+
+Reads are lazy and block-cached: one block is `--block-kib` KiB (256 by default), fetched with a ranged GET, and the cache is bounded by `--cache-mib` (256 by default).
+A server that ignores `Range` still works: the whole body is sliced to the requested span.
+A read past the end of a file is empty, and `release` drops that file's blocks.
+
+Listings and attributes are cached for two seconds, so a rapid `ls -R` does not re-walk every directory.
+
+## Limits
+
+- Linux only in this build.
+  `fuser` has no Windows backend, and macOS needs macFUSE and a separate build.
+- The search API is required: a server without `/service/rest/v1/search/assets` answers `404`, and the mount cannot list directories.
+- There is no write path yet: `create`, `write`, `unlink` and `mkdir` answer `EROFS`.
+- A directory that exists with no objects under it cannot be represented, because the repository has no empty directories to prove.
+
+## Flags
+
+| Flag | Default | Meaning |
+| :-- | :-- | :-- |
+| `-u, --user` | env | Credentials as `user:pass`, curl style. |
+| `--tls-insecure` | off | Skip TLS certificate verification. |
+| `--workers` | 8 | Parallel requests and FUSE dispatch threads. |
+| `--retry` | 4 | Attempts per HTTP request. |
+| `--connect-timeout-secs` | 15 | TCP connect timeout. |
+| `--stall-secs` | 30 | Fail a request when no bytes arrive for this long. |
+| `--block-kib` | 256 | One read block in KiB. |
+| `--cache-mib` | 256 | Read-block cache budget in MiB. |
