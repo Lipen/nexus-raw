@@ -825,6 +825,17 @@ jobs:
             }
             console.log("bridge smoke: the legacy require resolves the current surface")
           EOF
+          # The dot-assignment shape exists so cjs-module-lexer resolves named
+          # ESM imports. A real .mjs file proves that path, not just require().
+          cat > smoke.mjs <<'EOF'
+            import { up, down, clone, verify } from "nexus-raw"
+            const missing = [up, down, clone, verify].filter((fn) => typeof fn !== "function")
+            if (missing.length > 0) {
+              throw new Error("bridge ESM smoke: named imports are missing")
+            }
+            console.log("bridge ESM smoke: named imports resolve")
+          EOF
+          node smoke.mjs
 
   # The last job, and the only one that touches tags: after verify confirms
   # every artifact is served and the published example and bridge resolve,
