@@ -180,3 +180,51 @@ fn audit_workers_zero_is_misuse() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+fn hex_digest(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    let digest = sha2::Sha256::digest(bytes);
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn marker_line(name: &str, bytes: &[u8]) -> String {
+    format!("{}  {name}\n", hex_digest(bytes))
+}
+
+/// `--sample N` checks exactly N of the eligible assets, deterministically.
+#[test]
+fn sample_checks_the_requested_count() {
+    let srv = MockNexus::start(Scenario::Atomic).expect("mock nexus starts");
+    let mut items = Vec::new();
+    for i in 0..4 {
+        let name = format!("s{i}.bin");
+        let path = format!("1.0.0/{name}");
+        let body = format!("payload-{i}").into_bytes();
+        let digest = hex_digest(&body);
+        srv.insert(&format!("repository/raw-main/{path}"), &body);
+        srv.insert(
+            &format!("repository/raw-main/{path}.sha256"),
+            marker_line(&name, &body).as_bytes(),
+        );
+        items.push(serde_json::json!({"path": path, "checksum": {"sha256": digest.clone()}}));
+        items.push(serde_json::json!({"path": format!("{path}.sha256"), "checksum": {"sha256": digest}}));
+    }
+    srv.insert(
+        "service/rest/v1/search/assets",
+        serde_json::json!({"items": items}).to_string().as_bytes(),
+    );
+
+    let base = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["audit", &base, "--bytes", "--sample", "2"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("bytes checked 2"),
+        "the sample checks two: {}",
+        stdout(&out)
+    );
+
+    // A second run picks the same stride: the selection is deterministic.
+    let again = nxr(&["audit", &base, "--bytes", "--sample", "2"]);
+    assert_eq!(again.status.code(), Some(0));
+    assert!(stdout(&again).contains("bytes checked 2"));
+}

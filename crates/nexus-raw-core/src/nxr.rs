@@ -1560,6 +1560,26 @@ mod staging_lock_tests {
     use super::acquire_staging_lock;
 
     /// The creator must hold the lock too: a second call on the same fresh dir is refused.
+    /// A symlinked staging path is replaced, never followed: the target stays empty.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_staging_path_is_replaced_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim");
+        std::fs::create_dir(&victim).unwrap();
+        let staging = dir.path().join("staging");
+        std::os::unix::fs::symlink(&victim, &staging).unwrap();
+
+        super::secure_staging(&staging).unwrap();
+        let meta = std::fs::symlink_metadata(&staging).unwrap();
+        assert!(meta.is_dir(), "a real directory");
+        assert!(!meta.file_type().is_symlink(), "the link is gone");
+        assert!(
+            std::fs::metadata(&victim).unwrap().is_dir(),
+            "the target is untouched"
+        );
+    }
+
     #[test]
     fn the_creator_holds_the_lock() {
         let dir = tempfile::tempdir().unwrap();
