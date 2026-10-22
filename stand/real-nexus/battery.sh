@@ -36,13 +36,12 @@ trap 'rm -rf "$WORK"' EXIT
 pass=0
 fail=0
 n=0
-total=29
 ok() {
     n=$((n + 1)); pass=$((pass + 1))
     if [ "${BATTERY_VERBOSE:-0}" = 1 ]; then
         ui_ok "$(printf '%2d - %s' "$n" "$1")"
     elif [ -t 1 ] && [ "$((n % 10))" -eq 0 ]; then
-        ui_note "battery" "$n/$total"
+        ui_note "battery" "$n done"
     fi
 }
 no() {
@@ -242,8 +241,8 @@ fi
 # --- summary ----------------------------------------------------------------
 
 if [ "$fail" -eq 0 ]; then
-    ui_ok "$pass/$total passed"
+    ui_ok "$pass passed, 0 failed"
 else
-    ui_fail "$pass/$total passed, $fail failed"
+    ui_fail "$pass passed, $fail failed"
 fi
 [ "$fail" -eq 0 ]
