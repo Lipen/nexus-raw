@@ -102,7 +102,7 @@ class HttpError(NxrError):
 
 
 class UnsafeName(NxrError):
-    """A name outside the grammar, or carrying the reserved `.sha256` suffix."""
+    """A name outside the grammar, or carrying a reserved suffix or prefix."""
 
     exit_code = 2
 
@@ -553,6 +553,7 @@ def _check_name(name: str) -> None:
 
     A segment matches `[A-Za-z0-9._-]{1,255}` and is never `.` or `..`.
     The `.sha256` suffix is reserved: markers are written by `put`, never uploaded as artifacts.
+    A `.nxr`-prefixed segment is reserved too: those names are local staging and cache, never artifacts.
     """
     if not _SEGMENT.match(name):
         raise UnsafeName(f"unsafe name: {name!r}", hint="a name segment matches [A-Za-z0-9._-]{1,255}")
@@ -562,6 +563,11 @@ def _check_name(name: str) -> None:
         raise UnsafeName(
             f"unsafe name: {name!r}: reserved suffix .sha256",
             hint="the .sha256 suffix belongs to markers, which put writes itself",
+        )
+    if name.lower().startswith(".nxr"):
+        raise UnsafeName(
+            f"unsafe name: {name!r}: reserved prefix .nxr",
+            hint="a .nxr-prefixed name is local state, not an artifact",
         )
 
 

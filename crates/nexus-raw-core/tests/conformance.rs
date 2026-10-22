@@ -801,7 +801,8 @@ async fn segmented_down_resumes_finished_spans() {
     let staging = segment_dir(dst.path(), "big.bin");
     std::fs::create_dir_all(&staging).unwrap();
     std::fs::write(staging.join("segment-0000.part"), &content[..25_000]).unwrap();
-    std::fs::write(staging.join("manifest"), b"100000 4\n").unwrap();
+    let digest = Digest::of_bytes(&content);
+    std::fs::write(staging.join("manifest"), format!("100000 4 {digest}\n")).unwrap();
 
     let summary = nxr
         .down_with_segments(
@@ -821,6 +822,56 @@ async fn segmented_down_resumes_finished_spans() {
     );
 }
 
+/// A staged span from an older object version must not be reused: the manifest digest gates the resume.
+#[tokio::test]
+async fn segmented_down_discards_spans_from_another_object_version() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let old: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    let new: Vec<u8> = (0..100_000u32).map(|i| (i % 199) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &old);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    // A previous run staged spans from the old object.
+    let dst = TempDir::new().unwrap();
+    let staging = segment_dir(dst.path(), "big.bin");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("segment-0000.part"), &old[..25_000]).unwrap();
+    let old_digest = Digest::of_bytes(&old);
+    std::fs::write(
+        staging.join("manifest"),
+        format!("100000 4 {old_digest}\n"),
+    )
+    .unwrap();
+
+    // The remote object is replaced by same-length different bytes and a new marker.
+    let remote = format!("{VERSION}/big.bin");
+    mock.insert(&remote, &new);
+    mock.insert(
+        &format!("{remote}.sha256"),
+        sibling::format_line("big.bin", &Digest::of_bytes(&new)).as_bytes(),
+    );
+
+    let summary = nxr
+        .down_with_segments(
+            dst.path(),
+            Enumeration::Names(names(&["big.bin"])),
+            false,
+            Some(4),
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(
+        std::fs::read(dst.path().join("big.bin")).unwrap(),
+        new,
+        "the stale span must not mix into the new object"
+    );
+    assert!(!segment_dir(dst.path(), "big.bin").exists());
+}
+
 #[tokio::test]
 async fn segmented_down_fresh_refetches_every_span() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
@@ -835,7 +886,8 @@ async fn segmented_down_fresh_refetches_every_span() {
     let staging = segment_dir(dst.path(), "big.bin");
     std::fs::create_dir_all(&staging).unwrap();
     std::fs::write(staging.join("segment-0000.part"), &content[..25_000]).unwrap();
-    std::fs::write(staging.join("manifest"), b"100000 4\n").unwrap();
+    let digest = Digest::of_bytes(&content);
+    std::fs::write(staging.join("manifest"), format!("100000 4 {digest}\n")).unwrap();
 
     nxr.down_with_segments(
         dst.path(),
@@ -3240,4 +3292,41 @@ async fn ls_at_lists_any_directory_url() {
         .unwrap();
     let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
     assert_eq!(names, ["app.zip", "needs.json"], "the marker is hidden");
+}
+
+/// An unsafe marker name must refuse before the bytes are written: no markerless object is left behind.
+#[tokio::test]
+async fn put_bytes_refuses_an_unsafe_marker_name_before_writing() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}1.0.0/my%20notes.txt", mock.base_url());
+
+    let err = nxr.put_bytes(&url, b"x", true).await.unwrap_err();
+    assert!(matches!(err, Error::UnsafeName { .. }), "got {err:?}");
+    assert_eq!(err.exit_code(), 2);
+    assert!(
+        mock.store_get("1.0.0/my%20notes.txt").is_none(),
+        "the bytes must not be written when the marker name is refused"
+    );
+}
+
+/// `up --wait-index` must match a grouped base (`/g/1.0.0/name`), not just the last segment.
+#[tokio::test]
+async fn wait_search_visible_matches_a_grouped_base() {
+    let mock = MockNexus::start(Scenario::SearchLag { lag_ms: 10 }).unwrap();
+    mock.insert("g/1.0.0/a.zip", CONTENT);
+    let base = format!("{}repository/raw-main/g/1.0.0/", mock.base_url());
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config_at(base, None), tx).unwrap();
+
+    // The search lag is armed by the first storage PUT.
+    let probe = format!("{}repository/raw-main/g/1.0.0/.probe", mock.base_url());
+    nxr.put_bytes(&probe, b"probe", false).await.unwrap();
+
+    let visible = nxr
+        .wait_search_visible(&names(&["a.zip"]), 2)
+        .await
+        .unwrap();
+    assert_eq!(visible, 1, "the grouped path is visible");
 }

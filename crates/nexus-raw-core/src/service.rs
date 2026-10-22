@@ -359,11 +359,22 @@ pub(crate) async fn eula(client: &NexusClient, base: &str) -> Result<Option<Eula
 ///
 /// The disclaimer is echoed verbatim: the server refuses a rewritten one.
 pub(crate) async fn eula_accept(client: &NexusClient, base: &str) -> Result<EulaOutcome, Error> {
-    let Some(status) = eula(client, base).await? else {
-        return Ok(EulaOutcome {
-            accepted: false,
-            action: "none".to_owned(),
-        });
+    // The accept path is strict: 401/403 is a refusal to answer, not "no gate".
+    // The read path keeps mapping auth to `None`; `--accept` must not lie about it.
+    let root = server_root(base)?;
+    let url = format!("{root}/service/rest/v1/system/eula");
+    let status: EulaStatus = match client.get_small(&url).await {
+        Ok(Some(bytes)) => serde_json::from_slice(&bytes).map_err(|e| Error::ServerBody {
+            url: url.clone(),
+            detail: format!("the eula response is not JSON: {e}"),
+        })?,
+        Ok(None) => {
+            return Ok(EulaOutcome {
+                accepted: false,
+                action: "none".to_owned(),
+            });
+        }
+        Err(e) => return Err(e),
     };
     if status.accepted {
         return Ok(EulaOutcome {
@@ -371,8 +382,6 @@ pub(crate) async fn eula_accept(client: &NexusClient, base: &str) -> Result<Eula
             action: "none".to_owned(),
         });
     }
-    let root = server_root(base)?;
-    let url = format!("{root}/service/rest/v1/system/eula");
     let body = serde_json::json!({ "disclaimer": status.disclaimer, "accepted": true });
     client
         .post_small(&url, body.to_string().into_bytes())

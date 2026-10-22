@@ -377,24 +377,32 @@ fn split_bounds(total: u64, segments: usize) -> Vec<(u64, u64)> {
 
 /// The staging manifest, when it names exactly this object and split.
 #[cfg(not(target_arch = "wasm32"))]
-async fn read_manifest(staging: &Path) -> Option<(u64, usize)> {
+async fn read_manifest(staging: &Path) -> Option<(u64, usize, Option<String>)> {
     let text = tokio::fs::read_to_string(staging.join(SEGMENT_MANIFEST))
         .await
         .ok()?;
     let mut words = text.split_whitespace();
     let total = words.next()?.parse().ok()?;
     let segments = words.next()?.parse().ok()?;
-    words.next().is_none().then_some((total, segments))
+    let digest = words.next()?;
+    let digest = (digest != "-").then(|| digest.to_owned());
+    words.next().is_none().then_some((total, segments, digest))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn write_manifest(staging: &Path, total: u64, segments: usize) -> Result<(), Error> {
+async fn write_manifest(
+    staging: &Path,
+    total: u64,
+    segments: usize,
+    digest: Option<&str>,
+) -> Result<(), Error> {
     let path = staging.join(SEGMENT_MANIFEST);
     let mut f = crate::transport::client::write_options(false)
         .open(&path)
         .await
         .map_err(|e| Error::io(&path, e))?;
-    f.write_all(format!("{total} {segments}\n").as_bytes())
+    let digest = digest.unwrap_or("-");
+    f.write_all(format!("{total} {segments} {digest}\n").as_bytes())
         .await
         .map_err(|e| Error::io(&path, e))?;
     f.flush().await.map_err(|e| Error::io(&path, e))
@@ -509,12 +517,20 @@ async fn download_segmented(
     if !sane {
         let _ = tokio::fs::remove_file(&staging).await;
     }
-    if fresh || !sane || read_manifest(&staging).await != Some((total, segments)) {
+    // A manifest without the object digest cannot prove that the staged spans
+    // belong to the bytes we are about to assemble: a markerless resume is
+    // discarded, and a marked resume requires the exact expected digest.
+    let expected_hex = expected.as_ref().map(ToString::to_string);
+    let matches = match (read_manifest(&staging).await, &expected_hex) {
+        (Some((t, s, Some(d))), Some(e)) => t == total && s == segments && &d == e,
+        _ => false,
+    };
+    if fresh || !sane || !matches {
         let _ = tokio::fs::remove_dir_all(&staging).await;
         tokio::fs::create_dir_all(&staging)
             .await
             .map_err(|e| (name.clone(), Outcome::Failed(Error::io(&staging, e))))?;
-        write_manifest(&staging, total, segments)
+        write_manifest(&staging, total, segments, expected_hex.as_deref())
             .await
             .map_err(|e| (name.clone(), Outcome::Failed(e)))?;
     }
@@ -581,6 +597,23 @@ async fn download_segmented(
         if &actual != expected {
             let _ = tokio::fs::remove_file(&part).await;
             let _ = tokio::fs::remove_dir_all(&staging).await;
+            if !fresh {
+                // The staged spans were an older object version: the first run
+                // on this manifest is a restart from zero, like the single-stream path.
+                return Box::pin(download_segmented(
+                    client,
+                    dir,
+                    dir_url,
+                    name,
+                    Some(total),
+                    Some(expected.clone()),
+                    true,
+                    segments,
+                    workers,
+                    emit_done,
+                ))
+                .await;
+            }
             return Err((
                 name.clone(),
                 Outcome::Mismatch(format!(

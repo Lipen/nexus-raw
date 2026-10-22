@@ -758,7 +758,8 @@ class Reference(unittest.TestCase):
         """A URL whose final segment cannot carry a marker is refused before any byte moves.
 
         The rules the Rust grammar pins: the `.` and `..` segments, an empty segment
-        (a trailing slash), the reserved `.sha256` suffix, and any character outside `[A-Za-z0-9._-]`,
+        (a trailing slash), the reserved `.sha256` suffix, a `.nxr`-prefixed segment
+        (local staging and cache), and any character outside `[A-Za-z0-9._-]`,
         checked on the percent-decoded segment.
         """
         nx = nxr.Nxr()
@@ -769,6 +770,9 @@ class Reference(unittest.TestCase):
             "http://127.0.0.1:1/..",
             "http://127.0.0.1:1/dir/",
             "http://127.0.0.1:1/my%20app.zip",
+            "http://127.0.0.1:1/.nxr-state.json",
+            "http://127.0.0.1:1/.nxr-part-0123456789abcdef",
+            "http://127.0.0.1:1/.NXR-tmp-1-x",
         ]:
             with self.assertRaises(nxr.UnsafeName, msg=url):
                 nx.put(url, CONTENT)

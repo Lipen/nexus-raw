@@ -8,12 +8,13 @@ use crate::error::Error;
 /// Artifact name: a path relative to the directory being transferred.
 ///
 /// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each, no empty/`.`/`..` segments, no leading/trailing `/`.
-/// Reserved: the `.sha256` suffix (marker collision).
+/// Reserved: the `.sha256` suffix (marker collision) and a `.nxr`-prefixed segment (local staging and cache names).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactName(String);
 
 const MAX_SEGMENT_BYTES: usize = 255;
 const SIBLING_SUFFIX: &str = ".sha256";
+const LOCAL_PREFIX: &[u8] = b".nxr";
 
 fn valid_segment(seg: &str) -> bool {
     !seg.is_empty()
@@ -34,12 +35,13 @@ impl ArtifactName {
     /// assert_eq!(name.sibling(), "bom/linux-x86_64.json.sha256");
     /// assert_eq!(name.encoded(), "bom/linux-x86_64.json");
     /// assert!(ArtifactName::parse("x.sha256").is_err()); // reserved suffix
+    /// assert!(ArtifactName::parse(".nxr-state.json").is_err()); // reserved local-state prefix
     /// # Ok::<(), nexus_raw_core::Error>(())
     /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`Error::UnsafeName`] when `name` violates the grammar: empty, absolute, a `.`/`..` segment, a character outside `[A-Za-z0-9._-]`, a segment over 255 bytes, or the reserved `.sha256` suffix.
+    /// Returns [`Error::UnsafeName`] when `name` violates the grammar: empty, absolute, a `.`/`..` segment, a character outside `[A-Za-z0-9._-]`, a segment over 255 bytes, the reserved `.sha256` suffix, or a `.nxr`-prefixed segment.
     pub fn parse(name: &str) -> Result<Self, Error> {
         let err = |reason: &str| Error::UnsafeName {
             name: name.to_owned(),
@@ -62,6 +64,11 @@ impl ArtifactName {
                 return Err(err(
                     "each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'",
                 ));
+            }
+            if seg.len() >= LOCAL_PREFIX.len()
+                && seg.as_bytes()[..LOCAL_PREFIX.len()].eq_ignore_ascii_case(LOCAL_PREFIX)
+            {
+                return Err(err("reserved .nxr prefix (local state collision)"));
             }
         }
         Ok(Self(name.to_owned()))
@@ -172,7 +179,10 @@ mod tests {
         assert!(!unsafe_reason("a//b").is_empty());
         assert!(!unsafe_reason("x/").is_empty());
         assert!(!unsafe_reason("x.sha256").is_empty());
-        // No reserved names beyond the .sha256 suffix.
+        assert!(!unsafe_reason(".nxr-state.json").is_empty());
+        assert!(!unsafe_reason("a/.nxr-part-0123456789abcdef").is_empty());
+        assert!(!unsafe_reason(".NXR-tmp-1-x").is_empty());
+        // No reserved names beyond the .sha256 suffix and the .nxr local-state prefix.
         // `latest`/`nightly`/`version.json` are ordinary artifact names: no name carries protocol meaning.
         for name in ["latest", "nightly", "version.json"] {
             ArtifactName::parse(name).unwrap_or_else(|e| panic!("{name}: {e}"));

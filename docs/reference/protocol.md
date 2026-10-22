@@ -48,7 +48,7 @@ The search API is a separate subsystem in real Nexus (it reads the metadata data
 - A name is a relative path: segments through `/`.
 - A segment matches `[A-Za-z0-9._-]+` and is 1 to 255 bytes.
 - Forbidden: empty segments, `.`/`..` segments, leading or trailing `/`.
-- Reserved: the `.sha256` suffix and nothing else.
+- Reserved: the `.sha256` suffix and a `.nxr`-prefixed segment (local staging and cache names), and nothing else.
 - `version.json`, `latest`, `nightly` are ordinary names: upload them, download them, point a channel at them.
 
 What a name means is the publisher's convention, not the protocol's.

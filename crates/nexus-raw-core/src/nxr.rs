@@ -226,20 +226,26 @@ impl Nxr {
         sha: bool,
     ) -> Result<(u64, Option<Digest>), Error> {
         let digest = Digest::of_bytes(body);
+        // Validate the marker name before the first PUT: a bytes-first order
+        // would leave an unverifiable object behind when the name is unsafe.
+        let marker = if sha {
+            let marker_name = url
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or_default();
+            let name = ArtifactName::parse(marker_name).map_err(|e| Error::UnsafeName {
+                name: marker_name.to_owned(),
+                reason: format!("the final URL segment cannot carry a sha marker: {e}"),
+            })?;
+            Some(crate::model::sibling::format_line(name.as_str(), &digest))
+        } else {
+            None
+        };
         self.client.put_small(url, body.to_vec()).await?;
-        if !sha {
+        let Some(marker) = marker else {
             return Ok((body.len() as u64, None));
-        }
-        let marker_name = url
-            .trim_end_matches('/')
-            .rsplit('/')
-            .next()
-            .unwrap_or_default();
-        let name = ArtifactName::parse(marker_name).map_err(|e| Error::UnsafeName {
-            name: marker_name.to_owned(),
-            reason: format!("the final URL segment cannot carry a sha marker: {e}"),
-        })?;
-        let marker = crate::model::sibling::format_line(name.as_str(), &digest);
+        };
         let sib_url = format!("{url}.sha256");
         self.client.put_small(&sib_url, marker.into_bytes()).await?;
         Ok((body.len() as u64, Some(digest)))
@@ -667,13 +673,13 @@ impl Nxr {
     ///
     /// The same classes as [`Self::up`].
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn up_if_changed(
+    pub async fn up_if_changed_plan(
         &self,
         dir: &Path,
         names: Option<Vec<ArtifactName>>,
         gen_markers: bool,
         claim: Option<ArtifactName>,
-    ) -> Result<Summary, Error> {
+    ) -> Result<Vec<Action>, Error> {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
@@ -724,6 +730,27 @@ impl Nxr {
         .await
         .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
         .map_err(Error::from)?;
+        Ok(actions)
+    }
+
+    /// Upload a local directory, skipping names the remote already vouches for (`up --if-changed`).
+    ///
+    /// The plan is [`Self::up_if_changed_plan`]; this method emits it and executes it.
+    ///
+    /// # Errors
+    ///
+    /// The same classes as [`Self::up`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn up_if_changed(
+        &self,
+        dir: &Path,
+        names: Option<Vec<ArtifactName>>,
+        gen_markers: bool,
+        claim: Option<ArtifactName>,
+    ) -> Result<Summary, Error> {
+        let actions = self
+            .up_if_changed_plan(dir, names, gen_markers, claim.clone())
+            .await?;
         self.events.plan(&actions, Dir::Up);
         // One AIMD budget per run, the same contract as the plain `up`.
         let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
@@ -1308,10 +1335,22 @@ impl Nxr {
             _ => (*segs.first().unwrap_or(&"raw-main")).to_owned(),
         };
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
-        // Search reports repo-relative paths (`/<group…>/<version>/<name>`):
-        // a watched name is watched as a path suffix `/<last-segment>/<name>`,
-        // which holds for a directory URL at any depth.
-        let version_dir = segs.last().copied().unwrap_or_default();
+        // Search reports repo-relative paths (`/<group…>/<version>/<name>`).
+        // The watched prefix is everything after `/repository/<repo>/`, or the
+        // whole path for a root-style base: a last-segment shortcut misses a
+        // grouped base (`/g/1.0.0/a.zip` is not `/1.0.0/a.zip`).
+        let prefix = match segs.iter().position(|s| *s == "repository") {
+            Some(i) => segs
+                .get(i + 2..)
+                .map(|rest| rest.join("/"))
+                .unwrap_or_default(),
+            None => segs.join("/"),
+        };
+        let prefix = if prefix.is_empty() {
+            String::new()
+        } else {
+            format!("{prefix}/")
+        };
         let mut visible: usize;
         let mut poll_rounds: u32 = 0;
         loop {
@@ -1322,7 +1361,7 @@ impl Nxr {
                 layout::ls::search_paths(&self.client, &self.base, &repo).await?;
             visible = names
                 .iter()
-                .filter(|n| present.contains(&format!("/{version_dir}/{}", n.as_str())))
+                .filter(|n| present.contains(&format!("/{prefix}{}", n.as_str())))
                 .count();
             if visible == names.len() {
                 return Ok(visible);
@@ -1413,7 +1452,18 @@ fn acquire_staging_lock(staging: &Path) -> Result<std::fs::File, Error> {
             .create_new(true)
             .open(&path)
         {
-            Ok(file) => return Ok(file),
+            Ok(file) => {
+                // The creator must hold the lock too: returning the handle
+                // unlocked lets a second process open the same file and win
+                // `LOCK_EX` while the first run is already writing parts.
+                // SAFETY: `file` owns a live descriptor for this call, and
+                // `flock` only inspects it.
+                let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+                if rc == 0 {
+                    return Ok(file);
+                }
+                return Err(Error::io(&path, std::io::Error::last_os_error()));
+            }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err(Error::io(&path, e)),
         }
@@ -1466,4 +1516,19 @@ fn encode_rel(rel: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod staging_lock_tests {
+    use super::acquire_staging_lock;
+
+    /// The creator must hold the lock too: a second call on the same fresh dir is refused.
+    #[test]
+    fn the_creator_holds_the_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = acquire_staging_lock(dir.path()).expect("the first run takes the lock");
+        let second = acquire_staging_lock(dir.path()).expect_err("the second run is refused");
+        assert!(matches!(second, crate::error::Error::Misuse(_)), "{second:?}");
+        drop(first);
+    }
 }

@@ -56,6 +56,7 @@ The search API is an index, not the store, and it is the only enumeration source
 - The grammar `[A-Za-z0-9._-]`, 1 to 255 bytes per segment, no empty, `.` or `..` segments, applies to what nxr writes and to every name it accepts from the network.
   A hostile or broken listing that carries a traversal or absolute path is dropped rather than followed.
 - The `.sha256` suffix is reserved: an artifact name must not end with it.
+- A `.nxr`-prefixed segment is reserved too: those names are the transfer tool's local staging and cache.
 - A raw repository still holds foreign files with spaces, parens and unicode.
   `ls` and `down` display and fetch them, and the alphabet constrains only what nxr itself writes.
 - `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
