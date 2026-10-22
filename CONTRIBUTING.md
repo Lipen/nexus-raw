@@ -20,9 +20,10 @@ Its scenario list is the contract: a scenario added for one client lands with th
 ## Terminal output
 
 Scripts that print their own steps source `scripts/ui.sh`.
-Every line is `[tag] message`.
+Phases and results are `[tag] message`.
 The tag carries the only colour and the message keeps the terminal foreground.
-`ui_step TAG MESSAGE` opens a phase, `ui_ok` and `ui_fail` report a check, `ui_note TAG MESSAGE` adds secondary text.
+Details under a phase are indented and carry no tag.
+`ui_step TAG MESSAGE` opens a phase, `ui_ok` and `ui_fail` report a check, `ui_note TAG MESSAGE` adds secondary text, `ui_detail MESSAGE` adds a detail under the phase.
 The palette is cyan for phases, green for success, red for failure, yellow for warnings and dim for notes.
 Colour is off for a pipe, `NO_COLOR` and `TERM=dumb`, so captured output stays plain.
 

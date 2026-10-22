@@ -24,7 +24,7 @@ cleanup() {
         ui_error "stand" "failed (exit $status); last 200 log lines follow"
         compose logs --tail 200 >&2 || :
     else
-        ui_note "stand" "tearing down"
+        ui_detail "tearing down"
     fi
     compose down -v || :
     exit "$status"

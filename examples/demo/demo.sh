@@ -188,7 +188,7 @@ start_mock() {
 # ---- session -------------------------------------------------------------
 
 ui_step "demo" "nexus-raw session"
-ui_note "demo" "scenario: $SCENARIO    payloads: dist/1.4.0/"
+ui_detail "scenario: $SCENARIO    payloads: dist/1.4.0/"
 
 ui_step "build" "the demo binaries"
 if ! (cd "$ROOT" && cargo build -q -p mock-nexus -p nexus-raw); then
@@ -278,8 +278,8 @@ fi
 note "exit" "0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
 note "mock" "scenarios: $(cd "$ROOT" && "$MOCK" --print-scenarios | tr -d '\n ' | sed 's/\[//; s/\]//; s/"//g')"
 section "try" "poke it yourself"
-note "try" "just mock flaky: serve the flaky scenario"
-note "try" "just nxr -- up --help: show the upload flags"
+ui_detail "just mock flaky: serve the flaky scenario"
+ui_detail "just nxr -- up --help: show the upload flags"
 write_cast
 if [ -n "${NXR_DEMO_KEEP:-}" ]; then
   # Hand over the main server, the one holding the published version, and drop

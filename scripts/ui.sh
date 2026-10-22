@@ -1,7 +1,8 @@
 # shellcheck shell=sh
 # One terminal style for the repository's scripts.
 # Source it once: `. scripts/ui.sh`.
-# Every line is `[tag] message`: the tag carries the colour, the message keeps the terminal's own foreground.
+# Phases and results are `[tag] message`, with the tag carrying the colour and the message the terminal's own foreground.
+# Details under a phase are indented and carry no tag.
 # Colour is off for a pipe, NO_COLOR or TERM=dumb, so captured output stays plain.
 
 ui_init() {
@@ -25,6 +26,9 @@ ui_tag() { printf '%s[%s]%s %s\n' "$1" "$2" "$UI_RESET" "$3"; }
 
 # A command line for the demo session: bold, no colour.
 ui_command() { printf '%s%s%s\n' "$UI_CMD" "$1" "$UI_RESET"; }
+
+# A detail under the phase above: indented, no tag and no colour.
+ui_detail() { printf '  %s\n' "$1"; }
 
 # A phase: ui_step TAG MESSAGE.
 ui_step() { ui_tag "$UI_STEP" "$1" "$2"; }
