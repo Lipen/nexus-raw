@@ -13,11 +13,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Listings go through the search API, reads are lazy ranged GETs over a bounded block cache, and `.sha256` markers stay hidden.
   Every write answers `EROFS`.
   The binary is a separate crate, so `nxr` keeps no FUSE dependency and stays portable.
-- `Nxr::read_range`, a byte span into memory that slices the whole body when the server ignores `Range`, and `Nxr::ls_at`, a listing of any directory URL: the two core paths the mount is built on.
+- `Nxr::read_range`, a byte span into memory that skips to the span without buffering the whole object when the server ignores `Range`, and `Nxr::ls_at`, a listing of any directory URL: the two core paths the mount is built on.
 - `NexusClient::get_range`, the transport primitive behind `read_range`.
 - The wasm sandbox lists and uploads.
   `nxr_put` PUTs the bytes and the `.sha256` marker, the proxy forwards PUT with a request-body cap, and both the Node fake and the ServiceWorker fake store it.
   `Nxr::put_bytes` is part of the wasm surface: it is an in-memory POST-free path, not a file operation.
+
+### Fixed
+
+- The mock server refuses an inverted `Range` and an oversized `Content-Length` or chunked size instead of panicking, honors `spec.redirect`, and lists each repository once in the scoped collection.
+- The mirror staging lock is held by the creating run, a pre-created symlink at the staging path is replaced instead of followed, and the segmented resume is gated on the object digest.
+- An artifact segment with the reserved `.nxr` prefix is refused, so local part, segment and cache files can never collide with a repository object.
+- `put_bytes` validates the marker name before the bytes are PUT, and a zero-length `read_range` still reports an absent object as `None`.
+- `up --wait-index` matches a grouped or repository-root base, `service eula --accept` propagates a 401/403 instead of reporting no gate, and `service status` reads a refused probe as `false`.
+- `diff --prefix` filters local-only entries too, and `up --if-changed --plan` uses the if-changed classification.
+- `doctor` falls through to the repository HEAD on a 404 status and builds the deep service probes at the origin, and `service assets` no longer slices a multibyte checksum.
+- `mirror` and `mv` fall back to the shared `-u`, `--ls` cannot be combined with `--name` or `--names-from`, and a clap parse error still carries a `hint:` line and the NDJSON error object.
+- The alias URL expansion no longer uses raw pointers, and a broken TOML line no longer echoes an inline password.
+- Server-supplied text is escaped in human output, credential-bearing base URLs are no longer echoed, and the 401/403 body read is bounded.
+- The TUI drops a repository URL whose origin differs from the configured server.
+- The PyPI publish waits for the gate, its action is pinned to a commit, and a new gate rejects any action pinned to a tag.
+- The panel and the wasm sandbox bound their targets to configured origins, validate upload names before writing, queue uploads, and ignore stale listing responses.
+- The wasm server answers 413 before closing an over-cap body, the page unregisters a stale worker, and the node example kills its mock on exit.
 
 ## [0.22.1] - 2026-10-21
 
