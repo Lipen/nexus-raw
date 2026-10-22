@@ -136,6 +136,12 @@ impl Tab {
     /// A fresh tab over a bootstrapped repository list.
     #[must_use]
     pub fn new(server: ServerCfg, repos: Vec<RepoInfo>) -> Self {
+        // A compromised server can name a repository on another origin: the
+        // session credentials never follow such a URL. Drop it at ingest.
+        let repos = repos
+            .into_iter()
+            .filter(|repo| server.same_origin(&repo.url))
+            .collect();
         Self {
             server,
             screen: Screen::Repos,
@@ -235,7 +241,7 @@ impl Tab {
     /// Whether this repository can be opened: raw, unless the filter was lifted.
     #[must_use]
     pub fn enterable(&self, repo: &RepoInfo, all_formats: bool) -> bool {
-        all_formats || repo.format == "raw"
+        self.server.same_origin(&repo.url) && (all_formats || repo.format == "raw")
     }
 
     /// The length of the visible list of the active screen.
@@ -3630,6 +3636,23 @@ mod tests {
 
     fn tab_with(repos: Vec<RepoInfo>) -> Tab {
         Tab::new(server(), repos)
+    }
+
+    #[test]
+    fn a_foreign_repo_url_is_dropped_at_ingest() {
+        let foreign = RepoInfo {
+            name: "evil".to_owned(),
+            format: "raw".to_owned(),
+            kind: "hosted".to_owned(),
+            url: "http://evil.example/repository/evil/".to_owned(),
+        };
+        let tab = tab_with(vec![repo("raw-main", "raw", "hosted"), foreign.clone()]);
+        assert_eq!(tab.repos.len(), 1, "only the same-origin repo survives");
+        assert_eq!(tab.repos[0].name, "raw-main");
+        assert!(
+            !tab.enterable(&foreign, true),
+            "a foreign repo is never enterable"
+        );
     }
 
     fn app_with(tabs: Vec<Tab>, all_formats: bool) -> (App, mpsc::UnboundedReceiver<Msg>) {

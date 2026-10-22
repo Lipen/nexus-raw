@@ -60,6 +60,14 @@ pub struct ServerCfg {
 }
 
 impl ServerCfg {
+    /// Whether `url` shares this server's origin.
+    /// A server-supplied repository URL on another host is never dialed with
+    /// the session credentials.
+    #[must_use]
+    pub fn same_origin(&self, url: &str) -> bool {
+        origin_of(&self.url) == origin_of(url)
+    }
+
     /// A server from a bare URL: the label is the host.
     /// This is how `nxr-tui http://host:port/` names its tab.
     #[must_use]
@@ -69,6 +77,20 @@ impl ServerCfg {
             url,
         }
     }
+}
+
+/// The scheme, host and port of a URL, lowercased, with the userinfo dropped.
+fn origin_of(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let authority = rest.split('/').next()?;
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    Some(format!(
+        "{}://{}",
+        scheme.to_ascii_lowercase(),
+        host.to_ascii_lowercase()
+    ))
 }
 
 /// `http://127.0.0.1:8081/repository/raw-main/` → `127.0.0.1:8081`.
@@ -301,6 +323,15 @@ fn io_of(path: &Path) -> impl Fn(std::io::Error) -> Error + '_ {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn same_origin_rejects_a_foreign_host() {
+        let server = super::ServerCfg::from_base("http://127.0.0.1:8081/".to_owned());
+        assert!(server.same_origin("http://127.0.0.1:8081/repository/raw-main/"));
+        assert!(!server.same_origin("http://evil.example/repository/raw-main/"));
+        assert!(!server.same_origin("http://127.0.0.1:9999/repository/raw-main/"));
+        assert!(!server.same_origin("https://127.0.0.1:8081/repository/raw-main/"));
+    }
+
     use super::*;
 
     #[test]
