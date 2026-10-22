@@ -45,6 +45,14 @@ In GitHub Actions, `taiki-e/install-action` reaches those archives through the s
     tool: nexus-raw
 ```
 
+Pin a published release when the workflow needs a fixed CLI, replacing `<version>` with the release number:
+
+```yaml
+- uses: taiki-e/install-action@v2
+  with:
+    tool: nexus-raw@<version>
+```
+
 The action's default `cargo-binstall` fallback reads the crate metadata and downloads the release archive.
 Nothing on the upstream side is involved.
 The upstream manifest is only for the action's first-class tool list and its own checksum and attestation gate.
