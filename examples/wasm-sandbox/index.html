@@ -8,228 +8,380 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --muted: #64748b;
-    --line: #dbe2ea; --accent: #0f766e; --accent-2: #0ea5e9; --danger: #be123c;
+    --bg: #f4f7fb; --card: #ffffff; --ink: #0b1220; --muted: #5b6b81;
+    --line: #dbe3ee; --accent: #0d9488; --accent-2: #0284c7; --danger: #be123c;
+    --shadow: 0 18px 50px -28px rgb(15 23 42 / 45%);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #070b14; --card: #0f172a; --ink: #e6edf6; --muted: #94a3b8;
-      --line: #1e293b; --accent: #2dd4bf; --accent-2: #38bdf8; --danger: #fb7185;
+      --bg: #060a12; --card: #0d1524; --ink: #e8eef8; --muted: #93a3b8;
+      --line: #1d2a3d; --accent: #2dd4bf; --accent-2: #38bdf8; --danger: #fb7185;
+      --shadow: 0 18px 50px -28px rgb(0 0 0 / 70%);
     }
   }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 60rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  main { max-width: 74rem; margin: 0 auto; padding: 2.2rem 1rem 4rem; }
+  a { color: var(--accent-2); }
+
   .hero {
-    padding: 3rem 1.5rem; border: 1px solid var(--line); border-radius: 20px;
+    display: grid; gap: 2rem; align-items: center; padding: 2.4rem;
+    border: 1px solid var(--line); border-radius: 26px;
     background:
-      radial-gradient(120% 140% at 0% 0%, color-mix(in oklch, var(--accent) 18%, transparent), transparent 60%),
-      radial-gradient(120% 140% at 100% 0%, color-mix(in oklch, var(--accent-2) 16%, transparent), transparent 60%),
+      radial-gradient(120% 150% at 0% 0%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 58%),
+      radial-gradient(120% 150% at 100% 0%, color-mix(in oklch, var(--accent-2) 18%, transparent), transparent 58%),
       var(--card);
+    box-shadow: var(--shadow);
   }
-  .eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; color: var(--muted); }
-  h1 { margin: .4rem 0 .6rem; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; letter-spacing: -.02em; }
-  .lead { margin: 0; max-width: 42rem; color: var(--muted); }
+  @media (min-width: 60rem) { .hero { grid-template-columns: 1.15fr .85fr; padding: 3.2rem; } }
+  .eyebrow { margin: 0 0 .8rem; text-transform: uppercase; letter-spacing: .16em; font-size: .7rem; color: var(--muted); }
+  h1 { margin: 0 0 1rem; font-size: clamp(2.3rem, 6vw, 4rem); line-height: .98; letter-spacing: -.035em; }
+  h1 span { color: var(--accent); }
+  .lead { margin: 0 0 1.4rem; max-width: 34rem; color: var(--muted); font-size: 1.05rem; }
   .lead code { color: var(--ink); }
-  .grid { display: grid; gap: 1rem; margin-top: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1.25rem; }
-  .card h2 { margin: 0 0 .35rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
-  .card p { margin: 0; color: var(--muted); }
-  form { display: flex; gap: .5rem; margin: 1rem 0; flex-wrap: wrap; }
-  input[type=url], input[type=file] {
-    flex: 1; min-width: 12rem; padding: .55rem .7rem; border: 1px solid var(--line);
-    border-radius: 10px; background: var(--bg); color: var(--ink);
+  .cta { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .4rem; padding: .62rem 1.05rem;
+    border: 1px solid transparent; border-radius: 12px; background: var(--accent); color: #fff;
+    font: inherit; font-weight: 650; text-decoration: none; cursor: pointer;
   }
-  button {
-    padding: .55rem 1rem; border: 0; border-radius: 10px; background: var(--accent);
-    color: #fff; font-weight: 600; cursor: pointer;
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.small { padding: .35rem .7rem; font-size: .85rem; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .chips { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+  .chips li {
+    padding: .22rem .6rem; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font-size: .78rem; background: color-mix(in oklch, var(--card) 70%, transparent);
   }
-  button:hover { filter: brightness(1.08); }
-  ul { padding: 0; margin: .5rem 0 0; list-style: none; }
-  li { display: flex; gap: .5rem; align-items: center; padding: .35rem .1rem; border-bottom: 1px solid var(--line); }
-  li::before { content: "▤"; color: var(--muted); }
-  li.dir::before { content: "▸"; color: var(--accent); }
-  #entries.over { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 12px; }
-  #status, #upload-status { min-height: 1.5em; margin: .4rem 0; color: var(--muted); font-size: .9rem; }
-  #error { white-space: pre-wrap; color: var(--danger); font-size: .85rem; }
-  footer { margin-top: 1.5rem; color: var(--muted); font-size: .85rem; }
+  .terminal {
+    margin: 0; padding: 1.1rem 1.2rem; border: 1px solid var(--line); border-radius: 16px;
+    background: color-mix(in oklch, var(--ink) 8%, var(--card)); color: var(--ink);
+    font: .82rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow: auto; box-shadow: var(--shadow);
+  }
+  .terminal .prompt { color: var(--accent-2); }
+  .terminal .ok { color: var(--accent); }
+
+  .features { display: grid; gap: 1rem; margin: 1.2rem 0 0; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+  .feature { padding: 1.1rem 1.2rem; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+  .feature h3 { margin: 0 0 .3rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .feature p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+  .app { margin-top: 1.6rem; padding: 1.2rem; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--shadow); }
+  .toolbar { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; }
+  .pill {
+    display: inline-block; padding: .22rem .65rem; border-radius: 999px; font-size: .76rem;
+    font-weight: 650; border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .pill.ok { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, var(--line)); }
+  .pill.err { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 45%, var(--line)); }
+  .pill.busy { color: var(--accent-2); border-color: color-mix(in oklch, var(--accent-2) 45%, var(--line)); }
+  .connect { display: flex; gap: .5rem; flex: 1; min-width: 18rem; }
+  .connect input {
+    flex: 1; min-width: 12rem; padding: .55rem .72rem; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--bg); color: var(--ink); font: inherit;
+  }
+  .pathbar { display: flex; gap: .7rem; align-items: center; margin: 1rem 0 .6rem; flex-wrap: wrap; }
+  .crumbs { display: flex; gap: .25rem; align-items: center; flex-wrap: wrap; font-size: .9rem; }
+  .crumb {
+    padding: .18rem .45rem; border: 1px solid transparent; border-radius: 8px;
+    background: none; color: var(--ink); font: inherit; cursor: pointer;
+  }
+  .crumb:hover { border-color: var(--line); }
+  .sep { color: var(--muted); }
+  .browser { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; padding: .55rem .9rem; font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted); background: color-mix(in oklch, var(--ink) 4%, var(--card));
+  }
+  tbody td { padding: .55rem .9rem; border-top: 1px solid var(--line); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+  td.name::before { content: "▤"; margin-right: .5rem; color: var(--muted); }
+  td.name.dir::before { content: "▸"; color: var(--accent); }
+  td.kind { color: var(--muted); font-size: .82rem; width: 6rem; }
+  .empty { margin: 0; padding: 1.2rem .9rem; color: var(--muted); }
+  .upload { margin-top: 1rem; display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
+  .put { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; flex: 1; }
+  .drop {
+    flex: 1; min-width: 14rem; padding: .8rem 1rem; border: 1.5px dashed var(--line); border-radius: 14px;
+    color: var(--muted); cursor: pointer; text-align: center;
+  }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .drop input { display: none; }
+  .drop strong { color: var(--ink); }
+  .mut { min-height: 1.4em; margin: .55rem 0 0; color: var(--muted); font-size: .88rem; }
+  .error { white-space: pre-wrap; color: var(--danger); font-size: .85rem; margin: .4rem 0 0; }
+  footer { margin-top: 1.6rem; color: var(--muted); font-size: .85rem; }
+  footer a { color: var(--accent-2); }
 </style>
 </head>
 <body>
 <main>
   <header class="hero">
-    <p class="eyebrow">nexus-raw · wasm sandbox</p>
-    <h1>Your Nexus, in the browser.</h1>
-    <p class="lead">
-      The same verified core that powers <code>nxr</code>, compiled to WebAssembly.
-      List and upload against the built-in fake, or point the proxy at a real Nexus.
-    </p>
+    <div>
+      <p class="eyebrow">nexus-raw · wasm sandbox</p>
+      <h1>Your Nexus,<br><span>in the browser.</span></h1>
+      <p class="lead">
+        The same verified core that powers <code>nxr</code>, compiled to WebAssembly.
+        Browse a raw repository and upload files with the <code>.sha256</code> marker, against the built-in fake or a real Nexus.
+      </p>
+      <div class="cta">
+        <a class="btn" href="#app">Browse the demo</a>
+        <a class="btn ghost" href="https://github.com/Lipen/nexus-raw">GitHub</a>
+      </div>
+      <ul class="chips">
+        <li>same core</li>
+        <li>sha256 verified</li>
+        <li>no backend</li>
+        <li>GET, HEAD, PUT</li>
+      </ul>
+    </div>
+    <pre class="terminal"><span class="prompt">$</span> nxr up ./dist $NEXUS/1.4.0/
+<span class="ok">✓</span> 42 artifacts · 18 skipped · 0 failed
+<span class="prompt">$</span> nxr down $NEXUS/1.4.0/ --names-from list.txt
+<span class="ok">✓</span> 24 artifacts · 24 verified
+<span class="prompt">$</span> nxr clone $NEXUS ./backup
+<span class="ok">✓</span> sealed, resumable, verified</pre>
   </header>
 
-  <div class="grid">
-    <section class="card">
-      <h2>Connect</h2>
-      <p>Any raw directory URL. The page talks to this origin, so the proxy or the fake answers.</p>
-      <form id="ls">
-        <input id="dir" type="url" aria-label="directory URL">
-        <button type="submit">ls</button>
-      </form>
-      <p id="status">loading the module…</p>
-    </section>
-    <section class="card">
-      <h2>Upload</h2>
-      <p>Drop files on the list or pick them here. The upload PUTs the bytes and the <code>.sha256</code> marker.</p>
-      <form id="put">
-        <input id="files" type="file" multiple aria-label="files to upload">
-        <button type="submit">upload</button>
-      </form>
-      <p id="upload-status"></p>
-    </section>
-  </div>
-
-  <section class="card" style="margin-top:1rem">
-    <h2>Entries</h2>
-    <ul id="entries"></ul>
+  <section class="features">
+    <div class="feature"><h3>Same core</h3><p>Transport, listing and the in-memory PUT are the crate the CLI uses.</p></div>
+    <div class="feature"><h3>Verified</h3><p>Every upload computes sha256 and writes the sibling marker after the bytes.</p></div>
+    <div class="feature"><h3>No backend</h3><p>The fake Nexus runs in a ServiceWorker, so a static host is the whole demo.</p></div>
+    <div class="feature"><h3>Real Nexus</h3><p><code>--upstream</code> turns the page into a guarded same-origin proxy.</p></div>
   </section>
-  <pre id="error"></pre>
+
+  <section id="app" class="app">
+    <div class="toolbar">
+      <span id="conn" class="pill idle">idle</span>
+      <form id="connect" class="connect" onsubmit="return false">
+        <input id="dir" type="url" aria-label="directory URL" spellcheck="false">
+        <button class="btn" type="submit">Connect</button>
+      </form>
+    </div>
+
+    <div class="pathbar">
+      <button id="up" class="btn ghost small" type="button">↑ Up</button>
+      <nav id="crumbs" class="crumbs" aria-label="Breadcrumb"></nav>
+    </div>
+
+    <div class="browser">
+      <table>
+        <thead><tr><th>Name</th><th>Kind</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" class="empty" hidden>This folder is empty.</p>
+    </div>
+
+    <div class="upload">
+      <form id="put" class="put" onsubmit="return false">
+        <label class="drop" id="drop">
+          <input id="files" type="file" multiple>
+          <span>Drop files here or <strong>choose</strong></span>
+        </label>
+        <button class="btn" type="submit">Upload to this folder</button>
+      </form>
+    </div>
+    <p id="upload-status" class="mut"></p>
+    <p id="status" class="mut"></p>
+    <pre id="error" class="error"></pre>
+  </section>
 
   <footer>
-    The marker is PUT right after the bytes. The browser never talks to a foreign origin: <code>serve.mjs</code> is the proxy.
+    The browser never talks to a foreign origin: <code>serve.mjs</code> is the proxy, and the marker is PUT right after the bytes.
+    <a href="https://lipen.github.io/nexus-raw/how-to/wasm/">How it works</a>.
   </footer>
 </main>
 <script type="module">
   import init, { nxr_ls, nxr_put } from './pkg/nexus_raw_example_wasm_sandbox.js'
 
-  const status = document.getElementById('status')
-  const list = document.getElementById('entries')
-  const error = document.getElementById('error')
-  const dir = document.getElementById('dir')
+  const $ = (id) => document.getElementById(id)
+  const conn = $('conn'), status = $('status'), error = $('error'), rows = $('rows')
+  const crumbs = $('crumbs'), dirInput = $('dir'), upBtn = $('up'), empty = $('empty')
+  const uploadStatus = $('upload-status'), filesInput = $('files'), drop = $('drop')
 
-  // Failures must land on the page, not in an invisible console.
-  window.addEventListener('error', (e) => {
-    error.textContent += `window error: ${e.message}\n`
-  })
-  window.addEventListener('unhandledrejection', (e) => {
-    error.textContent += `rejection: ${e.reason}\n`
-  })
+  const params = new URLSearchParams(location.search)
+  const repo = params.get('repo') ?? 'demo'
+  const ROOT = `${location.origin}/repository/${repo}/`
+  let base = ROOT
+  let path = ''
+  let ready = false
+  let beaconSent = false
 
-  async function run() {
-    error.textContent = ''
-    list.textContent = ''
-    status.textContent = `listing ${dir.value} …`
-    let rows = 0
-    let failed = ''
-    try {
-      const parsed = JSON.parse(await nxr_ls(dir.value, null))
-      rows = parsed.length
-      for (const row of parsed) {
-        const li = document.createElement('li')
-        li.textContent = row.name + (row.dir ? '/' : '')
-        if (row.dir) li.className = 'dir'
-        list.append(li)
-      }
-      status.textContent = `${rows} entr${rows === 1 ? 'y' : 'ies'}`
-    } catch (e) {
-      failed = String(e)
-      status.textContent = 'failed'
-      // A 400 or 404 on a listing usually means the upstream has no such
-      // repository (or, on the mock, no seeded search page): say so where
-      // the error is, not just in the log at the bottom.
-      if (/\b(400|404)\b/.test(failed) && dir.value.includes('/repository/')) {
-        failed += `\nthe upstream has no searchable repository named "${repo}", ` +
-          `or it is not raw.\nopen the page as /?repo=<name> with a raw repository of this upstream, ` +
-          `or seed the mock's search page first (see the panel recipe)`
-      }
-      error.textContent = failed
-    } finally {
-      // The server logs this: the headless proof that the wasm ran end to end.
-      // The await keeps the beacon ordered after the render, and the smoke
-      // waits for the beacon itself: the load event races the module.
-      try {
-        await fetch(`/beacon?rows=${rows}&failed=${encodeURIComponent(failed)}`)
-      } catch {
-        // A static host has no beacon sink: the ping is best effort there.
-      }
+  const dirUrl = () => base + path
+  const setConn = (kind, text) => { conn.className = `pill ${kind}`; conn.textContent = text }
+  const segments = () => path.split('/').filter(Boolean)
+
+  function showError(text) { error.textContent = text }
+  function clearError() { error.textContent = '' }
+
+  function span(cls, text) {
+    const s = document.createElement('span')
+    s.className = cls
+    s.textContent = text
+    return s
+  }
+
+  function renderCrumbs() {
+    crumbs.textContent = ''
+    const root = document.createElement('button')
+    root.type = 'button'
+    root.className = 'crumb'
+    root.textContent = repo
+    root.addEventListener('click', () => { path = ''; list() })
+    crumbs.append(root)
+    let acc = ''
+    for (const seg of segments()) {
+      acc += `${seg}/`
+      const at = acc
+      crumbs.append(span('sep', '/'))
+      const crumb = document.createElement('button')
+      crumb.type = 'button'
+      crumb.className = 'crumb'
+      crumb.textContent = seg
+      crumb.addEventListener('click', () => { path = at; list() })
+      crumbs.append(crumb)
+    }
+    upBtn.disabled = path === ''
+  }
+
+  function render(entries) {
+    rows.textContent = ''
+    empty.hidden = entries.length > 0
+    for (const entry of entries) {
+      const tr = document.createElement('tr')
+      const name = document.createElement('td')
+      name.className = entry.dir ? 'name dir' : 'name'
+      name.textContent = entry.name + (entry.dir ? '/' : '')
+      const kind = document.createElement('td')
+      kind.className = 'kind'
+      kind.textContent = entry.dir ? 'folder' : 'file'
+      tr.append(name, kind)
+      tr.addEventListener('click', () => {
+        if (entry.dir) {
+          path = `${path}${entry.name}/`
+          list()
+        } else {
+          window.open(dirUrl() + entry.name, '_blank', 'noopener')
+        }
+      })
+      rows.append(tr)
     }
   }
 
-  // The repository name comes from ?repo= so an upstream can be anything;
-  // `demo` is the fake's repository and the default when no param is given.
-  // Core requires an absolute http(s) URL rooted at the origin: the grammar is
-  // origin-absolute, so the page only works when served at the origin root.
-  const repo = new URLSearchParams(location.search).get('repo') ?? 'demo'
-  dir.value = `${location.origin}/repository/${repo}/`
+  function pingBeacon(count, failed) {
+    if (beaconSent) return
+    beaconSent = true
+    fetch(`/beacon?rows=${count}&failed=${encodeURIComponent(failed)}`).catch(() => {})
+  }
 
-  // Static hosting has no backend at all: the ServiceWorker fake answers the
-  // nexus endpoints from the same demo data `serve.mjs` would.
-  // serve.mjs rewrites the marker above, so the worker registers only where
-  // neither a server-side fake nor an upstream proxy exists.
+  async function list() {
+    if (!ready) {
+      setConn('busy', 'loading…')
+      return
+    }
+    clearError()
+    setConn('busy', 'listing…')
+    dirInput.value = dirUrl()
+    status.textContent = `GET ${dirUrl()}`
+    try {
+      const parsed = JSON.parse(await nxr_ls(dirUrl(), null))
+      render(parsed)
+      renderCrumbs()
+      setConn('ok', `${parsed.length} entr${parsed.length === 1 ? 'y' : 'ies'}`)
+      status.textContent = `${parsed.length} entr${parsed.length === 1 ? 'y' : 'ies'} in ${path || `${repo}/`}`
+      pingBeacon(parsed.length, '')
+    } catch (e) {
+      setConn('err', 'failed')
+      status.textContent = 'listing failed'
+      showError(String(e))
+      pingBeacon(0, String(e))
+    }
+  }
+
+  function connect() {
+    let url = dirInput.value.trim()
+    if (!url) return
+    if (!url.endsWith('/')) url += '/'
+    const marker = '/repository/'
+    const at = url.indexOf(marker)
+    if (at >= 0) {
+      const rest = url.slice(at + marker.length)
+      const slash = rest.indexOf('/')
+      const repoName = slash >= 0 ? rest.slice(0, slash) : rest
+      base = url.slice(0, at + marker.length) + repoName + '/'
+      path = slash >= 0 ? rest.slice(slash + 1) : ''
+    } else {
+      base = url
+      path = ''
+    }
+    list()
+  }
+
+  async function upload(files) {
+    if (!ready) {
+      uploadStatus.textContent = 'loading…'
+      return
+    }
+    if (!files || files.length === 0) {
+      uploadStatus.textContent = 'pick a file first'
+      return
+    }
+    clearError()
+    let done = 0
+    for (const file of files) {
+      uploadStatus.textContent = `uploading ${file.name} (${done + 1}/${files.length})…`
+      try {
+        const target = new URL(file.name, dirUrl()).href
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        const answer = JSON.parse(await nxr_put(target, bytes, null))
+        done += 1
+        uploadStatus.textContent = `uploaded ${file.name}: ${answer.bytes} bytes · sha256 ${answer.digest.slice(0, 12)}…`
+      } catch (e) {
+        uploadStatus.textContent = `failed: ${file.name}`
+        showError(String(e))
+        return
+      }
+    }
+    uploadStatus.textContent = `uploaded ${done} file(s)`
+    await list()
+  }
+
   async function ensureFakeWorker() {
     if (window.NXR_SANDBOX_SERVE !== 'static' || !('serviceWorker' in navigator)) return
     await navigator.serviceWorker.register('/sw.mjs', { type: 'module' })
     await navigator.serviceWorker.ready
     if (navigator.serviceWorker.controller) return
-    // A fresh registration only controls this page once activate has claimed it.
     await new Promise((resolve) => {
       navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })
     })
   }
 
-  const uploadStatus = document.getElementById('upload-status')
-  const filesInput = document.getElementById('files')
-
-  async function upload(files) {
-    if (!files || files.length === 0) {
-      uploadStatus.textContent = 'pick a file first'
-      return
-    }
-    error.textContent = ''
-    let done = 0
-    for (const file of files) {
-      uploadStatus.textContent = `uploading ${file.name} (${done + 1}/${files.length}) …`
-      try {
-        const target = new URL(file.name, dir.value).href
-        const bytes = new Uint8Array(await file.arrayBuffer())
-        const answer = JSON.parse(await nxr_put(target, bytes, null))
-        done += 1
-        uploadStatus.textContent = `uploaded ${file.name}: ${answer.bytes} bytes, sha256 ${answer.digest}`
-      } catch (e) {
-        uploadStatus.textContent = `upload failed: ${file.name}`
-        error.textContent = String(e)
-        return
-      }
-    }
-    uploadStatus.textContent = `uploaded ${done} file(s)`
-    await run()
-  }
-
-  // The worker comes first: its activation must precede the listing's fetches.
-  // A headless harness must not rely on the load event (it races the module):
-  // the beacon is the completion signal, and the smoke waits for it.
-  try {
-    await ensureFakeWorker()
-  } catch (e) {
-    error.textContent += `service worker: ${e}\n`
-  }
-  try {
-    await init()
-  } catch (e) {
-    status.textContent = 'init failed'
-    error.textContent = String(e)
-    throw e
-  }
-  document.getElementById('ls').addEventListener('submit', (ev) => {
-    ev.preventDefault()
-    run()
+  // Bound before the first await: a click during module load must never reach the
+  // browser's native submit and reload the page. The inline `onsubmit` guard is the
+  // second belt for the window before this module executes at all.
+  $('connect').addEventListener('submit', (ev) => { ev.preventDefault(); connect() })
+  $('put').addEventListener('submit', (ev) => { ev.preventDefault(); upload(filesInput.files) })
+  upBtn.addEventListener('click', () => {
+    const segs = segments()
+    if (segs.length === 0) return
+    segs.pop()
+    path = segs.length ? `${segs.join('/')}/` : ''
+    list()
   })
-  document.getElementById('put').addEventListener('submit', (ev) => {
-    ev.preventDefault()
-    upload(filesInput.files)
+  dirInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault()
+      connect()
+    }
   })
-  const drop = document.getElementById('entries')
   drop.addEventListener('dragover', (ev) => {
     ev.preventDefault()
     drop.classList.add('over')
@@ -240,7 +392,20 @@
     drop.classList.remove('over')
     upload(ev.dataTransfer.files)
   })
-  await run()
+  dirInput.value = dirUrl()
+
+  ;(async () => {
+    try {
+      await ensureFakeWorker()
+      await init()
+      ready = true
+    } catch (e) {
+      setConn('err', 'init failed')
+      showError(String(e))
+      return
+    }
+    await list()
+  })()
 </script>
 </body>
 </html>
