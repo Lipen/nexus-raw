@@ -40,8 +40,6 @@ pub struct Spec {
     pub drop_connection: bool,
     /// Hold PUT connections without reading or answering.
     pub freeze_upload: bool,
-    /// Serve a drifted version document once drift is enabled.
-    pub doc_drift: bool,
 }
 
 impl Spec {
@@ -143,11 +141,6 @@ impl Spec {
         self
     }
 
-    /// Serve a drifted version document once drift is enabled.
-    pub fn with_doc_drift(mut self) -> Self {
-        self.doc_drift = true;
-        self
-    }
 }
 
 impl From<&Scenario> for Spec {
@@ -181,7 +174,6 @@ impl From<&Scenario> for Spec {
             Scenario::Auth403 { user, pass } => {
                 spec.auth_b64 = Some(crate::base64::encode(format!("{user}:{pass}").as_bytes()))
             }
-            Scenario::DocDrift => spec.doc_drift = true,
             Scenario::Flaky { first_failures } => spec.flaky_first = Some(*first_failures),
             Scenario::RetryAfter503 { retry_after_secs } => {
                 spec.pause_first_503 = Some(*retry_after_secs)
@@ -192,6 +184,7 @@ impl From<&Scenario> for Spec {
             } => spec.rate_first = Some((*first_429s, *retry_after_secs)),
             Scenario::Redirect { location_path } => spec.redirect = Some(location_path.clone()),
             Scenario::ReadOnly => spec.read_only = true,
+            Scenario::DocDrift => {}
             Scenario::NoService => {}
             Scenario::Search400 => {}
             Scenario::ServiceStatusEmpty => {}

@@ -23,7 +23,12 @@ pub(super) fn range_span(header: Option<&str>) -> Option<(usize, Option<usize>)>
     if end.is_empty() {
         return Some((start, None));
     }
-    Some((start, Some(end.parse::<usize>().ok()?)))
+    let end = end.parse::<usize>().ok()?;
+    // An inverted range is invalid (RFC 9110 §14.1.1): ignore the header and serve the whole body.
+    if end < start {
+        return None;
+    }
+    Some((start, Some(end)))
 }
 
 /// True when the path designates a version document (`<version>/version.json`).

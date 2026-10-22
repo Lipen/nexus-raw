@@ -183,7 +183,7 @@ pub enum Scenario {
     /// Included so client behavior against a fuller collection is pinned by name.
     /// Storage behavior is [`Scenario::Atomic`].
     RepoCollectionTrimmed,
-    /// The repositories document differs by caller: an anonymous request sees one entry, a request with the scenario credentials sees two.
+    /// The repositories document differs by caller: an anonymous request sees the seeded entries, a request with the scenario credentials sees them plus `raw-secret`.
     /// Storage behavior is [`Scenario::Atomic`].
     RepoCollectionScoped { user: String, pass: String },
     /// `GET /service/rest/v1/repositories/{format}/{type}/{name}` answers the full settings JSON for valid credentials and `403` with a `nx-admin required` body otherwise.

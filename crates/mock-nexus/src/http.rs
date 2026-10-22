@@ -197,7 +197,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
     }
 
     // redirect: reads point elsewhere with an empty 301, writes stay atomic.
-    if let Scenario::Redirect { location_path } = &shared.scenario {
+    // The spec is the runtime source: the preset and `Spec::with_redirect` both land here.
+    if let Some(location_path) = &shared.spec.redirect {
         if matches!(req.method.as_str(), "GET" | "HEAD") {
             log_request(shared, &req.method, path, Outcome::Status(301));
             let mut resp = plain(301, b"", None);
@@ -290,21 +291,13 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         let doc = seed_repositories_doc(shared);
                         match doc.rfind(']') {
                             Some(idx) => format!(
-                                "{},{},{}]",
+                                "{},{}]",
                                 &doc[..idx],
                                 serde_json::json!({
                                     "name": "raw-secret",
                                     "format": "raw",
                                     "type": "hosted",
                                     "url": format!("{}/repository/raw-secret/", base_of(shared)),
-                                    "size": 0,
-                                    "attributes": {}
-                                }),
-                                serde_json::json!({
-                                    "name": "raw-main",
-                                    "format": "raw",
-                                    "type": "hosted",
-                                    "url": format!("{}/repository/raw-main/", base_of(shared)),
                                     "size": 0,
                                     "attributes": {}
                                 })

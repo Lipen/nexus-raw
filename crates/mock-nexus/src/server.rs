@@ -9,6 +9,8 @@ use std::time::Duration;
 /// Upper bound for the request head.
 /// Anything larger is answered with 400.
 const HEAD_BOUND: usize = 64 * 1024;
+/// The largest request body the mock accepts: a declared length or a chunked total over this is malformed, so a hostile header cannot drive an allocation.
+const BODY_CAP: usize = 64 * 1024 * 1024;
 
 /// A parsed HTTP/1.1 request.
 #[derive(Debug)]
@@ -171,7 +173,8 @@ pub(crate) fn read_body_into<R: BufRead>(
         read_chunked(r, req)
     } else if let Some(len) = req.header("content-length") {
         match len.parse::<usize>() {
-            Ok(n) => read_exact_buf(r, &mut req.body, n),
+            Ok(n) if n <= BODY_CAP => read_exact_buf(r, &mut req.body, n),
+            Ok(_) => Err(malformed("content-length over the body cap")),
             Err(_) => Err(malformed("invalid content-length")),
         }
     } else {
@@ -274,6 +277,9 @@ fn read_chunked<R: BufRead>(r: &mut R, req: &mut Request) -> io::Result<()> {
                     return Ok(());
                 }
             }
+        }
+        if req.body.len().saturating_add(size) > BODY_CAP {
+            return Err(malformed("chunked body over the cap"));
         }
         read_exact_buf(r, &mut req.body, size)?;
         let mut tail = [0u8; 2];

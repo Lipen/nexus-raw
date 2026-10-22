@@ -1040,3 +1040,112 @@ fn query_percent_decoding_keeps_malformed_escapes() {
     assert_eq!(crate::support::percent_decode("bad%2"), "bad%2");
     assert_eq!(crate::support::percent_decode("plain"), "plain");
 }
+
+/// An inverted range is invalid: the header is ignored, the whole object is served, and the fixture stays healthy.
+#[test]
+fn inverted_range_is_ignored() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    let (status, _, _) =
+        exchange(server.addr(), "PUT", "/1.14.0/blob.bin", b"0123456789", &[]).unwrap();
+    assert_eq!(status, 201);
+
+    let (status, headers, body) = exchange(
+        server.addr(),
+        "GET",
+        "/1.14.0/blob.bin",
+        b"",
+        &[("Range", "bytes=5-3")],
+    )
+    .unwrap();
+    assert_eq!(status, 200, "an inverted range is ignored, not a panic");
+    assert_eq!(header_value(&headers, "content-range"), None);
+    assert_eq!(body, b"0123456789");
+
+    // The malformed request did not poison the server: the next one answers normally.
+    let (status, _, body) =
+        exchange(server.addr(), "GET", "/1.14.0/blob.bin", b"", &[]).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(body, b"0123456789");
+}
+
+/// A declared length larger than the body cap is refused before any allocation.
+#[test]
+fn huge_content_length_is_refused_without_a_panic() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    let mut stream = send(
+        server.addr(),
+        b"PUT /huge.bin HTTP/1.1\r\nHost: mock\r\nContent-Length: 18446744073709551615\r\n\r\n",
+    )
+    .unwrap();
+    let (status, _, _) = read_response(&mut stream).unwrap();
+    assert_eq!(status, 400);
+
+    // The fixture survives the hostile header and answers the next request.
+    let (status, _, _) = exchange(server.addr(), "GET", "/", b"", &[]).unwrap();
+    assert!(status == 200 || status == 404, "got {status}");
+}
+
+/// A chunked body whose size line crosses the cap is refused, not reserved.
+#[test]
+fn huge_chunked_body_is_refused() {
+    let server = MockNexus::start(Scenario::Atomic).unwrap();
+    let mut stream = send(
+        server.addr(),
+        b"PUT /huge.bin HTTP/1.1\r\nHost: mock\r\nTransfer-Encoding: chunked\r\n\r\nFFFFFFFFFFFFFFFF\r\n",
+    )
+    .unwrap();
+    let (status, _, _) = read_response(&mut stream).unwrap();
+    assert_eq!(status, 400);
+}
+
+/// The redirect knob is read from the spec, so `Spec::with_redirect` and `--config` both work.
+#[test]
+fn spec_redirect_is_honored() {
+    let server = MockNexus::start_spec(Spec::atomic().with_redirect("/moved")).unwrap();
+    let (status, headers, body) =
+        exchange(server.addr(), "GET", "/1.0.0/a.bin", b"", &[]).unwrap();
+    assert_eq!(status, 301);
+    assert_eq!(header_value(&headers, "location"), Some("/moved"));
+    assert!(body.is_empty());
+
+    // Writes stay atomic under a read redirect.
+    let (status, _, _) = exchange(server.addr(), "PUT", "/1.0.0/a.bin", b"x", &[]).unwrap();
+    assert_eq!(status, 201);
+}
+
+/// The scoped repositories document adds `raw-secret` and never duplicates a seeded name.
+#[test]
+fn scoped_repo_collection_lists_each_name_once() {
+    let server = MockNexus::start(Scenario::RepoCollectionScoped {
+        user: "ci".into(),
+        pass: "secret".into(),
+    })
+    .unwrap();
+    let auth = format!("Basic {}", crate::base64::encode(b"ci:secret"));
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/repositories",
+        b"",
+        &[("Authorization", &auth)],
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    let doc: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let names: Vec<&str> = doc
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["name"].as_str())
+        .collect();
+    assert_eq!(
+        names.iter().filter(|name| **name == "raw-main").count(),
+        1,
+        "raw-main appears once: {names:?}"
+    );
+    assert_eq!(
+        names.iter().filter(|name| **name == "raw-secret").count(),
+        1,
+        "raw-secret appears once: {names:?}"
+    );
+}
