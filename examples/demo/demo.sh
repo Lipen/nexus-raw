@@ -70,6 +70,8 @@ now_ms() {
 }
 
 # `say` is part of the recorded session.
+# The display may style the line, but `CAST_RAW` takes `$1` unchanged.
+# The cast and the landing SVG must stay ANSI-free.
 # `note` is commentary for the human.
 say() {
   case "$1" in

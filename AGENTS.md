@@ -49,8 +49,8 @@ The canonical protocol text is kept outside this repository.
 | the mount (`nxr-mount`, FUSE semantics, its limits) | [docs/reference/mount.md](docs/reference/mount.md), `crates/nexus-raw-mount/src/` |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
 | exit codes and hints | `crates/nexus-raw-core/src/error.rs` |
-|the lint/test gate and the shared docs gate|[Justfile](Justfile), [prek.toml](prek.toml), `scripts/check-docs.sh`|
-|the terminal output of a script|`scripts/ui.sh`, [CONTRIBUTING.md](CONTRIBUTING.md)|
+| the lint/test gate and the shared docs gate | [Justfile](Justfile), [prek.toml](prek.toml), `scripts/check-docs.sh` |
+| the terminal output of a script | `scripts/ui.sh`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | the recorded session and the landing animation | `examples/demo/README.md` |
 | the version agreement check | `scripts/version-check.sh` |
 | a quickstart's commands and outputs | `docs/tutorials/` (rust, node, ops) |
