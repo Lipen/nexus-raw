@@ -15,9 +15,12 @@ inputs:
     required: false
     default: ''
   version:
-    description: 'The nxr release version to install (without the leading v), or `latest` for the most recent release.'
+    description: |-
+      The nxr release version to install (without the leading v).
+      Empty follows the action ref when it is a full release tag, otherwise the latest release.
+      Pass `latest` explicitly for the most recent release.
     required: false
-    default: 'latest'
+    default: ''
   auth:
     description: |-
       Credentials as user:password.
@@ -47,6 +50,7 @@ runs:
       shell: 'bash'
       env:
         VERSION: '${{ inputs.version }}'
+        ACTION_REF: '${{ github.action_ref }}'
         ARCHIVE: '${{ steps.platform.outputs.archive }}'
         # The caller's repository is not the action's: a composite action
         # inherits `github.repository` from the workflow, so the release URL
@@ -58,10 +62,17 @@ runs:
       run: |
         set -eu
         repo="${ACTION_REPO:-$WORKFLOW_REPO}"
-        if [ "$VERSION" = "latest" ]; then
+        version="$VERSION"
+        if [ -z "$version" ]; then
+          case "$ACTION_REF" in
+            v[0-9]*.[0-9]*.[0-9]*) version="${ACTION_REF#v}" ;;
+            *) version="latest" ;;
+          esac
+        fi
+        if [ "$version" = "latest" ]; then
           base="https://github.com/${repo}/releases/latest/download"
         else
-          base="https://github.com/${repo}/releases/download/v${VERSION}"
+          base="https://github.com/${repo}/releases/download/v${version}"
         fi
         dest="${RUNNER_TEMP}/${ARCHIVE}"
         curl --fail --silent --show-error --location -o "$dest" "${base}/${ARCHIVE}"

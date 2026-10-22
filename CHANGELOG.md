@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The composite action installs the release named by its tag when `version` is empty, instead of always the latest release.
 - The mock server refuses an inverted `Range` and an oversized `Content-Length` or chunked size instead of panicking, honors `spec.redirect`, and lists each repository once in the scoped collection.
 - The mirror staging lock is held by the creating run, a pre-created symlink at the staging path is replaced instead of followed, and the segmented resume is gated on the object digest.
 - An artifact segment with the reserved `.nxr` prefix is refused, so local part, segment and cache files can never collide with a repository object.
