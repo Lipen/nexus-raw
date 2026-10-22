@@ -325,6 +325,15 @@
     list()
   }
 
+  const NAME = /^[A-Za-z0-9._-]+$/
+
+  // A name outside the wire grammar (or a reserved local-state prefix) is
+  // refused before the bytes are PUT: the core would otherwise store the
+  // object and then fail on the marker, leaving an unverifiable file behind.
+  function transferable(name) {
+    return NAME.test(name) && !name.toLowerCase().startsWith('.nxr') && !name.endsWith('.sha256')
+  }
+
   async function upload(files) {
     if (!ready) {
       uploadStatus.textContent = 'loading…'
@@ -336,7 +345,13 @@
     }
     clearError()
     let done = 0
+    let failed = 0
     for (const file of files) {
+      if (!transferable(file.name)) {
+        failed += 1
+        uploadStatus.textContent = `skipped ${file.name}: names must match [A-Za-z0-9._-]+ and not start with .nxr`
+        continue
+      }
       uploadStatus.textContent = `uploading ${file.name} (${done + 1}/${files.length})…`
       try {
         const target = new URL(file.name, dirUrl()).href
@@ -345,12 +360,12 @@
         done += 1
         uploadStatus.textContent = `uploaded ${file.name}: ${answer.bytes} bytes · sha256 ${answer.digest.slice(0, 12)}…`
       } catch (e) {
+        failed += 1
         uploadStatus.textContent = `failed: ${file.name}`
         showError(String(e))
-        return
       }
     }
-    uploadStatus.textContent = `uploaded ${done} file(s)`
+    uploadStatus.textContent = `uploaded ${done} file(s), ${failed} failed`
     await list()
   }
 

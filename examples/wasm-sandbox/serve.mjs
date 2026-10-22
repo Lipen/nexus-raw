@@ -132,14 +132,22 @@ function proxyNexus(req, res, guards) {
   })
   if (req.method === 'PUT') {
     let received = 0
+    let overflow = false
     req.on('data', (chunk) => {
       received += chunk.length
-      if (received > guards.maxRequestBytes) {
+      if (received > guards.maxRequestBytes && !overflow) {
+        overflow = true
         console.log(`proxy cut ${url.pathname}: request body over the ${guards.maxRequestBytes} byte cap`)
-        req.destroy()
+        req.pause()
         if (!res.headersSent) {
-          res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' })
-          res.end(`request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`)
+          res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8', connection: 'close' })
+          res.end(
+            `request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`,
+            () => setTimeout(() => {
+              req.destroy()
+              out.destroy()
+            }, 250),
+          )
         }
       }
     })
@@ -159,7 +167,8 @@ function readBody(req, cap) {
       size += chunk.length
       if (size > cap) {
         settled = true
-        req.destroy()
+        // Pause instead of destroy: the caller answers 413 before closing.
+        req.pause()
         resolve(null)
         return
       }
@@ -304,8 +313,11 @@ const server = createServer(async (req, res) => {
   if (upstream) return proxyNexus(req, res, guards)
   const body = req.method === 'PUT' ? await readBody(req, guards.maxRequestBytes) : ''
   if (body === null) {
-    res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' })
-    return res.end(`request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`)
+    res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8', connection: 'close' })
+    return res.end(
+      `request body is larger than the ${guards.maxRequestBytes} byte cap (raise --max-request-bytes)\n`,
+      () => setTimeout(() => req.destroy(), 250),
+    )
   }
   const fake = fakeNexus(url.pathname, url.searchParams, req.method, body)
   res.writeHead(fake.status, { 'content-type': 'text/plain; charset=utf-8' })
