@@ -134,7 +134,7 @@ pub(crate) async fn run(
                 // which read as a failure. Any non-5xx answer still proves
                 // reachability, and the line says so, because a bare `400`
                 // reads as a bug.
-                let status_url = format!("{}/service/rest/v1/status", base.trim_end_matches('/'));
+                let status_url = format!("{}/service/rest/v1/status", server_origin(&base)?);
                 let cfg = nexus_raw_core::Config {
                     base: base.clone(),
                     tls_insecure: cli.tls_insecure,
@@ -150,11 +150,14 @@ pub(crate) async fn run(
                         let detail;
                         let ok;
                         match client.get_small(&status_url).await {
-                            Ok(Some(_)) | Ok(None) => {
+                            Ok(Some(_)) => {
                                 ok = true;
                                 detail =
                                     "status endpoint answered: the server is reachable".to_owned();
                             }
+                            // `Ok(None)` is a 404: the endpoint is absent, not
+                            // a pass. Fall through to the repository HEAD, which
+                            // is what the credentials probe is for.
                             _ => match client.head_info(url).await {
                                 Ok(info) => {
                                     // A 401 or 403 means the server rejected the
@@ -319,7 +322,8 @@ async fn deep_probes(
     let _ = cli;
     let mut out: Vec<DeepLine> = Vec::new();
     let root = base.trim_end_matches('/').to_owned();
-    let status_url = format!("{root}/service/rest/v1/status");
+    let origin = server_origin(base)?;
+    let status_url = format!("{origin}/service/rest/v1/status");
 
     // version: diagnostic only, never a gate.
     match client.get_small(&status_url).await {
@@ -350,7 +354,7 @@ async fn deep_probes(
     }
 
     // range + content-length on the resolved target object.
-    match resolve_probe_target(client, &root, probe_name).await {
+    match resolve_probe_target(client, &origin, &root, probe_name).await {
         Some(object_url) => match client.head_info(&object_url).await {
             Ok(info) => {
                 let len = info.size;
@@ -415,7 +419,7 @@ async fn deep_probes(
         .and_then(|rest| rest.split('/').next())
         .unwrap_or("raw-main")
         .to_owned();
-    let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
+    let search_url = format!("{origin}/service/rest/v1/search/assets?repository={repo}");
     match client.get_small(&search_url).await {
         Ok(Some(_)) => out.push(("deep:search", true, "the search index answers".to_owned(), None)),
         Ok(None) => out.push(("deep:search", true, "empty page".to_owned(), None)),
@@ -435,7 +439,7 @@ async fn deep_probes(
     }
 
     // repo type through the service REST API, read-only.
-    let repos_url = format!("{root}/service/rest/v1/repositories");
+    let repos_url = format!("{origin}/service/rest/v1/repositories");
     match client.get_small(&repos_url).await {
         Ok(Some(body)) => {
             let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
@@ -491,7 +495,7 @@ async fn deep_probes(
     // eula gate: the CE 3.79+ write gate, strictly read-only (a GET).
     // A 404 means the server predates the gate; 401/403 means the probe
     // needs admin rights, which is a skip, not a finding.
-    let eula_url = format!("{root}/service/rest/v1/system/eula");
+    let eula_url = format!("{origin}/service/rest/v1/system/eula");
     match client.get_small(&eula_url).await {
         Ok(Some(body)) => {
             let parsed: Option<serde_json::Value> = serde_json::from_slice(&body).ok();
@@ -531,11 +535,28 @@ async fn deep_probes(
     Ok(out)
 }
 
+/// The server origin of a base URL: scheme, host and port, with no repository path.
+fn server_origin(base: &str) -> Result<String, Error> {
+    let (scheme, rest) = if let Some(rest) = base.strip_prefix("https://") {
+        ("https", rest)
+    } else if let Some(rest) = base.strip_prefix("http://") {
+        ("http", rest)
+    } else {
+        return Err(Error::Misuse(format!("base URL: {base:?} is not http(s)")));
+    };
+    let host_port = rest.split('/').next().unwrap_or_default();
+    if host_port.is_empty() {
+        return Err(Error::Misuse(format!("base URL: {base:?} has no host")));
+    }
+    Ok(format!("{scheme}://{host_port}"))
+}
+
 /// Resolve the object the range and content-length probes target: the explicit
 /// name, else the first object one search page returns.
 /// `None` means no target exists, which is a skip, not a failure.
 async fn resolve_probe_target(
     client: &nexus_raw_core::NexusClient,
+    origin: &str,
     root: &str,
     probe_name: Option<&str>,
 ) -> Option<String> {
@@ -549,7 +570,7 @@ async fn resolve_probe_target(
         .nth(1)
         .and_then(|rest| rest.split('/').next())
         .unwrap_or("raw-main");
-    let search_url = format!("{root}/service/rest/v1/search/assets?repository={repo}");
+    let search_url = format!("{origin}/service/rest/v1/search/assets?repository={repo}");
     let body = client.get_small(&search_url).await.ok()??;
     let parsed: serde_json::Value = serde_json::from_slice(&body).ok()?;
     let first = parsed["items"]
@@ -557,5 +578,5 @@ async fn resolve_probe_target(
         .and_then(|a| a.first())
         .and_then(|i| i["path"].as_str())
         .map(|p| p.trim_start_matches('/').to_owned())?;
-    Some(format!("{root}/repository/{repo}/{first}"))
+    Some(format!("{origin}/repository/{repo}/{first}"))
 }

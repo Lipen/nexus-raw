@@ -146,6 +146,30 @@ fn ndjson(out: &Output) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// A clap parse error is misuse 2 with a hint, and `--json` carries the same failure.
+#[test]
+fn a_bad_flag_is_misuse_with_a_hint() {
+    let out = nxr(&["--bogus"]);
+    expect_exit(&out, 2, "an unknown flag is misuse");
+    assert!(stderr(&out).contains("hint:"), "got: {}", stderr(&out));
+
+    let json = nxr(&["--json", "--bogus"]);
+    expect_exit(&json, 2, "an unknown flag is misuse in json mode too");
+    let lines = ndjson(&json);
+    let last = lines.last().expect("an error object");
+    assert_eq!(last["event"], "error");
+    assert_eq!(last["code"], 2);
+    assert!(
+        last["hint"].as_str().unwrap_or_default().contains("--help"),
+        "got: {last}"
+    );
+    assert!(
+        stderr(&json).is_empty(),
+        "the json channel carries the failure alone: {}",
+        stderr(&json)
+    );
+}
+
 // ---- transfers ------------------------------------------------------------
 
 /// up then down round trip against Atomic: bytes and markers on the server, bytes and markers on disk, exit 0 everywhere.
@@ -2642,6 +2666,28 @@ fn doctor_probe_rejects_rejected_credentials() {
     assert_eq!(probe["ok"], true, "got: {probe}");
 }
 
+/// `doctor --deep` asks the service API at the origin, not under the repository path.
+#[test]
+fn doctor_deep_reads_the_service_api_at_the_origin() {
+    let srv = server(Scenario::Atomic);
+    srv.insert(
+        "service/rest/v1/repositories",
+        br#"[{"name":"raw-main","format":"raw","type":"hosted"}]"#,
+    );
+    let url = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    let out = nxr(&["doctor", &url, "--deep"]);
+    expect_exit(&out, 0, "deep probes pass");
+    let text = stdout(&out);
+    assert!(
+        text.contains("deep:repo-type"),
+        "the probe is reported: {text}"
+    );
+    assert!(
+        !text.contains("deep:repo-type: skipped"),
+        "the service API is at the origin, not under the version path: {text}"
+    );
+}
+
 // ---- rm and point ---------------------------------------------------------
 
 /// Seed the version directory through `up` and install the version document.
@@ -3330,6 +3376,32 @@ fn mirror_src_user_authenticates_the_source() {
     assert!(dst2.store_get("1.14.0/a.zip").is_none());
 }
 
+/// A shared `-u` authenticates both sides when no per-side override is given.
+#[test]
+fn mirror_shared_user_authenticates_both_sides() {
+    let src = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    seed_mirror_source(&src);
+    let dst = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+
+    let ok = nxr(&[
+        "-u",
+        "nexus:secret",
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&ok, 0, "the shared -u authenticates both sides");
+    assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+}
+
 // ---- mv --------------------------------------------------------------------
 
 /// `mv` pours the version into the destination and then empties the source, markers included.
@@ -3538,6 +3610,32 @@ fn service_assets_walks_the_search_pages() {
     let assets = v["assets"].as_array().expect("assets array");
     assert_eq!(assets.len(), 35, "the mock serves 35 assets");
     assert_eq!(assets[0]["path"], "v0.9.0-assets/asset-000.bin");
+}
+
+/// A server-controlled checksum may be multibyte: the human line never byte-slices it.
+#[test]
+fn service_assets_survives_a_multibyte_checksum() {
+    let srv = server(Scenario::Atomic);
+    let page = serde_json::json!({
+        "items": [{"path": "1.0.0/a.zip", "checksum": {"sha256": "aéééé"}}],
+    });
+    srv.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+    let repo = format!("{}repository/raw-main/", srv.base_url());
+    let out = nxr(&["service", "assets", &repo]);
+    expect_exit(&out, 0, "a multibyte checksum must not panic");
+    assert!(stdout(&out).contains("1.0.0/a.zip"), "got: {}", stdout(&out));
+}
+
+/// `service eula --accept` on an auth-refusing server is an auth failure, not "no gate".
+#[test]
+fn service_eula_accept_refusal_is_an_auth_error() {
+    let srv = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    let out = nxr(&["service", "eula", &srv.base_url(), "--accept"]);
+    expect_exit(&out, 3, "a refused acceptance is a transport/auth class");
+    assert!(stderr(&out).contains("hint:"), "got: {}", stderr(&out));
 }
 
 /// `service eula` on a server without the gate reports gate:false and exits zero.
@@ -4380,6 +4478,44 @@ fn up_if_changed_skips_verified_and_reups_the_rest() {
         "the unchanged name never re-uploads"
     );
     assert_eq!(srv.store_get("1.14.0/b.bin").as_deref(), Some(GAMMA));
+}
+
+/// `up --if-changed --plan` uses the if-changed classification: a divergent remote is an upload, not a refusal.
+#[test]
+fn up_if_changed_plan_matches_the_if_changed_run() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let first = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&first, 0, "the seed upload lands");
+
+    write_file(src.path(), "a.zip", BETA);
+    std::fs::remove_file(src.path().join("a.zip.sha256")).unwrap();
+
+    // The strict plan refuses the divergence.
+    let strict = nxr(&["up", "--plan", src.path().to_str().unwrap(), &base]);
+    expect_exit(&strict, 1, "a strict plan reports the mismatch");
+
+    // The if-changed plan lists the upload and exits 0.
+    let planned = nxr(&[
+        "up",
+        "--if-changed",
+        "--plan",
+        src.path().to_str().unwrap(),
+        &base,
+    ]);
+    expect_exit(&planned, 0, "the if-changed plan accepts the divergence");
+    assert!(
+        stdout(&planned).contains("upload a.zip"),
+        "the plan names the upload: {}",
+        stdout(&planned)
+    );
+    assert_eq!(
+        srv.store_get("1.14.0/a.zip").as_deref(),
+        Some(ALPHA),
+        "a plan writes nothing"
+    );
 }
 
 /// up --if-changed over a markerless remote copy: no evidence, the name re-PUTs (the repair path).

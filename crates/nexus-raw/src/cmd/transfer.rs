@@ -54,10 +54,15 @@ async fn run_up(
 ) -> Result<(), Error> {
     if plan {
         let names = ctx.nxr.scan(src)?;
-        let actions = ctx
-            .nxr
-            .diff(src, names, nexus_raw_core::Mode::Up, !modes.no_sha)
-            .await?;
+        let actions = if modes.if_changed {
+            ctx.nxr
+                .up_if_changed_plan(src, Some(names), !modes.no_sha, claim)
+                .await?
+        } else {
+            ctx.nxr
+                .diff(src, names, nexus_raw_core::Mode::Up, !modes.no_sha)
+                .await?
+        };
         for a in &actions {
             crate::cmd::print_line(ctx.json, &plan_line(a), &action_json(a));
         }

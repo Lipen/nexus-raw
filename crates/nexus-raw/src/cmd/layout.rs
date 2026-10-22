@@ -270,7 +270,7 @@ async fn run_service_assets(ctx: &Ctx, q: Option<&str>, prefix: &[String]) -> Re
                 let sha = a
                     .sha256
                     .as_deref()
-                    .map(|s| &s[..8.min(s.len())])
+                    .map(|s| s.get(..8).unwrap_or(s))
                     .unwrap_or("-");
                 let size = a.size.map_or_else(|| "-".to_owned(), |s| s.to_string());
                 format!(

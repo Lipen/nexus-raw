@@ -464,7 +464,43 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run_main() -> std::process::ExitCode {
-    let mut cli = Cli::parse();
+    // The NDJSON channel must carry a parse failure too: clap would otherwise
+    // print its own text and exit before the renderer exists, breaking the
+    // `--json` contract the docs promise.
+    let json = std::env::args_os().any(|arg| arg == "--json");
+    let mut cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(e) => {
+            let code = u8::try_from(e.exit_code()).unwrap_or(2);
+            if code == 0 {
+                let _ = e.print();
+                return std::process::ExitCode::SUCCESS;
+            }
+            let detail = e
+                .to_string()
+                .lines()
+                .next()
+                .unwrap_or("bad command line")
+                .trim_start_matches("error: ")
+                .to_owned();
+            let hint = "check the command shape: nxr --help, or nxr <command> --help";
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "event": "error",
+                        "code": 2,
+                        "error": detail,
+                        "hint": hint,
+                    })
+                );
+            } else {
+                let _ = e.print();
+                eprintln!("hint: {hint}");
+            }
+            return std::process::ExitCode::from(2);
+        }
+    };
     if let Err(e) = alias::apply_remote(&mut cli) {
         if cli.json {
             // The NDJSON channel carries the failure alone: scripts parse this
