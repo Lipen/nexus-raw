@@ -283,7 +283,13 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/' || url.pathname === '/index.html') {
     // Read per request: the page is tiny and edit-reload loops must not need a server restart.
     // The rewritten marker keeps the ServiceWorker fake off: a fake or a proxy already answers here.
-    const indexHtml = await readFile(join(here, 'index.html'), 'utf8')
+    let indexHtml
+    try {
+      indexHtml = await readFile(join(here, 'index.html'), 'utf8')
+    } catch (err) {
+      res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+      return res.end(`cannot read index.html: ${err.message}\n`)
+    }
     const mode = upstream ? 'upstream' : 'node-fake'
     const marked = indexHtml.replace(SERVE_MARKER, `NXR_SANDBOX_SERVE = "${mode}"`)
     if (marked === indexHtml) {

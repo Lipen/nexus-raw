@@ -40,11 +40,13 @@ const PUT_BODY_CAP = 100 * 1024 * 1024
 // Every target URL is checked against this set before an napi call, so the
 // panel cannot forward its ambient credentials to an arbitrary host.
 const allowedOrigins = new Set()
+// The panel binds loopback: only loopback names are a legitimate Host.
+const allowedHosts = new Set()
 
 // A transferable artifact segment: the wire grammar minus the reserved local-state prefix.
 const ARTIFACT_SEGMENT = /^[A-Za-z0-9._-]+$/
 function transferable(segment) {
-  return ARTIFACT_SEGMENT.test(segment) && !segment.toLowerCase().startsWith('.nxr')
+  return ARTIFACT_SEGMENT.test(segment) && !segment.toLowerCase().startsWith('.nxr') && !segment.endsWith('.sha256')
 }
 
 function rememberJob(job) {
@@ -381,7 +383,17 @@ function refuseForeignOrigin(req) {
   }
 }
 
+// A rebinding page presents its own hostname in both Host and Origin, so the
+// Origin-vs-Host check passes; the Host allowlist closes that hole.
+function refuseForeignHost(req) {
+  const host = req.headers.host ?? ''
+  if (!allowedHosts.has(host)) {
+    throw new HttpError(403, { error: `host ${JSON.stringify(host)} is not this panel` })
+  }
+}
+
 async function route(req, res) {
+  refuseForeignHost(req)
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`)
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
@@ -530,5 +542,9 @@ const server = createServer((req, res) => {
 })
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`panel listening http://localhost:${server.address().port}`)
+  const bound = server.address().port
+  for (const name of ['localhost', '127.0.0.1', '[::1]']) {
+    allowedHosts.add(`${name}:${bound}`)
+  }
+  console.log(`panel listening http://localhost:${bound}`)
 })

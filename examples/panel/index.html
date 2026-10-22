@@ -503,7 +503,8 @@ function clearError(box) {
 // Button busy state: disabled, relabelled, aria-busy, restored in finally.
 function busy(btn, label, run) {
   if (btn.disabled) return Promise.resolve()
-  const orig = btn.textContent
+  // A button may carry an inline SVG: save and restore the markup, not just text.
+  const orig = btn.innerHTML
   btn.disabled = true
   btn.setAttribute('aria-busy', 'true')
   btn.textContent = label
@@ -512,7 +513,7 @@ function busy(btn, label, run) {
     .finally(() => {
       btn.disabled = false
       btn.removeAttribute('aria-busy')
-      btn.textContent = orig
+      btn.innerHTML = orig
     })
 }
 
@@ -672,7 +673,10 @@ function ascend(i) {
   navigate(state.dirSegs.slice(0, i + 1))
 }
 
+let entriesSeq = 0
+
 async function loadEntries() {
+  const seq = ++entriesSeq
   const url = dirUrl()
   const ul = $('entry-list')
   clearError($('entry-error'))
@@ -682,6 +686,8 @@ async function loadEntries() {
   $('browser-hint').textContent = `Loading ${url}…`
   try {
     const entries = await api(`/api/entries?url=${encodeURIComponent(url)}`)
+    // A slower response from a directory the user already left must not render.
+    if (seq !== entriesSeq) return
     ul.removeAttribute('aria-busy')
     renderEntries(entries)
   } catch (err) {
@@ -1153,7 +1159,18 @@ function uploadOne(file, row) {
   })
 }
 
-async function uploadFiles(files) {
+let uploadChain = Promise.resolve()
+
+function uploadFiles(files) {
+  // Batches queue instead of dropping: a second pick during a slow upload must
+  // still land, with its own rows and tally.
+  uploadChain = uploadChain.then(() => uploadBatch(files)).catch((err) => {
+    toast(`Upload failed: ${err?.message ?? String(err)}`, 'bad')
+  })
+  return uploadChain
+}
+
+async function uploadBatch(files) {
   if (!state.repoUrl) {
     toast('Pick a raw repository first', 'bad')
     return

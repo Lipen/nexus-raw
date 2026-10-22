@@ -214,6 +214,7 @@
   let path = ''
   let ready = false
   let beaconSent = false
+  let listSeq = 0
 
   const dirUrl = () => base + path
   const setConn = (kind, text) => { conn.className = `pill ${kind}`; conn.textContent = text }
@@ -287,12 +288,16 @@
       setConn('busy', 'loading…')
       return
     }
+    const seq = ++listSeq
+    const at = dirUrl()
     clearError()
     setConn('busy', 'listing…')
-    dirInput.value = dirUrl()
-    status.textContent = `GET ${dirUrl()}`
+    dirInput.value = at
+    status.textContent = `GET ${at}`
     try {
-      const parsed = JSON.parse(await nxr_ls(dirUrl(), null))
+      const parsed = JSON.parse(await nxr_ls(at, null))
+      // A slower response from a path the user already left must not render.
+      if (seq !== listSeq) return
       render(parsed)
       renderCrumbs()
       setConn('ok', `${parsed.length} entr${parsed.length === 1 ? 'y' : 'ies'}`)
@@ -410,6 +415,22 @@
   dirInput.value = dirUrl()
 
   ;(async () => {
+    // A worker registered on a static visit keeps intercepting after the same
+    // origin starts serving through the proxy: unregister it before init.
+    if (window.NXR_SANDBOX_SERVE !== 'static' && 'serviceWorker' in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        if (regs.length > 0) {
+          await Promise.all(regs.map((reg) => reg.unregister()))
+          if (navigator.serviceWorker.controller) {
+            location.reload()
+            return
+          }
+        }
+      } catch (e) {
+        error.textContent += `service worker cleanup: ${e}\n`
+      }
+    }
     try {
       await ensureFakeWorker()
       await init()

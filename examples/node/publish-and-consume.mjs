@@ -12,6 +12,9 @@ import pkg from "@nexus-raw/nxr";
 const { up, down, verify, channelSet, channelGet } = pkg;
 
 const mock = process.argv[2] ? { url: process.argv[2], child: null } : await spawnMock();
+// A throw later in the demo must not orphan the mock: the exit hook runs on
+// both the normal and the exceptional path.
+process.on("exit", () => mock.child?.kill());
 const repo = mock.url;
 
 // The producer side: a version directory of plain artifacts.
@@ -42,8 +45,7 @@ const check = await verify("demo-vendor");
 console.log(`verify: ${check.skipped + downSummary.downloaded} names ok`);
 mock.child?.kill();
 
-/** Spawn the repo's mock server.
- * Leaked on purpose: it dies with this process. */
+/** Spawn the repo's mock server; the exit hook above kills it. */
 function spawnMock() {
   // The demo runs from the repo root (just) or from examples/node (npm): try both, and let the environment override.
   const candidates = process.env.MOCK_NEXUS_BIN
