@@ -40,6 +40,7 @@ Values never appear in logs, `--json` output or error messages.
 | the server refuses writes with 403 | `nxr service eula <url> --accept` |
 | list a directory | `nxr ls <dir-url>` and `--assets` for flat names |
 | fetch one file | `nxr get <url> -o <file>` |
+| fetch one file with the marker and resume | `nxr down <file-url> <dst-dir>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | stream one file to stdout | `nxr get <url>` |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |

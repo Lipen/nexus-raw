@@ -140,9 +140,9 @@ pub(crate) enum Cmd {
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,
     },
-    /// Download a remote directory into a local one (§5.2, §5.2.1).
+    /// Download a remote directory, or one file named by its URL, into a local one (§5.2, §5.2.1).
     Down {
-        /// The remote directory URL.
+        /// The remote directory URL, or a file URL to fetch that one artifact.
         #[arg(value_name = "SRC_URL")]
         src: String,
         /// The target directory.

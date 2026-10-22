@@ -94,7 +94,7 @@ pub async fn up(
 /// Download a remote directory into a local one.
 ///
 /// The enumeration source is mandatory: `ls` or explicit `names`.
-/// Otherwise the promise rejects like the CLI.
+/// Otherwise the promise rejects; the CLI additionally turns a file URL into one name.
 #[napi]
 pub async fn down(
     src_url: String,

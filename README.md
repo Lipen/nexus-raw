@@ -134,7 +134,7 @@ If a transfer is interrupted, run the same command again: what already landed is
 | `nxr complete <shell>` | print a shell completion script to stdout (bash, zsh, fish, powershell) |
 
 `down`, `diff`, `mirror`, `mv` and `rm` enumerate explicitly: repeatable `--name`, `--names-from FILE` (one name per line, `-` is stdin), or best-effort `--ls` when the server has the search API.
-With neither they refuse.
+With neither they refuse, except `nxr down <file-url> <dst-dir>`: a URL that ends at a file is a one-name source, and the file lands at `<dst-dir>/<leaf>` with the usual marker, resume and digest checks.
 
 Exit codes: 0 ok, 1 data problem, 2 misuse, 3 transport.
 Every error prints a `hint:` line.

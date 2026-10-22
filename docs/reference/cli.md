@@ -378,8 +378,10 @@ A prefix without the trailing slash is misuse (exit 2).
 
 Resuming is the default: a rerun picks up the part files of a killed run through `Range` requests.
 `down` must know what to fetch, and Nexus raw has no guaranteed directory listing.
-Without flags `down` refuses: there is no default enumeration source.
-If that is absent the run refuses with `cannot enumerate` (exit 1) and a hint naming the explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
+A URL that ends at a file is itself a source: `nxr down …/1.4.0/app.zip vendor/` syncs the `…/1.4.0/` directory for the name `app.zip` and writes `vendor/app.zip` with the same marker, resume and digest checks as a directory run.
+The parent directory is the sync root and the last segment is the name.
+With `--name`, `--names-from` or `--ls` the URL keeps its old meaning, the directory to enumerate, so a directory URL should end with a slash.
+Without any source, and when the URL names a directory, `down` refuses with `cannot enumerate` (exit 1) and a hint naming the explicit sources (see [the refusal transcript](errors.md#enumeration-refusal-exit-1)).
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/app/ \

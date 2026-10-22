@@ -93,7 +93,7 @@ let nxr = Nxr::new(
     tx,
 )?;
 
-// The enumeration source is mandatory, exactly like `nxr down`.
+// The core enumeration source is mandatory: the CLI's file-URL shorthand resolves to one name before this call.
 let summary = nxr
     .down("vendor/app/".as_ref(), Enumeration::Search, false)
     .await?;

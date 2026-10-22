@@ -32,7 +32,7 @@ The symmetric diff decides what to transfer.
 
 `up` writes markers by default.
 `--no-sha` opts out.
-`down` requires an enumeration source: explicit names, or the best-effort search API.
+`down` requires an enumeration source: explicit names (repeatable `--name`, a names file, or a URL that ends at a file), or the best-effort search API.
 `up --if-changed` relaxes exactly one refusal: a complete local copy whose digest differs from the remote marker re-PUTs instead of refusing.
 Every other rule holds, and a skip still demands evidence: only a verified digest equality skips, a missing or foreign remote marker re-PUTs the name.
 

@@ -16,7 +16,7 @@ The canonical protocol text is kept outside this repository.
   A divergent complete artifact is never overwritten.
   `up` writes markers by default and generates missing local siblings.
   `--no-sha` is the explicit opt-out.
-- `down` requires an enumeration source (repeatable `--name`, `--names-from`, or `--ls`) and refuses with `cannot enumerate` otherwise.
+- `down` takes its names from repeatable `--name`, `--names-from`, `--ls`, or a URL that ends at a file (the parent directory is the base, the leaf is the name); without any source it refuses with `cannot enumerate`.
 - The marker is always PUT after the bytes of the same name.
 - The order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.

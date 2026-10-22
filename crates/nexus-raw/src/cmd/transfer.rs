@@ -118,12 +118,49 @@ pub(crate) async fn down(
     segments: Option<usize>,
     prefixes: &[String],
 ) -> Result<(), Error> {
-    let ctx = make_ctx(cli, src)?;
-    let enum_src =
-        enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
+    // A bare file URL is a one-name sync: the parent directory is the base and
+    // the last segment is the name. An explicit source keeps the old meaning,
+    // where `src` is the directory to enumerate (a trailing slash or `--ls`).
+    let inferred = if names.is_empty() && names_from.is_empty() && !ls {
+        split_file_url(src)
+    } else {
+        None
+    };
+    let (base, inferred_name) = match inferred {
+        Some((base, name)) => (base, Some(name)),
+        None => (src.to_owned(), None),
+    };
+    let ctx = make_ctx(cli, &base)?;
+    let borrowed;
+    let effective_names = match &inferred_name {
+        Some(name) => {
+            borrowed = vec![name.clone()];
+            borrowed.as_slice()
+        }
+        None => names,
+    };
+    let enum_src = enumeration_source(ctx.nxr.base(), effective_names, names_from, ls)?
+        .with_prefixes(prefixes)?;
     let result = run_down(&ctx, dst, enum_src, fresh, plan, segments).await;
     finish(ctx).await;
     result
+}
+
+/// Split a file URL into the directory to sync and the name under it:
+/// `…/a/b.bin` -> (`…/a/`, `b.bin`).
+/// A trailing slash means a directory, and a URL without a path is not a file.
+fn split_file_url(url: &str) -> Option<(String, String)> {
+    let scheme_end = url.find("://")? + 3;
+    let path_start = scheme_end + url[scheme_end..].find('/')?;
+    let path = &url[path_start..];
+    if path.ends_with('/') {
+        return None;
+    }
+    let (parent, leaf) = path.rsplit_once('/')?;
+    if leaf.is_empty() {
+        return None;
+    }
+    Some((format!("{}{parent}/", &url[..path_start]), leaf.to_owned()))
 }
 
 async fn run_down(
@@ -755,4 +792,37 @@ pub(crate) async fn audit(
     }
     finish(ctx).await;
     Ok(u8::from(!(findings.is_empty() && byte_findings.is_empty())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_file_url;
+
+    #[test]
+    fn splits_a_file_url_at_its_parent() {
+        assert_eq!(
+            split_file_url("https://h/repository/raw/1.4.0/a.zip"),
+            Some(("https://h/repository/raw/1.4.0/".into(), "a.zip".into()))
+        );
+        assert_eq!(
+            split_file_url("https://h/b.bin"),
+            Some(("https://h/".into(), "b.bin".into()))
+        );
+        assert_eq!(
+            split_file_url("https://h/a/b/c.bin"),
+            Some(("https://h/a/b/".into(), "c.bin".into()))
+        );
+    }
+
+    #[test]
+    fn keeps_directory_and_bare_urls_out() {
+        for url in [
+            "https://h/repository/raw/1.4.0/",
+            "https://h/",
+            "https://h",
+            "https://h:8081",
+        ] {
+            assert_eq!(split_file_url(url), None, "{url}");
+        }
+    }
 }

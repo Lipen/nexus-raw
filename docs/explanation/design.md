@@ -353,7 +353,7 @@ No other command reads it, and no correctness rule depends on it.
 
 A raw repository has no guaranteed directory listing.
 The search API varies between server releases, and HEAD-probing for likely names is guessing with extra requests.
-So `down` requires an enumeration source (explicit names, a name file, or an explicitly requested best-effort `--ls`) and refuses with a hint when it has none.
+So `down` requires an enumeration source (explicit names, a name file, a file URL whose last segment is the name, or an explicitly requested best-effort `--ls`) and refuses with a hint when it has none.
 
 The caller owns the name list: repeat `--name`, or write the list to a file and pass `--names-from`.
 Nothing is reserved: a publisher who wants a machine-readable index ships one as an ordinary artifact and documents its name, and `nxr` never reads it.

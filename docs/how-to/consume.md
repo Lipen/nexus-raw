@@ -17,9 +17,12 @@ The scenario behind every transcript here: your build needs the artifacts of ver
 | Source | Invocation | Reach for it when |
 |:-------|:-----------|:------------------|
 | explicit names, repeatable | `nxr down <ver-url>/ vendor/app/ --name app.zip` | a job needs one or two files, or a pipeline owns its list |
+| a file URL | `nxr down <ver-url>/app.zip vendor/app/` | one verified file: the parent directory is the sync root, so the file lands at `vendor/app/app.zip` |
 | server search API | `nxr down <ver-url>/ vendor/app/ --ls` | best effort: needs a server with the search API and a repository-style URL |
 
-Without a source, `down` refuses instead of guessing:
+A URL that ends at a file is itself a source: the parent directory is the base and the last segment is the name.
+
+Without a source, a directory URL refuses instead of guessing:
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.3.0/ vendor/old/

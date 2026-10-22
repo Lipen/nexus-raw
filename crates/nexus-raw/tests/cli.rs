@@ -392,6 +392,23 @@ fn down_explicit_name() {
     assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
 }
 
+/// A file URL with no enumeration source is a one-name download into `DST`.
+#[test]
+fn down_file_url_fetches_one_artifact() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let base = format!("{}repo/dir/", srv.base_url());
+    expect_exit(&nxr(&["up", src.path().to_str().unwrap(), &base]), 0, "up");
+
+    let dst = TempDir::new().unwrap();
+    let file_url = format!("{base}a.zip");
+    let down = nxr(&["down", &file_url, dst.path().to_str().unwrap()]);
+    expect_exit(&down, 0, "down file url");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+    assert!(dst.path().join("a.zip.sha256").exists());
+}
+
 /// `down --segments` splits each artifact over closed Range requests and lands
 /// the same bytes as one stream.
 #[test]

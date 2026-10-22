@@ -189,7 +189,7 @@ _arguments "${_arguments_options[@]}" : \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':src -- The remote directory URL:_default' \
+':src -- The remote directory URL, or a file URL to fetch that one artifact:_default' \
 ':dst -- The target directory:_files' \
 && ret=0
 ;;
@@ -912,7 +912,7 @@ _nxr_commands() {
 'head:HEAD a URL\: status, size, content type' \
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
-'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'down:Download a remote directory, or one file named by its URL, into a local one (§5.2, §5.2.1)' \
 'clone:Clone a raw repository into a local directory\: verified, resumable, with an optional local fact cache' \
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \
@@ -1021,7 +1021,7 @@ _nxr__subcmd__help_commands() {
 'head:HEAD a URL\: status, size, content type' \
 'sha:The sha256 of a file or URL' \
 'up:Upload a local directory (§5.2)' \
-'down:Download a remote directory into a local one (§5.2, §5.2.1)' \
+'down:Download a remote directory, or one file named by its URL, into a local one (§5.2, §5.2.1)' \
 'clone:Clone a raw repository into a local directory\: verified, resumable, with an optional local fact cache' \
 'diff:Compare a local directory against a remote one\: the delta report' \
 'audit:Audit a repository for integrity\: the structural report, optionally byte-verified' \

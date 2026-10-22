@@ -126,7 +126,7 @@ This one is the client contract: every wire invariant against the implementation
 | Completion is bytes plus a verified marker. A diverged complete object is never overwritten | yes | yes | via core | yes |
 | The marker is `sha256sum -c` format and follows the bytes of the same name | yes | yes | via core | yes |
 | The marker names the artifact relative to the addressed base | yes | yes | via core | yes |
-| A directory transfer refuses without an explicit enumeration source | yes | yes | via core | n/a |
+| A directory URL refuses without an explicit enumeration source | yes | yes | via core | n/a |
 | Resume sends `Accept-Encoding: identity`; a complete part finalizes on `416` | yes | yes | via core | identity only |
 | A markerless remote is completed by computing the marker from the received bytes | yes | yes | via core | yes |
 | A foreign or unparseable marker refuses the name | yes | yes | via core | yes |
