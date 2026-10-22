@@ -140,7 +140,6 @@ impl Spec {
         self.freeze_upload = true;
         self
     }
-
 }
 
 impl From<&Scenario> for Spec {

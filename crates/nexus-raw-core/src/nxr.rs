@@ -274,7 +274,10 @@ impl Nxr {
         len: u64,
     ) -> Result<Option<Vec<u8>>, Error> {
         if len == 0 {
-            return Ok(Some(Vec::new()));
+            // The contract says `None` means absent: a zero-length read still
+            // has to know, so probe the object with a HEAD.
+            let info = self.head(url).await?;
+            return Ok((info.status != 404).then(Vec::new));
         }
         let Some(end_incl) = start.checked_add(len - 1) else {
             return Err(Error::misuse("the byte range overflows u64"));
@@ -1147,23 +1150,7 @@ impl Nxr {
         // No implicit claim: no name is special, the enumeration order stands.
         let claim = None::<ArtifactName>;
         let staging = mirror::staging_dir(&self.base, &dst.base);
-        // The parts may hold private bytes in a shared temp location: create the
-        // directory private instead of publishing them to every local user.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            std::fs::DirBuilder::new()
-                .mode(0o700)
-                .recursive(true)
-                .create(&staging)
-                .map_err(|e| Error::io(&staging, e))?;
-        }
-        // No mode knob off unix: the dir inherits the privacy of the user's
-        // own temp location, which is where it lives anyway.
-        #[cfg(not(unix))]
-        tokio::fs::create_dir_all(&staging)
-            .await
-            .map_err(|e| Error::io(&staging, e))?;
+        secure_staging(&staging)?;
         // Two concurrent mirrors of one pair would interleave the same part files:
         // an advisory lock refuses the second run instead of corrupting the first.
         // The guard lives to the end of the run, the lock dies with it.
@@ -1436,6 +1423,56 @@ impl Nxr {
 ///
 /// # Errors
 ///
+/// Create the mirror staging directory privately, refusing to follow a planted symlink.
+///
+/// The path is predictable in a shared temp dir: a pre-created symlink (or a
+/// foreign-owned directory) is an attack, not resume state.
+#[cfg(not(target_arch = "wasm32"))]
+fn secure_staging(path: &Path) -> Result<(), Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                // A symlink is never a run's own directory: drop the link, not its target.
+                std::fs::remove_file(path).map_err(|e| Error::io(path, e))?;
+            }
+            Ok(meta) if !meta.is_dir() => {
+                return Err(Error::Misuse(format!(
+                    "the mirror staging path is not a directory: {}",
+                    path.display()
+                )));
+            }
+            Ok(meta) => {
+                // SAFETY: getuid has no preconditions and cannot fail.
+                let uid = unsafe { libc::getuid() };
+                if meta.uid() != uid {
+                    return Err(Error::Misuse(format!(
+                        "the mirror staging directory is owned by another user: {}",
+                        path.display()
+                    )));
+                }
+                if meta.permissions().mode() & 0o077 != 0 {
+                    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+                        .map_err(|e| Error::io(path, e))?;
+                }
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(Error::io(path, e)),
+        }
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(path)
+            .map_err(|e| Error::io(path, e))?;
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(path).map_err(|e| Error::io(path, e))
+    }
+}
+
 /// Returns [`Error::Misuse`] when another run holds the lock and [`Error::Io`] when the lock file cannot be managed.
 #[cfg(not(target_arch = "wasm32"))]
 fn acquire_staging_lock(staging: &Path) -> Result<std::fs::File, Error> {
@@ -1528,7 +1565,10 @@ mod staging_lock_tests {
         let dir = tempfile::tempdir().unwrap();
         let first = acquire_staging_lock(dir.path()).expect("the first run takes the lock");
         let second = acquire_staging_lock(dir.path()).expect_err("the second run is refused");
-        assert!(matches!(second, crate::error::Error::Misuse(_)), "{second:?}");
+        assert!(
+            matches!(second, crate::error::Error::Misuse(_)),
+            "{second:?}"
+        );
         drop(first);
     }
 }

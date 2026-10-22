@@ -164,6 +164,9 @@ impl Error {
         };
         hint.map(|hint| match self.server_body() {
             Some(detail) => {
+                // The body is server-controlled: escape control characters so a
+                // hostile 401/403 cannot inject ANSI or OSC into a terminal.
+                let detail: String = detail.chars().flat_map(char::escape_debug).collect();
                 if detail.contains("End User License Agreement") {
                     format!("{hint}. The server requires the EULA accepted first: run `nxr service eula <server-root> --accept`")
                 } else {
@@ -231,6 +234,17 @@ mod tests {
     use super::*;
 
     /// Server-controlled names must not smuggle terminal escapes into stderr (ANSI/OSC injection): the display renders them escaped.
+    #[test]
+    fn hostile_server_body_is_escaped_in_the_hint() {
+        let e = Error::Auth {
+            url: "http://h/x".to_owned(),
+            reason: "HTTP 401".to_owned(),
+            detail: Some("\u{1b}]0;pwn\u{7}".to_owned()),
+        };
+        let hint = e.hint().expect("auth carries a hint");
+        assert!(!hint.contains('\u{1b}'), "raw ESC leaked: {hint:?}");
+    }
+
     #[test]
     fn unsafe_name_display_is_escaped() {
         let e = Error::UnsafeName {

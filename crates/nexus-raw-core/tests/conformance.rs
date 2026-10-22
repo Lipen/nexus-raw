@@ -749,6 +749,58 @@ fn ranged_gets(mock: &MockNexus, path: &str) -> usize {
         .count()
 }
 
+/// `down --fresh` ignores a stale part instead of resuming it.
+#[tokio::test]
+async fn down_fresh_ignores_a_stale_part() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let dst = TempDir::new().unwrap();
+    let name = ArtifactName::parse("a.zip").unwrap();
+    let part = part_path(dst.path(), &name);
+    std::fs::write(&part, b"stale-bytes-from-another-run").unwrap();
+
+    let summary = nxr
+        .down(dst.path(), Enumeration::Names(vec![name]), true)
+        .await
+        .unwrap();
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(std::fs::read(dst.path().join("a.zip")).unwrap(), CONTENT);
+    assert!(!part.exists(), "the fresh run consumes its part");
+}
+
+/// A symlinked intermediate directory is a plant: the download refuses and the decoy stays empty.
+#[cfg(unix)]
+#[tokio::test]
+async fn down_refuses_a_symlinked_parent_directory() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/bom/a.zip"), CONTENT);
+    mock.insert(
+        &format!("{VERSION}/bom/a.zip.sha256"),
+        sibling::format_line("a.zip", &Digest::of_bytes(CONTENT)).as_bytes(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let dst = TempDir::new().unwrap();
+    let decoy = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(decoy.path(), dst.path().join("bom")).unwrap();
+
+    let err = nxr
+        .down(dst.path(), Enumeration::Names(names(&["bom/a.zip"])), false)
+        .await
+        .unwrap_err();
+    assert_eq!(err.exit_code(), 1, "a symlinked parent is a data refusal");
+    assert!(
+        !decoy.path().join("a.zip").exists(),
+        "the decoy received nothing"
+    );
+}
+
 #[tokio::test]
 async fn segmented_down_lands_the_same_bytes_as_one_stream() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
@@ -840,11 +892,7 @@ async fn segmented_down_discards_spans_from_another_object_version() {
     std::fs::create_dir_all(&staging).unwrap();
     std::fs::write(staging.join("segment-0000.part"), &old[..25_000]).unwrap();
     let old_digest = Digest::of_bytes(&old);
-    std::fs::write(
-        staging.join("manifest"),
-        format!("100000 4 {old_digest}\n"),
-    )
-    .unwrap();
+    std::fs::write(staging.join("manifest"), format!("100000 4 {old_digest}\n")).unwrap();
 
     // The remote object is replaced by same-length different bytes and a new marker.
     let remote = format!("{VERSION}/big.bin");
@@ -1110,6 +1158,43 @@ async fn clone_second_run_skips_and_writes_the_cache() {
         .unwrap();
     assert_eq!(second.downloaded, 0);
     assert_eq!(second.skipped, 3);
+}
+
+/// `--no-state` writes no cache: the next run hashes from scratch, nothing is left behind.
+#[tokio::test]
+async fn clone_no_state_omits_the_cache() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    nxr.clone_to(dst.path(), &[], StateMode::Off, false)
+        .await
+        .unwrap();
+    assert!(
+        !dst.path().join(".nxr-state.json").exists(),
+        "--no-state must not write the default cache"
+    );
+}
+
+/// `--state PATH` writes the cache at the explicit path, not in the destination.
+#[tokio::test]
+async fn clone_explicit_state_path_writes_there() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    let state = TempDir::new().unwrap();
+    let path = state.path().join("cache.json");
+    nxr.clone_to(dst.path(), &[], StateMode::At(&path), false)
+        .await
+        .unwrap();
+    assert!(path.is_file(), "the explicit cache path is written");
+    assert!(
+        !dst.path().join(".nxr-state.json").exists(),
+        "the default path stays empty"
+    );
 }
 
 #[tokio::test]
@@ -3329,4 +3414,25 @@ async fn wait_search_visible_matches_a_grouped_base() {
         .await
         .unwrap();
     assert_eq!(visible, 1, "the grouped path is visible");
+}
+
+/// A zero-length read still separates "empty" from "absent".
+#[tokio::test]
+async fn read_range_len_zero_still_probes_existence() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/a.bin"), CONTENT);
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let url = format!("{}{VERSION}/a.bin", mock.base_url());
+    assert_eq!(
+        nxr.read_range(&url, 0, 0).await.unwrap(),
+        Some(Vec::new()),
+        "an existing object is an empty span"
+    );
+    let absent = format!("{}{VERSION}/absent.bin", mock.base_url());
+    assert!(
+        nxr.read_range(&absent, 0, 0).await.unwrap().is_none(),
+        "an absent object is None even for zero length"
+    );
 }

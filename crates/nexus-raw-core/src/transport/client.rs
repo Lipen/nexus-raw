@@ -352,7 +352,20 @@ impl NexusClient {
     /// The server's error body as one short line for `Error::detail` (spec §5).
     /// An empty or unreadable body carries no detail.
     async fn body_detail(resp: reqwest::Response) -> Option<String> {
-        let text = resp.text().await.ok()?;
+        // A hostile 401/403 body can be endless: read a small window, never the
+        // whole body, then keep the first line.
+        let mut stream = resp.bytes_stream();
+        let cap = BODY_DETAIL_CHARS * 4;
+        let mut buf = Vec::new();
+        while buf.len() < cap {
+            let chunk = match stream.next().await {
+                Some(Ok(chunk)) => chunk,
+                Some(Err(_)) | None => break,
+            };
+            let room = cap - buf.len();
+            buf.extend_from_slice(&chunk[..chunk.len().min(room)]);
+        }
+        let text = String::from_utf8_lossy(&buf);
         let line = text.lines().next()?.trim();
         if line.is_empty() {
             return None;
@@ -473,7 +486,7 @@ impl NexusClient {
     /// GET a byte range into memory.
     ///
     /// The mount read path: a `Range` request answered with `206` returns the span,
-    /// a `200` means the server ignored `Range` and the span is sliced out of the whole body,
+    /// a `200` means the server ignored `Range` and the stream is skipped to the span,
     /// a `404` returns `None`, and a `416` (the span starts at or past the end) returns an empty body.
     ///
     /// # Errors
@@ -503,23 +516,57 @@ impl NexusClient {
                     }
                     _ => return Err(this.status_failure(url, resp).await),
                 }
-                let body = resp.bytes().await.map_err(|e| this.wrap_send_err(url, e))?;
-                if status == 206 {
-                    return Ok(Some(body.to_vec()));
-                }
-                // The server ignored `Range`: slice the requested span out of the whole body.
-                let lo = usize::try_from(start).unwrap_or(usize::MAX).min(body.len());
-                let hi = usize::try_from(end_incl)
-                    .unwrap_or(usize::MAX)
-                    .saturating_add(1)
-                    .min(body.len());
-                if lo >= hi {
-                    return Ok(Some(Vec::new()));
-                }
-                Ok(Some(body[lo..hi].to_vec()))
+                // 206: the body starts at `start`. 200: the server ignored
+                // `Range`, so skip to `start` without buffering the object.
+                let take = end_incl.saturating_sub(start).saturating_add(1);
+                let skip = if status == 206 { 0 } else { start };
+                Ok(Some(this.read_span(resp, skip, take, url).await?))
             })
         })
         .await
+    }
+
+    /// Read at most `take` bytes from `skip` on, with the stall window per chunk.
+    /// A span read never buffers the whole object: a `Range`-stripping proxy
+    /// answers `200`, and the skip walks the stream instead.
+    async fn read_span(
+        &self,
+        resp: reqwest::Response,
+        skip: u64,
+        take: u64,
+        url: &str,
+    ) -> Result<Vec<u8>, AttemptFailure> {
+        let mut stream = resp.bytes_stream();
+        let mut skipped = 0u64;
+        let mut out = Vec::new();
+        while (out.len() as u64) < take {
+            let next = tokio::time::timeout(self.stall, stream.next()).await;
+            let chunk = match next {
+                Ok(Some(Ok(chunk))) => chunk,
+                Ok(Some(Err(e))) => return Err(self.wrap_send_err(url, e)),
+                Ok(None) => break,
+                Err(_) => {
+                    return Err(AttemptFailure::again(Error::transport(
+                        url,
+                        format!("no bytes for {:?} while reading a range", self.stall),
+                    )));
+                }
+            };
+            let mut offset = 0usize;
+            if skipped < skip {
+                let need = skip - skipped;
+                if (chunk.len() as u64) <= need {
+                    skipped += chunk.len() as u64;
+                    continue;
+                }
+                offset = usize::try_from(need).unwrap_or(usize::MAX);
+                skipped = skip;
+            }
+            let want = usize::try_from(take - out.len() as u64).unwrap_or(0);
+            let end = (offset + want).min(chunk.len());
+            out.extend_from_slice(&chunk[offset..end]);
+        }
+        Ok(out)
     }
 
     /// PUT a small object whole.

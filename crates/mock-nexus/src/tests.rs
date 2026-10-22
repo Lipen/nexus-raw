@@ -1062,8 +1062,7 @@ fn inverted_range_is_ignored() {
     assert_eq!(body, b"0123456789");
 
     // The malformed request did not poison the server: the next one answers normally.
-    let (status, _, body) =
-        exchange(server.addr(), "GET", "/1.14.0/blob.bin", b"", &[]).unwrap();
+    let (status, _, body) = exchange(server.addr(), "GET", "/1.14.0/blob.bin", b"", &[]).unwrap();
     assert_eq!(status, 200);
     assert_eq!(body, b"0123456789");
 }
@@ -1102,8 +1101,7 @@ fn huge_chunked_body_is_refused() {
 #[test]
 fn spec_redirect_is_honored() {
     let server = MockNexus::start_spec(Spec::atomic().with_redirect("/moved")).unwrap();
-    let (status, headers, body) =
-        exchange(server.addr(), "GET", "/1.0.0/a.bin", b"", &[]).unwrap();
+    let (status, headers, body) = exchange(server.addr(), "GET", "/1.0.0/a.bin", b"", &[]).unwrap();
     assert_eq!(status, 301);
     assert_eq!(header_value(&headers, "location"), Some("/moved"));
     assert!(body.is_empty());

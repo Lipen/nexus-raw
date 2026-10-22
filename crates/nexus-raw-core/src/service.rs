@@ -97,9 +97,15 @@ pub(crate) async fn status(client: &NexusClient, base: &str) -> Result<StatusRep
 }
 
 /// True when the URL answers 200.
-/// Any other verdict (404, 403, transport) is `false`.
+/// A 404 and a refused probe (401/403) are a `false` verdict; transport and
+/// server errors propagate, because they say nothing about reachability.
 async fn probe_ok(client: &NexusClient, url: &str) -> Result<bool, Error> {
-    Ok(client.get_small(url).await?.is_some())
+    match client.get_small(url).await {
+        Ok(Some(_)) => Ok(true),
+        Ok(None) => Ok(false),
+        Err(Error::Auth { .. }) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 /// One repository entry with its optional full settings (the admin-only detail).

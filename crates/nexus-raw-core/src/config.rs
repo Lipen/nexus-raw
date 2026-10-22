@@ -91,10 +91,13 @@ impl Config {
 ///
 /// Returns [`Error::Misuse`] when `base` is not an http(s) URL with a host and without userinfo, query or fragment.
 pub fn normalize_base(base: &str) -> Result<String, Error> {
+    // Never echo the raw base: a parse failure or a query token is exactly
+    // where a secret would leak into stderr and the `--json` error object.
     let err = || {
-        Error::misuse(format!(
-            "base URL {base:?} must be http(s)://host/path ending with /"
-        ))
+        Error::misuse(
+            "the base URL must be http(s)://host/path; credentials belong in -u or the environment, \
+             and a query or fragment is refused",
+        )
     };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
     // Credentials in the URL userinfo leak into errors, logs and doctor output.
@@ -150,6 +153,19 @@ mod tests {
         bad.workers = 8;
         bad.retry_attempts = 0;
         assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn errors_never_echo_a_credentialed_url() {
+        for bad in [
+            "https://alice:s3cret@",
+            "https://alice:s3cret@host:99999/",
+            "https://host/repo?token=s3cret",
+            "https://host/repo#s3cret",
+        ] {
+            let text = normalize_base(bad).unwrap_err().to_string();
+            assert!(!text.contains("s3cret"), "{bad}: {text}");
+        }
     }
 
     #[test]

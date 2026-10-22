@@ -307,3 +307,20 @@ async fn detail_in_hint_rides_the_hint() {
         "the server body must ride the hint, got: {hint}"
     );
 }
+
+/// A refused status probe is a verdict about access, not a transport error: alive/writable false.
+#[tokio::test]
+async fn status_maps_a_refused_probe_to_false() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::Auth403 {
+        user: "ci".into(),
+        pass: "secret".into(),
+    })
+    .unwrap();
+    let nxr = client(server.base_url());
+    let report = nxr
+        .service_status()
+        .await
+        .expect("a refusal is not an error");
+    assert!(!report.alive, "a 403 status probe is a false verdict");
+    assert!(!report.writable, "a 403 writable probe is a false verdict");
+}
