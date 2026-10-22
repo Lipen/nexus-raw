@@ -37,6 +37,19 @@ Prebuilt binaries ride on [GitHub Releases](https://github.com/Lipen/nexus-raw/r
 cargo binstall nexus-raw
 ```
 
+In GitHub Actions, `taiki-e/install-action` reaches those archives through the same binstall metadata, with no entry in its own manifest:
+
+```yaml
+- uses: taiki-e/install-action@v2
+  with:
+    tool: nexus-raw
+```
+
+The action's default `cargo-binstall` fallback reads the crate metadata and downloads the release archive.
+Nothing on the upstream side is involved.
+The upstream manifest is only for the action's first-class tool list and its own checksum and attestation gate.
+The composite action in this repository stays the verified path, because it checks `SHA256SUMS` itself.
+
 With Homebrew on macOS and Linux, through the tap in this repository:
 
 ```bash
