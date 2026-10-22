@@ -125,6 +125,24 @@ pub fn normalize_base(base: &str) -> Result<String, Error> {
     Ok(out)
 }
 
+/// Split a URL that ends at a file into its parent directory and the name.
+/// `…/a/b.bin` -> (`…/a/`, `b.bin`).
+/// A trailing slash means a directory, and a URL without a path is not a file.
+#[must_use]
+pub fn split_file_url(url: &str) -> Option<(String, String)> {
+    let scheme_end = url.find("://")? + 3;
+    let path_start = scheme_end + url[scheme_end..].find('/')?;
+    let path = &url[path_start..];
+    if path.ends_with('/') {
+        return None;
+    }
+    let (parent, leaf) = path.rsplit_once('/')?;
+    if leaf.is_empty() {
+        return None;
+    }
+    Some((format!("{}{parent}/", &url[..path_start]), leaf.to_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +212,32 @@ mod tests {
         let text = format!("{c:?}");
         assert!(!text.contains("c2VjcmV0"), "leak: {text}");
         assert!(text.contains("***"), "redacted: {text}");
+    }
+    #[test]
+    fn file_url_splits_at_its_parent() {
+        assert_eq!(
+            split_file_url("https://h/repository/raw/1.4.0/a.zip"),
+            Some(("https://h/repository/raw/1.4.0/".into(), "a.zip".into()))
+        );
+        assert_eq!(
+            split_file_url("https://h/b.bin"),
+            Some(("https://h/".into(), "b.bin".into()))
+        );
+        assert_eq!(
+            split_file_url("https://h/a/b/c.bin"),
+            Some(("https://h/a/b/".into(), "c.bin".into()))
+        );
+    }
+
+    #[test]
+    fn directory_and_bare_urls_are_not_files() {
+        for url in [
+            "https://h/repository/raw/1.4.0/",
+            "https://h/",
+            "https://h",
+            "https://h:8081",
+        ] {
+            assert_eq!(split_file_url(url), None, "{url}");
+        }
     }
 }

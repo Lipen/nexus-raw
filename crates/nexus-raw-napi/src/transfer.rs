@@ -7,7 +7,7 @@ use nexus_raw_core::{ArtifactName, CloneAction, Mode, NamePrefix, Nxr, StateMode
 use tokio::sync::mpsc;
 
 use crate::error::js_error;
-use crate::input::{parse_names, resolve_enumeration};
+use crate::input::{infer_file_url, parse_names, resolve_enumeration};
 use crate::mapping::{self, CommonOpts};
 use crate::opts::{
     split_common, NxrAuth, NxrCloneOpts, NxrDiffOpts, NxrDownOpts, NxrMirrorOpts, NxrRmOpts,
@@ -93,8 +93,9 @@ pub async fn up(
 
 /// Download a remote directory into a local one.
 ///
-/// The enumeration source is mandatory: `ls` or explicit `names`.
-/// Otherwise the promise rejects; the CLI additionally turns a file URL into one name.
+/// The enumeration source is `ls`, explicit `names`, or a file URL whose last
+/// segment names one artifact (the parent directory is the base).
+/// Otherwise the promise rejects like the CLI.
 #[napi]
 pub async fn down(
     src_url: String,
@@ -102,6 +103,10 @@ pub async fn down(
     opts: Option<NxrDownOpts>,
 ) -> Result<NxrSummary> {
     let o = opts.unwrap_or_default();
+    // The Node surface mirrors the CLI: with no names and no `ls`, a URL that
+    // ends at a file is that one name, with its parent directory as the base.
+    let ls = o.ls.unwrap_or(false);
+    let (src_url, names) = infer_file_url(&src_url, o.names, ls);
     let (common, on_event) = split_common(
         o.auth,
         o.workers,
@@ -115,15 +120,10 @@ pub async fn down(
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     // Pure parsing first: no events can precede the pump.
-    let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
+    let parsed_names: Option<Vec<ArtifactName>> = parse_names(names)?;
     // Every early return from here drops the facade before draining the pump: the pump ends only when the facade's sender is gone.
     let pump = spawn_pump(rx, on_event);
-    let enum_src = match resolve_enumeration(
-        &nxr,
-        parsed_names,
-        o.ls.unwrap_or(false),
-        "no names or ls given",
-    ) {
+    let enum_src = match resolve_enumeration(&nxr, parsed_names, ls, "no names or ls given") {
         Ok(v) => v,
         Err(e) => {
             drop(nxr);

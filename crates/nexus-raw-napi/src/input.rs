@@ -23,6 +23,21 @@ pub(crate) fn resolve_enumeration(
     })
 }
 
+/// Apply the CLI's file-URL shorthand: with no names and no `ls`, a URL that
+/// ends at a file becomes the parent base plus a one-name list.
+pub(crate) fn infer_file_url(
+    src_url: &str,
+    names: Option<Vec<String>>,
+    ls: bool,
+) -> (String, Option<Vec<String>>) {
+    if names.is_none() && !ls {
+        if let Some((base, leaf)) = nexus_raw_core::config::split_file_url(src_url) {
+            return (base, Some(vec![leaf]));
+        }
+    }
+    (src_url.to_owned(), names)
+}
+
 /// Parse explicit names through the grammar (exit 2 on bad names).
 pub(crate) fn parse_names(names: Option<Vec<String>>) -> Result<Option<Vec<ArtifactName>>> {
     match names {
@@ -43,7 +58,7 @@ pub(crate) fn parse_names(names: Option<Vec<String>>) -> Result<Option<Vec<Artif
 
 #[cfg(test)]
 mod tests {
-    use super::parse_names;
+    use super::{infer_file_url, parse_names};
 
     #[test]
     fn empty_names_list_is_misuse_not_whole_catalog() {
@@ -56,5 +71,23 @@ mod tests {
                 .len(),
             1
         );
+    }
+    #[test]
+    fn a_file_url_becomes_one_name() {
+        let (base, names) = infer_file_url("http://h/a/b.bin", None, false);
+        assert_eq!(base, "http://h/a/");
+        assert_eq!(names.unwrap(), vec!["b.bin".to_owned()]);
+
+        let (base, names) = infer_file_url("http://h/a/", None, false);
+        assert_eq!(base, "http://h/a/");
+        assert!(names.is_none());
+
+        let (base, names) = infer_file_url("http://h/a/b.bin", Some(vec!["x".into()]), false);
+        assert_eq!(base, "http://h/a/b.bin");
+        assert!(names.is_some());
+
+        let (base, names) = infer_file_url("http://h/a/b.bin", None, true);
+        assert_eq!(base, "http://h/a/b.bin");
+        assert!(names.is_none());
     }
 }

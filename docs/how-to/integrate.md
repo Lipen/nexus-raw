@@ -93,7 +93,7 @@ let nxr = Nxr::new(
     tx,
 )?;
 
-// The core enumeration source is mandatory: the CLI's file-URL shorthand resolves to one name before this call.
+// The core enumeration source is mandatory: the CLI and the Node wrapper resolve a file URL to one name before this call.
 let summary = nxr
     .down("vendor/app/".as_ref(), Enumeration::Search, false)
     .await?;
