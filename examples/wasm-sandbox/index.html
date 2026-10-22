@@ -209,6 +209,10 @@
 
   const params = new URLSearchParams(location.search)
   const repo = params.get('repo') ?? 'demo'
+  // The smoke drives the page with `?smoke=interact`: the page clicks a folder,
+  // goes up and uploads a synthetic file, then reports the result in the beacon.
+  const smoke = params.get('smoke')
+  let heldBeacon = null
   const ROOT = `${location.origin}/repository/${repo}/`
   let base = ROOT
   let path = ''
@@ -278,6 +282,11 @@
   }
 
   function pingBeacon(count, failed) {
+    if (smoke === 'interact') {
+      // The interaction run sends one beacon at the end, carrying the outcome.
+      heldBeacon = { count, failed }
+      return
+    }
     if (beaconSent) return
     beaconSent = true
     fetch(`/beacon?rows=${count}&failed=${encodeURIComponent(failed)}`).catch(() => {})
@@ -414,6 +423,48 @@
   })
   dirInput.value = dirUrl()
 
+  function waitFor(expression, predicate, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const end = Date.now() + timeout
+      const tick = () => {
+        let value
+        try {
+          value = expression()
+        } catch (e) {
+          reject(e)
+          return
+        }
+        if (predicate(value)) {
+          resolve(value)
+          return
+        }
+        if (Date.now() > end) {
+          reject(new Error(`timeout waiting for ${value}`))
+          return
+        }
+        setTimeout(tick, 50)
+      }
+      tick()
+    })
+  }
+
+  async function selfTest() {
+    const cell = document.querySelector('#rows td.name.dir')
+    if (!cell) throw new Error('no folder row')
+    cell.closest('tr').click()
+    await waitFor(() => $('crumbs').textContent, (text) => text.includes('app'))
+    $('up').click()
+    await waitFor(() => $('crumbs').textContent, (text) => !text.includes('app'))
+    const file = new File(['smoke-upload\n'], 'smoke.txt', { type: 'text/plain' })
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    filesInput.files = transfer.files
+    $('put').requestSubmit()
+    await waitFor(() => $('upload-status').textContent, (text) => text.includes('uploaded'))
+    await waitFor(() => $('rows').textContent, (text) => text.includes('smoke.txt'))
+    return 'ok'
+  }
+
   ;(async () => {
     // A worker registered on a static visit keeps intercepting after the same
     // origin starts serving through the proxy: unregister it before init.
@@ -441,6 +492,19 @@
       return
     }
     await list()
+    if (smoke === 'interact') {
+      let interact = 'ok'
+      try {
+        await selfTest()
+      } catch (e) {
+        interact = `fail: ${e}`
+        showError(String(e))
+      }
+      const held = heldBeacon ?? { count: 0, failed: '' }
+      fetch(
+        `/beacon?rows=${held.count}&failed=${encodeURIComponent(held.failed)}&interact=${encodeURIComponent(interact)}`,
+      ).catch(() => {})
+    }
   })()
 </script>
 </body>

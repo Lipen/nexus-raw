@@ -72,4 +72,5 @@ Three constraints apply:
 
 The `wasm` job builds the crate for `wasm32`, regenerates the wasm-bindgen glue at the locked version and runs the smoke.
 The smoke drives the fake module, then the built wasm under plain node (a full listing, one injected failure retried on the way, an upload re-listed with its digest), then the page in a headless browser against a backend-free static server, where the only path to a listing is the ServiceWorker.
-A break in the read surface fails the build, not a browser console.
+The browser run opens `?smoke=interact`: the page clicks a folder, goes up and uploads a synthetic file through the form, and the final beacon must say `interact = "ok"`.
+A break in the read surface or in the page's navigation and upload fails the build, not a browser console.

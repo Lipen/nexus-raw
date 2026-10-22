@@ -5,8 +5,9 @@
 // - the built wasm under plain node: `nxr_ls` against the same fake, one injected 500
 //   burned on the way, so the retry path runs too;
 // - when a chromium-family binary is around (or --require-browser insists), the page
-//   itself in a headless browser against a backend-free static server: there the only
-//   way to a listing is the ServiceWorker fake, and the beacon proves it happened.
+//   itself in a headless browser against a backend-free static server: the page opens
+//   `?smoke=interact`, clicks a folder, goes up and uploads a file, and the final
+//   beacon carries `interact = "ok"`.
 //
 // Exit code 0 means: the read surface still compiles, loads and lists.
 // Run it after a build (see the `wasm-smoke` recipe or ci.yml).
@@ -61,6 +62,7 @@ function startServer(withApi) {
       const record = {
         rows: Number(url.searchParams.get('rows') ?? -1),
         failed: url.searchParams.get('failed') ?? '',
+        interact: url.searchParams.get('interact') ?? '',
       }
       beacons.push(record)
       console.log(`smoke: beacon: rows=${record.rows} failed="${record.failed}"`)
@@ -278,15 +280,23 @@ async function main() {
     const attempts = []
     let passing = false
     for (let shot = 0; shot < 2 && !passing; shot++) {
+      // A retry must not pass on the previous attempt's beacon.
+      staticHost.beacons.length = 0
       try {
-        run = await runBrowser(`${staticHost.url}/`, waitForBeacon)
+        run = await runBrowser(`${staticHost.url}/?smoke=interact`, waitForBeacon)
       } catch (e) {
         attempts.push(String(e).slice(0, 120))
         continue
       }
       if (!run) break
       const beacon = staticHost.beacons.at(-1)
-      if (beacon && beacon.rows > 0 && beacon.failed === '' && staticHost.apiHits() === 0) {
+      if (
+        beacon &&
+        beacon.rows > 0 &&
+        beacon.failed === '' &&
+        beacon.interact === 'ok' &&
+        staticHost.apiHits() === 0
+      ) {
         passing = true
       } else {
         attempts.push(run.driver)
@@ -311,9 +321,15 @@ async function main() {
     const pageFacts = (dom) => {
       const status = dom.match(/<p id="status">(.*?)<\/p>/s)?.[1] ?? ''
       const error = dom.match(/<pre id="error">(.*?)<\/pre>/s)?.[1] ?? ''
-      return `status="${status.slice(0, 120)}" error="${error.slice(0, 300)}"`
+      return `status="${status.slice(0, 120)}" error="${error.slice(0, 300)}" interact="${dom.match(/interact=([^&"]*)/)?.[1] ?? ''}"`
     }
-    assert.ok(beacon && beacon.rows > 0 && beacon.failed === '', `no passing beacon: ${JSON.stringify(staticHost.beacons)}, attempts: ${attempts.join(' | ')}, page: ${pageFacts(run.dom)}`)
+    assert.ok(
+      beacon &&
+        beacon.rows > 0 &&
+        beacon.failed === '' &&
+        beacon.interact === 'ok',
+      `no passing beacon: ${JSON.stringify(staticHost.beacons)}, attempts: ${attempts.join(' | ')}, page: ${pageFacts(run.dom)}`,
+    )
     // The dom dump is a bonus, not the contract: some chromium builds never reach
     // the dump's quiescence while a service worker stays registered, and the
     // `--timeout` flag does not save those. The beacon already proves the wasm
