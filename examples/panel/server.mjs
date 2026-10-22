@@ -36,6 +36,17 @@ const JOB_HISTORY_MAX = 50
 // The memory cap of one /api/put body: a single uploaded file.
 const PUT_BODY_CAP = 100 * 1024 * 1024
 
+// The configured servers are the only hosts the panel ever talks to.
+// Every target URL is checked against this set before an napi call, so the
+// panel cannot forward its ambient credentials to an arbitrary host.
+const allowedOrigins = new Set()
+
+// A transferable artifact segment: the wire grammar minus the reserved local-state prefix.
+const ARTIFACT_SEGMENT = /^[A-Za-z0-9._-]+$/
+function transferable(segment) {
+  return ARTIFACT_SEGMENT.test(segment) && !segment.toLowerCase().startsWith('.nxr')
+}
+
 function rememberJob(job) {
   jobs.set(job.id, job)
   while (jobs.size > JOB_HISTORY_MAX) {
@@ -139,8 +150,23 @@ async function readJson(req, limit) {
 // The URL query parameter every GET endpoint shares.
 function queryUrl(url, name = 'url') {
   const value = url.searchParams.get(name)
-  if (!value || !/^https?:\/\//.test(value)) {
+  if (!value) {
     throw badRequest(`the ${name} query parameter must be an http(s) URL`)
+  }
+  let parsed
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw badRequest(`the ${name} query parameter must be an http(s) URL`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw badRequest(`the ${name} query parameter must be an http(s) URL`)
+  }
+  if (parsed.username || parsed.password) {
+    throw badRequest(`the ${name} URL must not carry credentials`)
+  }
+  if (!allowedOrigins.has(parsed.origin)) {
+    throw badRequest(`the ${name} host ${parsed.origin} is not a configured server`)
   }
   return value
 }
@@ -182,6 +208,9 @@ function validSubtree(path) {
 async function walkFiles(dirUrl, prefix, out) {
   for (const entry of await nxr.lsEntries(dirUrl)) {
     const name = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+    if (!transferable(entry.name)) {
+      throw badRequest(`cannot transfer ${name}: a name segment must match [A-Za-z0-9._-]+ and not start with .nxr`)
+    }
     if (entry.kind === 'dir') {
       await walkFiles(`${dirUrl}${encodeURIComponent(entry.name)}/`, name, out)
     } else {
@@ -209,8 +238,23 @@ async function startDownload(body) {
 // The URL validation every transferring or destructive call shares: a
 // repository directory URL whose subtree path agrees with the body.
 function validateSubtree(url, path) {
-  if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
+  if (typeof url !== 'string') {
     throw badRequest('url must be an http(s) directory URL')
+  }
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw badRequest('url must be an http(s) directory URL')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw badRequest('url must be an http(s) directory URL')
+  }
+  if (parsed.username || parsed.password) {
+    throw badRequest('url must not carry credentials')
+  }
+  if (!allowedOrigins.has(parsed.origin)) {
+    throw badRequest(`host ${parsed.origin} is not a configured server`)
   }
   if (typeof path !== 'string' || !validSubtree(path)) {
     throw badRequest('path must be a relative subtree path inside the repository, possibly empty')
@@ -463,6 +507,9 @@ async function validateServers(urls) {
 }
 
 const { servers, port, lazy } = parseArgs(process.argv.slice(2))
+for (const server of servers) {
+  allowedOrigins.add(new URL(server).origin)
+}
 if (!lazy && servers.length === 0) {
   fail('no server URL given: pass --url <server> at least once, or add --lazy to skip startup validation')
 }
