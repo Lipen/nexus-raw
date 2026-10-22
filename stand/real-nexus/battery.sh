@@ -32,8 +32,15 @@ trap 'rm -rf "$WORK"' EXIT
 pass=0
 fail=0
 n=0
-ok() { n=$((n + 1)); pass=$((pass + 1)); printf 'ok %2d - %s\n' "$n" "$1"; }
-no() { n=$((n + 1)); fail=$((fail + 1)); printf 'FAIL %2d - %s\n' "$n" "$1"; }
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
+    c_reset=$'\033[0m'
+    c_ok=$'\033[32m'
+    c_fail=$'\033[31m'
+else
+    c_reset='' c_ok='' c_fail=''
+fi
+ok() { n=$((n + 1)); pass=$((pass + 1)); printf '%sok%s %2d - %s\n' "$c_ok" "$c_reset" "$n" "$1"; }
+no() { n=$((n + 1)); fail=$((fail + 1)); printf '%sFAIL%s %2d - %s\n' "$c_fail" "$c_reset" "$n" "$1"; }
 # The command must succeed.
 expect_ok() { local desc="$1"; shift; if "$@" > /dev/null 2>&1; then ok "$desc"; else no "$desc"; fi; }
 # The command must fail.
@@ -226,5 +233,9 @@ fi
 
 # --- summary ----------------------------------------------------------------
 
-printf '\n%d passed, %d failed\n' "$pass" "$fail"
+if [ "$fail" -eq 0 ]; then
+    printf '\n%s%d passed, 0 failed%s\n' "$c_ok" "$pass" "$c_reset"
+else
+    printf '\n%s%d passed, %d failed%s\n' "$c_fail" "$pass" "$fail" "$c_reset"
+fi
 [ "$fail" -eq 0 ]

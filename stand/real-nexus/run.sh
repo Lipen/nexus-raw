@@ -13,25 +13,48 @@ set -eu
 
 DIR=$(cd "$(dirname "$0")" && pwd)
 
+# Colour the step headers and the final status on a terminal.
+# NO_COLOR and a dumb TERM keep the output plain for pipes and CI.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
+    c_reset=$'\033[0m'
+    c_step=$'\033[1;36m'
+    c_ok=$'\033[32m'
+    c_fail=$'\033[31m'
+    c_dim=$'\033[2m'
+else
+    c_reset='' c_step='' c_ok='' c_fail='' c_dim=''
+fi
+
+step() { printf '\n%s==> %s%s\n' "$c_step" "$*" "$c_reset" >&2; }
+
 compose() { docker compose -f "$DIR/compose.yaml" "$@"; }
 
 cleanup() {
     status=$?
     if [ "$status" -ne 0 ]; then
+        printf '\n%s==> stand failed (exit %s); last 200 log lines follow%s\n' "$c_fail" "$status" "$c_reset" >&2
         compose logs --tail 200 >&2 || :
+    else
+        printf '\n%s==> tearing down%s\n' "$c_dim" "$c_reset" >&2
     fi
     compose down -v || :
     exit "$status"
 }
 trap cleanup EXIT
 
-echo "==> building nxr" >&2
-cargo build -q --locked -p nexus-raw
+step "building nxr"
+start=$SECONDS
+cargo build --locked -p nexus-raw
+step "nxr built in $((SECONDS - start))s"
 
-echo "==> booting nexus3 (the first run pulls the image, ~700 MB)" >&2
+step "booting nexus3 (the first run pulls the image, ~700 MB)"
 compose up -d
+step "nexus3 container started"
 
+step "bootstrapping nexus3 (readiness, EULA, repository)"
 "$DIR/bootstrap.sh"
 
-echo "==> running the battery" >&2
+step "running the battery"
 "$DIR/battery.sh" "$@"
+
+printf '\n%s==> stand passed%s\n' "$c_ok" "$c_reset" >&2

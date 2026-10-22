@@ -66,7 +66,7 @@ mock scenario='atomic' *args:
 [doc('Run the real-Nexus stand against a local docker Nexus.')]
 [group('stand')]
 stand *args:
-    stand/real-nexus/run.sh {{ args }}
+    @stand/real-nexus/run.sh {{ args }}
 
 [doc('Format all crates.')]
 [group('check')]
