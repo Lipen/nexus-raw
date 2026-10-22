@@ -11,13 +11,13 @@
 # A round that finds a miss sleeps and retries the whole set until a single
 # deadline expires, so a slow registry cannot stretch the wait per package
 # and the finalize job's timeout stays a hard ceiling.
-# The npm document can trail its publish by ten minutes, the same lag that
-# held the 0.22.0 platform package.
+# The npm document can trail its publish by more than ten minutes, the lag
+# that held the 0.22.0 and 0.23.0 platform packages.
 # A miss is recorded and the audit continues, so one round names every
 # missing artifact, and the exit code judges the whole set.
 #
 # REGISTRY_AUDIT_DEADLINE and REGISTRY_AUDIT_INTERVAL override the default
-# 600 seconds and 15 seconds.
+# 900 seconds and 15 seconds.
 # REGISTRY_AUDIT_VERSION overrides the workspace version, for a manual probe.
 #
 # Exit codes: 0 every artifact is visible, 1 something is missing, 2 bad input.
@@ -42,7 +42,7 @@ else
 fi
 [ -n "$version" ] || { echo "registry-audit: no workspace version in Cargo.toml" >&2; exit 1; }
 
-deadline="${REGISTRY_AUDIT_DEADLINE:-600}"
+deadline="${REGISTRY_AUDIT_DEADLINE:-900}"
 interval="${REGISTRY_AUDIT_INTERVAL:-15}"
 case "$deadline" in ''|*[!0-9]*) usage_err ;; esac
 case "$interval" in ''|*[!0-9]*) usage_err ;; esac
