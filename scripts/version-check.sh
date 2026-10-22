@@ -23,12 +23,13 @@ ws="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
 pkg="$(sed -n 's/^  "version": "\(.*\)",/\1/p' crates/nexus-raw-napi/package.json)"
 dep="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw/Cargo.toml)"
 tui="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw-tui/Cargo.toml)"
+mount="$(sed -n 's/.*nexus-raw-core = { path = "\.\.\/nexus-raw-core", version = "\(.*\)" }.*/\1/p' crates/nexus-raw-mount/Cargo.toml)"
 py="$(sed -n 's/^version = "\(.*\)"$/\1/p' clients/python/pyproject.toml)"
 bridge="$(sed -n 's/^  "version": "\(.*\)",/\1/p' packaging/npm-bridge/package.json)"
 readme_pin="$(sed -n 's/.*uses: Lipen\/nexus-raw@v\(.*\)/\1/p' README.md)"
 
 failed=0
-for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui" "clients/python/pyproject.toml:$py" "packaging/npm-bridge/package.json:$bridge" "the README action pin:$readme_pin"; do
+for pair in "crates/nexus-raw-napi/package.json:$pkg" "nexus-raw's dependency on nexus-raw-core:$dep" "nexus-raw-tui's dependency on nexus-raw-core:$tui" "nexus-raw-mount's dependency on nexus-raw-core:$mount" "clients/python/pyproject.toml:$py" "packaging/npm-bridge/package.json:$bridge" "the README action pin:$readme_pin"; do
   name="${pair%%:*}"; got="${pair#*:}"
   if [ "$got" != "$ws" ]; then
     echo "version-check: $name is '$got', the workspace is '$ws'" >&2

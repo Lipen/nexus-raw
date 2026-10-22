@@ -224,6 +224,7 @@ version v:
     perl -pi -e "s/\Q$old\E/{{ v }}/g" crates/nexus-raw-napi/package.json
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw/Cargo.toml
     perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw-tui/Cargo.toml
+    perl -pi -e "s/(nexus-raw-core = \{ path = \"[^\"]*\", version = )\"[^\"]*\"/\${1}\"{{ v }}\"/" crates/nexus-raw-mount/Cargo.toml
     perl -pi -e "s/^version = \"[^\"]*\"/version = \"{{ v }}\"/" clients/python/pyproject.toml
     perl -pi -e "s/\"version\": \"[^\"]*\"/\"version\": \"{{ v }}\"/ if \$. == 3" packaging/npm-bridge/package.json
     perl -pi -e "s/\"\@nexus-raw\/nxr\": \"[^\"]*\"/\"\@nexus-raw\/nxr\": \"{{ v }}\"/" packaging/npm-bridge/package.json
@@ -246,6 +247,7 @@ version v:
     grep -q "^version = \"{{ v }}\"" clients/python/pyproject.toml || { echo "version: the pyproject version did not move" >&2; exit 1; }
     grep -q "\"@nexus-raw/nxr\": \"{{ v }}\"" packaging/npm-bridge/package.json || { echo "version: the bridge dependency pin did not move" >&2; exit 1; }
     grep -q "version = \"{{ v }}\"" crates/nexus-raw-tui/Cargo.toml || { echo "version: the tui dep pin did not move" >&2; exit 1; }
+    grep -q "version = \"{{ v }}\"" crates/nexus-raw-mount/Cargo.toml || { echo "version: the mount dep pin did not move" >&2; exit 1; }
     grep -q "\"version\": \"{{ v }}\"" crates/nexus-raw-napi/package.json || { echo "version: the napi package version did not move" >&2; exit 1; }
     grep -q "uses: Lipen/nexus-raw@v{{ v }}" README.md || { echo "version: the README action pin did not move" >&2; exit 1; }
     # Resolve so every lock follows the new workspace version: the root lock first, then the three standalone locks (the two examples and the bench workspace).
