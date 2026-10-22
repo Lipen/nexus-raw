@@ -88,15 +88,6 @@ say() {
   fi
 }
 
-note() {
-  ui_tag "$UI_DIM" "$1" "$2"
-}
-
-# A section in the live session; the recorded cast keeps only the commands and output.
-section() {
-  ui_tag "$UI_STEP" "$1" "$2"
-}
-
 # Assemble the recorded lines into the file the docs player reads.
 # `paste -sd,` also handles the trailing-comma problem.
 write_cast() {
@@ -109,7 +100,7 @@ write_cast() {
     paste -sd, "$CAST_RAW"
     printf '\n]}\n'
   } > "$out"
-  note "cast" "written: $out ($(wc -l < "$CAST_RAW") lines)"
+  ui_note "cast" "written: $out ($(wc -l < "$CAST_RAW") lines)"
 }
 
 # Run a command: print it, then stream its output line by line as it arrives.
@@ -187,10 +178,10 @@ start_mock() {
 
 # ---- session -------------------------------------------------------------
 
-ui_step "demo" "nexus-raw session"
-ui_detail "scenario: $SCENARIO    payloads: dist/1.4.0/"
+ui_phase "demo" "nexus-raw session"
+ui_plain "scenario: $SCENARIO    payloads: dist/1.4.0/"
 
-ui_step "build" "the demo binaries"
+ui_phase "build" "the demo binaries"
 if ! (cd "$ROOT" && cargo build -q -p mock-nexus -p nexus-raw); then
   ui_fail "the demo binaries did not build"
   exit 1
@@ -214,11 +205,11 @@ build_payloads
 start_mock "$SCENARIO" "$@"
 REPO="${MOCK_URL%/}"
 
-section "publish" "a version directory"
+ui_phase "publish" "a version directory"
 run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first app-1.4.0.zip --workers 1
 say ""
 
-section "name" "consumers never hard-code a version"
+ui_phase "name" "consumers never hard-code a version"
 say "# give the version a name, so consumers never hard-code it"
 run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
 # A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
@@ -233,12 +224,12 @@ else
 fi
 say ""
 
-section "consume" "exactly that version"
+ui_phase "consume" "exactly that version"
 say "# fetch that version back, digests checked on the way in"
 run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 say ""
 
-section "verify" "offline, no network"
+ui_phase "verify" "offline, no network"
 say "# check every digest offline, no network"
 run "$NXR" verify "$VENDOR/"
 
@@ -275,11 +266,11 @@ if [ "$SCOPE" = "full" ]; then
   say ""
 fi
 
-note "exit" "0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
-note "mock" "scenarios: $(cd "$ROOT" && "$MOCK" --print-scenarios | tr -d '\n ' | sed 's/\[//; s/\]//; s/"//g')"
-section "try" "poke it yourself"
-ui_detail "just mock flaky: serve the flaky scenario"
-ui_detail "just nxr -- up --help: show the upload flags"
+ui_note "exit" "0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
+ui_note "mock" "scenarios: $(cd "$ROOT" && "$MOCK" --print-scenarios | tr -d '\n ' | sed 's/\[//; s/\]//; s/"//g')"
+ui_phase "try" "poke it yourself"
+ui_plain "just mock flaky: serve the flaky scenario"
+ui_plain "just nxr -- up --help: show the upload flags"
 write_cast
 if [ -n "${NXR_DEMO_KEEP:-}" ]; then
   # Hand over the main server, the one holding the published version, and drop
@@ -290,6 +281,6 @@ if [ -n "${NXR_DEMO_KEEP:-}" ]; then
     kill "$pid" 2>/dev/null
   done
   MOCK_PIDS=("$MAIN_MOCK_PID")
-  note "mock" "still serving $MAIN_MOCK_URL (scenario $SCENARIO); ctrl-c to stop it"
+  ui_note "mock" "still serving $MAIN_MOCK_URL (scenario $SCENARIO); ctrl-c to stop it"
   wait "$MAIN_MOCK_PID"
 fi

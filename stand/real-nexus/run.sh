@@ -24,26 +24,26 @@ cleanup() {
         ui_error "stand" "failed (exit $status); last 200 log lines follow"
         compose logs --tail 200 >&2 || :
     else
-        ui_detail "tearing down"
+        ui_plain "tearing down"
     fi
     compose down -v || :
     exit "$status"
 }
 trap cleanup EXIT
 
-ui_step "build" "building nxr"
+ui_phase "build" "building nxr"
 start=$SECONDS
 cargo build --locked -p nexus-raw
 ui_ok "nxr built in $((SECONDS - start))s"
 
-ui_step "boot" "nexus3 (the first run pulls the image, ~700 MB)"
+ui_phase "boot" "nexus3 (the first run pulls the image, ~700 MB)"
 compose up -d
 ui_ok "nexus3 container started"
 
-ui_step "bootstrap" "readiness, EULA, repository"
+ui_phase "bootstrap" "readiness, EULA, repository"
 "$DIR/bootstrap.sh"
 
-ui_step "battery" "running"
+ui_phase "battery" "running"
 "$DIR/battery.sh" "$@"
 
 ui_success "stand" "passed"

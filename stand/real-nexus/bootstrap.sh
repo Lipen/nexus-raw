@@ -23,7 +23,7 @@ until curl -sf "$BASE/service/rest/v1/status/writable" > /dev/null 2>&1; do
         exit 1
     fi
     if [ $((i % 10)) -eq 1 ]; then
-        ui_detail "waiting for nexus to become writable (poll $i/150, ~3s each)"
+        ui_plain "waiting for nexus to become writable (poll $i/150, ~3s each)"
     fi
     sleep 3
 done

@@ -47,7 +47,7 @@ fi
 
 here=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 cd "$here"
-ui_step "mount" "building the binaries"
+ui_phase "mount" "building the binaries"
 if ! cargo build -q -p mock-nexus -p nexus-raw -p nexus-raw-mount; then
   ui_fail "the binaries did not build"
   exit 1
@@ -82,7 +82,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Port 0 lets the kernel pick: the log line carries the port the mock landed on.
-ui_step "mount" "starting the mock"
+ui_phase "mount" "starting the mock"
 "$bin/mock-nexus" search-lag --port 0 --seed-dir "$work/data" > "$work/mock.log" 2>&1 &
 mock_pid=$!
 base=""
@@ -102,7 +102,7 @@ fi
 ui_ok "mock at $base"
 
 # The probe arms the search deadline; the seeded objects reach the index after the lag.
-ui_step "mount" "waiting for the search index"
+ui_phase "mount" "waiting for the search index"
 printf 'probe\n' | "$bin/nxr" put "$base/.probe" --stdin > /dev/null
 sleep 7
 ui_ok "index ready"
@@ -117,7 +117,7 @@ case "$listing" in
     ;;
 esac
 
-ui_step "mount" "mounting the repository"
+ui_phase "mount" "mounting the repository"
 "$bin/nxr-mount" "$base" "$mnt" > "$work/mount.log" 2>&1 &
 mount_pid=$!
 for _ in $(seq 1 100); do
@@ -136,7 +136,7 @@ fail() {
   exit 1
 }
 
-ui_step "mount" "comparing the tree"
+ui_phase "mount" "comparing the tree"
 [ "$(cat "$mnt/hello.txt")" = "hello world" ] || fail "hello.txt content diverged"
 diff -r -x .probe "$work/data/repository/raw" "$mnt" || fail "the tree diverged"
 [ "$(stat -c %s "$mnt/a/big.bin")" = "1000000" ] || fail "big.bin size diverged"

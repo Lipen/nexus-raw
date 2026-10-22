@@ -1,8 +1,9 @@
 # shellcheck shell=sh
 # One terminal style for the repository's scripts.
 # Source it once: `. scripts/ui.sh`.
-# Phases and results are `[tag] message`, with the tag carrying the colour and the message the terminal's own foreground.
-# Details under a phase are indented and carry no tag.
+# Two line kinds.
+# A status line is `[tag] message`, with the tag carrying the colour and the message the terminal's own foreground.
+# A body line carries no tag and no indent: subprocess output, ui_plain elaborations and ui_command commands.
 # Colour is off for a pipe, NO_COLOR or TERM=dumb, so captured output stays plain.
 
 ui_init() {
@@ -21,25 +22,24 @@ ui_init() {
 }
 ui_init
 
-# The one line shape: a coloured tag, then the message in the default foreground.
+# The status shape: a coloured tag, then the message in the default foreground.
 ui_tag() { printf '%s[%s]%s %s\n' "$1" "$2" "$UI_RESET" "$3"; }
+
+# A body line: no tag, no indent, no colour.
+ui_plain() { printf '%s\n' "$1"; }
 
 # A command line for the demo session: bold, no colour.
 ui_command() { printf '%s%s%s\n' "$UI_CMD" "$1" "$UI_RESET"; }
 
-# A detail under the phase above: indented, no tag and no colour.
-ui_detail() { printf '  %s\n' "$1"; }
-
-# A phase: ui_step TAG MESSAGE.
-ui_step() { ui_tag "$UI_STEP" "$1" "$2"; }
+# A block header: ui_phase TAG MESSAGE.
+ui_phase() { ui_tag "$UI_STEP" "$1" "$2"; }
 # The closing phase of a successful run.
 ui_success() { ui_tag "$UI_OK" "$1" "$2"; }
 # The closing phase of a failed run.
 ui_error() { ui_tag "$UI_FAIL" "$1" "$2"; }
-# A result line: [ok] or [fail].
+# A result line: [ok], [fail] or [warn].
 ui_ok() { ui_tag "$UI_OK" "ok" "$1"; }
 ui_fail() { ui_tag "$UI_FAIL" "fail" "$1"; }
 ui_warn() { ui_tag "$UI_WARN" "warn" "$1"; }
-# Secondary text: ui_note TAG MESSAGE.
+# A distinct note such as [mock], [exit] or [cast].
 ui_note() { ui_tag "$UI_DIM" "$1" "$2"; }
-ui_hint() { ui_tag "$UI_DIM" "hint" "$1"; }

@@ -18,7 +18,7 @@ here="$(dirname "$0")"
 run_check() {
     label=$1
     shift
-    ui_step "docs" "checking $label"
+    ui_phase "docs" "checking $label"
     "$@" || { ui_fail "$label"; exit 1; }
     ui_ok "$label"
 }
@@ -30,6 +30,6 @@ run_check "the bridge surface" "$here/check-bridge-surface.sh"
 run_check "the skill" "$here/check-skill.sh"
 run_check "action pins" "$here/check-action-pins.sh"
 
-ui_step "docs" "building the site"
+ui_phase "docs" "building the site"
 uvx zensical@0.0.71 build --strict "$@" || { ui_fail "docs build"; exit 1; }
 ui_ok "docs build"
