@@ -55,6 +55,19 @@ pub enum Delta {
     },
 }
 
+impl Delta {
+    /// The artifact name this entry is about.
+    #[must_use]
+    pub fn name(&self) -> &ArtifactName {
+        match self {
+            Self::Same { name, .. }
+            | Self::MissingLocal { name, .. }
+            | Self::MissingRemote { name, .. }
+            | Self::Diverged { name, .. } => name,
+        }
+    }
+}
+
 /// The delta of a local scan against the remote enumeration, in name order.
 ///
 /// The name set is the union: a scanned-only name is [`Delta::MissingRemote`],

@@ -3250,6 +3250,39 @@ fn diff_equal_directory_exits_zero() {
     expect_exit(&named, 0, "an equal named diff is exit 0");
 }
 
+/// `--prefix` keeps only whole-segment matches on both sides.
+#[test]
+fn diff_prefix_filters_both_sides() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let local = TempDir::new().unwrap();
+    std::fs::create_dir_all(local.path().join("a")).unwrap();
+    std::fs::create_dir_all(local.path().join("b")).unwrap();
+    write_file(local.path(), "a/x.bin", ALPHA);
+    write_file(local.path(), "b/y.bin", BETA);
+    expect_exit(
+        &nxr(&["up", local.path().to_str().unwrap(), &base]),
+        0,
+        "seed the prefix fixture",
+    );
+
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a/x.bin",
+        "--name",
+        "b/y.bin",
+        "--prefix",
+        "a/",
+    ]);
+    expect_exit(&out, 0, "the filtered diff is clean");
+    let text = stdout(&out);
+    assert!(text.contains("same a/x.bin"), "{text}");
+    assert!(!text.contains("b/y.bin"), "the other prefix is out: {text}");
+}
+
 /// `diff` prints one line per entry and changes nothing on either side.
 #[test]
 fn diff_reports_the_sections_and_writes_nothing() {
@@ -3511,6 +3544,33 @@ fn mirror_shared_user_authenticates_both_sides() {
     ]);
     expect_exit(&ok, 0, "the shared -u authenticates both sides");
     assert_eq!(dst.store_get("1.14.0/a.zip").unwrap(), ALPHA);
+}
+
+/// `mirror --names-from` copies exactly the listed names.
+#[test]
+fn mirror_names_from_copies_only_the_list() {
+    let src = server(Scenario::Atomic);
+    seed_mirror_source(&src);
+    src.insert("1.14.0/b.bin", BETA);
+    src.insert("1.14.0/b.bin.sha256", marker_line("b.bin", BETA).as_bytes());
+    let dst = server(Scenario::Atomic);
+    let list = TempDir::new().unwrap();
+    let names = list.path().join("names.txt");
+    std::fs::write(&names, "a.zip\n").unwrap();
+
+    let out = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--names-from",
+        names.to_str().unwrap(),
+    ]);
+    expect_exit(&out, 0, "the listed name is mirrored");
+    assert_eq!(dst.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert!(
+        dst.store_get("1.14.0/b.bin").is_none(),
+        "an unlisted name is not copied"
+    );
 }
 
 // ---- mv --------------------------------------------------------------------

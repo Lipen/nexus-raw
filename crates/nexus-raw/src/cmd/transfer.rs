@@ -309,7 +309,10 @@ async fn run_diff(
             .map(|p| nexus_raw_core::NamePrefix::parse(p))
             .collect::<Result<Vec<_>, _>>()?;
         match ctx.nxr.delta_search(local, &parsed_prefixes).await {
-            Ok(entries) => return print_delta(ctx, &entries),
+            Ok(entries) => {
+                let entries = filter_delta(entries, &parsed_prefixes);
+                return print_delta(ctx, &entries);
+            }
             Err(err)
                 if fallback
                     && matches!(
@@ -327,6 +330,7 @@ async fn run_diff(
                     enumeration_source(ctx.nxr.base(), names, names_from, ls && !explicit)?
                         .with_prefixes(prefixes)?;
                 let entries = ctx.nxr.delta(local, enum_src).await?;
+                let entries = filter_delta(entries, &parsed_prefixes);
                 return print_delta(ctx, &entries);
             }
             Err(err @ (Error::SearchRepoMissing { .. } | Error::Enumerate { .. })) => {
@@ -337,8 +341,28 @@ async fn run_diff(
     }
     let enum_src =
         enumeration_source(ctx.nxr.base(), names, names_from, ls)?.with_prefixes(prefixes)?;
+    let parsed_prefixes = prefixes
+        .iter()
+        .map(|p| nexus_raw_core::NamePrefix::parse(p))
+        .collect::<Result<Vec<_>, _>>()?;
     let entries = ctx.nxr.delta(local, enum_src).await?;
+    let entries = filter_delta(entries, &parsed_prefixes);
     print_delta(ctx, &entries)
+}
+
+/// `--prefix` filters the whole delta, local-only entries included.
+/// The enumeration filter alone leaves a local name outside the prefix as `missing-remote`.
+fn filter_delta(
+    entries: Vec<nexus_raw_core::Delta>,
+    prefixes: &[nexus_raw_core::NamePrefix],
+) -> Vec<nexus_raw_core::Delta> {
+    if prefixes.is_empty() {
+        return entries;
+    }
+    entries
+        .into_iter()
+        .filter(|entry| prefixes.iter().any(|prefix| prefix.matches(entry.name())))
+        .collect()
 }
 
 /// Print the delta lines and return the diff verdict: 0 when every entry is `same`.
