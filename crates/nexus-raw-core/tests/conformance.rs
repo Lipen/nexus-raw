@@ -3436,3 +3436,50 @@ async fn read_range_len_zero_still_probes_existence() {
         "an absent object is None even for zero length"
     );
 }
+
+/// `clone --verify` ignores a cache whose size and mtime still match: the bytes are re-hashed.
+#[tokio::test]
+async fn clone_verify_rehashes_a_poisoned_cache() {
+    let mock = clone_server();
+    let nxr = seed_clone_repository(&mock);
+    seed_clone_tree(&nxr).await;
+
+    let dst = TempDir::new().unwrap();
+    nxr.clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+
+    // Corrupt a local object with the same size, then restore its mtime: the
+    // default cache now trusts size+mtime+marker and skips it.
+    let path = dst.path().join("a.zip");
+    let meta = std::fs::metadata(&path).unwrap();
+    let times = std::fs::FileTimes::new()
+        .set_accessed(meta.accessed().unwrap())
+        .set_modified(meta.modified().unwrap());
+    let poison = vec![0xEEu8; CONTENT.len()];
+    std::fs::write(&path, &poison).unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(times)
+        .unwrap();
+
+    // Without --verify the poisoned copy is trusted and skipped.
+    let skipped = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, false)
+        .await
+        .unwrap();
+    assert_eq!(skipped.skipped, 3, "the cache trusts the unchanged stamp");
+    assert_eq!(std::fs::read(&path).unwrap(), poison, "the poison stays");
+
+    // With --verify the bytes are hashed and the divergence refuses.
+    let err = nxr
+        .clone_to(dst.path(), &[], StateMode::Default, true)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, Error::Mismatch { .. }),
+        "--verify must see the poison: {err:?}"
+    );
+}

@@ -31,6 +31,11 @@ pub(crate) async fn get(
                 .to_owned(),
         ));
     }
+    if cont && out.is_none() {
+        return Err(Error::Misuse(
+            "--continue resumes a sibling part file: pass -o FILE, or drop --continue".to_owned(),
+        ));
+    }
     let ctx = make_ctx(cli, url)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
     let result = run_get(&ctx, url, out, cont, segments).await;

@@ -691,6 +691,83 @@ fn down_names_from_bad_line_is_misuse() {
     );
 }
 
+/// `--continue` needs a target: resume writes a sibling part file.
+#[test]
+fn get_continue_without_output_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let out = nxr(&["get", "--continue", &url]);
+    expect_exit(&out, 2, "resume without a target is misuse");
+    assert!(stderr(&out).contains("--continue"), "{}", stderr(&out));
+}
+
+/// `-q` keeps the summary line and drops the per-event output.
+#[test]
+fn quiet_prints_only_the_summary_line() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let out = nxr(&["-q", "up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&out, 0, "quiet up");
+    let text = stdout(&out);
+    assert!(text.contains("uploaded 1"), "the summary remains: {text}");
+    assert_eq!(
+        text.lines().filter(|line| !line.trim().is_empty()).count(),
+        1,
+        "exactly one line: {text}"
+    );
+}
+
+/// The TLS flag is reported by doctor; a zero timeout is refused by the same config validation.
+#[test]
+fn tls_insecure_is_reported_and_zero_timeout_is_misuse() {
+    // Doctor treats the flag as a finding: the point is that the setting reaches it.
+    let off = nxr(&["--tls-insecure", "doctor"]);
+    expect_exit(&off, 2, "tls-insecure is a doctor finding");
+    assert!(
+        stdout(&off).contains("verification is OFF"),
+        "{}",
+        stdout(&off)
+    );
+    let zero = nxr(&["--connect-timeout-secs", "0", "doctor"]);
+    expect_exit(&zero, 2, "a zero timeout is misuse");
+    assert!(stderr(&zero).contains("hint:"), "{}", stderr(&zero));
+}
+
+/// `rm --names-from` deletes exactly the listed names.
+#[test]
+fn rm_names_from_deletes_only_the_list() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seed the delete list",
+    );
+    let list = TempDir::new().unwrap();
+    let names = list.path().join("names.txt");
+    std::fs::write(&names, "a.zip\n").unwrap();
+    let out = nxr(&[
+        "rm",
+        &base,
+        "--names-from",
+        names.to_str().unwrap(),
+        "--yes",
+    ]);
+    expect_exit(&out, 0, "the listed name is removed");
+    assert!(srv.store_get("1.14.0/a.zip").is_none(), "a.zip bytes");
+    assert!(
+        srv.store_get("1.14.0/a.zip.sha256").is_none(),
+        "a.zip marker"
+    );
+    assert!(srv.store_get("1.14.0/b.bin").is_some(), "b.bin stays");
+}
+
 /// A plain get ignores an existing `<out>.part`: only `--continue` resumes.
 #[test]
 fn plain_get_ignores_an_existing_part() {
