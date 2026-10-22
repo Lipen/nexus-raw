@@ -705,6 +705,7 @@ jobs:
   pypi:
     name: Publish the python client
     runs-on: ubuntu-24.04
+    needs: [gate]
     timeout-minutes: 15
     permissions:
       # Trusted publishing to PyPI exchanges the workflow identity for an
@@ -739,7 +740,7 @@ jobs:
 
       - name: Publish to PyPI
         if: ${{ !inputs.dry-run && steps.pypi-guard.outputs.skip != 'true' }}
-        uses: pypa/gh-action-pypi-publish@v1.14.2
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: clients/python/dist
           # A guard check can race the CDN: run A published, run B's check
