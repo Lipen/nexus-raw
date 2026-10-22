@@ -19,7 +19,11 @@ run_check() {
     label=$1
     shift
     ui_phase "docs" "checking $label"
-    "$@" || { ui_fail "$label"; exit 1; }
+    if ! output=$("$@" 2>&1); then
+        ui_fail "$label"
+        printf '%s\n' "$output" >&2
+        exit 1
+    fi
     ui_ok "$label"
 }
 
@@ -31,5 +35,9 @@ run_check "the skill" "$here/check-skill.sh"
 run_check "action pins" "$here/check-action-pins.sh"
 
 ui_phase "docs" "building the site"
-uvx zensical@0.0.71 build --strict "$@" || { ui_fail "docs build"; exit 1; }
+uvx zensical@0.0.71 build --strict "$@" || {
+    ui_fail "docs build"
+    ui_hint 'run `just docs` to preview the site'
+    exit 1
+}
 ui_ok "docs build"

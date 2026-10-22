@@ -22,10 +22,14 @@ Its scenario list is the contract: a scenario added for one client lands with th
 Scripts that print their own steps source `scripts/ui.sh`.
 A status line is `[tag] message`.
 The tag carries the only colour and the message keeps the terminal foreground.
+Status, results, notes and body go to stdout.
+Failures, warnings and hints go to stderr.
 A body line carries no tag and no indent: subprocess output, `ui_plain` elaborations and `ui_command` commands.
-`ui_phase TAG MESSAGE` opens a block, `ui_ok` and `ui_fail` report a check, `ui_warn` warns, `ui_success` and `ui_error` close a run, `ui_note TAG MESSAGE` adds a distinct note, `ui_plain MESSAGE` adds a body line, `ui_command MESSAGE` prints a demo command.
-The palette is cyan for phases, green for success, red for failure, yellow for warnings and dim for notes.
-Colour is off for a pipe, `NO_COLOR` and `TERM=dumb`, so captured output stays plain.
+`ui_phase TAG MESSAGE` opens a block, `ui_ok` and `ui_fail` report a check, `ui_warn` warns, `ui_success` and `ui_error` close a run, `ui_note TAG MESSAGE` adds a distinct note, `ui_hint MESSAGE` adds a fix on stderr, `ui_plain MESSAGE` adds a body line, `ui_command MESSAGE` prints a demo command.
+Colour is decided per stream: `[ -t 1 ]` for stdout and `[ -t 2 ]` for stderr.
+`NO_COLOR` and `TERM=dumb` disable both.
+`ui_hint` puts commands in backticks, so they stay copyable.
+A long quiet suite prints failures immediately, a heartbeat every tenth on a TTY, and a final count.
 
 ## Commits
 

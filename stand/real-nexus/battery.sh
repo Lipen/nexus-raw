@@ -36,8 +36,19 @@ trap 'rm -rf "$WORK"' EXIT
 pass=0
 fail=0
 n=0
-ok() { n=$((n + 1)); pass=$((pass + 1)); ui_ok "$(printf '%2d - %s' "$n" "$1")"; }
-no() { n=$((n + 1)); fail=$((fail + 1)); ui_fail "$(printf '%2d - %s' "$n" "$1")"; }
+total=29
+ok() {
+    n=$((n + 1)); pass=$((pass + 1))
+    if [ "${BATTERY_VERBOSE:-0}" = 1 ]; then
+        ui_ok "$(printf '%2d - %s' "$n" "$1")"
+    elif [ -t 1 ] && [ "$((n % 10))" -eq 0 ]; then
+        ui_note "battery" "$n/$total"
+    fi
+}
+no() {
+    n=$((n + 1)); fail=$((fail + 1))
+    ui_fail "$(printf '%2d - %s' "$n" "$1")"
+}
 # The command must succeed.
 expect_ok() { local desc="$1"; shift; if "$@" > /dev/null 2>&1; then ok "$desc"; else no "$desc"; fi; }
 # The command must fail.
@@ -231,8 +242,8 @@ fi
 # --- summary ----------------------------------------------------------------
 
 if [ "$fail" -eq 0 ]; then
-    ui_ok "$pass passed, 0 failed"
+    ui_ok "$pass/$total passed"
 else
-    ui_fail "$pass passed, $fail failed"
+    ui_fail "$pass/$total passed, $fail failed"
 fi
 [ "$fail" -eq 0 ]
