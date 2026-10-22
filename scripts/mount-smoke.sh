@@ -27,23 +27,32 @@ case "${1:-}" in
     ;;
 esac
 
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=ui.sh
+. "$script_dir/ui.sh"
+
 if [ "$(uname -s)" != Linux ]; then
-  echo "mount-smoke: skipped (the mount is Linux-only)"
+  ui_warn "mount: skipped (the mount is Linux-only)"
   exit 0
 fi
 if [ ! -e /dev/fuse ]; then
-  echo "mount-smoke: skipped (no /dev/fuse)"
+  ui_warn "mount: skipped (no /dev/fuse)"
   exit 0
 fi
 fusermount=$(command -v fusermount3 || command -v fusermount || true)
 if [ -z "$fusermount" ]; then
-  echo "mount-smoke: skipped (no fusermount3 or fusermount; install fuse3)"
+  ui_warn "mount: skipped (no fusermount3 or fusermount; install fuse3)"
   exit 0
 fi
 
-here=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+here=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 cd "$here"
-cargo build -q -p mock-nexus -p nexus-raw -p nexus-raw-mount
+ui_step "mount" "building the binaries"
+if ! cargo build -q -p mock-nexus -p nexus-raw -p nexus-raw-mount; then
+  ui_fail "the binaries did not build"
+  exit 1
+fi
+ui_ok "binaries built"
 target_dir=$(cargo metadata --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
 bin="$target_dir/debug"
 
@@ -73,6 +82,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Port 0 lets the kernel pick: the log line carries the port the mock landed on.
+ui_step "mount" "starting the mock"
 "$bin/mock-nexus" search-lag --port 0 --seed-dir "$work/data" > "$work/mock.log" 2>&1 &
 mock_pid=$!
 base=""
@@ -85,25 +95,29 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 if [ -z "$base" ]; then
-  echo "mount-smoke: the mock did not start" >&2
+  ui_fail "the mock did not start"
   cat "$work/mock.log" >&2
   exit 1
 fi
+ui_ok "mock at $base"
 
 # The probe arms the search deadline; the seeded objects reach the index after the lag.
+ui_step "mount" "waiting for the search index"
 printf 'probe\n' | "$bin/nxr" put "$base/.probe" --stdin > /dev/null
 sleep 7
+ui_ok "index ready"
 
 listing=$("$bin/nxr" ls "$base")
 case "$listing" in
   *hello.txt*) ;;
   *)
-    echo "mount-smoke: the listing missed hello.txt:" >&2
-    echo "$listing" >&2
+    ui_fail "the listing missed hello.txt"
+    printf '%s\n' "$listing" >&2
     exit 1
     ;;
 esac
 
+ui_step "mount" "mounting the repository"
 "$bin/nxr-mount" "$base" "$mnt" > "$work/mount.log" 2>&1 &
 mount_pid=$!
 for _ in $(seq 1 100); do
@@ -111,16 +125,18 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 if ! mountpoint -q "$mnt"; then
-  echo "mount-smoke: the mount did not come up" >&2
+  ui_fail "the mount did not come up"
   cat "$work/mount.log" >&2
   exit 1
 fi
+ui_ok "mounted at $mnt"
 
 fail() {
-  echo "mount-smoke: $*" >&2
+  ui_fail "mount: $*"
   exit 1
 }
 
+ui_step "mount" "comparing the tree"
 [ "$(cat "$mnt/hello.txt")" = "hello world" ] || fail "hello.txt content diverged"
 diff -r -x .probe "$work/data/repository/raw" "$mnt" || fail "the tree diverged"
 [ "$(stat -c %s "$mnt/a/big.bin")" = "1000000" ] || fail "big.bin size diverged"
@@ -129,8 +145,9 @@ diff -r -x .probe "$work/data/repository/raw" "$mnt" || fail "the tree diverged"
 if (printf x > "$mnt/new.txt") 2>/dev/null; then
   fail "a write to the read-only mount succeeded"
 fi
+ui_ok "tree, size, digest and read-only behavior"
 
 "$fusermount" -u "$mnt"
 wait "$mount_pid" || true
 mount_pid=""
-echo "mount-smoke: ok"
+ui_success "mount" "passed"

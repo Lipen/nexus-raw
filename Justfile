@@ -44,13 +44,13 @@ mount url mnt *args:
 [doc('Smoke the mount against the mock server (Linux).')]
 [group('mount')]
 mount-smoke:
-    scripts/mount-smoke.sh
+    @scripts/mount-smoke.sh
 
 # Regenerate the tap formula from a release's SHA256SUMS (`--check` compares).
 [doc('Render the Homebrew formula from a release.')]
 [group('brew')]
 brew-formula *args:
-    scripts/brew-formula.sh {{ args }}
+    @scripts/brew-formula.sh {{ args }}
 
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
@@ -418,8 +418,7 @@ example-rust:
 [doc('Run the demo stand scenario.')]
 [group('examples')]
 demo scenario='slow' *args:
-    cargo build -q -p mock-nexus -p nexus-raw
-    examples/demo/demo.sh {{ scenario }} {{ args }}
+    @examples/demo/demo.sh {{ scenario }} {{ args }}
 
 # The landing animation is a recording of that same stand, not a mock-up.
 # The port is pinned so the recorded URLs stay comparable between recordings;
@@ -431,14 +430,12 @@ demo scenario='slow' *args:
 [doc('Record the demo session.')]
 [group('examples')]
 demo-cast *args:
-    cargo build -q -p mock-nexus -p nexus-raw
-    NXR_DEMO_SCOPE=core NXR_DEMO_CAST=docs/assets/cast/session.json \
+    @NXR_DEMO_SCOPE=core NXR_DEMO_CAST=docs/assets/cast/session.json \
         examples/demo/demo.sh slow --port 8734 --chunk-delay-ms 5 {{ args }}
-    test -s docs/assets/cast/session.json
-    python3 examples/demo/stage.py docs/assets/cast/session.json
-    python3 examples/demo/svg.py docs/assets/cast/session.json docs/assets/img/session.svg
-    @echo "cast: docs/assets/cast/session.json"
-    @echo "svg:  docs/assets/img/session.svg"
+    @test -s docs/assets/cast/session.json
+    @python3 examples/demo/stage.py docs/assets/cast/session.json
+    @python3 examples/demo/svg.py docs/assets/cast/session.json docs/assets/img/session.svg
+    @bash -c '. scripts/ui.sh; ui_ok "cast: docs/assets/cast/session.json"; ui_ok "svg: docs/assets/img/session.svg"'
 
 # The whole site, written in docs/ (zensical, Material stack).
 # Live reload included: edit a page, the browser refreshes itself.
@@ -451,7 +448,7 @@ docs *args:
 [doc('Build the docs, check hints, llms.txt and fail on issues.')]
 [group('docs')]
 check-docs *args:
-    scripts/check-docs.sh {{ args }}
+    @scripts/check-docs.sh {{ args }}
 
 # The HEAD commit is green on CI: a push without a red tail.
 [doc('Wait for the CI on HEAD and report green or red.')]

@@ -17,6 +17,15 @@ just demo         # a real session against the mock server and stub payloads
 The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`, the failure-injection server in `crates/mock-nexus`.
 Its scenario list is the contract: a scenario added for one client lands with the test that exercises it.
 
+## Terminal output
+
+Scripts that print their own steps source `scripts/ui.sh`.
+Every line is `[tag] message`.
+The tag carries the only colour and the message keeps the terminal foreground.
+`ui_step TAG MESSAGE` opens a phase, `ui_ok` and `ui_fail` report a check, `ui_note TAG MESSAGE` adds secondary text.
+The palette is cyan for phases, green for success, red for failure, yellow for warnings and dim for notes.
+Colour is off for a pipe, `NO_COLOR` and `TERM=dumb`, so captured output stays plain.
+
 ## Commits
 
 Conventional, subject-only, no body, one change per commit: `scope: short imperative summary` with scopes `core`, `cli`, `mock`, `tui`, `docs`, `chore`.

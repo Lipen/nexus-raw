@@ -11,10 +11,25 @@
 set -eu
 
 here="$(dirname "$0")"
-"$here/check-hints.sh"
-"$here/check-cli-surface.sh"
-"$here/llms-check.sh"
-"$here/check-bridge-surface.sh"
-"$here/check-skill.sh"
-"$here/check-action-pins.sh"
-uvx zensical@0.0.71 build --strict "$@"
+
+# shellcheck source=ui.sh
+. "$here/ui.sh"
+
+run_check() {
+    label=$1
+    shift
+    ui_step "docs" "checking $label"
+    "$@" || { ui_fail "$label"; exit 1; }
+    ui_ok "$label"
+}
+
+run_check "hints" "$here/check-hints.sh"
+run_check "the CLI surface" "$here/check-cli-surface.sh"
+run_check "llms.txt" "$here/llms-check.sh"
+run_check "the bridge surface" "$here/check-bridge-surface.sh"
+run_check "the skill" "$here/check-skill.sh"
+run_check "action pins" "$here/check-action-pins.sh"
+
+ui_step "docs" "building the site"
+uvx zensical@0.0.71 build --strict "$@" || { ui_fail "docs build"; exit 1; }
+ui_ok "docs build"

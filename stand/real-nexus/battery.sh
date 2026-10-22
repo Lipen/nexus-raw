@@ -1,10 +1,14 @@
 #!/bin/bash
 # The conformance battery against the real Nexus from compose.yaml: the same
 # class of checks phase 1 ran by hand, numbered and loud. Every check prints
-# `ok`/`FAIL` with a running number; the exit code is nonzero if any failed.
+# `[ok]`/`[fail]` with a running number; the exit code is nonzero if any failed.
 # `just stand` builds nxr, boots the container and calls this script.
 set -u
 DIR=$(cd "$(dirname "$0")" && pwd)
+
+# shellcheck source=../../scripts/ui.sh
+. "$DIR/../../scripts/ui.sh"
+
 BASE="${NEXUS_BASE:-http://localhost:${NEXUS_PORT:-18081}}"
 URL="$BASE/repository/stand"
 VER="$URL/1.4.0/"
@@ -14,7 +18,7 @@ if [ -z "$NXR" ]; then
     NXR=$(ls "$DIR/../../target/release/nxr" "$DIR/../../target/debug/nxr" 2>/dev/null | head -1)
 fi
 if [ ! -x "$NXR" ]; then
-    echo "no nxr binary: cargo build --release -p nexus-raw, or set NXR=" >&2
+    ui_fail "no nxr binary: cargo build --release -p nexus-raw, or set NXR="
     exit 2
 fi
 
@@ -32,15 +36,8 @@ trap 'rm -rf "$WORK"' EXIT
 pass=0
 fail=0
 n=0
-if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
-    c_reset=$'\033[0m'
-    c_ok=$'\033[32m'
-    c_fail=$'\033[31m'
-else
-    c_reset='' c_ok='' c_fail=''
-fi
-ok() { n=$((n + 1)); pass=$((pass + 1)); printf '%sok%s %2d - %s\n' "$c_ok" "$c_reset" "$n" "$1"; }
-no() { n=$((n + 1)); fail=$((fail + 1)); printf '%sFAIL%s %2d - %s\n' "$c_fail" "$c_reset" "$n" "$1"; }
+ok() { n=$((n + 1)); pass=$((pass + 1)); ui_ok "$(printf '%2d - %s' "$n" "$1")"; }
+no() { n=$((n + 1)); fail=$((fail + 1)); ui_fail "$(printf '%2d - %s' "$n" "$1")"; }
 # The command must succeed.
 expect_ok() { local desc="$1"; shift; if "$@" > /dev/null 2>&1; then ok "$desc"; else no "$desc"; fi; }
 # The command must fail.
@@ -234,8 +231,8 @@ fi
 # --- summary ----------------------------------------------------------------
 
 if [ "$fail" -eq 0 ]; then
-    printf '\n%s%d passed, 0 failed%s\n' "$c_ok" "$pass" "$c_reset"
+    ui_ok "$pass passed, 0 failed"
 else
-    printf '\n%s%d passed, %d failed%s\n' "$c_fail" "$pass" "$fail" "$c_reset"
+    ui_fail "$pass passed, $fail failed"
 fi
 [ "$fail" -eq 0 ]

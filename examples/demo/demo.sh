@@ -24,6 +24,9 @@ INVOKED_FROM="$PWD"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
+# The shared terminal style (colour off for pipes and NO_COLOR).
+. "$ROOT/scripts/ui.sh"
+
 # The commands print as a user types them: `nxr` from PATH, paths relative to this directory.
 # Absolute scratch paths would make a recording unreadable.
 export PATH="$ROOT/target/debug:$PATH"
@@ -69,7 +72,12 @@ now_ms() {
 # `say` is part of the recorded session.
 # `note` is commentary for the human.
 say() {
-  printf '%s\n' "$1"
+  case "$1" in
+    '$ '*) ui_command "$1" ;;
+    '# '*) printf '%s%s%s\n' "$UI_DIM" "$1" "$UI_RESET" ;;
+    '(exit '*) printf '%s%s%s\n' "$UI_DIM" "$1" "$UI_RESET" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
   if [ -n "$CAST_RAW" ]; then
     local text t
     text="$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g')"
@@ -79,7 +87,12 @@ say() {
 }
 
 note() {
-  printf '%s\n' "$1"
+  ui_tag "$UI_DIM" "$1" "$2"
+}
+
+# A section in the live session; the recorded cast keeps only the commands and output.
+section() {
+  ui_tag "$UI_STEP" "$1" "$2"
 }
 
 # Assemble the recorded lines into the file the docs player reads.
@@ -94,7 +107,7 @@ write_cast() {
     paste -sd, "$CAST_RAW"
     printf '\n]}\n'
   } > "$out"
-  note "cast written: $out ($(wc -l < "$CAST_RAW") lines)"
+  note "cast" "written: $out ($(wc -l < "$CAST_RAW") lines)"
 }
 
 # Run a command: print it, then stream its output line by line as it arrives.
@@ -155,13 +168,13 @@ start_mock() {
     url="$(grep -m1 -o 'listening http://[^ ]*' "$log" 2>/dev/null || true)"
     [ -n "$url" ] && break
     if ! kill -0 "$pid" 2>/dev/null; then
-      note "mock-nexus ($scenario) exited before it listened:"
+      ui_fail "mock-nexus ($scenario) exited before it listened"
       head -5 "$log"
       exit 1
     fi
     sleep 0.05
   done
-  [ -n "$url" ] || { note "mock-nexus ($scenario) never reported a port"; exit 1; }
+  [ -n "$url" ] || { ui_fail "mock-nexus ($scenario) never reported a port"; exit 1; }
 
   MOCK_URL="${url#listening }"
   if [ -z "$MAIN_MOCK_PID" ]; then
@@ -172,10 +185,15 @@ start_mock() {
 
 # ---- session -------------------------------------------------------------
 
-if [ ! -x "$ROOT/target/debug/mock-nexus" ] || [ ! -x "$ROOT/target/debug/nxr" ]; then
-  note "building mock-nexus and nxr (first run only)"
-  (cd "$ROOT" && cargo build -q -p mock-nexus -p nexus-raw) || exit 1
+ui_step "demo" "nexus-raw session"
+ui_note "demo" "scenario: $SCENARIO    payloads: dist/1.4.0/"
+
+ui_step "build" "the demo binaries"
+if ! (cd "$ROOT" && cargo build -q -p mock-nexus -p nexus-raw); then
+  ui_fail "the demo binaries did not build"
+  exit 1
 fi
+ui_ok "binaries built"
 
 cd "$HERE" || exit 1
 
@@ -189,19 +207,16 @@ if [ -n "${NXR_DEMO_CAST:-}" ]; then
   CAST_START_MS="$(now_ms)"
 fi
 
-note "nexus-raw demo stand: mock server + stub payloads, every command real"
-note "scenario: $SCENARIO    payloads: dist/1.4.0/"
-note ""
 
 build_payloads
 start_mock "$SCENARIO" "$@"
 REPO="${MOCK_URL%/}"
 
-note "--- publish a version directory ----------------------------------"
+section "publish" "a version directory"
 run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first app-1.4.0.zip --workers 1
 say ""
 
-note "--- name it, so consumers never hard-code a version --------------"
+section "name" "consumers never hard-code a version"
 say "# give the version a name, so consumers never hard-code it"
 run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
 # A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
@@ -216,12 +231,12 @@ else
 fi
 say ""
 
-note "--- consume exactly that version ---------------------------------"
+section "consume" "exactly that version"
 say "# fetch that version back, digests checked on the way in"
 run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 say ""
 
-note "--- verify offline, no network -----------------------------------"
+section "verify" "offline, no network"
 say "# check every digest offline, no network"
 run "$NXR" verify "$VENDOR/"
 
@@ -258,10 +273,11 @@ if [ "$SCOPE" = "full" ]; then
   say ""
 fi
 
-note "exit codes: 0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
-note "scenarios the mock speaks: $(cd "$ROOT" && "$MOCK" --print-scenarios | tr -d '\n ' | sed 's/\[//; s/\]//; s/"//g')"
-note ""
-note "poke it yourself:  just mock flaky   |   just nxr -- up --help"
+note "exit" "0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
+note "mock" "scenarios: $(cd "$ROOT" && "$MOCK" --print-scenarios | tr -d '\n ' | sed 's/\[//; s/\]//; s/"//g')"
+section "try" "poke it yourself"
+note "try" "just mock flaky: serve the flaky scenario"
+note "try" "just nxr -- up --help: show the upload flags"
 write_cast
 if [ -n "${NXR_DEMO_KEEP:-}" ]; then
   # Hand over the main server, the one holding the published version, and drop
@@ -272,6 +288,6 @@ if [ -n "${NXR_DEMO_KEEP:-}" ]; then
     kill "$pid" 2>/dev/null
   done
   MOCK_PIDS=("$MAIN_MOCK_PID")
-  note "still serving $MAIN_MOCK_URL (scenario $SCENARIO); ctrl-c to stop it"
+  note "mock" "still serving $MAIN_MOCK_URL (scenario $SCENARIO); ctrl-c to stop it"
   wait "$MAIN_MOCK_PID"
 fi
