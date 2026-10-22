@@ -18,7 +18,7 @@ if [ -z "$NXR" ]; then
     NXR=$(ls "$DIR/../../target/release/nxr" "$DIR/../../target/debug/nxr" 2>/dev/null | head -1)
 fi
 if [ ! -x "$NXR" ]; then
-    ui_fail "no nxr binary: cargo build --release -p nexus-raw, or set NXR="
+    ui_fail "no nxr binary: \`cargo build --release -p nexus-raw\`, or set NXR="
     exit 2
 fi
 

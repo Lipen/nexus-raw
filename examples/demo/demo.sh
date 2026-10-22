@@ -267,10 +267,10 @@ if [ "$SCOPE" = "full" ]; then
 fi
 
 ui_note "exit" "0 ok, 1 data (divergence, missing, failed digest), 2 misuse, 3 transport"
-ui_note "mock" "$(cd "$ROOT" && "$MOCK" --print-scenarios | grep -c '"') scenarios, run just mock --print-scenarios to list them"
+ui_note "mock" "$(cd "$ROOT" && "$MOCK" --print-scenarios | grep -c '"') scenarios, run \`just mock --print-scenarios\` to list them"
 ui_phase "try" "poke it yourself"
-ui_plain "just mock flaky: serve the flaky scenario"
-ui_plain "just nxr -- up --help: show the upload flags"
+ui_plain "just mock flaky           -- serve the flaky scenario"
+ui_plain "just nxr -- up --help        -- show the upload flags"
 write_cast
 if [ -n "${NXR_DEMO_KEEP:-}" ]; then
   # Hand over the main server, the one holding the published version, and drop
