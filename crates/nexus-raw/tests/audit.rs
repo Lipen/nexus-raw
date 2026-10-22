@@ -207,7 +207,9 @@ fn sample_checks_the_requested_count() {
             marker_line(&name, &body).as_bytes(),
         );
         items.push(serde_json::json!({"path": path, "checksum": {"sha256": digest.clone()}}));
-        items.push(serde_json::json!({"path": format!("{path}.sha256"), "checksum": {"sha256": digest}}));
+        items.push(
+            serde_json::json!({"path": format!("{path}.sha256"), "checksum": {"sha256": digest}}),
+        );
     }
     srv.insert(
         "service/rest/v1/search/assets",
