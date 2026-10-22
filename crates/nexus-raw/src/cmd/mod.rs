@@ -368,6 +368,14 @@ pub(crate) fn enumeration_source(
     ls: bool,
 ) -> Result<Enumeration, Error> {
     if ls {
+        // `--ls` is a whole-listing source, not a filter: a destructive command
+        // that also names files would act on the listing, not on the names.
+        if !names.is_empty() || !names_from.is_empty() {
+            return Err(Error::Misuse(
+                "--ls cannot be combined with --name/--names-from: pass one enumeration source"
+                    .to_owned(),
+            ));
+        }
         return Ok(Enumeration::Search);
     }
     let mut all: Vec<String> = names.to_vec();
@@ -381,6 +389,12 @@ pub(crate) fn enumeration_source(
         url: base.to_owned(),
         reason: "no --name/--names-from/--ls given".into(),
     })
+}
+
+/// Escape control characters in server-supplied text before a terminal sees it.
+/// `--json` stays raw: serde already escapes control characters.
+pub(crate) fn printable(value: &str) -> String {
+    value.chars().flat_map(char::escape_debug).collect()
 }
 
 /// One JSON line for the simple (non-event) results.

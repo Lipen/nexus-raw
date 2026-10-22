@@ -116,3 +116,67 @@ fn byte_mode_verifies_the_clean_pair() {
         "exactly one clean asset checked: {s}"
     );
 }
+
+/// The positive bitrot case: corrupt bytes under an intact marker are a byte mismatch, exit 1.
+#[test]
+fn byte_mode_flags_a_corrupted_asset() {
+    let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
+    // Replace the clean object's bytes, keep its marker: the byte pass must see it.
+    srv.insert("repository/raw-main/1.0.0/clean/app.bin", b"bitrot");
+
+    let out = nxr(&["audit", &repo_url(&srv), "--bytes", "--prefix", "clean/"]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "bitrot is exit 1: {}",
+        stdout(&out)
+    );
+    let s = stdout(&out);
+    assert!(
+        s.contains("byte_mismatch") && s.contains("clean/app.bin"),
+        "the corrupted asset is named: {s}"
+    );
+    assert!(s.contains("bytes checked 1"), "one asset checked: {s}");
+}
+
+/// `--name` narrows the audit to the named entries, and only those.
+#[test]
+fn name_filter_limits_the_findings() {
+    let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
+
+    let clean = nxr(&["audit", &repo_url(&srv), "--name", "clean/app.bin"]);
+    assert_eq!(
+        clean.status.code(),
+        Some(0),
+        "the clean name is silent: {}",
+        stdout(&clean)
+    );
+    assert!(stdout(&clean).contains("findings: 0"));
+
+    let orphan = nxr(&["audit", &repo_url(&srv), "--name", "orphan/app.bin"]);
+    assert_eq!(
+        orphan.status.code(),
+        Some(1),
+        "the orphan is a finding: {}",
+        stdout(&orphan)
+    );
+    let s = stdout(&orphan);
+    assert!(
+        s.contains("orphan orphan/app.bin"),
+        "the named finding: {s}"
+    );
+    assert!(!s.contains("dangling"), "the other names are out: {s}");
+}
+
+/// The audit's `--workers` is the shared worker budget: zero is misuse, not a silent default.
+#[test]
+fn audit_workers_zero_is_misuse() {
+    let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
+    let out = nxr(&["audit", &repo_url(&srv), "--workers", "0"]);
+    assert_eq!(out.status.code(), Some(2), "{}", stdout(&out));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("--workers"),
+        "the refusal names the flag: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

@@ -691,6 +691,24 @@ fn down_names_from_bad_line_is_misuse() {
     );
 }
 
+/// A plain get ignores an existing `<out>.part`: only `--continue` resumes.
+#[test]
+fn plain_get_ignores_an_existing_part() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("plain.bin", ALPHA);
+    let url = format!("{}plain.bin", root_url(&srv));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("plain.bin");
+    let part = out.path().join("plain.bin.part");
+    std::fs::write(&part, b"stale-bytes").unwrap();
+
+    let got = nxr(&["get", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&got, 0, "a plain get must not resume");
+    assert_eq!(std::fs::read(&target).unwrap(), ALPHA);
+    assert!(!part.exists(), "the transfer consumes its part");
+}
+
 /// A missing --names-from file is a misuse (exit 2), not a transport error.
 #[test]
 fn down_names_from_missing_file_is_misuse() {
@@ -1077,6 +1095,22 @@ fn head_reports_status() {
     assert_eq!(lines[0]["size"], BETA.len() as u64);
     assert!(lines[0].get("url").is_some());
     assert!(lines[0].get("content_type").is_some());
+}
+
+/// A 404 head is a result, not an error: the status is the answer.
+#[test]
+fn head_404_is_a_result_not_an_error() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}missing.bin", root_url(&srv));
+
+    let human = nxr(&["head", &url]);
+    expect_exit(&human, 0, "a 404 head is a result");
+    assert!(stdout(&human).contains("404"), "{}", stdout(&human));
+
+    let json = nxr(&["--json", "head", &url]);
+    expect_exit(&json, 0, "a 404 head is a result in json too");
+    let lines = ndjson(&json);
+    assert_eq!(lines[0]["status"], 404);
 }
 
 // ---- channel --------------------------------------------------------------
@@ -3599,6 +3633,75 @@ fn service_repo_unknown_url_is_a_data_miss() {
     expect_exit(&out, 1, "a miss is a data fact");
 }
 
+/// A server-supplied name with control characters is escaped in the human line.
+#[test]
+fn ls_escapes_a_hostile_server_name() {
+    let srv = server(Scenario::Atomic);
+    let page = serde_json::json!({"items": [{"path": "bad\nname.bin"}]});
+    srv.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+    let repo = format!("{}repository/raw-main/", srv.base_url());
+    let out = nxr(&["ls", &repo]);
+    expect_exit(&out, 0, "the listing succeeds");
+    let text = stdout(&out);
+    assert!(
+        text.contains("\\n"),
+        "the newline is escaped, not printed raw: {text:?}"
+    );
+}
+
+/// `down --ls --plan` uses the store-backed search enumeration: the plan lists the searched names.
+#[test]
+fn down_ls_plan_lists_the_search_names() {
+    let srv = server(Scenario::SearchLag { lag_ms: 10 });
+    srv.insert("repository/raw-main/g/1.0.0/a.zip", ALPHA);
+    srv.insert(
+        "repository/raw-main/g/1.0.0/a.zip.sha256",
+        marker_line("a.zip", ALPHA).as_bytes(),
+    );
+    // The search lag is armed by a storage PUT.
+    let probe = TempDir::new().unwrap();
+    std::fs::write(probe.path().join("p"), b"probe").unwrap();
+    let put = nxr(&[
+        "put",
+        &format!("{}repository/raw-main/g/1.0.0/.probe", srv.base_url()),
+        "-f",
+        probe.path().join("p").to_str().unwrap(),
+    ]);
+    expect_exit(&put, 0, "the probe arms the search lag");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    let version = format!("{}repository/raw-main/g/1.0.0/", srv.base_url());
+    let dst = TempDir::new().unwrap();
+    let plan = nxr(&[
+        "down",
+        &version,
+        dst.path().to_str().unwrap(),
+        "--ls",
+        "--plan",
+    ]);
+    expect_exit(&plan, 0, "the search plan succeeds");
+    assert!(
+        stdout(&plan).contains("download a.zip"),
+        "the plan names the searched asset: {}",
+        stdout(&plan)
+    );
+}
+
+/// `ls --assets` prints flat artifact names and refuses a repository root.
+#[test]
+fn ls_assets_lists_flat_names_and_refuses_a_repository_root() {
+    let srv = server(Scenario::AssetsPagination);
+    let version = format!("{}repository/raw-main/v0.9.0-assets/", srv.base_url());
+    let out = nxr(&["ls", &version, "--assets"]);
+    expect_exit(&out, 0, "the flat listing succeeds");
+    let text = stdout(&out);
+    assert!(text.contains("asset-000.bin"), "a flat name: {text}");
+    assert!(!text.contains(".sha256"), "markers are hidden: {text}");
+
+    let root = nxr(&["ls", &srv.base_url(), "--assets"]);
+    expect_exit(&root, 2, "a repository root cannot be an assets base");
+}
+
 /// `service assets` walks the search pages: one --json object with every asset.
 #[test]
 fn service_assets_walks_the_search_pages() {
@@ -3623,7 +3726,11 @@ fn service_assets_survives_a_multibyte_checksum() {
     let repo = format!("{}repository/raw-main/", srv.base_url());
     let out = nxr(&["service", "assets", &repo]);
     expect_exit(&out, 0, "a multibyte checksum must not panic");
-    assert!(stdout(&out).contains("1.0.0/a.zip"), "got: {}", stdout(&out));
+    assert!(
+        stdout(&out).contains("1.0.0/a.zip"),
+        "got: {}",
+        stdout(&out)
+    );
 }
 
 /// `service eula --accept` on an auth-refusing server is an auth failure, not "no gate".
@@ -3646,6 +3753,28 @@ fn service_eula_without_a_gate_is_a_noop() {
     expect_exit(&out, 0, "no gate is a zero");
     let v: serde_json::Value = serde_json::from_str(stdout(&out).trim()).unwrap();
     assert_eq!(v["gate"], false);
+}
+
+/// `--ls` and explicit names are two enumeration sources: a destructive command refuses the pair.
+#[test]
+fn rm_ls_with_explicit_names_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        marker_line("a.zip", ALPHA).as_bytes(),
+    );
+    srv.insert("1.14.0/b.bin", BETA);
+
+    let out = nxr(&["rm", &dir_url(&srv), "--ls", "--name", "a.zip", "--yes"]);
+    expect_exit(&out, 2, "conflicting enumeration sources are misuse");
+    assert!(
+        stderr(&out).contains("--ls") && stderr(&out).contains("--name"),
+        "the refusal names both sources: {}",
+        stderr(&out)
+    );
+    assert_eq!(srv.store_get("1.14.0/a.zip").as_deref(), Some(ALPHA));
+    assert_eq!(srv.store_get("1.14.0/b.bin").as_deref(), Some(BETA));
 }
 
 // ---- prefix ----------------------------------------------------------------

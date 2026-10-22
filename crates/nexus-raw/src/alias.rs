@@ -173,8 +173,15 @@ impl Aliases {
                 e
             ))
         })?;
-        let parsed: Aliases = toml::from_str(&text)
-            .map_err(|e| misuse(format!("{} is not a valid alias file: {e}", path.display())))?;
+        // The parser's Display embeds the offending source line, and this file
+        // is exactly where an inline password lives: keep the path and the fact,
+        // never the excerpt.
+        let parsed: Aliases = toml::from_str(&text).map_err(|_| {
+            misuse(format!(
+                "{} is not a valid alias file (check the TOML keys and value types)",
+                path.display()
+            ))
+        })?;
         Ok(parsed)
     }
 
@@ -220,45 +227,32 @@ pub fn join(base: &str, arg: &str) -> String {
 
 /// Which positional fields of the parsed CLI carry URLs.
 /// A mirror/move src and dst are two URLs in one command.
-fn url_slots(cli: &crate::Cli) -> Vec<*mut String> {
+fn url_slots(cli: &mut crate::Cli) -> Vec<&mut String> {
     use crate::Cmd as C;
-    match &cli.command {
+    match &mut cli.command {
         C::Get { url, .. }
         | C::Put { url, .. }
         | C::Head { url, .. }
-        | C::Audit { repo: url, .. } => {
-            vec![std::ptr::addr_of!(*url).cast_mut()]
-        }
+        | C::Audit { repo: url, .. }
+        | C::Point { url, .. }
+        | C::Sha { target: url } => vec![url],
         C::Up { dst, .. }
         | C::Down { src: dst, .. }
         | C::Rm { src: dst, .. }
-        | C::Ls { url: dst, .. } => {
-            vec![std::ptr::addr_of!(*dst).cast_mut()]
-        }
-        C::Point { url, .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
-        C::Mirror { src, dst, .. } | C::Mv { src, dst, .. } => {
-            vec![
-                std::ptr::addr_of!(*src).cast_mut(),
-                std::ptr::addr_of!(*dst).cast_mut(),
-            ]
-        }
-        C::Diff { src, .. } | C::Clone { url: src, .. } => {
-            vec![std::ptr::addr_of!(*src).cast_mut()]
-        }
-        C::Sha { target } => vec![std::ptr::addr_of!(*target).cast_mut()],
+        | C::Ls { url: dst, .. } => vec![dst],
+        C::Mirror { src, dst, .. } | C::Mv { src, dst, .. } => vec![src, dst],
+        C::Diff { src, .. } | C::Clone { url: src, .. } => vec![src],
         C::Channel { op } => match op {
-            crate::ChannelOp::Get { url } | crate::ChannelOp::Set { url, .. } => {
-                vec![std::ptr::addr_of!(*url).cast_mut()]
-            }
+            crate::ChannelOp::Get { url } | crate::ChannelOp::Set { url, .. } => vec![url],
         },
         C::Service { op } => match op {
             crate::ServiceOp::Repos { url }
             | crate::ServiceOp::Status { url }
             | crate::ServiceOp::Repo { url, .. }
             | crate::ServiceOp::Assets { url, .. }
-            | crate::ServiceOp::Eula { url, .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
+            | crate::ServiceOp::Eula { url, .. } => vec![url],
         },
-        C::Doctor { url: Some(url), .. } => vec![std::ptr::addr_of!(*url).cast_mut()],
+        C::Doctor { url: Some(url), .. } => vec![url],
         C::Verify { .. } | C::Complete { .. } | C::Doctor { .. } => vec![],
     }
 }
@@ -287,10 +281,7 @@ pub fn apply_remote(cli: &mut crate::Cli) -> Result<(), Error> {
     );
     if !local_sha {
         for slot in url_slots(cli) {
-            // SAFETY: the pointers come from `&mut cli` fields taken just above,
-            // no aliasing exists in this scope, and each field is written once.
-            let url = unsafe { &mut *slot };
-            *url = join(&alias.url, url);
+            *slot = join(&alias.url, slot.as_str());
         }
     }
 
@@ -304,6 +295,16 @@ pub fn apply_remote(cli: &mut crate::Cli) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The parser's source excerpt can carry an inline password: the error must not.
+    #[test]
+    fn a_broken_secret_line_is_not_echoed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[a]\nurl = \"http://h/\"\npass = \"s3cret\n").unwrap();
+        let text = Aliases::load(&path).unwrap_err().to_string();
+        assert!(!text.contains("s3cret"), "{text}");
+    }
 
     fn write(text: &str) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();

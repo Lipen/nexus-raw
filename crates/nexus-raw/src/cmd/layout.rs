@@ -4,7 +4,7 @@ use std::path::Path;
 
 use nexus_raw_core::{Error, Summary};
 
-use crate::cmd::{finish, make_ctx, print_line, Ctx};
+use crate::cmd::{finish, make_ctx, print_line, printable, Ctx};
 use crate::Cli;
 
 pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> {
@@ -21,7 +21,7 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
         for n in &names {
             print_line(
                 ctx.json,
-                n.as_str(),
+                &printable(n.as_str()),
                 &serde_json::json!({"name": n.to_string()}),
             );
         }
@@ -30,7 +30,7 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
         for e in &entries {
             match e.kind {
                 nexus_raw_core::EntryKind::Dir => {
-                    let name = format!("{}/", e.name);
+                    let name = format!("{}/", printable(&e.name));
                     print_line(
                         ctx.json,
                         &name,
@@ -40,7 +40,7 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
                 nexus_raw_core::EntryKind::File => {
                     print_line(
                         ctx.json,
-                        &e.name,
+                        &printable(&e.name),
                         &serde_json::json!({"entry": e.name, "kind": "file"}),
                     );
                 }
@@ -170,7 +170,15 @@ async fn run_service_repos(ctx: &Ctx) -> Result<(), Error> {
     let repos = ctx.nxr.service_repos().await?;
     let human = repos
         .iter()
-        .map(|r| format!("{} {} {} {}", r.name, r.format, r.kind, r.url))
+        .map(|r| {
+            format!(
+                "{} {} {} {}",
+                printable(&r.name),
+                printable(&r.format),
+                printable(&r.kind),
+                printable(&r.url)
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     print_line(ctx.json, &human, &serde_json::json!({ "repos": repos }));
@@ -189,7 +197,7 @@ async fn run_service_status(ctx: &Ctx) -> Result<(), Error> {
     let report = ctx.nxr.service_status().await?;
     let mut human = format!(
         "{}: {}",
-        report.root,
+        printable(&report.root),
         if report.alive {
             "alive"
         } else {
@@ -204,7 +212,7 @@ async fn run_service_status(ctx: &Ctx) -> Result<(), Error> {
         });
     }
     if let Some(v) = &report.version {
-        human.push_str(&format!(", version {v}"));
+        human.push_str(&format!(", version {}", printable(v)));
     }
     print_line(
         ctx.json,
@@ -227,15 +235,18 @@ async fn run_service_repo(ctx: &Ctx, detail: bool) -> Result<(), Error> {
     let human = match &repo.detail {
         Some(d) => format!(
             "{} {} {} {} (full settings follow)\n{}",
-            repo.info.name,
-            repo.info.format,
-            repo.info.kind,
-            repo.info.url,
+            printable(&repo.info.name),
+            printable(&repo.info.format),
+            printable(&repo.info.kind),
+            printable(&repo.info.url),
             serde_json::to_string_pretty(d).unwrap_or_default()
         ),
         None => format!(
             "{} {} {} {}",
-            repo.info.name, repo.info.format, repo.info.kind, repo.info.url
+            printable(&repo.info.name),
+            printable(&repo.info.format),
+            printable(&repo.info.kind),
+            printable(&repo.info.url)
         ),
     };
     print_line(
@@ -276,9 +287,9 @@ async fn run_service_assets(ctx: &Ctx, q: Option<&str>, prefix: &[String]) -> Re
                 format!(
                     "{}  {}  {}  {}",
                     size,
-                    sha,
-                    a.last_modified.as_deref().unwrap_or("-"),
-                    a.path
+                    printable(sha),
+                    printable(a.last_modified.as_deref().unwrap_or("-")),
+                    printable(&a.path)
                 )
             })
             .collect::<Vec<_>>()
@@ -313,11 +324,13 @@ async fn run_service_eula(ctx: &Ctx, accept: bool) -> Result<(), Error> {
         let human = format!(
             "accepted: {}; disclaimer: {}",
             status.accepted,
-            status
-                .disclaimer
-                .split(". ")
-                .next()
-                .unwrap_or(&status.disclaimer)
+            printable(
+                status
+                    .disclaimer
+                    .split(". ")
+                    .next()
+                    .unwrap_or(&status.disclaimer)
+            )
         );
         print_line(
             ctx.json,
