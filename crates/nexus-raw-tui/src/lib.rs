@@ -28,7 +28,7 @@
 //! use std::sync::Arc;
 //!
 //! use clap::Parser as _;
-//! use nexus_raw_tui::args::{Args, Tls};
+//! use nexus_raw_tui::args::Args;
 //! use nexus_raw_tui::config::ConfigFile;
 //! use nexus_raw_tui::{app::App, net};
 //!
@@ -48,8 +48,7 @@
 //!     Some(PathBuf::from("/tmp/nxr-tui.toml")),
 //!     false,
 //!     net::dir_url("http://127.0.0.1:8081").into(),
-//!     None,
-//!     Tls::default(),
+//!     net::Session::default(),
 //!     tx,
 //! );
 //! app.boot();

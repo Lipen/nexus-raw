@@ -26,7 +26,7 @@ use ratatui::Terminal;
 use tokio::sync::mpsc;
 
 use crate::app::{App, Msg, Tab};
-use crate::args::{Args, Tls};
+use crate::args::Args;
 use crate::config::{ConfigFile, ServerCfg};
 use crate::net;
 use crate::ui;
@@ -42,18 +42,20 @@ pub async fn run(
     cfg: ConfigFile,
     cfg_path: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let auth = net::auth_header(&args.user).context("resolve credentials")?;
-    let tls = args.tls();
+    let session = net::Session {
+        auth: net::auth_header(&args.user).context("resolve credentials")?,
+        tls: args.tls(),
+    };
     let servers = args.resolve_servers(&cfg)?;
     // Fail-fast: every configured server must answer before the screen opens.
     let mut tabs = Vec::with_capacity(servers.len());
     for server in &servers {
-        let repos = net::server_repos(server, auth.clone(), tls.clone())
+        let repos = net::server_repos(server, session.clone())
             .await
             .with_context(|| format!("server {}", server.name.escape_debug()))?;
         tabs.push(Tab::new(server.clone(), repos));
     }
-    open_terminal(servers, tabs, cfg, cfg_path, args, auth, tls).await
+    open_terminal(servers, tabs, cfg, cfg_path, args, session).await
 }
 
 /// The effective format filter: the flag lifts it, the config default fills it in.
@@ -69,8 +71,7 @@ async fn open_terminal(
     cfg: ConfigFile,
     cfg_path: Option<PathBuf>,
     args: Arc<Args>,
-    auth: Option<String>,
-    tls: Tls,
+    session: net::Session,
 ) -> anyhow::Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
     let download_dir = cfg.download.dir.clone();
@@ -82,8 +83,7 @@ async fn open_terminal(
         cfg_path,
         all_formats,
         download_dir,
-        auth,
-        tls,
+        session,
         tx,
     );
     app.boot();

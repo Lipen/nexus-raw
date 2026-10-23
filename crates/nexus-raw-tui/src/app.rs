@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::args::Tls;
+use crate::net::Session;
 
 /// A bare action key: capitals arrive with Shift, so Shift is allowed.
 /// Control, Alt and Super combos never trigger actions.
@@ -774,10 +774,8 @@ pub enum Msg {
 pub struct App {
     /// Every server the session knows: opened tabs, presets and added servers.
     pub servers: Vec<ServerCfg>,
-    /// Resolved `Authorization` header value, if any.
-    pub auth: Option<String>,
-    /// The session TLS policy: one setting for every server.
-    pub tls: Tls,
+    /// The session credentials and TLS policy: one set for every server.
+    pub session: Session,
     /// Repositories of every format may be opened, not only raw.
     pub all_formats: bool,
     /// The left/right navigation mode of the tree.
@@ -864,16 +862,14 @@ impl App {
         config_path: Option<PathBuf>,
         all_formats: bool,
         download_dir: PathBuf,
-        auth: Option<String>,
-        tls: Tls,
+        session: Session,
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Self {
         let nav = config.tui.nav;
         let base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             servers,
-            auth,
-            tls,
+            session,
             all_formats,
             nav,
             destination: download_dir.clone(),
@@ -1744,14 +1740,7 @@ impl App {
         self.status = format!("listing {}/", row.name);
         let url = net::dir_url(&row.url);
         let (tab, gen) = (self.tab, t.gen);
-        net::load_entries(
-            self.tx.clone(),
-            tab,
-            gen,
-            url,
-            self.auth.clone(),
-            self.tls.clone(),
-        );
+        net::load_entries(self.tx.clone(), tab, gen, url, self.session.clone());
     }
 
     fn descend(&mut self, name: String) {
@@ -1775,14 +1764,7 @@ impl App {
         t.loading = true;
         self.pending += 1;
         let (tab, gen) = (self.tab, t.gen);
-        net::load_entries(
-            self.tx.clone(),
-            tab,
-            gen,
-            url,
-            self.auth.clone(),
-            self.tls.clone(),
-        );
+        net::load_entries(self.tx.clone(), tab, gen, url, self.session.clone());
     }
 
     fn on_back(&mut self) {
@@ -1825,14 +1807,7 @@ impl App {
                 self.pending += 1;
                 self.status = format!("listing {}/", t.breadcrumb());
                 let (tab, gen) = (self.tab, t.gen);
-                net::load_entries(
-                    self.tx.clone(),
-                    tab,
-                    gen,
-                    url,
-                    self.auth.clone(),
-                    self.tls.clone(),
-                );
+                net::load_entries(self.tx.clone(), tab, gen, url, self.session.clone());
             }
         }
     }
@@ -1940,8 +1915,7 @@ impl App {
                 gen,
                 row.rel,
                 url,
-                self.auth.clone(),
-                self.tls.clone(),
+                self.session.clone(),
             );
             return;
         }
@@ -2075,8 +2049,8 @@ impl App {
                     self.status = format!("refreshing {}", t.server.name);
                 }
                 let server = t.server.clone();
-                let (slot, auth, tls) = (idx, self.auth.clone(), self.tls.clone());
-                net::load_repos(self.tx.clone(), server, slot, false, auth, tls);
+                let (slot, session) = (idx, self.session.clone());
+                net::load_repos(self.tx.clone(), server, slot, false, session);
             }
             Screen::Tree => {
                 let url = t.here_url();
@@ -2085,8 +2059,8 @@ impl App {
                 if idx == self.tab && !quiet {
                     self.status = format!("refreshing {}/", t.breadcrumb());
                 }
-                let (tab, gen, auth, tls) = (idx, t.gen, self.auth.clone(), self.tls.clone());
-                net::load_entries(self.tx.clone(), tab, gen, url, auth, tls);
+                let (tab, gen, session) = (idx, t.gen, self.session.clone());
+                net::load_entries(self.tx.clone(), tab, gen, url, session);
             }
         }
     }
@@ -2138,15 +2112,14 @@ impl App {
         };
         self.mode = Mode::Card(Card::File(Box::new(card)));
         self.pending += 2;
-        let (tab, gen, auth, tls) = (self.tab, t.gen, self.auth.clone(), self.tls.clone());
+        let (tab, gen, session) = (self.tab, t.gen, self.session.clone());
         net::head_size(
             self.tx.clone(),
             tab,
             gen,
             rel.clone(),
             url.clone(),
-            auth.clone(),
-            tls.clone(),
+            session.clone(),
         );
         net::fetch_sibling(
             self.tx.clone(),
@@ -2154,8 +2127,7 @@ impl App {
             gen,
             rel,
             format!("{url}.sha256"),
-            auth,
-            tls,
+            session,
         );
     }
 
@@ -2219,8 +2191,7 @@ impl App {
             server,
             self.tabs.len(),
             true,
-            self.auth.clone(),
-            self.tls.clone(),
+            self.session.clone(),
         );
     }
 
@@ -2400,13 +2371,7 @@ impl App {
             ..Transfer::default()
         });
         self.status = format!("put {} -> {}", src.display(), pos);
-        let handle = net::start_upload(
-            self.tx.clone(),
-            base,
-            src,
-            self.auth.clone(),
-            self.tls.clone(),
-        );
+        let handle = net::start_upload(self.tx.clone(), base, src, self.session.clone());
         if let Some(dl) = self.transfer.as_mut() {
             dl.handle = Some(handle);
         }
@@ -2886,14 +2851,7 @@ impl App {
             ..Transfer::default()
         });
         self.status = format!("downloading {}", row.name);
-        let handle = net::fetch_one(
-            self.tx.clone(),
-            url,
-            out,
-            base,
-            self.auth.clone(),
-            self.tls.clone(),
-        );
+        let handle = net::fetch_one(self.tx.clone(), url, out, base, self.session.clone());
         if let Some(dl) = self.transfer.as_mut() {
             dl.handle = Some(handle);
         }
@@ -2963,8 +2921,7 @@ impl App {
             repo.dir_url(),
             rel,
             EntryKind::Dir,
-            self.auth.clone(),
-            self.tls.clone(),
+            self.session.clone(),
         );
     }
 
@@ -3234,14 +3191,8 @@ impl App {
                     });
                 }
                 self.status = format!("plan: {count} {unit} -> {}", dst.display());
-                let handle = net::start_download(
-                    self.tx.clone(),
-                    base,
-                    names,
-                    dst,
-                    self.auth.clone(),
-                    self.tls.clone(),
-                );
+                let handle =
+                    net::start_download(self.tx.clone(), base, names, dst, self.session.clone());
                 if let Some(dl) = self.transfer.as_mut() {
                     dl.handle = Some(handle);
                 }
@@ -3450,14 +3401,7 @@ impl App {
                     ..Transfer::default()
                 });
                 self.status = format!("downloading {}", url.rsplit('/').next().unwrap_or(&url));
-                let handle = net::fetch_one(
-                    self.tx.clone(),
-                    url,
-                    out,
-                    dst,
-                    self.auth.clone(),
-                    self.tls.clone(),
-                );
+                let handle = net::fetch_one(self.tx.clone(), url, out, dst, self.session.clone());
                 if let Some(dl) = self.transfer.as_mut() {
                     dl.handle = Some(handle);
                 }
@@ -3478,8 +3422,7 @@ impl App {
                     repo_url,
                     names,
                     dst,
-                    self.auth.clone(),
-                    self.tls.clone(),
+                    self.session.clone(),
                 );
                 if let Some(dl) = self.transfer.as_mut() {
                     dl.handle = Some(handle);
@@ -3742,8 +3685,7 @@ mod tests {
             None,
             all_formats,
             PathBuf::from("dl"),
-            None,
-            Tls::default(),
+            Session::default(),
             tx,
         );
         app.boot();
@@ -5822,8 +5764,7 @@ mod tests {
             Some(path.clone()),
             false,
             PathBuf::from("dl"),
-            None,
-            Tls::default(),
+            Session::default(),
             tx,
         );
         app.boot();
@@ -6243,8 +6184,7 @@ mod tests {
             Some(path.clone()),
             false,
             PathBuf::from("dl"),
-            None,
-            Tls::default(),
+            Session::default(),
             tx,
         );
         app.boot();
@@ -6275,8 +6215,7 @@ mod tests {
             Some(path.clone()),
             false,
             PathBuf::from("dl"),
-            None,
-            Tls::default(),
+            Session::default(),
             tx,
         );
         app.boot();
@@ -6350,8 +6289,7 @@ mod tests {
             Some(path.clone()),
             false,
             PathBuf::from("dl"),
-            None,
-            Tls::default(),
+            Session::default(),
             tx,
         );
         app.boot();
