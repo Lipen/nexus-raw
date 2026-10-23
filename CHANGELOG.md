@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `nxr-tui --ca-bundle FILE` (also `NXR_CA_BUNDLE`) and `--tls-insecure` apply one TLS policy to the session.
 - `nxr-tui --no-color` and a non-empty `NO_COLOR` drop the two semantic colours.
 - The Node bindings accept `caBundle` for a private CA and `prefixes` on `up`.
+- The Node `get` accepts `range`, with the same span rules as the CLI.
+- `Nxr::scan_prefixes` and `Nxr::get_range` expose the scoped scan and the one-span read to library consumers.
 
 ### Changed
 

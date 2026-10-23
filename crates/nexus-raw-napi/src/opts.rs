@@ -99,6 +99,9 @@ pub struct NxrGetOpts {
     pub out: Option<String>,
     /// Resume from an existing `<out>.part` through a Range request.
     pub cont: Option<bool>,
+    /// Fetch one byte range: START-END or START- (inclusive).
+    /// Conflicts with `cont`.
+    pub range: Option<String>,
 }
 
 /// `put` options.

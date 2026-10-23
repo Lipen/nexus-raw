@@ -46,6 +46,15 @@ pub struct GetOutcome {
     pub resumed_from: u64,
 }
 
+/// One byte range: the inclusive start, the optional inclusive end, and the bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(not(target_arch = "wasm32"))]
+pub struct RangeOutcome {
+    pub start: u64,
+    pub end: Option<u64>,
+    pub bytes: Vec<u8>,
+}
+
 /// GET a URL.
 ///
 /// With `out`: stream into `<out>.part` (resuming from it when `cont`), verify nothing, then rename to `out`.
@@ -522,6 +531,87 @@ fn last_segment(url: &str) -> String {
     percent_decode(&raw)
 }
 
+/// Parse `START-END` or `START-` into an inclusive start and an optional end.
+pub fn parse_range(spec: &str) -> Result<(u64, Option<u64>), Error> {
+    let (start, end) = spec
+        .split_once('-')
+        .ok_or_else(|| Error::Misuse("range expects START-END or START-".to_owned()))?;
+    if start.is_empty() {
+        return Err(Error::Misuse(
+            "range does not take a suffix (-N): use START- or START-END".to_owned(),
+        ));
+    }
+    let start = start
+        .parse::<u64>()
+        .map_err(|_| Error::Misuse(format!("range start is not a number: {start}")))?;
+    if end.is_empty() {
+        return Ok((start, None));
+    }
+    let end = end
+        .parse::<u64>()
+        .map_err(|_| Error::Misuse(format!("range end is not a number: {end}")))?;
+    if end < start {
+        return Err(Error::Misuse("range end is before its start".to_owned()));
+    }
+    Ok((start, Some(end)))
+}
+
+/// Write bytes beside `path` through an exclusive temporary, then rename.
+///
+/// A symlink planted at the output is replaced, never followed.
+/// The `.nxr` prefix keeps the temporary out of every scan.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when the temporary cannot be created, written or renamed.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write as _;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    for n in 0..100u32 {
+        let candidate = parent.join(format!(".nxr-range-{}-{n}.tmp", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                let written = file.write_all(bytes).and_then(|()| file.flush());
+                drop(file);
+                if let Err(e) = written {
+                    let _ = std::fs::remove_file(&candidate);
+                    return Err(Error::Io {
+                        path: candidate.display().to_string(),
+                        detail: e.to_string(),
+                    });
+                }
+                std::fs::rename(&candidate, path).map_err(|e| {
+                    let _ = std::fs::remove_file(&candidate);
+                    Error::Io {
+                        path: path.display().to_string(),
+                        detail: e.to_string(),
+                    }
+                })?;
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(Error::Io {
+                    path: candidate.display().to_string(),
+                    detail: e.to_string(),
+                });
+            }
+        }
+    }
+    Err(Error::Io {
+        path: path.display().to_string(),
+        detail: "cannot create a temporary file beside the output".to_owned(),
+    })
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -538,5 +628,19 @@ mod tests {
     fn url_last_segment_decodes() {
         assert_eq!(last_segment("http://h/a/b/app.zip"), "app.zip");
         assert_eq!(last_segment("http://h/a/b/my%20app.zip"), "my app.zip");
+    }
+
+    #[test]
+    fn parses_the_range_forms() {
+        assert_eq!(parse_range("10-19").unwrap(), (10, Some(19)));
+        assert_eq!(parse_range("10-").unwrap(), (10, None));
+        assert_eq!(parse_range("0-0").unwrap(), (0, Some(0)));
+    }
+
+    #[test]
+    fn refuses_malformed_ranges() {
+        for spec in ["", "10", "-5", "19-10", "x-2", "1-x", "1-2-3", " 1-2"] {
+            assert!(parse_range(spec).is_err(), "{spec:?} must be refused");
+        }
     }
 }

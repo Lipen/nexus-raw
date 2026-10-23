@@ -29,7 +29,7 @@ use crate::model::state::RemoteStatus;
 use crate::primitive;
 use crate::primitive::HeadInfo;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::primitive::{GetOutcome, ShaSource};
+use crate::primitive::{GetOutcome, RangeOutcome, ShaSource};
 use crate::service;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::sync::{
@@ -337,6 +337,70 @@ impl Nxr {
             return Err(Error::misuse("the byte range overflows u64"));
         };
         self.client.get_range(url, start, end_incl).await
+    }
+
+    /// Read one `START-END` or `START-` byte range.
+    ///
+    /// The open form learns the size with a HEAD; a start at or past the end
+    /// is a misuse, not a successful empty read.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Missing`] when the object is absent,
+    /// [`Error::Misuse`] for a malformed or past-the-end range, and the
+    /// transport/auth/HTTP errors of the HEAD or GET.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn get_range(&self, url: &str, spec: &str) -> Result<RangeOutcome, Error> {
+        let (start, end) = primitive::parse_range(spec)?;
+        let len = match end {
+            Some(end) => end
+                .checked_sub(start)
+                .and_then(|d| d.checked_add(1))
+                .ok_or_else(|| Error::Misuse("the byte range overflows u64".to_owned()))?,
+            None => {
+                let info = self.head(url).await?;
+                if info.status == 404 {
+                    return Err(Error::Missing {
+                        names: vec![url.to_owned()],
+                    });
+                }
+                let size = info.size.ok_or_else(|| {
+                    Error::Misuse(
+                        "the server did not report a size: use START-END instead".to_owned(),
+                    )
+                })?;
+                if start >= size {
+                    return Err(Error::Misuse(format!(
+                        "range starts at {start}, past the end of {size} bytes"
+                    )));
+                }
+                size - start
+            }
+        };
+        let bytes = self
+            .read_range(url, start, len)
+            .await?
+            .ok_or_else(|| Error::Missing {
+                names: vec![url.to_owned()],
+            })?;
+        // A 416 reaches the core as an empty span: a start at or past the end
+        // is not a successful empty read.
+        if bytes.is_empty() && len > 0 {
+            let info = self.head(url).await?;
+            if info.status == 404 {
+                return Err(Error::Missing {
+                    names: vec![url.to_owned()],
+                });
+            }
+            if let Some(size) = info.size {
+                if start >= size {
+                    return Err(Error::Misuse(format!(
+                        "range starts at {start}, past the end of {size} bytes"
+                    )));
+                }
+            }
+        }
+        Ok(RangeOutcome { start, end, bytes })
     }
 
     /// The sha256 of a file or URL (spec §5.1).

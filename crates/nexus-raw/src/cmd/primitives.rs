@@ -227,79 +227,34 @@ async fn run_sha(ctx: &Ctx, target: &str) -> Result<(), Error> {
 }
 
 async fn run_get_range(ctx: &Ctx, url: &str, out: Option<&Path>, spec: &str) -> Result<(), Error> {
-    let (start, end) = parse_range(spec)?;
-    let len = match end {
-        Some(end) => end
-            .checked_sub(start)
-            .and_then(|d| d.checked_add(1))
-            .ok_or_else(|| Error::Misuse("the byte range overflows u64".to_owned()))?,
-        None => {
-            let info = ctx.nxr.head(url).await?;
-            if info.status == 404 {
-                return Err(Error::Missing {
-                    names: vec![url.to_owned()],
-                });
-            }
-            let size = info.size.ok_or_else(|| {
-                Error::Misuse(
-                    "the server did not report a size: use --range START-END instead".to_owned(),
-                )
-            })?;
-            if start >= size {
-                return Err(Error::Misuse(format!(
-                    "range starts at {start}, past the end of {size} bytes"
-                )));
-            }
-            size - start
-        }
-    };
-    let bytes = ctx
-        .nxr
-        .read_range(url, start, len)
-        .await?
-        .ok_or_else(|| Error::Missing {
-            names: vec![url.to_owned()],
-        })?;
-    // A 416 reaches the core as an empty span: a start at or past the end is
-    // not a successful empty read, so name it before writing anything.
-    if bytes.is_empty() && len > 0 {
-        let info = ctx.nxr.head(url).await?;
-        if info.status == 404 {
-            return Err(Error::Missing {
-                names: vec![url.to_owned()],
-            });
-        }
-        if let Some(size) = info.size {
-            if start >= size {
-                return Err(Error::Misuse(format!(
-                    "range starts at {start}, past the end of {size} bytes"
-                )));
-            }
-        }
-    }
-    let label = match end {
-        Some(end) => format!("{start}-{end}"),
-        None => format!("{start}-"),
+    let range = ctx.nxr.get_range(url, spec).await?;
+    let label = match range.end {
+        Some(end) => format!("{}-{end}", range.start),
+        None => format!("{}-", range.start),
     };
     match out {
         Some(path) => {
-            write_range_file(path, &bytes)?;
+            nexus_raw_core::primitive::write_bytes_atomically(path, &range.bytes)?;
             print_line(
                 ctx.json,
-                &format!("range {label}: {} bytes → {}", bytes.len(), path.display()),
+                &format!(
+                    "range {label}: {} bytes → {}",
+                    range.bytes.len(),
+                    path.display()
+                ),
                 &serde_json::json!({
                     "ok": true,
                     "url": url,
                     "out": path.display().to_string(),
                     "range": label,
-                    "bytes": bytes.len(),
+                    "bytes": range.bytes.len(),
                 }),
             );
         }
         None => {
             use std::io::Write;
             let mut stdout = std::io::stdout().lock();
-            stdout.write_all(&bytes).map_err(|e| Error::Io {
+            stdout.write_all(&range.bytes).map_err(|e| Error::Io {
                 path: "-".to_owned(),
                 detail: e.to_string(),
             })?;
@@ -310,81 +265,6 @@ async fn run_get_range(ctx: &Ctx, url: &str, out: Option<&Path>, spec: &str) -> 
         }
     }
     Ok(())
-}
-
-/// Write a range beside its destination through an exclusive temporary, then
-/// rename it into place: a symlink planted at the output is replaced, never
-/// followed. The `.nxr` prefix keeps the temporary out of every scan.
-fn write_range_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
-    use std::io::Write as _;
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    for n in 0..100u32 {
-        let candidate = parent.join(format!(".nxr-range-{}-{n}.tmp", std::process::id()));
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&candidate)
-        {
-            Ok(mut file) => {
-                let written = file.write_all(bytes).and_then(|()| file.flush());
-                drop(file);
-                if let Err(e) = written {
-                    let _ = std::fs::remove_file(&candidate);
-                    return Err(Error::Io {
-                        path: candidate.display().to_string(),
-                        detail: e.to_string(),
-                    });
-                }
-                std::fs::rename(&candidate, path).map_err(|e| {
-                    let _ = std::fs::remove_file(&candidate);
-                    Error::Io {
-                        path: path.display().to_string(),
-                        detail: e.to_string(),
-                    }
-                })?;
-                return Ok(());
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => {
-                return Err(Error::Io {
-                    path: candidate.display().to_string(),
-                    detail: e.to_string(),
-                });
-            }
-        }
-    }
-    Err(Error::Io {
-        path: path.display().to_string(),
-        detail: "cannot create a temporary file beside the output".to_owned(),
-    })
-}
-
-/// Parse `START-END` or `START-` into an inclusive start and an optional end.
-fn parse_range(spec: &str) -> Result<(u64, Option<u64>), Error> {
-    let (start, end) = spec
-        .split_once('-')
-        .ok_or_else(|| Error::Misuse("--range expects START-END or START-".to_owned()))?;
-    if start.is_empty() {
-        return Err(Error::Misuse(
-            "--range does not take a suffix (-N): use START- or START-END".to_owned(),
-        ));
-    }
-    let start = start
-        .parse::<u64>()
-        .map_err(|_| Error::Misuse(format!("--range start is not a number: {start}")))?;
-    if end.is_empty() {
-        return Ok((start, None));
-    }
-    let end = end
-        .parse::<u64>()
-        .map_err(|_| Error::Misuse(format!("--range end is not a number: {end}")))?;
-    if end < start {
-        return Err(Error::Misuse("--range end is before its start".to_owned()));
-    }
-    Ok((start, Some(end)))
 }
 
 fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core::GetOutcome) {
@@ -413,25 +293,6 @@ fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core
             if !ctx.json {
                 log::debug!("get: {} bytes from {url}", outcome.size);
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_range;
-
-    #[test]
-    fn parses_the_two_range_forms() {
-        assert_eq!(parse_range("10-19").unwrap(), (10, Some(19)));
-        assert_eq!(parse_range("10-").unwrap(), (10, None));
-        assert_eq!(parse_range("0-0").unwrap(), (0, Some(0)));
-    }
-
-    #[test]
-    fn refuses_malformed_ranges() {
-        for spec in ["", "10", "-5", "19-10", "x-2", "1-x", "1-2-3", " 1-2"] {
-            assert!(parse_range(spec).is_err(), "{spec:?} must be refused");
         }
     }
 }

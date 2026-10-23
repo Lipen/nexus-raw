@@ -93,10 +93,12 @@ Every method mirrors a CLI command one-to-one.
 | Method | Returns | Mirrors | Contract |
 |:--------|:--------|:--------|:---------|
 | `get(url, out, cont)` | `GetOutcome` | `nxr get` | stream a URL to a file or stdout, resume through `<out>.part` |
+| `get_range(url, spec)` | `RangeOutcome` | `nxr get --range` | one `START-END`/`START-` span: HEAD for the open form, a past-the-end start is misuse |
 | `put(url, src, sha)` | `(u64, Option<Digest>)` | `nxr put` | PUT a file, optionally with its sha-sibling |
 | `head(url)` | `HeadInfo` | `nxr head` | status and metadata: 404 is a normal result, not an error |
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
+| `scan_prefixes(dir, prefixes)` | `Vec<ArtifactName>` | the `up --prefix` input set | only the selected subtrees are read, keeping each prefix in the name |
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --plan` | the symmetric plan without transferring |
 | `delta(dir, enum_src)` | `Vec<Delta>` | `nxr diff` | the local-against-storage report: `Same`, `MissingLocal`, `MissingRemote`, `Diverged` (size and/or sha), nothing written |
 | `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
@@ -167,6 +169,7 @@ async fn local_digest(nxr: &Nxr, path: &str) -> Result<Digest, nexus_raw_core::E
 ```
 
 `GetOutcome` carries `size`, the `digest` of the written file (stdout mode skips hashing and returns `None`), and `resumed_from`, the part offset the transfer continued from (`0` for a fresh download).
+`RangeOutcome` carries the inclusive `start`, the optional `end`, and the `bytes` of the span.
 
 ## L1: transfer
 
