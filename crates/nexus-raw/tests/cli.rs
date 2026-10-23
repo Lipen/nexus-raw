@@ -431,6 +431,21 @@ fn up_prefix_refuses_a_symlinked_prefix_root() {
 
 #[test]
 #[cfg(unix)]
+fn up_rejects_a_symlinked_source_root_without_a_prefix() {
+    let srv = server(Scenario::Atomic);
+    let real = TempDir::new().unwrap();
+    std::fs::create_dir_all(real.path().join("a")).unwrap();
+    write_file(real.path(), "a/x.bin", ALPHA);
+    let link = real.path().join("link");
+    std::os::unix::fs::symlink(real.path(), &link).unwrap();
+    let out = nxr(&["up", link.to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&out, 2, "a symlinked source root");
+    assert!(stderr(&out).contains("symlink"), "{}", stderr(&out));
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+#[cfg(unix)]
 fn up_prefix_refuses_a_symlinked_source_root() {
     let srv = server(Scenario::Atomic);
     let real = TempDir::new().unwrap();

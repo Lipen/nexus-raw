@@ -32,6 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The `UnsafeName` hint names the regular-file rule, so a symlink refusal no longer points only at the name grammar.
 - The help hides the `NXR_CA_BUNDLE` value instead of echoing the path.
 - `up --prefix` scans only the selected subtrees and validates explicit names path by path, so an unselected symlink no longer refuses the run and the tree is not walked twice.
+- The scan refuses a symlinked source root for plain `up` and `diff`, matching the scoped prefix scan.
 
 ## [0.23.0] - 2026-10-22
 

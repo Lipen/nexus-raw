@@ -5,17 +5,43 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::name::{ArtifactName, NamePrefix};
 
+/// The directory the walk starts from: a real directory, never a symlink.
+///
+/// A symlinked root would redirect the walk outside the chosen tree, so it is
+/// refused exactly like a symlinked entry.
+fn checked_root(dir: &Path) -> Result<(), Error> {
+    let meta = std::fs::symlink_metadata(dir).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::Misuse(format!("not a directory: {}", dir.display()))
+        } else {
+            Error::io(dir, e)
+        }
+    })?;
+    if meta.file_type().is_symlink() {
+        return Err(Error::UnsafeName {
+            name: dir.display().to_string(),
+            reason: "symlinked source: dereference it before uploading".to_owned(),
+        });
+    }
+    if !meta.is_dir() {
+        return Err(Error::Misuse(format!("not a directory: {}", dir.display())));
+    }
+    Ok(())
+}
+
 /// Recursively list the artifact names in `dir`.
 ///
 /// Every regular file becomes a candidate name (relative path, `/` separated).
 /// Hidden path segments (starting with `.`) and `*.sha256` siblings are skipped: a sibling is the marker of its bytes, never an artifact of its own.
 /// A symlink or any other non-regular entry is a misuse error (exit 2), never a silent skip.
+/// A symlinked or non-directory root is refused before the walk.
 /// Names that fail the grammar are a misuse error (exit 2), never silently skipped.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Io`] when a directory cannot be listed and [`Error::Misuse`] (or [`Error::UnsafeName`]) when a file path violates the name grammar.
+/// Returns [`Error::Io`] when a directory cannot be listed, [`Error::Misuse`] for a missing or non-directory root, and [`Error::UnsafeName`] for a symlinked root or a file path that violates the name grammar.
 pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
+    checked_root(dir)?;
     let mut names = Vec::new();
     let mut stack = vec![dir.to_owned()];
     while let Some(d) = stack.pop() {
@@ -99,22 +125,7 @@ pub fn scan_dir_prefixes(dir: &Path, prefixes: &[NamePrefix]) -> Result<Vec<Arti
     if prefixes.is_empty() || prefixes.iter().any(|p| p.as_str().is_empty()) {
         return scan_dir(dir);
     }
-    let root = std::fs::symlink_metadata(dir).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            Error::Misuse(format!("not a directory: {}", dir.display()))
-        } else {
-            Error::io(dir, e)
-        }
-    })?;
-    if root.file_type().is_symlink() {
-        return Err(Error::UnsafeName {
-            name: dir.display().to_string(),
-            reason: "symlinked source: dereference it before uploading".to_owned(),
-        });
-    }
-    if !root.is_dir() {
-        return Err(Error::Misuse(format!("not a directory: {}", dir.display())));
-    }
+    checked_root(dir)?;
     let mut names = std::collections::BTreeSet::new();
     for prefix in prefixes {
         let rel = prefix.as_str().trim_end_matches('/');
@@ -162,6 +173,42 @@ pub fn scan_dir_prefixes(dir: &Path, prefixes: &[NamePrefix]) -> Result<Vec<Arti
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    #[cfg(unix)]
+    fn scan_rejects_a_symlinked_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir(root.join("real")).unwrap();
+        fs::write(root.join("real/x.bin"), b"x").unwrap();
+        std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
+        let err = scan_dir(&root.join("link")).unwrap_err();
+        assert!(
+            matches!(err, Error::UnsafeName { .. }),
+            "a symlinked root must be refused, not followed: {err:?}"
+        );
+    }
+
+    #[test]
+    fn scan_rejects_a_file_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("file"), b"x").unwrap();
+        let err = scan_dir(&tmp.path().join("file")).unwrap_err();
+        assert!(
+            matches!(err, Error::Misuse(_)),
+            "a file is not a directory: {err:?}"
+        );
+    }
+
+    #[test]
+    fn scan_rejects_a_missing_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = scan_dir(&tmp.path().join("absent")).unwrap_err();
+        assert!(
+            matches!(err, Error::Misuse(_)),
+            "a missing root is misuse: {err:?}"
+        );
+    }
 
     #[test]
     fn scan_skips_hidden_and_siblings() {
