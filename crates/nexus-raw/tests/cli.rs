@@ -450,6 +450,84 @@ fn up_prefix_refuses_a_symlinked_source_root() {
 }
 
 #[test]
+fn up_prefix_union_uploads_both_subtrees() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let up = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+        "--prefix",
+        "b/",
+    ]);
+    expect_exit(&up, 0, "up with two prefixes");
+    assert_eq!(srv.store_get("1.14.0/a/x.bin").as_deref(), Some(ALPHA));
+    assert_eq!(srv.store_get("1.14.0/b/y.bin").as_deref(), Some(BETA));
+}
+
+#[test]
+fn up_prefix_refuses_a_file_prefix() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let out = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/x.bin/",
+    ]);
+    expect_exit(&out, 2, "a file cannot be a prefix root");
+    assert!(
+        stderr(&out).contains("prefix is not a directory"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+fn up_prefix_refuses_a_hidden_prefix() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    std::fs::create_dir_all(src.path().join(".hidden")).unwrap();
+    write_file(src.path(), ".hidden/x.bin", ALPHA);
+    let out = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        ".hidden/",
+    ]);
+    expect_exit(&out, 2, "a hidden prefix");
+    assert!(
+        stderr(&out).contains("hidden entries are not artifacts"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+fn up_prefix_missing_source_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    let dir = TempDir::new().unwrap();
+    let absent = dir.path().join("absent");
+    let out = nxr(&[
+        "up",
+        absent.to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+    ]);
+    expect_exit(&out, 2, "a missing source");
+    assert!(stderr(&out).contains("not a directory"), "{}", stderr(&out));
+}
+
+#[test]
 fn up_no_sha_skips_markers() {
     let srv = server(Scenario::Atomic);
     let src = TempDir::new().unwrap();

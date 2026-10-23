@@ -538,6 +538,30 @@ mod tests {
 
     use nexus_raw_core::Digest;
 
+    #[test]
+    fn config_carries_the_session_tls() {
+        let insecure = config(
+            "http://h/".into(),
+            None,
+            Tls {
+                insecure: true,
+                ca_bundle: None,
+            },
+        );
+        assert!(insecure.tls_insecure);
+        assert!(insecure.ca_bundle.is_none());
+
+        let ca = config(
+            "http://h/".into(),
+            None,
+            Tls {
+                insecure: false,
+                ca_bundle: Some(PathBuf::from("ca.pem")),
+            },
+        );
+        assert_eq!(ca.ca_bundle.as_deref(), Some(Path::new("ca.pem")));
+    }
+
     /// The search page the mock serves for every listing query: the whole repo in one page.
     fn seed_three_levels(mock: &MockNexus) {
         for path in [

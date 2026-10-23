@@ -42,7 +42,13 @@ fn scan_prefixes(nxr: &Nxr, src: &Path, prefixes: &[String]) -> Result<Vec<Artif
     if parsed.iter().any(|p| p.as_str().is_empty()) {
         return nxr.scan(src);
     }
-    let root = std::fs::symlink_metadata(src).map_err(|e| Error::io(src, e))?;
+    let root = std::fs::symlink_metadata(src).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::Misuse(format!("not a directory: {}", src.display()))
+        } else {
+            Error::io(src, e)
+        }
+    })?;
     if root.file_type().is_symlink() {
         return Err(Error::UnsafeName {
             name: src.display().to_string(),
