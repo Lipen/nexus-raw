@@ -40,6 +40,7 @@ A server that ignores `Range` still works: the whole body is sliced to the reque
 A read past the end of a file is empty, and `release` drops that file's blocks.
 
 Listings and attributes are cached for two seconds, so a rapid `ls -R` does not re-walk every directory.
+A listing reports a synthetic inode for an entry the kernel has not looked up. The real inode is assigned on lookup, and the node is dropped when the kernel forgets it.
 
 ## Limits
 
