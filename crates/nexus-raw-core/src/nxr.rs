@@ -361,6 +361,29 @@ impl Nxr {
         sync::scan_dir(dir)
     }
 
+    /// The artifact names under the selected whole-segment prefixes.
+    ///
+    /// Only the selected subtrees are read: an unselected symlink or unsafe
+    /// name cannot refuse the run. A prefix must name a real directory whose
+    /// components are not symlinks; a hidden prefix is a misuse.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Misuse`] for a bad or missing prefix, [`Error::UnsafeName`]
+    /// for a symlink, and [`Error::Io`] from the walk.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn scan_prefixes(
+        &self,
+        dir: &Path,
+        prefixes: &[String],
+    ) -> Result<Vec<ArtifactName>, Error> {
+        let parsed = prefixes
+            .iter()
+            .map(|p| crate::model::name::NamePrefix::parse(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        sync::scan_dir_prefixes(dir, &parsed)
+    }
+
     /// Resolve the names an `up` works on: an explicit list is validated path
     /// by path, `None` scans the whole directory. The explicit path never
     /// walks unrelated entries, so a caller that already scoped the tree pays

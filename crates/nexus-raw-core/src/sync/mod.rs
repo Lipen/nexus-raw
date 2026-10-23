@@ -18,4 +18,4 @@ pub use clone::{CloneAction, StateMode};
 pub use delta::{compare, Delta, Side};
 pub use diff::{classify, classify_if_changed, local_statuses, Action, Mode};
 pub use rm::RmAction;
-pub use scan::scan_dir;
+pub use scan::{scan_dir, scan_dir_prefixes};

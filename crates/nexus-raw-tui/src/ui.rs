@@ -852,6 +852,19 @@ mod tests {
     fn semantic_colors_are_plain_when_disabled() {
         assert_eq!(semantic(true, Color::Red), Style::default());
         assert_eq!(semantic(true, Color::Green), Style::default());
+        assert_eq!(semantic(false, Color::Green).fg, Some(Color::Green));
         assert_ne!(semantic(false, Color::Red), Style::default());
+    }
+
+    #[test]
+    fn the_failure_line_drops_red_under_no_color() {
+        let dl = Transfer {
+            outcome: Some(DlOutcome::Failed("boom".into(), None)),
+            ..Transfer::default()
+        };
+        let colored = outcome_line(&dl, false);
+        assert_eq!(colored.spans[0].style.fg, Some(Color::Red));
+        let plain = outcome_line(&dl, true);
+        assert_eq!(plain.spans[0].style, Style::default());
     }
 }

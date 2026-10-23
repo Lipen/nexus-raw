@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::error::Error;
-use crate::model::name::ArtifactName;
+use crate::model::name::{ArtifactName, NamePrefix};
 
 /// Recursively list the artifact names in `dir`.
 ///
@@ -83,6 +83,81 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
     Ok(names)
 }
 
+/// Recursively list the artifact names under the selected whole-segment
+/// prefixes, keeping the prefix in each name.
+///
+/// Only the selected subtrees are read: an unselected symlink or unsafe name
+/// cannot refuse the walk. The source root and every prefix component must be
+/// a real directory, and a hidden prefix is a misuse.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] for a hidden, missing or non-directory prefix,
+/// [`Error::UnsafeName`] for a symlinked source or prefix, and [`Error::Io`]
+/// from the walk.
+pub fn scan_dir_prefixes(dir: &Path, prefixes: &[NamePrefix]) -> Result<Vec<ArtifactName>, Error> {
+    if prefixes.is_empty() || prefixes.iter().any(|p| p.as_str().is_empty()) {
+        return scan_dir(dir);
+    }
+    let root = std::fs::symlink_metadata(dir).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::Misuse(format!("not a directory: {}", dir.display()))
+        } else {
+            Error::io(dir, e)
+        }
+    })?;
+    if root.file_type().is_symlink() {
+        return Err(Error::UnsafeName {
+            name: dir.display().to_string(),
+            reason: "symlinked source: dereference it before uploading".to_owned(),
+        });
+    }
+    if !root.is_dir() {
+        return Err(Error::Misuse(format!("not a directory: {}", dir.display())));
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for prefix in prefixes {
+        let rel = prefix.as_str().trim_end_matches('/');
+        if rel.split('/').any(|seg| seg.starts_with('.')) {
+            return Err(Error::Misuse(format!(
+                "hidden entries are not artifacts: {}",
+                prefix.as_str()
+            )));
+        }
+        let mut cur = dir.to_path_buf();
+        for seg in rel.split('/') {
+            cur.push(seg);
+            let meta = std::fs::symlink_metadata(&cur).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Error::Misuse(format!("prefix is not a directory: {}", cur.display()))
+                } else {
+                    Error::io(&cur, e)
+                }
+            })?;
+            if meta.file_type().is_symlink() {
+                return Err(Error::UnsafeName {
+                    name: rel.to_owned(),
+                    reason: "symlinked prefix: dereference or copy the target".to_owned(),
+                });
+            }
+            if !meta.is_dir() {
+                return Err(Error::Misuse(format!(
+                    "prefix is not a directory: {}",
+                    cur.display()
+                )));
+            }
+        }
+        for name in scan_dir(&cur)? {
+            names.insert(ArtifactName::parse(&format!(
+                "{}{}",
+                prefix.as_str(),
+                name.as_str()
+            ))?);
+        }
+    }
+    Ok(names.into_iter().collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +190,66 @@ mod tests {
         assert!(
             matches!(err, Error::UnsafeName { .. }),
             "expected the grammar to refuse the literal backslash: {err:?}"
+        );
+    }
+
+    #[test]
+    fn prefixes_keep_the_union() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::create_dir_all(root.join("b")).unwrap();
+        fs::write(root.join("a/x.bin"), b"x").unwrap();
+        fs::write(root.join("b/y.bin"), b"y").unwrap();
+        let prefixes = [
+            NamePrefix::parse("a/").unwrap(),
+            NamePrefix::parse("b/").unwrap(),
+        ];
+        let names: Vec<String> = scan_dir_prefixes(root, &prefixes)
+            .unwrap()
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+        assert_eq!(names, ["a/x.bin", "b/y.bin"]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn prefixes_ignore_unselected_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::create_dir_all(root.join("b")).unwrap();
+        fs::write(root.join("a/x.bin"), b"x").unwrap();
+        std::os::unix::fs::symlink(root.join("a"), root.join("b/link")).unwrap();
+        let prefixes = [NamePrefix::parse("a/").unwrap()];
+        let names: Vec<String> = scan_dir_prefixes(root, &prefixes)
+            .unwrap()
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+        assert_eq!(names, ["a/x.bin"]);
+    }
+
+    #[test]
+    fn prefixes_refuse_a_missing_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefixes = [NamePrefix::parse("missing/").unwrap()];
+        let err = scan_dir_prefixes(tmp.path(), &prefixes).unwrap_err();
+        assert!(
+            matches!(err, Error::Misuse(_)),
+            "a missing prefix is misuse: {err:?}"
+        );
+    }
+
+    #[test]
+    fn prefixes_refuse_a_hidden_prefix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefixes = [NamePrefix::parse(".hidden/").unwrap()];
+        let err = scan_dir_prefixes(tmp.path(), &prefixes).unwrap_err();
+        assert!(
+            matches!(err, Error::Misuse(_)),
+            "a hidden prefix is misuse: {err:?}"
         );
     }
 

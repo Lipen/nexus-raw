@@ -29,78 +29,6 @@ pub(crate) struct UpModes {
     pub(crate) if_changed: bool,
 }
 
-/// Scan only the subtrees named by `--prefix`, keeping the prefix in each name.
-///
-/// The source root and every prefix component must be a real directory: a
-/// symlink never redirects the walk. Entries outside the prefixes are not
-/// read at all, so their symlinks and unsafe names cannot refuse the run.
-fn scan_prefixes(nxr: &Nxr, src: &Path, prefixes: &[String]) -> Result<Vec<ArtifactName>, Error> {
-    let parsed = prefixes
-        .iter()
-        .map(|p| NamePrefix::parse(p))
-        .collect::<Result<Vec<_>, _>>()?;
-    if parsed.iter().any(|p| p.as_str().is_empty()) {
-        return nxr.scan(src);
-    }
-    let root = std::fs::symlink_metadata(src).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            Error::Misuse(format!("not a directory: {}", src.display()))
-        } else {
-            Error::io(src, e)
-        }
-    })?;
-    if root.file_type().is_symlink() {
-        return Err(Error::UnsafeName {
-            name: src.display().to_string(),
-            reason: "symlinked source: dereference it before uploading".to_owned(),
-        });
-    }
-    if !root.is_dir() {
-        return Err(Error::Misuse(format!("not a directory: {}", src.display())));
-    }
-    let mut names = std::collections::BTreeSet::new();
-    for prefix in &parsed {
-        let rel = prefix.as_str().trim_end_matches('/');
-        if rel.split('/').any(|seg| seg.starts_with('.')) {
-            return Err(Error::Misuse(format!(
-                "hidden entries are not artifacts: {}",
-                prefix.as_str()
-            )));
-        }
-        let mut cur = src.to_path_buf();
-        for seg in rel.split('/') {
-            cur.push(seg);
-            let meta = std::fs::symlink_metadata(&cur).map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    Error::Misuse(format!("prefix is not a directory: {}", cur.display()))
-                } else {
-                    Error::io(&cur, e)
-                }
-            })?;
-            if meta.file_type().is_symlink() {
-                return Err(Error::UnsafeName {
-                    name: rel.to_owned(),
-                    reason: "symlinked prefix: dereference or copy the target".to_owned(),
-                });
-            }
-            if !meta.is_dir() {
-                return Err(Error::Misuse(format!(
-                    "prefix is not a directory: {}",
-                    cur.display()
-                )));
-            }
-        }
-        for name in nxr.scan(&cur)? {
-            names.insert(ArtifactName::parse(&format!(
-                "{}{}",
-                prefix.as_str(),
-                name.as_str()
-            ))?);
-        }
-    }
-    Ok(names.into_iter().collect())
-}
-
 // The signature is the CLI surface: every argument is a user flag of `nxr up`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn up(
@@ -135,7 +63,7 @@ async fn run_up(
     let selected = if prefixes.is_empty() {
         None
     } else {
-        let kept = scan_prefixes(&ctx.nxr, src, prefixes)?;
+        let kept = ctx.nxr.scan_prefixes(src, prefixes)?;
         if kept.is_empty() {
             return Err(Error::Misuse(format!(
                 "nothing to upload: no names under the selected prefixes in {}",
