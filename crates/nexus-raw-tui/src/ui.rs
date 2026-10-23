@@ -848,6 +848,60 @@ fn error_overlay(modal: &ErrorModal, area: Rect, f: &mut Frame) {
 mod tests {
     use super::*;
 
+    use crate::app::{Msg, Tab};
+    use crate::config::{ConfigFile, ServerCfg};
+    use crate::net::Session;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tokio::sync::mpsc;
+
+    fn app_with_help() -> App {
+        let server = ServerCfg::from_base("http://127.0.0.1:1/".to_owned());
+        let tab = Tab::new(server.clone(), Vec::new());
+        let (tx, _rx) = mpsc::unbounded_channel::<Msg>();
+        let mut app = App::new(
+            vec![server],
+            vec![tab],
+            ConfigFile::default(),
+            None,
+            false,
+            PathBuf::from("dl"),
+            Session::default(),
+            false,
+            tx,
+        );
+        app.mode = Mode::Help;
+        app
+    }
+
+    fn text_of(terminal: &Terminal<TestBackend>) -> String {
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| buffer[(x, y)].symbol().to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn the_help_overlay_renders_its_sections() {
+        let mut app = app_with_help();
+        let backend = TestBackend::new(100, 60);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+        let text = text_of(&terminal);
+        assert!(text.contains("nxr-tui keys"), "{text}");
+        assert!(text.contains("this help"), "{text}");
+        assert!(text.contains("navigation"), "{text}");
+    }
+
+    #[test]
+    fn the_help_overlay_survives_a_narrow_terminal() {
+        let mut app = app_with_help();
+        let backend = TestBackend::new(24, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+    }
+
     #[test]
     fn semantic_colors_are_plain_when_disabled() {
         assert_eq!(semantic(true, Color::Red), Style::default());
