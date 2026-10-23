@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The mount evicts cached blocks per inode and counts the released bytes exactly, so the cache budget no longer drifts.
 - The mount help and reference state the minimum `--block-kib` and `--cache-mib` values.
+- The `.part` suffix joins the reserved names, and a local `.part` staging file is an explicit misuse in `up` instead of a silent omission.
 
 ## [0.23.0] - 2026-10-22
 

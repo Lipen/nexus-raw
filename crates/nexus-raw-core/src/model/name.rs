@@ -8,12 +8,13 @@ use crate::error::Error;
 /// Artifact name: a path relative to the directory being transferred.
 ///
 /// Validated on construction: segments `[A-Za-z0-9._-]+`, 1..=255 bytes each, no empty/`.`/`..` segments, no leading/trailing `/`.
-/// Reserved: the `.sha256` suffix (marker collision) and a `.nxr`-prefixed segment (local staging and cache names).
+/// Reserved: the `.sha256` and `.part` suffixes (marker and local-staging collisions) and a `.nxr`-prefixed segment (local staging and cache names).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactName(String);
 
 const MAX_SEGMENT_BYTES: usize = 255;
 const SIBLING_SUFFIX: &str = ".sha256";
+const PART_SUFFIX: &str = ".part";
 const LOCAL_PREFIX: &[u8] = b".nxr";
 
 fn valid_segment(seg: &str) -> bool {
@@ -35,13 +36,14 @@ impl ArtifactName {
     /// assert_eq!(name.sibling(), "bom/linux-x86_64.json.sha256");
     /// assert_eq!(name.encoded(), "bom/linux-x86_64.json");
     /// assert!(ArtifactName::parse("x.sha256").is_err()); // reserved suffix
+    /// assert!(ArtifactName::parse("x.part").is_err()); // reserved local staging
     /// assert!(ArtifactName::parse(".nxr-state.json").is_err()); // reserved local-state prefix
     /// # Ok::<(), nexus_raw_core::Error>(())
     /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`Error::UnsafeName`] when `name` violates the grammar: empty, absolute, a `.`/`..` segment, a character outside `[A-Za-z0-9._-]`, a segment over 255 bytes, the reserved `.sha256` suffix, or a `.nxr`-prefixed segment.
+    /// Returns [`Error::UnsafeName`] when `name` violates the grammar: empty, absolute, a `.`/`..` segment, a character outside `[A-Za-z0-9._-]`, a segment over 255 bytes, the reserved `.sha256` or `.part` suffix, or a `.nxr`-prefixed segment.
     pub fn parse(name: &str) -> Result<Self, Error> {
         let err = |reason: &str| Error::UnsafeName {
             name: name.to_owned(),
@@ -58,6 +60,11 @@ impl ArtifactName {
         }
         if name.ends_with(SIBLING_SUFFIX) {
             return Err(err("reserved suffix .sha256 (artifact/marker collision)"));
+        }
+        if name.ends_with(PART_SUFFIX) {
+            return Err(err(
+                "reserved suffix .part (local download staging collision)",
+            ));
         }
         for seg in name.split('/') {
             if !valid_segment(seg) {

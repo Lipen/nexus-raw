@@ -44,10 +44,9 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
             if fname.ends_with(".sha256") {
                 continue;
             }
-            if fname.ends_with(".part") {
-                // The unfinished download of `get -o` next to its target: never an artifact.
-                continue;
-            }
+            // A `.part` file is local download staging, not an artifact. The
+            // name grammar rejects it, so a stale or foreign part fails loudly
+            // here instead of vanishing from the upload.
             let rel = path
                 .strip_prefix(dir)
                 .map_err(|_| Error::misuse(format!("scan root mismatch: {}", path.display())))?
@@ -78,7 +77,6 @@ mod tests {
         fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("a.zip"), b"x").unwrap();
         fs::write(root.join("a.zip.sha256"), b"x").unwrap();
-        fs::write(root.join("a.zip.part"), b"x").unwrap();
         fs::write(root.join("sub").join("b.json"), b"y").unwrap();
         fs::write(root.join(".hidden"), b"z").unwrap();
         let names = scan_dir(root).unwrap();
@@ -99,6 +97,18 @@ mod tests {
         assert!(
             matches!(err, Error::UnsafeName { .. }),
             "expected the grammar to refuse the literal backslash: {err:?}"
+        );
+    }
+
+    #[test]
+    fn scan_rejects_a_part_staging_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("data.part"), b"x").unwrap();
+        let err = scan_dir(root).unwrap_err();
+        assert!(
+            matches!(err, Error::UnsafeName { .. }),
+            "a part staging file must be refused, not silently dropped: {err:?}"
         );
     }
 

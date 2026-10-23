@@ -20,7 +20,7 @@ The canonical protocol text is kept outside this repository.
 - The marker is always PUT after the bytes of the same name.
 - The order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
-  Only the `.sha256` suffix and a `.nxr`-prefixed segment (local staging and cache) are reserved.
+  Only the `.sha256` and `.part` suffixes and a `.nxr`-prefixed segment (local staging and cache) are reserved.
   `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
 - A channel is any token file.
   Dotted-numeric order is the only comparison the tool imposes (`--if-forward`).

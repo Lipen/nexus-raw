@@ -261,6 +261,16 @@ fn up_marker_names_the_nested_path() {
 
 /// up --no-sha: bytes go up, no marker is generated or stored.
 #[test]
+fn up_rejects_a_part_staging_file() {
+    let srv = server(Scenario::Atomic);
+    let src = tempfile::tempdir().unwrap();
+    std::fs::write(src.path().join("data.part"), b"x").unwrap();
+    let out = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&out, 2, "a part staging file is misuse");
+    assert!(stderr(&out).contains(".part"), "{}", stderr(&out));
+}
+
+#[test]
 fn up_no_sha_skips_markers() {
     let srv = server(Scenario::Atomic);
     let src = TempDir::new().unwrap();
