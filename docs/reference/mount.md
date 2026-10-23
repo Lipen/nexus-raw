@@ -30,6 +30,7 @@ The mount therefore resolves a node in two steps:
    A non-empty listing makes it a directory, an empty one makes the path `ENOENT`.
 
 `.sha256` markers are hidden from listings, exactly as `nxr ls` hides them.
+Each name segment is percent-encoded when a repository URL is built, so a foreign name with spaces, `?`, `#`, `%` or unicode resolves.
 
 Reads are lazy and block-cached: one block is `--block-kib` KiB (256 by default), fetched with a ranged GET, and the cache is bounded by `--cache-mib` (256 by default).
 A server that ignores `Range` still works: the whole body is sliced to the requested span.

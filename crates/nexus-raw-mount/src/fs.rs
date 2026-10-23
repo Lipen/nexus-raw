@@ -106,7 +106,7 @@ impl NexusFs {
         Self {
             nxr,
             rt,
-            base,
+            base: base.trim_end_matches('/').to_owned(),
             block,
             cache_cap,
             uid,
@@ -129,11 +129,7 @@ impl NexusFs {
 
     /// The repository URL of one path.
     fn url_for(&self, path: &str) -> String {
-        if path == "/" {
-            format!("{}/", self.base)
-        } else {
-            format!("{}{}", self.base, path)
-        }
+        repo_url(&self.base, path)
     }
 
     fn path_of(&self, ino: u64) -> Option<String> {
@@ -463,6 +459,42 @@ fn map_error(error: Error) -> Errno {
     }
 }
 
+/// The repository URL of one FUSE path: the base plus each path segment percent-encoded.
+///
+/// A foreign object name may carry spaces, `?`, `#`, `%` or unicode; the search API
+/// returns it decoded, so every segment is encoded before it becomes a URL.
+fn repo_url(base: &str, path: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let rel = path.trim_start_matches('/');
+    if rel.is_empty() {
+        format!("{base}/")
+    } else {
+        format!("{base}/{}", encode_path(rel))
+    }
+}
+
+fn encode_path(path: &str) -> String {
+    path.split('/')
+        .map(encode_segment)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn encode_segment(segment: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(segment.len());
+    for &byte in segment.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            out.push(byte as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(byte >> 4) as usize] as char);
+            out.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
 /// `parent` plus one segment.
 fn join(parent: &str, name: &str) -> String {
     if parent == "/" {
@@ -482,9 +514,26 @@ fn parent_of(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{join, parent_of, State};
+    use super::{encode_path, join, parent_of, repo_url, State};
     use std::collections::HashMap;
     use std::sync::Arc;
+
+    #[test]
+    fn repo_url_encodes_foreign_names() {
+        assert_eq!(repo_url("http://h/repo", "/"), "http://h/repo/");
+        assert_eq!(repo_url("http://h/repo/", "/"), "http://h/repo/");
+        assert_eq!(
+            repo_url("http://h/repo/", "/a b/c?d#e%f"),
+            "http://h/repo/a%20b/c%3Fd%23e%25f"
+        );
+    }
+
+    #[test]
+    fn path_encoding_keeps_unreserved_segments() {
+        assert_eq!(encode_path("a-b_c.d~e"), "a-b_c.d~e");
+        assert_eq!(encode_path("a/b"), "a/b");
+        assert_eq!(encode_path("é"), "%C3%A9");
+    }
 
     #[test]
     fn join_keeps_one_slash() {
