@@ -78,6 +78,9 @@ Every `[[server]]` is a preset: it opens with `--server <name>`, and all of them
 The `s` overlay inside the TUI adds a server and saves it as a preset under a fresh unique name.
 Passwords never live in the config: credentials come from `-u` or the environment (`NXR_AUTH`, or `NXR_USERNAME` + `NXR_PASSWORD`) at every launch, one set for all servers of the session, exactly like the `nxr` CLI.
 
+TLS is one policy per session too: `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA, `--tls-insecure` skips verification, and the two exclude each other.
+The bundle carries the CA that signed the server certificate, not the server leaf.
+
 ## Downloads
 
 A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.

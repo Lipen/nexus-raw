@@ -1,9 +1,20 @@
 //! Command line arguments for `nxr-tui`.
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use nexus_raw_core::Error;
 
 use crate::config::{self, ConfigFile, ServerCfg};
+
+/// The TLS policy of one session: one set for every server, like the credentials.
+#[derive(Debug, Clone, Default)]
+pub struct Tls {
+    /// Skip certificate verification.
+    pub insecure: bool,
+    /// A PEM bundle of extra trust roots for a private CA.
+    pub ca_bundle: Option<PathBuf>,
+}
 
 /// A terminal browser over Nexus raw repositories.
 #[derive(Debug, Clone, Parser)]
@@ -25,6 +36,21 @@ pub struct Args {
     /// (env fallback: NXR_AUTH, or NXR_USERNAME + NXR_PASSWORD)
     #[arg(short, long)]
     pub user: Option<String>,
+
+    /// Skip TLS certificate verification
+    #[arg(long)]
+    pub tls_insecure: bool,
+
+    /// A PEM bundle of extra trust roots for a private CA (also NXR_CA_BUNDLE)
+    /// The bundle carries the CA that signed the server certificate, not the bare server leaf
+    #[arg(
+        long,
+        value_name = "FILE",
+        env = "NXR_CA_BUNDLE",
+        hide_env_values = true,
+        conflicts_with = "tls_insecure"
+    )]
+    pub ca_bundle: Option<PathBuf>,
 
     /// Let repositories of every format be opened, not only raw
     #[arg(long)]
@@ -54,6 +80,15 @@ fn after_help() -> String {
 }
 
 impl Args {
+    /// The TLS policy of this session.
+    #[must_use]
+    pub fn tls(&self) -> Tls {
+        Tls {
+            insecure: self.tls_insecure,
+            ca_bundle: self.ca_bundle.clone(),
+        }
+    }
+
     /// The servers this invocation opens: positional URLs first, then `--server`
     /// presets, then every config preset when neither was given.
     ///
@@ -126,6 +161,24 @@ mod tests {
             name: name.to_owned(),
             url: url.to_owned(),
         }
+    }
+
+    #[test]
+    fn tls_flags_parse_and_conflict() {
+        let parsed = Args::parse_from(["nxr-tui", "--tls-insecure", "http://h/"]);
+        assert!(parsed.tls().insecure);
+        assert!(parsed.tls().ca_bundle.is_none());
+        assert!(
+            Args::try_parse_from([
+                "nxr-tui",
+                "--ca-bundle",
+                "ca.pem",
+                "--tls-insecure",
+                "http://h/",
+            ])
+            .is_err(),
+            "the two trust policies exclude each other"
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ use anyhow::{bail, Context};
 use nexus_raw_core::{Entry, EntryKind, Enumeration, Event, Nxr};
 use tokio::sync::mpsc;
 
-use crate::args::Args;
+use crate::args::{Args, Tls};
 use crate::config::ConfigFile;
 use crate::net;
 
@@ -20,12 +20,13 @@ use crate::net;
 /// Returns an error when the bootstrap, any listing, the walk or the download fails.
 pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     let auth = net::auth_header(&args.user)?;
+    let tls = args.tls();
     let servers = args.resolve_servers(&cfg)?;
 
     // The same fail-fast bootstrap the TUI uses: every server must answer.
     let mut all = Vec::new();
     for server in &servers {
-        let repos = net::server_repos(server, auth.clone())
+        let repos = net::server_repos(server, auth.clone(), tls.clone())
             .await
             .with_context(|| format!("server {}", server.name.escape_debug()))?;
         // Server-derived strings print escaped: a hostile name must not
@@ -55,12 +56,12 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     let repo_url = net::dir_url(&repo.url);
 
     // The tree walk: the root listing, then two descents along the first folder.
-    let root = listing(&repo_url, "", &auth).await?;
+    let root = listing(&repo_url, "", &auth, &tls).await?;
     println!("tree of {}:", repo.name.escape_debug());
     print_entries("", &root);
     let mut dir_rel = String::new();
     for level in 1..=2 {
-        let Some(name) = listing(&repo_url, &dir_rel, &auth)
+        let Some(name) = listing(&repo_url, &dir_rel, &auth, &tls)
             .await?
             .into_iter()
             .find(|e| e.kind == EntryKind::Dir)
@@ -69,7 +70,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
             break;
         };
         dir_rel = format!("{dir_rel}{name}/");
-        let entries = listing(&repo_url, &dir_rel, &auth).await?;
+        let entries = listing(&repo_url, &dir_rel, &auth, &tls).await?;
         println!("level {level}: {}", dir_rel.escape_debug());
         print_entries("  ", &entries);
     }
@@ -80,7 +81,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
         .find(|e| e.kind == EntryKind::Dir)
         .map(|e| format!("{}/", e.name))
         .unwrap_or_default();
-    let names = net::collect_dir(&repo_url, &sub_rel, auth.clone()).await?;
+    let names = net::collect_dir(&repo_url, &sub_rel, auth.clone(), tls.clone()).await?;
     if names.is_empty() {
         bail!("no files under {sub_rel:?}");
     }
@@ -131,7 +132,10 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     });
 
     let summary = {
-        let nxr = Nxr::new(net::config(repo_url.clone(), auth.clone()), events)?;
+        let nxr = Nxr::new(
+            net::config(repo_url.clone(), auth.clone(), tls.clone()),
+            events,
+        )?;
         nxr.down(&dst, Enumeration::Names(names), false)
             .await
             .context("download")?
@@ -159,10 +163,11 @@ async fn listing(
     repo_url: &str,
     dir_rel: &str,
     auth: &Option<String>,
+    tls: &Tls,
 ) -> anyhow::Result<Vec<Entry>> {
     let url = net::dir_url(&format!("{repo_url}{dir_rel}"));
     let (events, _drain) = mpsc::unbounded_channel::<Event>();
-    Nxr::new(net::config(url, auth.clone()), events)?
+    Nxr::new(net::config(url, auth.clone(), tls.clone()), events)?
         .ls_entries()
         .await
         .context("list entries")

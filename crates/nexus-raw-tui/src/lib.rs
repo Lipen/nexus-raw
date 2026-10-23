@@ -28,7 +28,7 @@
 //! use std::sync::Arc;
 //!
 //! use clap::Parser as _;
-//! use nexus_raw_tui::args::Args;
+//! use nexus_raw_tui::args::{Args, Tls};
 //! use nexus_raw_tui::config::ConfigFile;
 //! use nexus_raw_tui::{app::App, net};
 //!
@@ -49,6 +49,7 @@
 //!     false,
 //!     net::dir_url("http://127.0.0.1:8081").into(),
 //!     None,
+//!     Tls::default(),
 //!     tx,
 //! );
 //! app.boot();
@@ -69,5 +70,5 @@ pub use crate::app::{
     cause_of, App, Card, DestPicker, DlEv, DlOutcome, ErrorModal, LocalEntry, LocalPane, Mode, Msg,
     PickSource, RepoRow, Retry, SaveAsDialog, Screen, ShaState, SizeState, Tab, Toast, Transfer,
 };
-pub use crate::args::Args;
+pub use crate::args::{Args, Tls};
 pub use crate::config::{ConfigFile, Nav, ServerCfg};

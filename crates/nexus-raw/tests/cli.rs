@@ -2070,6 +2070,26 @@ fn ca_bundle_env_is_read() {
 }
 
 #[test]
+fn help_groups_local_and_global_flags() {
+    let out = nxr(&["up", "--help"]);
+    expect_exit(&out, 0, "up help");
+    let text = stdout(&out);
+    let local = text.find("--prefix").expect("the local flag is listed");
+    let global = text
+        .find("Global options")
+        .expect("the global section is titled");
+    assert!(local < global, "local flags come first:\n{text}");
+    assert!(
+        text[global..].contains("--ca-bundle"),
+        "global flags follow the heading:\n{text}"
+    );
+    assert!(
+        !text[..global].contains("--ca-bundle"),
+        "global flags do not sit among the local ones:\n{text}"
+    );
+}
+
+#[test]
 fn ca_bundle_env_value_is_hidden_from_help() {
     let out = nxr_env(&["--help"], &[("NXR_CA_BUNDLE", "/tmp/private-ca.pem")]);
     expect_exit(&out, 0, "help with the CA env");

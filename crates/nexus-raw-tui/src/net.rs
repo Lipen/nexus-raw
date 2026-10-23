@@ -15,6 +15,7 @@ use nexus_raw_core::{
 use tokio::sync::mpsc;
 
 use crate::app::{DlEv, LocalEntry, Msg};
+use crate::args::Tls;
 use crate::config::ServerCfg;
 
 /// Resolves the `Authorization` header value from `-u user:pass` and the environment.
@@ -43,11 +44,11 @@ pub fn auth_header(user: &Option<String>) -> anyhow::Result<Option<String>> {
 
 /// A config for one base, with the same defaults as the `nxr` CLI.
 #[must_use]
-pub fn config(base: String, auth: Option<String>) -> Config {
+pub fn config(base: String, auth: Option<String>, tls: Tls) -> Config {
     Config {
         base,
-        tls_insecure: false,
-        ca_bundle: None,
+        tls_insecure: tls.insecure,
+        ca_bundle: tls.ca_bundle,
         workers: 8,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(15),
@@ -75,9 +76,10 @@ pub fn dir_url(url: &str) -> String {
 pub async fn server_repos(
     server: &ServerCfg,
     auth: Option<String>,
+    tls: Tls,
 ) -> Result<Vec<nexus_raw_core::service::RepoInfo>, Error> {
     let (events, _drain) = mpsc::unbounded_channel::<Event>();
-    Nxr::new(config(dir_url(&server.url), auth), events)?
+    Nxr::new(config(dir_url(&server.url), auth, tls), events)?
         .service_repos()
         .await
 }
@@ -92,9 +94,10 @@ pub fn load_repos(
     slot: usize,
     connect: bool,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
-        let res = server_repos(&server, auth).await;
+        let res = server_repos(&server, auth, tls).await;
         let _ = tx.send(Msg::Repos {
             tab: slot,
             server,
@@ -112,11 +115,12 @@ pub fn load_entries(
     gen: u64,
     dir_url: String,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
         let res = async {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(dir_url.clone(), auth.clone()), events)?
+            Nxr::new(config(dir_url.clone(), auth.clone(), tls.clone()), events)?
                 .ls_entries()
                 .await
         }
@@ -135,11 +139,12 @@ pub fn head_size(
     rel: String,
     url: String,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
         let res = async {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(url.clone(), auth.clone()), events)?
+            Nxr::new(config(url.clone(), auth.clone(), tls.clone()), events)?
                 .head(&url)
                 .await
         }
@@ -158,12 +163,14 @@ pub fn fetch_sibling(
     rel: String,
     url: String,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
         let res = async {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
             let progress = Progress::new(events);
-            let client = NexusClient::new(&config(url.clone(), auth.clone()), progress)?;
+            let client =
+                NexusClient::new(&config(url.clone(), auth.clone(), tls.clone()), progress)?;
             match client.get_small(&url).await? {
                 None => Ok(None),
                 Some(raw) => sibling::parse_line(&String::from_utf8_lossy(&raw))
@@ -188,13 +195,14 @@ pub fn fetch_one(
     out: PathBuf,
     dst: PathBuf,
     auth: Option<String>,
+    tls: Tls,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let _ = tx.send(Msg::Dl(DlEv::Start {
             local: dst,
             files: Some(1),
         }));
-        let res = fetch_one_inner(url, out, auth).await;
+        let res = fetch_one_inner(url, out, auth, tls).await;
         let _ = tx.send(Msg::Dl(DlEv::Done(res.map(|_size| Summary {
             uploaded: 0,
             downloaded: 1,
@@ -207,7 +215,12 @@ pub fn fetch_one(
     })
 }
 
-async fn fetch_one_inner(url: String, out: PathBuf, auth: Option<String>) -> Result<u64, Error> {
+async fn fetch_one_inner(
+    url: String,
+    out: PathBuf,
+    auth: Option<String>,
+    tls: Tls,
+) -> Result<u64, Error> {
     // The destination folder is explicit (picked with `o` or set in the
     // config), so creating it here is not an implicit side effect.
     // A single-file get cannot fall back to the walk's directory creation.
@@ -218,7 +231,7 @@ async fn fetch_one_inner(url: String, out: PathBuf, auth: Option<String>) -> Res
     }
     let (events, _drain) = mpsc::unbounded_channel::<Event>();
     let progress = Progress::new(events);
-    let client = NexusClient::new(&config(url.clone(), auth), progress)?;
+    let client = NexusClient::new(&config(url.clone(), auth, tls), progress)?;
     let expected = match client.get_small(&format!("{url}.sha256")).await? {
         None => None,
         Some(raw) => Some(
@@ -256,11 +269,12 @@ pub fn load_children(
     dir_rel: String,
     dir_url: String,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
         let res = async {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(dir_url.clone(), auth.clone()), events)?
+            Nxr::new(config(dir_url.clone(), auth.clone(), tls.clone()), events)?
                 .ls_entries()
                 .await
         }
@@ -276,6 +290,7 @@ pub fn load_children(
 
 /// Collects the names behind a download request and reports them to the app.
 /// A folder entry walks the whole subtree, a file entry is a single-name plan.
+#[allow(clippy::too_many_arguments)]
 pub fn walk_for_download(
     tx: mpsc::UnboundedSender<Msg>,
     tab: usize,
@@ -284,14 +299,15 @@ pub fn walk_for_download(
     rel: String,
     kind: EntryKind,
     auth: Option<String>,
+    tls: Tls,
 ) {
     tokio::spawn(async move {
         let res = async {
             match kind {
                 // The empty scope is the whole repository: no trailing slash,
                 // or every name would carry a leading one and fail the grammar.
-                EntryKind::Dir if rel.is_empty() => collect_dir(&repo_url, "", auth).await,
-                EntryKind::Dir => collect_dir(&repo_url, &format!("{rel}/"), auth).await,
+                EntryKind::Dir if rel.is_empty() => collect_dir(&repo_url, "", auth, tls).await,
+                EntryKind::Dir => collect_dir(&repo_url, &format!("{rel}/"), auth, tls).await,
                 EntryKind::File => Ok(vec![ArtifactName::parse(&rel)?]),
             }
         }
@@ -310,9 +326,10 @@ pub async fn collect_dir(
     repo_url: &str,
     dir_rel: &str,
     auth: Option<String>,
+    tls: Tls,
 ) -> Result<Vec<ArtifactName>, Error> {
     let mut names = Vec::new();
-    walk_dir(repo_url, dir_rel, &mut names, auth).await?;
+    walk_dir(repo_url, dir_rel, &mut names, auth, tls).await?;
     Ok(names)
 }
 
@@ -322,12 +339,13 @@ fn walk_dir<'a>(
     dir_rel: &'a str,
     out: &'a mut Vec<ArtifactName>,
     auth: Option<String>,
+    tls: Tls,
 ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
     Box::pin(async move {
         let url = dir_url(&format!("{repo_url}{dir_rel}"));
         let entries = {
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
-            Nxr::new(config(url, auth.clone()), events)?
+            Nxr::new(config(url, auth.clone(), tls.clone()), events)?
                 .ls_entries()
                 .await?
         };
@@ -335,7 +353,7 @@ fn walk_dir<'a>(
             match entry.kind {
                 EntryKind::Dir => {
                     let rel = format!("{dir_rel}{}/", entry.name);
-                    walk_dir(repo_url, &rel, out, auth.clone()).await?;
+                    walk_dir(repo_url, &rel, out, auth.clone(), tls.clone()).await?;
                 }
                 EntryKind::File => {
                     out.push(ArtifactName::parse(&format!("{dir_rel}{}", entry.name))?);
@@ -426,6 +444,7 @@ pub fn start_download(
     names: Vec<ArtifactName>,
     dst: PathBuf,
     auth: Option<String>,
+    tls: Tls,
 ) -> tokio::task::JoinHandle<()> {
     let start = DlEv::Start {
         local: dst.clone(),
@@ -433,7 +452,7 @@ pub fn start_download(
     };
     spawn_transfer(tx, start, Dir::Down, |events| {
         Box::pin(async move {
-            let nxr = Nxr::new(config(repo_url.clone(), auth.clone()), events)?;
+            let nxr = Nxr::new(config(repo_url.clone(), auth.clone(), tls.clone()), events)?;
             nxr.down(&dst, Enumeration::Names(names), false).await
         })
     })
@@ -446,6 +465,7 @@ pub fn start_upload(
     base: String,
     src: PathBuf,
     auth: Option<String>,
+    tls: Tls,
 ) -> tokio::task::JoinHandle<()> {
     let start = DlEv::Start {
         local: src.clone(),
@@ -453,7 +473,7 @@ pub fn start_upload(
     };
     spawn_transfer(tx, start, Dir::Up, |events| {
         Box::pin(async move {
-            let nxr = Nxr::new(config(base.clone(), auth.clone()), events)?;
+            let nxr = Nxr::new(config(base.clone(), auth.clone(), tls.clone()), events)?;
             nxr.up(&src, None, true, None).await
         })
     })
@@ -544,7 +564,7 @@ mod tests {
     async fn server_repos_lists_the_mock_repositories() {
         let mock = MockNexus::start(Scenario::Atomic).unwrap();
         let server = ServerCfg::from_base(mock.base_url());
-        let rows = server_repos(&server, None).await.unwrap();
+        let rows = server_repos(&server, None, Tls::default()).await.unwrap();
         let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, vec!["raw-main", "raw-all"]);
         assert!(rows.iter().all(|r| r.format == "raw"));
@@ -554,7 +574,9 @@ mod tests {
     async fn server_repos_refuses_an_unreachable_base() {
         // Port 1 on loopback: connection refused, nothing listens there.
         let server = ServerCfg::from_base("http://127.0.0.1:1/".to_owned());
-        let err = server_repos(&server, None).await.unwrap_err();
+        let err = server_repos(&server, None, Tls::default())
+            .await
+            .unwrap_err();
         assert_eq!(err.exit_code(), 3);
         assert!(err.hint().is_some());
     }
@@ -562,7 +584,9 @@ mod tests {
     #[tokio::test]
     async fn server_repos_refuses_a_malformed_base() {
         let server = ServerCfg::from_base("not a url".to_owned());
-        let err = server_repos(&server, None).await.unwrap_err();
+        let err = server_repos(&server, None, Tls::default())
+            .await
+            .unwrap_err();
         assert_eq!(err.exit_code(), 2);
     }
 
@@ -571,7 +595,9 @@ mod tests {
         let mock = MockNexus::start(Scenario::Atomic).unwrap();
         seed_three_levels(&mock);
         let repo_url = format!("{}repository/raw-main/", mock.base_url());
-        let names = collect_dir(&repo_url, "", None).await.unwrap();
+        let names = collect_dir(&repo_url, "", None, Tls::default())
+            .await
+            .unwrap();
         let mut got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
         got.sort_unstable();
         assert_eq!(
@@ -591,7 +617,9 @@ mod tests {
         let mock = MockNexus::start(Scenario::Atomic).unwrap();
         seed_three_levels(&mock);
         let repo_url = format!("{}repository/raw-main/", mock.base_url());
-        let names = collect_dir(&repo_url, "app/core/", None).await.unwrap();
+        let names = collect_dir(&repo_url, "app/core/", None, Tls::default())
+            .await
+            .unwrap();
         let mut got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
         got.sort_unstable();
         assert_eq!(got, vec!["app/core/lib.rs", "app/core/util/helpers.py"]);
@@ -605,10 +633,12 @@ mod tests {
             br#"{"continuationToken":null,"items":[{"path":"docs/guide/intro.md"}]}"#,
         );
         let repo_url = format!("{}repository/raw-main/", mock.base_url());
-        let names = collect_dir(&repo_url, "docs/", None).await.unwrap();
+        let names = collect_dir(&repo_url, "docs/", None, Tls::default())
+            .await
+            .unwrap();
         let got: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
         assert_eq!(got, vec!["docs/guide/intro.md"]);
-        let none = collect_dir(&repo_url, "docs/guide/empty/", None)
+        let none = collect_dir(&repo_url, "docs/guide/empty/", None, Tls::default())
             .await
             .unwrap();
         assert!(none.is_empty());
@@ -620,7 +650,7 @@ mod tests {
         mock.insert("repository/raw-main/README.txt", b"content of README.txt\n");
         let url = format!("{}repository/raw-main/README.txt", mock.base_url());
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-        head_size(tx, 0, 7, "README.txt".into(), url, None);
+        head_size(tx, 0, 7, "README.txt".into(), url, None, Tls::default());
         match rx.recv().await.unwrap() {
             Msg::Head { tab, gen, rel, res } => {
                 assert_eq!((tab, gen), (0, 7));
@@ -644,7 +674,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("README.txt");
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-        fetch_one(tx, url, out.clone(), dir.path().to_path_buf(), None);
+        fetch_one(
+            tx,
+            url,
+            out.clone(),
+            dir.path().to_path_buf(),
+            None,
+            Tls::default(),
+        );
         match rx.recv().await.unwrap() {
             Msg::Dl(DlEv::Start { files, .. }) => assert_eq!(files, Some(1)),
             other => panic!("unexpected message: {other:?}"),
@@ -669,7 +706,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("README.txt");
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-        fetch_one(tx, url, out.clone(), dir.path().to_path_buf(), None);
+        fetch_one(
+            tx,
+            url,
+            out.clone(),
+            dir.path().to_path_buf(),
+            None,
+            Tls::default(),
+        );
         while let Some(msg) = rx.recv().await {
             if let Msg::Dl(DlEv::Done(res)) = msg {
                 let err = res.expect_err("the marker mismatch must fail the download");
@@ -689,7 +733,7 @@ mod tests {
         mock.insert("repository/raw-main/README.txt.sha256", marker.as_bytes());
         let url = format!("{}repository/raw-main/README.txt.sha256", mock.base_url());
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-        fetch_sibling(tx, 0, 3, "README.txt".into(), url, None);
+        fetch_sibling(tx, 0, 3, "README.txt".into(), url, None, Tls::default());
         match rx.recv().await.unwrap() {
             Msg::Sibling { tab, gen, rel, res } => {
                 assert_eq!((tab, gen), (0, 3));
@@ -708,7 +752,7 @@ mod tests {
         std::fs::write(dir.path().join("one.txt"), body).unwrap();
         let base = format!("{}repository/raw-main/", mock.base_url());
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
-        start_upload(tx, base, dir.path().to_path_buf(), None);
+        start_upload(tx, base, dir.path().to_path_buf(), None, Tls::default());
         let mut summary = None;
         while let Some(msg) = rx.recv().await {
             if let Msg::Dl(DlEv::Done(res)) = msg {
@@ -738,6 +782,7 @@ mod tests {
             format!("{}repository/raw-main/", mock.base_url()),
             dir.path().to_path_buf(),
             None,
+            Tls::default(),
         );
         let mut summary = None;
         while let Some(msg) = rx.recv().await {

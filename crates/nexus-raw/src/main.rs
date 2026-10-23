@@ -24,12 +24,24 @@ Agent entry points:
 pub(crate) struct Cli {
     /// Credentials as user:pass, curl style.
     /// Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD.
-    #[arg(short = 'u', long, value_name = "USER:PASS", global = true)]
+    #[arg(
+        short = 'u',
+        long,
+        value_name = "USER:PASS",
+        global = true,
+        help_heading = "Global options"
+    )]
     pub(crate) user: Option<String>,
     /// A remote alias from the config file (the file is read only when this names one).
     /// The alias expands URL arguments that look relative and supplies the credentials.
     /// A `-u` on the same call wins over the alias credentials.
-    #[arg(short = 'R', long, value_name = "ALIAS", global = true)]
+    #[arg(
+        short = 'R',
+        long,
+        value_name = "ALIAS",
+        global = true,
+        help_heading = "Global options"
+    )]
     pub(crate) remote: Option<String>,
     /// The alias credentials resolved by `-R` (never printed).
     /// Kept apart from `user` so the doctor's source line stays honest.
@@ -39,19 +51,43 @@ pub(crate) struct Cli {
     #[arg(skip)]
     pub(crate) alias_name: Option<String>,
     /// Parallel artifact transfers.
-    #[arg(long, global = true, value_name = "N", default_value_t = 8)]
+    #[arg(
+        long,
+        global = true,
+        help_heading = "Global options",
+        value_name = "N",
+        default_value_t = 8
+    )]
     pub(crate) workers: usize,
     /// Attempts per HTTP request.
-    #[arg(long, global = true, value_name = "N", default_value_t = 4)]
+    #[arg(
+        long,
+        global = true,
+        help_heading = "Global options",
+        value_name = "N",
+        default_value_t = 4
+    )]
     pub(crate) retry: u32,
     /// TCP connect timeout in seconds.
-    #[arg(long, global = true, value_name = "SECS", default_value_t = 15)]
+    #[arg(
+        long,
+        global = true,
+        help_heading = "Global options",
+        value_name = "SECS",
+        default_value_t = 15
+    )]
     pub(crate) connect_timeout_secs: u64,
     /// Fail a transfer when no bytes arrive for this many seconds.
-    #[arg(long, global = true, value_name = "SECS", default_value_t = 30)]
+    #[arg(
+        long,
+        global = true,
+        help_heading = "Global options",
+        value_name = "SECS",
+        default_value_t = 30
+    )]
     pub(crate) stall_secs: u64,
     /// Skip TLS certificate verification.
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = "Global options")]
     pub(crate) tls_insecure: bool,
     /// A PEM bundle of extra trust roots for a private CA (curl's --cacert).
     /// The bundle carries the CA that signed the server certificate, not the bare server leaf.
@@ -59,6 +95,7 @@ pub(crate) struct Cli {
     #[arg(
         long,
         global = true,
+        help_heading = "Global options",
         value_name = "FILE",
         env = "NXR_CA_BUNDLE",
         hide_env_values = true,
@@ -66,13 +103,13 @@ pub(crate) struct Cli {
     )]
     pub(crate) ca_bundle: Option<PathBuf>,
     /// Emit one NDJSON event per line on stdout.
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = "Global options")]
     pub(crate) json: bool,
     /// Print only the final summary line.
-    #[arg(short = 'q', long, global = true)]
+    #[arg(short = 'q', long, global = true, help_heading = "Global options")]
     pub(crate) quiet: bool,
     /// Print more detail: transfer starts and plan names.
-    #[arg(short = 'v', long, global = true)]
+    #[arg(short = 'v', long, global = true, help_heading = "Global options")]
     pub(crate) verbose: bool,
     #[command(subcommand)]
     pub(crate) command: Cmd,

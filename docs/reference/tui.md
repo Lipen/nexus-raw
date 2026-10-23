@@ -25,6 +25,9 @@ Three ways to say which servers open:
 Positional URLs and `--server` presets compose: both open, in that order.
 An unknown preset name is a usage error (exit 2) that names the known presets.
 
+The session also has one TLS policy, like the credentials: `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA, `--tls-insecure` skips verification, and the two exclude each other.
+The bundle carries the CA that signed the server certificate, not the server leaf.
+
 Inside the TUI, `s` opens the servers overlay: every server the session knows, with the open ones marked.
 `enter` focuses the tab of the selected server or connects a new one in the background.
 `a` opens the add form.
