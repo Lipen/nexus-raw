@@ -85,7 +85,7 @@ nxr up dist/1.4.0/ "$BASE/1.4.0/"
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
 V=$(nxr channel get "$BASE/latest")
 printf 'app-1.4.0.zip\n' > names.txt
-nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt --name app-1.4.0.zip
+nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt
 nxr verify vendor/prebuilt
 ```
 
@@ -95,15 +95,15 @@ nxr verify vendor/prebuilt
 
 | Команда | Делает |
 |:--------|:-------|
-| `nxr get <URL> [-o FILE] [--continue] [--segments N]` | GET в файл (через `.part`, докачка через Range или `N` параллельных спанов) или stdout |
+| `nxr get <URL> [-o FILE] [--continue] [--segments N] [--range RANGE]` | GET в файл (через `.part`, докачка через Range, `N` параллельных спанов или один точный диапазон) или stdout |
 | `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
 | `nxr head <URL>` | статус, размер, content type |
 | `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first NAME]` | скан → дифф → PUT байтов + маркеров параллельными воркерами |
+| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first NAME] [--prefix P]...` | скан → дифф → PUT байтов + маркеров параллельными воркерами. `--prefix` публикует поддерево с сохранением пути |
 | `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--segments N] [--plan] [--prefix P]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер. `--segments` режет каждый артефакт на параллельные Range-запросы |
 | `nxr clone <URL> <DIR> [--state FILE] [--no-state] [--verify] [--plan] [--prefix P]` | клон всего репозитория: проверенные загрузки, запечатывание локальных маркеров, необязательный кэш фактов, который не перехэширует неизменённые файлы |
 | `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--via search [--fallback]]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет. `--via search` читает удалённые факты из search-листинга |
-| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run] [--src-user U] [--dst-user U] [--prefix P]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
+| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run\|--plan] [--src-user U] [--dst-user U] [--prefix P]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
 | `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
 | `nxr mv <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes] [--src-user U] [--dst-user U]` | mirror в приёмник, затем удаление в источнике: план по умолчанию, `--yes` двигает (пока перенос не сошёлся, ничего не удаляется) |
 | `nxr point <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
@@ -121,6 +121,8 @@ nxr verify vendor/prebuilt
 
 `down`, `diff`, `mirror`, `mv` и `rm` берут перечисление явно: повторяемый `--name`, `--names-from FILE` (по одному имени в строке, `-` это stdin) или best-effort `--ls` при наличии на сервере search API.
 Без источника команда отказывает.
+Исключение: `nxr down <file-url> <dst-dir>`, где URL оканчивается файлом, это источник из одного имени.
+Файл ложится в `<dst-dir>/<leaf>` с обычными маркером, докачкой и проверкой digest.
 
 Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
 Каждая ошибка печатает `hint:`.
