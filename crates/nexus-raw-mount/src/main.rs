@@ -170,3 +170,22 @@ fn run(cli: Cli) -> Result<(), String> {
     fuser::mount(filesystem, &cli.mountpoint, &options)
         .map_err(|e| format!("mount {}: {e}", cli.mountpoint.display()))
 }
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn the_disk_cache_budget_defaults_without_a_cache_dir() {
+        assert!(Cli::try_parse_from(["nxr-mount", "http://h/repo", "/mnt"]).is_ok());
+    }
+
+    #[test]
+    fn an_explicit_disk_budget_needs_the_cache_dir() {
+        assert!(
+            Cli::try_parse_from(["nxr-mount", "--disk-cache-mib", "8", "http://h/repo", "/mnt"])
+                .is_err()
+        );
+    }
+}
