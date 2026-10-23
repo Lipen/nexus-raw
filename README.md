@@ -173,6 +173,18 @@ nxr-tui https://nexus.example.com/     # or with no arguments: the config preset
 
 Keys, the config file and the headless smoke mode: [the TUI reference](docs/reference/tui.md).
 
+## Mount
+
+`nxr-mount` exposes a raw repository as a local directory: listings, attributes and lazy ranged reads over FUSE.
+The mount is read-only today, and every write gets `EROFS`.
+
+```bash
+nxr-mount https://nexus.example.com/repository/raw/ /mnt/nexus
+```
+
+The mount is Linux only, and the release archives carry it next to `nxr`.
+FUSE semantics, flags, the disk cache and the limits: [the mount reference](docs/reference/mount.md).
+
 ## Credentials
 
 - Sources, in checked order: `-u user:pass`, then `NXR_AUTH` (base64 of `user:pass`), then `NXR_USERNAME` + `NXR_PASSWORD`.
