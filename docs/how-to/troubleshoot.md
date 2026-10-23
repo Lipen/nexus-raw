@@ -193,13 +193,13 @@ Names are rejected before any request when they fail the grammar:
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name '../etc/passwd'
 error: unsafe name: ../etc/passwd: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
-hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved
 ```
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name 'app-1.4.0.zip.sha256'
 error: unsafe name: app-1.4.0.zip.sha256: reserved suffix .sha256 (artifact/marker collision)
-hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved
 ```
 
 Exit 2 in both cases: path traversal is impossible by construction, and an artifact can never collide with its own marker.

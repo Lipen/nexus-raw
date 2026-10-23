@@ -758,13 +758,14 @@ class Reference(unittest.TestCase):
         """A URL whose final segment cannot carry a marker is refused before any byte moves.
 
         The rules the Rust grammar pins: the `.` and `..` segments, an empty segment
-        (a trailing slash), the reserved `.sha256` suffix, a `.nxr`-prefixed segment
-        (local staging and cache), and any character outside `[A-Za-z0-9._-]`,
+        (a trailing slash), the reserved `.sha256` and `.part` suffixes, a `.nxr`-prefixed
+        segment (local staging and cache), and any character outside `[A-Za-z0-9._-]`,
         checked on the percent-decoded segment.
         """
         nx = nxr.Nxr()
         for url in [
             "http://127.0.0.1:1/x.sha256",
+            "http://127.0.0.1:1/x.part",
             "http://127.0.0.1:1/not a name",
             "http://127.0.0.1:1/.",
             "http://127.0.0.1:1/..",

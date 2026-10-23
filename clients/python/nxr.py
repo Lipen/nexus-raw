@@ -553,6 +553,7 @@ def _check_name(name: str) -> None:
 
     A segment matches `[A-Za-z0-9._-]{1,255}` and is never `.` or `..`.
     The `.sha256` suffix is reserved: markers are written by `put`, never uploaded as artifacts.
+    The `.part` suffix is reserved too: those names are local download staging, never artifacts.
     A `.nxr`-prefixed segment is reserved too: those names are local staging and cache, never artifacts.
     """
     if not _SEGMENT.match(name):
@@ -563,6 +564,11 @@ def _check_name(name: str) -> None:
         raise UnsafeName(
             f"unsafe name: {name!r}: reserved suffix .sha256",
             hint="the .sha256 suffix belongs to markers, which put writes itself",
+        )
+    if name.endswith(".part"):
+        raise UnsafeName(
+            f"unsafe name: {name!r}: reserved suffix .part",
+            hint="the .part suffix is local download staging, never an artifact",
         )
     if name.lower().startswith(".nxr"):
         raise UnsafeName(

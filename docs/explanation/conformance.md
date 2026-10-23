@@ -137,7 +137,7 @@ This one is the client contract: every wire invariant against the implementation
 | Exit codes 0/1/2/3 and the `hint:` line are stable | yes | yes | via core | yes |
 | NDJSON shapes are additive and pinned by fixtures | yes | yes | n/a | n/a |
 | Credentials never echo and TLS verifies by default | yes | yes | via core | yes |
-| Names are `[A-Za-z0-9._-]` segments and `.sha256` is reserved | yes | yes | via core | yes |
+| Names are `[A-Za-z0-9._-]` segments and `.sha256` and `.part` are reserved | yes | yes | via core | yes |
 | Segmented transfers: bounds, single-stream fallback, per-span resume | yes | yes | via core | n/a |
 | The clone fact cache is a hint, never authority | yes | yes | via core | n/a |
 

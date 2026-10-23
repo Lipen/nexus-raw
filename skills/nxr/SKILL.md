@@ -19,7 +19,7 @@ A divergent complete artifact is never overwritten, so a rerun is always safe.
 
 - `up` writes markers by default and generates the missing local sibling, and `--no-sha` is the explicit opt-out.
 - The marker of a name is always PUT after that name's bytes, and the order between names is free.
-- Names are relative paths of `[A-Za-z0-9._-]` segments, and only the `.sha256` suffix and a `.nxr`-prefixed segment are reserved.
+- Names are relative paths of `[A-Za-z0-9._-]` segments, and only the `.sha256` and `.part` suffixes and a `.nxr`-prefixed segment are reserved.
   A raw repository still holds foreign files with spaces, parens and unicode: `ls` and `down` handle them, and the alphabet constrains only what nxr itself writes.
 - `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
   A channel is any token file, and dotted-numeric order is the only comparison nxr imposes (`--if-forward`).

@@ -186,10 +186,11 @@ mod tests {
         assert!(!unsafe_reason("a//b").is_empty());
         assert!(!unsafe_reason("x/").is_empty());
         assert!(!unsafe_reason("x.sha256").is_empty());
+        assert!(!unsafe_reason("x.part").is_empty());
         assert!(!unsafe_reason(".nxr-state.json").is_empty());
         assert!(!unsafe_reason("a/.nxr-part-0123456789abcdef").is_empty());
         assert!(!unsafe_reason(".NXR-tmp-1-x").is_empty());
-        // No reserved names beyond the .sha256 suffix and the .nxr local-state prefix.
+        // No reserved names beyond the .sha256 and .part suffixes and the .nxr local-state prefix.
         // `latest`/`nightly`/`version.json` are ordinary artifact names: no name carries protocol meaning.
         for name in ["latest", "nightly", "version.json"] {
             ArtifactName::parse(name).unwrap_or_else(|e| panic!("{name}: {e}"));

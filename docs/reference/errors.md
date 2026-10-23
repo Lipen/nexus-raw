@@ -16,7 +16,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command: finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written |
 | `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the enumeration source` | a typo, or a name list that drifted from what was published |
 | `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `repeat --name, use --names-from FILE, or use --ls when the server has the search API` | no `--name`, `--names-from` or `--ls` on the call |
-| `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved` | spaces, unicode, empty segments or the reserved `.sha256` suffix |
+| `UnsafeName { name, reason }` | a name failed the grammar | 2 | `names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved` | spaces, unicode, empty segments or the reserved `.sha256` and `.part` suffixes |
 | `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
 | `ReadOnly { url, status }` | the repository refuses a deletion: 403/405 to DELETE | 1 | `the repository answered {status} to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed` | a read-only deployment, or credentials without write access |
@@ -139,7 +139,7 @@ The grammar rejects the file before anything is hashed or sent.
 ```console
 $ nxr up dist-broken/ https://nexus.example.com/repository/raw-main/broken/
 error: unsafe name: bad name.zip: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
-hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 suffix is reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved
 $ echo $?
 2
 ```
