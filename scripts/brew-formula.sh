@@ -137,11 +137,16 @@ HEAD
   cat <<'TAIL'
   def install
     bin.install "nxr"
+    # The mount is Linux-only; older Linux archives predate it.
+    bin.install "nxr-mount" if OS.linux? && File.exist?("nxr-mount")
     doc.install "README.md", "LICENSE"
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/nxr --version")
+    if OS.linux? && (bin/"nxr-mount").exist?
+      assert_match version.to_s, shell_output("#{bin}/nxr-mount --version")
+    end
   end
 end
 TAIL

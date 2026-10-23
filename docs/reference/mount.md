@@ -5,6 +5,7 @@ It is a companion binary, not a subcommand of `nxr`: the CLI stays a portable cu
 
 The mount is read-only today.
 It answers listings, attributes and reads.
+The Linux release archives carry `nxr-mount` next to `nxr`. `just mount` runs it from the workspace.
 Every write gets `EROFS`.
 
 ## Run it

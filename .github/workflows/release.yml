@@ -177,9 +177,18 @@ jobs:
       - name: Build nxr
         run: cargo build --locked --release -p nexus-raw --target ${{ matrix.target }}
 
+      # The mount is Linux-only; the other legs package the CLI alone.
+      - name: Build nxr-mount
+        if: runner.os == 'Linux'
+        run: cargo build --locked --release -p nexus-raw-mount --target ${{ matrix.target }}
+
       - name: Strip the binary
         if: runner.os != 'Windows'
-        run: strip "target/${{ matrix.target }}/release/nxr"
+        run: |
+          strip "target/${{ matrix.target }}/release/nxr"
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            strip "target/${{ matrix.target }}/release/nxr-mount"
+          fi
 
       # The binary has to run before it ships: this catches a broken link
       # (missing loader, bad static libc) far cheaper than a user would.
@@ -189,6 +198,9 @@ jobs:
           bin="target/${{ matrix.target }}/release/nxr"
           if [ "${{ runner.os }}" = Windows ]; then bin="$bin.exe"; fi
           "$bin" --version
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            "target/${{ matrix.target }}/release/nxr-mount" --version
+          fi
 
       - name: Pack and checksum
         shell: bash
@@ -197,6 +209,9 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then bin="$bin.exe"; fi
           mkdir stage
           cp "$bin" README.md LICENSE stage/
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            cp "target/${{ matrix.target }}/release/nxr-mount" stage/
+          fi
           cp -r skills stage/skills
           archive="nxr-${{ matrix.name }}.tar.gz"
           tar -czf "$archive" -C stage .
