@@ -226,7 +226,7 @@ _arguments "${_arguments_options[@]}" : \
 '*--name=[One explicit name (repeatable)]:NAME:_default' \
 '*--names-from=[Read names from a file, one per line (\`-\` is stdin). Repeatable, combines with --name]:FILE:_default' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
-'--via=[Build the remote side from the search API'\''s per-asset facts (one paged listing) instead of per-name probes. Requires \`--ls\`; a server without the search API refuses unless \`--fallback\` degrades the report to the probe-based enumeration]:SOURCE:_default' \
+'--via=[Build the remote side from the search API'\''s per-asset facts (one paged listing) instead of per-name probes. Requires \`--ls\`. A server without the search API refuses unless \`--fallback\` degrades the report to the probe-based enumeration]:SOURCE:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \

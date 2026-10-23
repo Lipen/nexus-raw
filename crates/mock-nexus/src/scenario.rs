@@ -154,7 +154,8 @@ pub enum Scenario {
     Redirect { location_path: String },
     /// The store carries one clean pair (`clean/app.bin` + an honest marker), an orphan (`orphan/app.bin` without a marker), a dangling marker (`dangling/app.bin.sha256` without bytes) and an unparseable marker (`broken/app.bin.sha256` with a body outside the `sha256sum -c` format).
     /// GET/HEAD/PUT behave like [`Scenario::Atomic`]: the litter is seeded data, not wire behavior.
-    /// The `nxr audit` structural mode classifies all three classes and never refuses; `--bytes` still verifies the clean pair.
+    /// The `nxr audit` structural mode classifies all three classes and never refuses.
+    /// `--bytes` still verifies the clean pair.
     AuditLitter,
     /// Every DELETE is refused with `403 Forbidden`: the read-only repository.
     /// Nothing is ever removed from the store.
@@ -214,8 +215,10 @@ pub enum Scenario {
     /// Storage behavior is [`Scenario::Atomic`].
     EulaAbsent,
     /// The search index lags behind writes: for `lag_ms` after the first PUT of a run,
-    /// `/service/rest/v1/search/assets` serves the empty page; afterwards it serves the
-    /// store-backed answer like [`Scenario::Atomic`]. The first PUT starts the clock.
+    /// `/service/rest/v1/search/assets` serves the empty page.
+    /// Afterwards it serves the
+    /// store-backed answer like [`Scenario::Atomic`].
+    /// The first PUT starts the clock.
     /// Storage behavior is [`Scenario::Atomic`].
     SearchLag { lag_ms: u64 },
     /// Writes answer `403` with a short `please ask the administrator` body, so the client hint carries the server detail.

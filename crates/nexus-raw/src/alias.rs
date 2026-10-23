@@ -259,7 +259,8 @@ fn url_slots(cli: &mut crate::Cli) -> Vec<&mut String> {
 
 /// Resolve `-R`: expand URL arguments through the alias and attach the alias credentials.
 ///
-/// Priority: `-u` wins over the alias credentials. The alias wins over ambient env.
+/// Priority: `-u` wins over the alias credentials.
+/// The alias wins over ambient env.
 ///
 /// # Errors
 ///

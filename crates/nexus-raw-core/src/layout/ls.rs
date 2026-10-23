@@ -351,7 +351,8 @@ fn directory_scope(group: &[String], version: &str) -> Option<String> {
 /// `q` is the directory scope, or `None` for a repository-wide walk.
 /// The `group` search parameter is deliberately never sent: on a real Nexus it
 /// matches Maven coordinates, not raw path prefixes, which emptied deep
-/// listings. `q` cuts the pages, and the caller's prefix filter decides the answer.
+/// listings.
+/// `q` cuts the pages, and the caller's prefix filter decides the answer.
 async fn paginate(
     client: &NexusClient,
     base: &str,
@@ -406,7 +407,8 @@ async fn walk(
     // The page cap turns an endless scroll into an Enumerate refusal.
     //
     // The bound is per walk, and a directory walk carries `q`, so the rows it covers are the
-    // directory's, not the repository's. Measured against the pinned Nexus 3.96.3
+    // directory's, not the repository's.
+    // Measured against the pinned Nexus 3.96.3
     // (stand/real-nexus/search-pages.sh): `/search/assets` serves 50 rows a page and ignores
     // `pageSize`, 6095 repository objects are 122 pages, and a 5000-name directory is 101.
     // 1000 pages is 50 000 rows: ten times that directory, eight times that repository, and

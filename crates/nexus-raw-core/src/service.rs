@@ -97,7 +97,7 @@ pub(crate) async fn status(client: &NexusClient, base: &str) -> Result<StatusRep
 }
 
 /// True when the URL answers 200.
-/// A 404 and a refused probe (401/403) are a `false` verdict; transport and
+/// A 404 and a refused probe (401/403) are a `false` verdict. Transport and
 /// server errors propagate, because they say nothing about reachability.
 async fn probe_ok(client: &NexusClient, url: &str) -> Result<bool, Error> {
     match client.get_small(url).await {
@@ -366,7 +366,7 @@ pub(crate) async fn eula(client: &NexusClient, base: &str) -> Result<Option<Eula
 /// The disclaimer is echoed verbatim: the server refuses a rewritten one.
 pub(crate) async fn eula_accept(client: &NexusClient, base: &str) -> Result<EulaOutcome, Error> {
     // The accept path is strict: 401/403 is a refusal to answer, not "no gate".
-    // The read path keeps mapping auth to `None`; `--accept` must not lie about it.
+    // The read path keeps mapping auth to `None`. `--accept` must not lie about it.
     let root = server_root(base)?;
     let url = format!("{root}/service/rest/v1/system/eula");
     let status: EulaStatus = match client.get_small(&url).await {

@@ -227,7 +227,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
     }
 
     // service-overview scenarios: the server endpoints answer before the storage store is consulted.
-    // Each arm writes its response and returns. Storage scenarios fall through to the match below.
+    // Each arm writes its response and returns.
+    // Storage scenarios fall through to the match below.
     if matches!(req.method.as_str(), "GET" | "HEAD") {
         let service = match path {
             "service/rest/v1/status" => match shared.scenario {
@@ -342,7 +343,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                                     return None;
                                 }
                                 // Strip the `repository/<repo>/` prefix the store keys
-                                // carry when it is there; a root-style store key passes as is.
+                                // carry when it is there. A root-style store key passes as is.
                                 if let Some(rest) = k.strip_prefix("repository/") {
                                     return Some(
                                         rest.split_once('/')
@@ -406,7 +407,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         return;
     }
 
-    // search-lag: the first storage PUT arms the catch-up deadline; the index
+    // search-lag: the first storage PUT arms the catch-up deadline. The index
     // serves the empty page until it passes, then the store-backed answer.
     if let Scenario::SearchLag { lag_ms } = shared.scenario {
         if req.method == "PUT" && !path.starts_with("service/rest/v1/") {

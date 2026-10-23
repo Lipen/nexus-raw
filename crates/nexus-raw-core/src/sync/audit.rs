@@ -2,7 +2,7 @@
 //!
 //! The classification is a pure function over metadata facts: the raw tree
 //! listing (markers included), the marker bodies and the search facts.
-//! Asset bytes are never read here; the `--bytes` mode lives in the executor
+//! Asset bytes are never read here. The `--bytes` mode lives in the executor
 //! and feeds the same finding type.
 //! The repository is only ever read: no audit request mutates it.
 
@@ -98,9 +98,9 @@ pub struct AuditVerdict {
 /// The structural classification over the audit input.
 ///
 /// Per listed object:
-/// - an asset without its marker is an [`FindingClass::Orphan`];
-/// - a marker whose asset is not listed is a [`FindingClass::DanglingMarker`];
-/// - a marker body outside the format is an [`FindingClass::UnparseableMarker`];
+/// - an asset without its marker is an [`FindingClass::Orphan`].
+/// - a marker whose asset is not listed is a [`FindingClass::DanglingMarker`].
+/// - a marker body outside the format is an [`FindingClass::UnparseableMarker`].
 /// - a parsed marker whose digest disagrees with the search fact is a
 ///   [`FindingClass::DivergedFact`].
 ///
@@ -164,7 +164,7 @@ pub fn classify(input: &AuditInput) -> AuditVerdict {
             continue;
         }
         let Some(body) = body else {
-            // The executor fetched every listed marker; an absent body means
+            // The executor fetched every listed marker. An absent body means
             // the marker was filtered before the fetch (name filters), so
             // this pair was never checked: silence, not a finding.
             continue;

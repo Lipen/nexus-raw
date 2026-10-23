@@ -314,7 +314,7 @@ pub async fn get_segmented(
             resumed_from: 0,
         });
     }
-    // Every segment spans at least one byte; spans are `total / segments` sized with
+    // Every segment spans at least one byte. Spans are `total / segments` sized with
     // the remainder spread over the leading segments.
     let base = total / segments as u64;
     let segments = if base == 0 {
@@ -481,7 +481,7 @@ async fn verify_sibling(
 }
 
 /// The staging directory for a segmented get: `<out>.segments/` beside the output.
-/// Created on demand; a failure leaves its files for inspection.
+/// Created on demand. A failure leaves its files for inspection.
 #[cfg(not(target_arch = "wasm32"))]
 async fn temp_staging_dir(out: &Path) -> Result<PathBuf, Error> {
     let mut s = out.as_os_str().to_os_string();

@@ -29,7 +29,7 @@ impl Dir {
 
 /// One name that did not land, with the exit-code class of its error.
 /// [`Summary::failed`] keeps the legacy strings, which for a digest mismatch
-/// carry `name: detail`; this list always carries the bare name.
+/// carry `name: detail`. This list always carries the bare name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Failure {
     pub name: String,
@@ -44,7 +44,8 @@ pub struct Summary {
     pub downloaded: usize,
     pub skipped: usize,
     /// Local markers a `clone` rewrote from bytes that already matched the
-    /// remote marker. Other operations leave it at 0.
+    /// remote marker.
+    /// Other operations leave it at 0.
     pub sealed: usize,
     /// Names this call deleted (`rm`): transfers never delete, so they stay at 0.
     pub removed: usize,
@@ -200,7 +201,8 @@ impl Event {
 
 /// Coalescing progress sender: at most one byte event per `MIN_INTERVAL` per (name, dir).
 /// The throttle key is the hash of (name, dir): the lookup runs on every chunk, so it
-/// must not allocate. A hash collision only merges two throttle slots, which is harmless.
+/// must not allocate.
+/// A hash collision only merges two throttle slots, which is harmless.
 #[derive(Clone)]
 pub struct Progress {
     tx: mpsc::UnboundedSender<Event>,

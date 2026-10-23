@@ -308,8 +308,8 @@ type DeepLine = (&'static str, bool, String, Option<&'static str>);
 /// The read-only `--deep` probes of the server's actual behavior.
 ///
 /// Every probe is independent: one refusing never stops the others.
-/// A probe with a target (range, content-length) needs an object; without one
-/// the verdict is `skipped`, never `ok` and never `fail` (an empty repository
+/// A probe with a target (range, content-length) needs an object.
+/// Without one the verdict is `skipped`, never `ok` and never `fail` (an empty repository
 /// is a normal thing to point doctor at, before the first `up`).
 /// Write rights are deliberately not probed: a PUT probe would itself be a
 /// mutation, against the read-only contract of the diagnostics.
@@ -493,8 +493,8 @@ async fn deep_probes(
     }
 
     // eula gate: the CE 3.79+ write gate, strictly read-only (a GET).
-    // A 404 means the server predates the gate; 401/403 means the probe
-    // needs admin rights, which is a skip, not a finding.
+    // A 404 means the server predates the gate.
+    // A 401/403 means the probe needs admin rights, which is a skip, not a finding.
     let eula_url = format!("{origin}/service/rest/v1/system/eula");
     match client.get_small(&eula_url).await {
         Ok(Some(body)) => {

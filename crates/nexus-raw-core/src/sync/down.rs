@@ -65,7 +65,7 @@ fn segment_dir(dir: &Path, name: &ArtifactName) -> PathBuf {
 /// The Summary event goes out before the error returns.
 /// Part files resume by default.
 /// `fresh` starts every name from zero.
-/// `segments` splits each artifact into that many concurrent Range spans; the
+/// `segments` splits each artifact into that many concurrent Range spans. The
 /// worker budget still caps the network concurrency, so the flag widens one
 /// object, never the run.
 ///

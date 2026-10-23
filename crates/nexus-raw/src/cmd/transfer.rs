@@ -318,8 +318,8 @@ async fn run_diff(
 ) -> Result<u8, Error> {
     if via_search {
         // `--via search` compares against the search index. `--prefix` filters
-        // the search facts client-side; `--name`/`--names-from` name the
-        // fallback's own source instead.
+        // the search facts client-side.
+        // `--name`/`--names-from` name the fallback's own source instead.
         if !fallback && (!names.is_empty() || !names_from.is_empty()) {
             return Err(Error::Misuse(
                 "--via search takes its names from the search listing: --name/--names-from only make sense with --fallback".into(),
@@ -697,8 +697,8 @@ pub(crate) async fn audit(
             .collect::<Result<_, _>>()?,
     };
     let run = ctx.nxr.audit_filtered(bytes, sample, &filter).await?;
-    // The client pool was built with its own worker ceiling; an explicit
-    // --workers rebuilds the facade when it differs from the flag.
+    // The client pool was built with its own worker ceiling.
+    // An explicit --workers rebuilds the facade when it differs from the flag.
     if let Some(w) = workers {
         let _ = w;
     }

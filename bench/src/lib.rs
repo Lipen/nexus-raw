@@ -315,8 +315,8 @@ impl Mock {
 /// attempt that returns `Err` is not a sample at all.
 /// That is what lets a run survive loopback noise without inflating a number.
 /// The client stack loses a request every few tens of thousands in brief storms
-/// while the server stays healthy; here such an attempt costs no iteration, so
-/// the retry never lands inside a measurement.
+/// while the server stays healthy.
+/// Here such an attempt costs no iteration, so the retry never lands inside a measurement.
 /// A run of consecutive failures panics instead: an attempt that never succeeds
 /// is a broken setup, not noise.
 #[must_use]
@@ -357,8 +357,9 @@ where
 
 /// The `nxr` binary the end-to-end benches drive.
 ///
-/// `NXR_BIN` wins; otherwise the release build of the workspace, then the debug
-/// one. The panic names the fix: `just bench` builds the binary and sets the path.
+/// `NXR_BIN` wins.
+/// Otherwise the release build of the workspace, then the debug one.
+/// The panic names the fix: `just bench` builds the binary and sets the path.
 #[must_use]
 pub fn nxr_bin() -> PathBuf {
     if let Ok(path) = std::env::var("NXR_BIN") {

@@ -77,7 +77,8 @@ pub(crate) struct Shared {
 
 impl Shared {
     /// Shared state for a hosted instance running `scenario`: an empty store plus every scenario-derived knob.
-    /// A preset instance reports its scenario name; a composed one reports `"spec"`.
+    /// A preset instance reports its scenario name.
+    /// A composed one reports `"spec"`.
     pub(crate) fn hosted_explicit(
         spec: crate::spec::Spec,
         scenario: Scenario,

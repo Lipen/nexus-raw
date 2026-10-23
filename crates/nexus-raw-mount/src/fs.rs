@@ -2,7 +2,7 @@
 //!
 //! The repository has no directories: a path is a directory while any object sits under it.
 //! A node is therefore a file when HEAD answers 200 and a directory when the search listing is
-//! non-empty; an absent object with an empty listing is `ENOENT`.
+//! non-empty. An absent object with an empty listing is `ENOENT`.
 //!
 //! Reads are block-cached, listings and attributes live for [`TTL`], and no lock is held across a
 //! network call: the cache mutex only guards map lookups and inserts.
@@ -462,7 +462,7 @@ fn join(parent: &str, name: &str) -> String {
     }
 }
 
-/// The parent of a path; the root is its own parent.
+/// The parent of a path. The root is its own parent.
 fn parent_of(path: &str) -> &str {
     match path.rfind('/') {
         Some(0) | None => "/",

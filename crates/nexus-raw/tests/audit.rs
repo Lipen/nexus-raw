@@ -1,6 +1,7 @@
 //! CLI conformance: `nxr audit` against the `audit-litter` scenario.
 //!
-//! Covers: the structural classes (orphan, dangling marker, unparseable marker), the clean pair never flagged, the exit-code verdict, and the two-mode contract (the structural pass sees no byte corruption; the byte pass verifies the clean pair).
+//! Covers the structural classes (orphan, dangling marker, unparseable marker), the clean pair never flagged, and the exit-code verdict.
+//! It also covers the two-mode contract: the structural pass sees no byte corruption, the byte pass verifies the clean pair.
 
 use std::process::{Command, Output};
 

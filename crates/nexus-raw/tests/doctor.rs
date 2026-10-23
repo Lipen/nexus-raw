@@ -59,8 +59,8 @@ fn deep_on_atomic_reports_all_probes() {
 #[test]
 fn deep_on_ignore_range_warns_range_stripped() {
     let srv = MockNexus::start(Scenario::IgnoreRange).expect("mock nexus starts");
-    // The ignore-range store is atomic except the range behavior; the target
-    // needs one object, so the test seeds it through the search-visible page
+    // The ignore-range store is atomic except the range behavior.
+    // The target needs one object, so the test seeds it through the search-visible page
     // first: a put, which ignore-range stores normally.
     let dir = std::env::temp_dir().join(format!("nxr-doctor-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");

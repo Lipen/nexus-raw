@@ -151,7 +151,8 @@ pub async fn down(
 ///
 /// The optional fact cache lives under `dstDir` and skips re-hashing files
 /// whose size and mtime still match the last verified copy. `verify` ignores
-/// it. `state`/`noState` choose an explicit path or disable it.
+/// it.
+/// `state`/`noState` choose an explicit path or disable it.
 #[napi]
 pub async fn clone(
     src_url: String,
@@ -450,7 +451,8 @@ pub async fn mirror(
     Ok(NxrSummary::from(&summary))
 }
 
-/// Check local bytes, markers and digests. No network.
+/// Check local bytes, markers and digests.
+/// No network.
 #[napi]
 pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSummary> {
     let o = opts.unwrap_or_default();

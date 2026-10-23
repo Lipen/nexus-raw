@@ -1,9 +1,9 @@
 // The sandbox smoke: builds nothing, drives everything, stays dependency-free.
 //
 // Three layers, in order:
-// - unit checks of the shared fake module: the pagination loop, the 404 arm, markers in search;
+// - unit checks of the shared fake module: the pagination loop, the 404 arm, markers in search.
 // - the built wasm under plain node: `nxr_ls` against the same fake, one injected 500
-//   burned on the way, so the retry path runs too;
+//   burned on the way, so the retry path runs too.
 // - when a chromium-family binary is around (or --require-browser insists), the page
 //   itself in a headless browser against a backend-free static server: the page opens
 //   `?smoke=interact`, clicks a folder, goes up and uploads a file, and the final
@@ -198,7 +198,7 @@ async function runBrowser(url, waitForBeacon) {
   const [code] = await new Promise((done) => child.on('close', (...c) => done(c)))
   clearTimeout(killer)
   await rm(profile, { recursive: true, force: true }).catch(() => {})
-  // The dump lands at quiescence, which includes the beacon; the grace wait covers
+  // The dump lands at quiescence, which includes the beacon. The grace wait covers
   // a browser that quit a beat before the server recorded the ping.
   await Promise.race([waitForBeacon(), new Promise((r) => setTimeout(r, 3000))])
   return { dom, driver: `${bin}${code === 0 ? '' : ` (exit ${code}: ${err.slice(0, 300)})`}` }
@@ -224,7 +224,7 @@ async function main() {
   // 2. The built wasm under plain node, against the same fake.
   const api = await startServer(true)
   try {
-    // The wasm-bindgen web glue expects browser globals; node grew the Web APIs
+    // The wasm-bindgen web glue expects browser globals. Node grew the Web APIs
     // (fetch, Request, AbortController) that the reqwest wasm backend needs,
     // and the two aliases below are all that is missing.
     globalThis.self ??= globalThis
@@ -253,7 +253,7 @@ async function main() {
     assert.ok(after.some((row) => row.name === 'upload.txt' && !row.dir), 'the uploaded file is listed')
     assert.ok(!after.some((row) => row.name.endsWith('.sha256')), 'the marker stays hidden')
     console.log('smoke: wasm upload: bytes, digest and the re-listed name checked')
-    // The page pings the same beacon; the smoke pings it like the page does.
+    // The page pings the same beacon. The smoke pings it like the page does.
     await fetch(`${api.url}/beacon?rows=${rows.length}&failed=`)
     const beacon = api.beacons.at(-1)
     assert.ok(beacon.rows > 0 && beacon.failed === '', `node run beacon: ${JSON.stringify(beacon)}`)
@@ -264,7 +264,7 @@ async function main() {
 
   // 3. The page in a headless browser, backend-free: only the worker can answer.
   const staticHost = await startServer(false)
-  // The page pings exactly once; the server-side record is the sync point.
+  // The page pings exactly once. The server-side record is the sync point.
   const waitForBeacon = async () => {
     const deadline = Date.now() + 30_000
     while (staticHost.beacons.length === 0) {
@@ -274,8 +274,9 @@ async function main() {
   }
   try {
     // Runner chromium now and then does not reach the listing inside the first
-    // window, for no change on our side; two shots, and only both silent make
-    // the red. Every assertion below rides the passing attempt's facts.
+    // window, for no change on our side. Two shots, and only both silent make
+    // the red.
+    // Every assertion below rides the passing attempt's facts.
     let run = null
     const attempts = []
     let passing = false
@@ -333,7 +334,7 @@ async function main() {
     // The dom dump is a bonus, not the contract: some chromium builds never reach
     // the dump's quiescence while a service worker stays registered, and the
     // `--timeout` flag does not save those. The beacon already proves the wasm
-    // listed end to end; `--require-browser` demands the rendered rows anyway.
+    // listed end to end. `--require-browser` demands the rendered rows anyway.
     if (run.dom.includes('app/')) {
       console.log(`smoke: browser (${run.driver}): beacon rows=${beacon.rows} failed="" api hits=0, rows rendered, so the service worker answered`)
     } else if (requireBrowser) {

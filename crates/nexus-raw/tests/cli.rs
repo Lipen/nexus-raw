@@ -737,7 +737,8 @@ fn quiet_prints_only_the_summary_line() {
     );
 }
 
-/// The TLS flag is reported by doctor; a zero timeout is refused by the same config validation.
+/// The TLS flag is reported by doctor.
+/// A zero timeout is refused by the same config validation.
 #[test]
 fn tls_insecure_is_reported_and_zero_timeout_is_misuse() {
     // Doctor treats the flag as a finding: the point is that the setting reaches it.
@@ -975,7 +976,8 @@ fn seed_publish(base: &str) {
     expect_exit(&up, 0, "seeding up");
 }
 
-/// mirror with explicit names pours exactly those names; a rerun is a pure skip with zero content GETs.
+/// A mirror with explicit names pours exactly those names.
+/// A rerun is a pure skip with zero content GETs.
 #[test]
 fn mirror_pours_the_version_and_reruns_are_pure_skips() {
     let src_srv = server(Scenario::Atomic);
@@ -2228,7 +2230,8 @@ fn golden_ndjson_mirror_holds() {
 }
 
 /// The retry surface is part of the same contract: a rate-limited up pins the `retrying` event, name, attempt and reason included.
-/// The reason carries the request URL, so the test masks the ephemeral port with `PORT` before comparing; the fixture is otherwise byte-exact.
+/// The reason carries the request URL, so the test masks the ephemeral port with `PORT` before comparing.
+/// The fixture is otherwise byte-exact.
 #[test]
 fn golden_ndjson_retrying_holds() {
     let srv = server(Scenario::RateLimit {
@@ -2419,8 +2422,8 @@ fn audit_prefix_matches_whole_segments() {
 // ---- golden completions -----------------------------------------------------
 
 /// The completion scripts are part of the contract, pinned byte-exact by fixtures in tests/golden/.
-/// A clap tree change (a command, a flag, a help text) deliberately breaks them;
-/// regenerate with `cargo run -p nexus-raw -- complete <shell> > <fixture>` and commit on purpose.
+/// A clap tree change (a command, a flag, a help text) deliberately breaks them.
+/// Regenerate with `cargo run -p nexus-raw -- complete <shell> > <fixture>` and commit on purpose.
 /// The scripts are deterministic: no ports, no timestamps, no environment.
 /// A platform-flavored render (an `.exe` in the program name, a path separator) fails here
 /// with the first differing lines printed, so the flavor is visible from the CI log alone.
@@ -2840,7 +2843,8 @@ fn publish_for_rm(srv: &MockNexus, names: &[&str]) -> String {
     base
 }
 
-/// rm deletes the enumerated version: names, markers and the version document; a rerun sees only 404s and exits 0.
+/// `rm` deletes the enumerated version: names, markers and the version document.
+/// A rerun sees only 404s and exits 0.
 #[test]
 fn rm_removes_whole_version_and_reruns_clean() {
     let srv = server(Scenario::Atomic);
@@ -3083,7 +3087,8 @@ fn rm_exit_matrix_rows() {
     expect_exit(&dead, 3, "a dead base is transport");
 }
 
-/// point deletes a channel ref and stays idempotent; the read-only scenario refuses it.
+/// `point` deletes a channel ref and stays idempotent.
+/// The read-only scenario refuses it.
 #[test]
 fn point_roundtrip_and_readonly() {
     let srv = server(Scenario::Atomic);
@@ -3727,7 +3732,8 @@ fn service_repos_prints_human_lines() {
     assert!(text.contains("raw-all raw group http://"), "{text}");
 }
 
-/// `--json` is one object with the repository array; a repository URL works as the input.
+/// `--json` is one object with the repository array.
+/// A repository URL works as the input.
 #[test]
 fn service_repos_json_shape_from_a_repository_url() {
     let srv = server(Scenario::Atomic);
@@ -3756,7 +3762,8 @@ fn service_repos_missing_prints_the_root_hint() {
     assert!(stderr(&out).contains("server root"), "{}", stderr(&out));
 }
 
-/// `service status` prints the alive verdict; --json carries the same shape.
+/// `service status` prints the alive verdict.
+/// `--json` carries the same shape.
 #[test]
 fn service_status_prints_the_alive_verdict() {
     let srv = server(Scenario::ServiceStatusVersion);
@@ -3933,7 +3940,8 @@ fn rm_ls_with_explicit_names_is_misuse() {
 
 // ---- prefix ----------------------------------------------------------------
 
-/// `down --prefix` plans exactly the subtree; a bare prefix is misuse.
+/// `down --prefix` plans exactly the subtree.
+/// A bare prefix is misuse.
 #[test]
 fn down_prefix_flag_filters_the_plan() {
     let srv = server(Scenario::Atomic);
@@ -4828,7 +4836,8 @@ fn up_if_changed_reups_when_the_remote_marker_is_missing() {
 // ---- search lag -----------------------------------------------------------
 
 /// `up --wait-index` holds the run until the lagging search index surfaces every
-/// uploaded name; the default run without the flag answers before the index does.
+/// uploaded name.
+/// The default run without the flag answers before the index does.
 #[test]
 fn up_wait_index_survives_the_search_lag() {
     let srv = server(Scenario::SearchLag { lag_ms: 1500 });

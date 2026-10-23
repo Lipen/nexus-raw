@@ -1,20 +1,21 @@
 // Drift guard for the hand-maintained index.d.ts.
-// The napi CLI regenerates binding.d.ts from the Rust source on every build;
+// The napi CLI regenerates binding.d.ts from the Rust source on every build.
 // index.d.ts is maintained by hand (its header says so) and must describe the
-// same surface. Run after a build: `node check-dts.mjs` (CI does).
+// same surface.
+// Run after a build: `node check-dts.mjs` (CI does).
 //
 // The two files intentionally differ in form, so the comparison is
 // normalized, not textual:
-// - the generated optional options carry ` | undefined | null`;
+// - the generated optional options carry ` | undefined | null`.
 // - the generated option interfaces flatten what index.d.ts inherits
-//   through `extends NxrCommonOpts`;
+//   through `extends NxrCommonOpts`.
 // - `export declare function` vs `export function`, whitespace, wrapping.
 // One-sided exports are allow-listed: NxrEvent is hand-documented only,
 // __napiBindingTarget is loader machinery the CLI adds.
 //
 // Granularity: function names and full signatures, interface names, and the
 // field names of every interface. A renamed parameter or a dropped field
-// fails; a pure type rewording inside one field may not.
+// fails. A pure type rewording inside one field may not.
 // On top of the two .d.ts files, the named exports of the runtime entry
 // (`index.js`) must match the declared functions exactly.
 
@@ -27,7 +28,7 @@ const INDEX_ONLY_INTERFACES = new Set(['NxrEvent'])
 const BINDING_ONLY_EXPORTS = new Set(['__napiBindingTarget'])
 
 const stripComments = (s) => s.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '')
-// `X | undefined | null` on an optional option is the same optional type;
+// `X | undefined | null` on an optional option is the same optional type.
 // strip the exact sequence, keep meaningful unions like `string | Uint8Array`.
 // A multi-line param list may end in a trailing comma before the `)`.
 const normType = (s) => s.replace(/\s+/g, '').replaceAll('|undefined|null', '').replace(/,$/, '')
@@ -82,7 +83,8 @@ const problems = []
 const indexFns = parseFunctions(indexSrc)
 const bindingFns = parseFunctions(bindingSrc)
 // A shipped `.d.ts` must not name `Buffer`: consumers without @types/node
-// would get TS2591. `Uint8Array` accepts a Node Buffer and needs no typings.
+// would get TS2591.
+// `Uint8Array` accepts a Node Buffer and needs no typings.
 for (const fns of [indexFns, bindingFns]) {
   for (const [name, sig] of fns) {
     if (/\bBuffer\b/.test(sig)) {

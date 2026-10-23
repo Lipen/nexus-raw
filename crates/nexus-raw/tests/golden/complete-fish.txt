@@ -160,7 +160,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand clone" -s h -l help -d 'Print he
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l names-from -d 'Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
-complete -c nxr -n "__fish_nxr_using_subcommand diff" -l via -d 'Build the remote side from the search API\'s per-asset facts (one paged listing) instead of per-name probes. Requires `--ls`; a server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration' -r
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -l via -d 'Build the remote side from the search API\'s per-asset facts (one paged listing) instead of per-name probes. Requires `--ls`. A server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l workers -d 'Parallel artifact transfers' -r

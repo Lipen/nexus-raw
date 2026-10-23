@@ -151,7 +151,8 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
-        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        /// Read names from a file, one per line (`-` is stdin).
+        /// Repeatable, combines with --name.
         #[arg(long, value_name = "FILE")]
         names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
@@ -206,7 +207,8 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
-        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        /// Read names from a file, one per line (`-` is stdin).
+        /// Repeatable, combines with --name.
         #[arg(long, value_name = "FILE")]
         names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
@@ -216,7 +218,8 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
         /// Build the remote side from the search API's per-asset facts (one paged listing) instead of per-name probes.
-        /// Requires `--ls`; a server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration.
+        /// Requires `--ls`.
+        /// A server without the search API refuses unless `--fallback` degrades the report to the probe-based enumeration.
         #[arg(long, value_name = "SOURCE")]
         via: Option<String>,
         /// With `--via`: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run.
@@ -255,13 +258,15 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
-        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        /// Read names from a file, one per line (`-` is stdin).
+        /// Repeatable, combines with --name.
         #[arg(long, value_name = "FILE")]
         names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Delete for real. Without it the run prints the plan and touches nothing.
+        /// Delete for real.
+        /// Without it the run prints the plan and touches nothing.
         #[arg(long)]
         yes: bool,
         /// Keep only names under this whole-segment prefix (repeatable).
@@ -285,7 +290,8 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
-        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        /// Read names from a file, one per line (`-` is stdin).
+        /// Repeatable, combines with --name.
         #[arg(long, value_name = "FILE")]
         names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
@@ -317,13 +323,15 @@ pub(crate) enum Cmd {
         /// One explicit name (repeatable).
         #[arg(long, value_name = "NAME")]
         name: Vec<String>,
-        /// Read names from a file, one per line (`-` is stdin). Repeatable, combines with --name.
+        /// Read names from a file, one per line (`-` is stdin).
+        /// Repeatable, combines with --name.
         #[arg(long, value_name = "FILE")]
         names_from: Vec<String>,
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing.
+        /// Move for real.
+        /// Without it the run prints both plans (the pour and the delete) and touches nothing.
         #[arg(long)]
         yes: bool,
         /// Credentials for the source only, overriding the shared `-u`.
@@ -362,7 +370,8 @@ pub(crate) enum Cmd {
         /// A base URL to probe (checks without it stay local).
         #[arg(value_name = "URL")]
         url: Option<String>,
-        /// Probe the server's behavior: range, content-length, search, repo type, version. Read-only.
+        /// Probe the server's behavior: range, content-length, search, repo type, version.
+        /// Read-only.
         #[arg(long, requires = "url")]
         deep: bool,
         /// The object the deep probes target (default: a soft autolookup of the root).

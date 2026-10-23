@@ -156,7 +156,7 @@ impl Nxr {
     /// GET a URL in `segments` concurrent byte-range pieces (spec §5.1 `get --segments`).
     ///
     /// Falls back to the single-stream [`Nxr::get`] result shape when the server ignores `Range`
-    /// (the caller reruns the plain path; the error here is [`Error::RangeIgnored`]).
+    /// (the caller reruns the plain path. The error here is [`Error::RangeIgnored`]).
     ///
     /// # Errors
     ///
@@ -387,14 +387,14 @@ impl Nxr {
     ///
     /// The structural pass lists the raw tree through the search API (markers
     /// included), fetches every listed marker body (small GETs, worker-paced)
-    /// and classifies the integrity classes over the metadata; asset bytes are
+    /// and classifies the integrity classes over the metadata. Asset bytes are
     /// never read. The search facts double as the independent cross-check of
     /// every parsed marker (`diverged_fact`), so a run over a live index both
     /// proves existence and cross-checks content.
     ///
     /// `bytes_mode` additionally downloads and hashes every asset against its
     /// marker: the only pass that sees silent bitrot. `sample` limits the byte
-    /// pass to a deterministic subset of that size; `None` or `Some(0)` checks
+    /// pass to a deterministic subset of that size. `None` or `Some(0)` checks
     /// everything.
     ///
     /// The repository is only read: no audit request mutates it.
@@ -738,7 +738,7 @@ impl Nxr {
 
     /// Upload a local directory, skipping names the remote already vouches for (`up --if-changed`).
     ///
-    /// The plan is [`Self::up_if_changed_plan`]; this method emits it and executes it.
+    /// The plan is [`Self::up_if_changed_plan`]. This method emits it and executes it.
     ///
     /// # Errors
     ///
@@ -857,7 +857,7 @@ impl Nxr {
     /// The enumeration is the search API walked at the invocation base, so a
     /// repository root works as well as a version directory.
     /// A local fact cache (`StateMode`) skips re-hashing files whose size and
-    /// mtime still match the last verified copy; `verify` ignores it.
+    /// mtime still match the last verified copy. `verify` ignores it.
     /// Nothing is written.
     ///
     /// # Errors
@@ -1291,7 +1291,7 @@ impl Nxr {
 
     /// Poll the search index until every given name is visible, or the budget runs out.
     ///
-    /// The search index on a real server lags behind completed writes by seconds;
+    /// The search index on a real server lags behind completed writes by seconds.
     /// a consumer that reads through search right after `up` sees a stale world.
     /// The poll asks for the full asset list every 500ms and counts how many of
     /// `names` are present. The returned count may be lower than `names.len()`:
@@ -1414,7 +1414,7 @@ impl Nxr {
 ///
 /// Platform arms:
 /// - unix: an exclusive `flock`. The first create is exclusive (`create_new`),
-///   which also refuses a symlink plant at the predictable temp name; a dead
+///   which also refuses a symlink plant at the predictable temp name. A dead
 ///   run's leftover file is taken over once the flock comes free.
 /// - windows: the file is opened with read and write sharing denied, so a
 ///   second open for writing fails while this run lives. Share-delete stays

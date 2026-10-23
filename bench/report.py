@@ -320,8 +320,8 @@ def compare(first: str, second: str) -> int:
         if before is None or after is None:
             side = "only in the newer record" if before is None else "only in the older record"
             lines.append(
-                f"| {name} | {duration(before['mean_ns']) if before else '—'} | "
-                f"{duration(after['mean_ns']) if after else '—'} | | | {side} |"
+                f"| {name} | {duration(before['mean_ns']) if before else 'n/a'} | "
+                f"{duration(after['mean_ns']) if after else 'n/a'} | | | {side} |"
             )
             continue
         mean_before, mean_after = before["mean_ns"], after["mean_ns"]

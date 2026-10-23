@@ -174,7 +174,8 @@ function queryUrl(url, name = 'url') {
 }
 
 // Split `.../repository/<name>/<subtree>/` into the repo root and the decoded
-// subtree path. The root keeps its trailing slash, so names append directly.
+// subtree path.
+// The root keeps its trailing slash, so names append directly.
 function splitRepoUrl(dirUrl) {
   const parsed = new URL(dirUrl)
   const segs = parsed.pathname.split('/').filter((s) => s !== '')
@@ -188,7 +189,7 @@ function splitRepoUrl(dirUrl) {
   return { repoUrl: root.toString(), subtree }
 }
 
-// A decoded path segment; a malformed escape falls back to the raw text.
+// A decoded path segment. A malformed escape falls back to the raw text.
 function decodeSegment(seg) {
   try {
     return decodeURIComponent(seg)
@@ -384,7 +385,7 @@ function refuseForeignOrigin(req) {
 }
 
 // A rebinding page presents its own hostname in both Host and Origin, so the
-// Origin-vs-Host check passes; the Host allowlist closes that hole.
+// Origin-vs-Host check passes. The Host allowlist closes that hole.
 function refuseForeignHost(req) {
   const host = req.headers.host ?? ''
   if (!allowedHosts.has(host)) {
@@ -424,7 +425,8 @@ async function route(req, res) {
     return
   }
   // A single-file upload: the raw body IS the file, `nxr.put` stages it and
-  // writes the `.sha256` marker itself. The cap bounds one file in memory.
+  // writes the `.sha256` marker itself.
+  // The cap bounds one file in memory.
   // The target must be a repository path: the panel is not a relay to
   // arbitrary hosts.
   if (req.method === 'POST' && url.pathname === '/api/put') {

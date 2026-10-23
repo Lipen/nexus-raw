@@ -198,7 +198,8 @@ pub struct NxrCloneOpts {
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
-    /// Where to keep the local fact cache. Default: `<dstDir>/.nxr-state.json`.
+    /// Where to keep the local fact cache.
+    /// Default: `<dstDir>/.nxr-state.json`.
     pub state: Option<String>,
     /// Disable the cache: hash every local file.
     pub no_state: Option<bool>,
@@ -260,7 +261,8 @@ pub struct NxrRmOpts {
     pub names: Option<Vec<String>>,
     /// Best-effort enumeration through the server search API (`--ls`).
     pub ls: Option<bool>,
-    /// Delete for real. Without it the promise resolves to the plan, like `rm` without `--yes`.
+    /// Delete for real.
+    /// Without it the promise resolves to the plan, like `rm` without `--yes`.
     pub confirm: Option<bool>,
 }
 

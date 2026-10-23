@@ -90,8 +90,8 @@ pub(crate) async fn put(
 
 /// `put --stdin`: read the whole body from stdin, then send it as one PUT.
 /// The protocol carries Content-Length and the resume scheme assumes a known
-/// size, so a pipe is buffered whole before the upload; the digest rides the
-/// same buffered body.
+/// size, so a pipe is buffered whole before the upload.
+/// The digest rides the same buffered body.
 async fn run_put_stdin(ctx: &Ctx, url: &str, sha: bool) -> Result<(), Error> {
     use std::io::Read;
     let mut body = Vec::new();

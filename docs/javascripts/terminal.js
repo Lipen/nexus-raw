@@ -40,7 +40,7 @@
       throw new Error(`${url}: malformed lines`);
     }
     // A cast without a timeline or colors is a cast this player cannot pace or
-    // paint; the SVG fallback is the honest answer, not a guessed pace.
+    // paint. The SVG fallback is the honest answer, not a guessed pace.
     if (!Array.isArray(at) || at.length !== lines.length) throw new Error(`${url}: no timeline`);
     if (!Array.isArray(kinds) || kinds.length !== lines.length) {
       throw new Error(`${url}: no line kinds`);
@@ -175,7 +175,7 @@
       frame.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
 
-    // Play once, when the terminal is actually on screen; a session that runs
+    // Play once, when the terminal is actually on screen. A session that runs
     // off screen is a session nobody sees.
     if ("IntersectionObserver" in window) {
       const observer = new IntersectionObserver(

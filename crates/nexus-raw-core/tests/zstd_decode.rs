@@ -25,14 +25,7 @@ fn config(base: String) -> Config {
 
 /// Read one request head, through the blank line that ends it.
 fn read_head(stream: &mut std::net::TcpStream) -> String {
-    read_head_dbg(stream)
-}
-
-#[allow(dead_code)]
-fn read_head_dbg(stream: &mut std::net::TcpStream) -> String {
-    let s = read_head_impl(stream);
-    eprintln!("[listener] got: {}", s.lines().next().unwrap_or(""));
-    s
+    read_head_impl(stream)
 }
 
 fn read_head_impl(stream: &mut std::net::TcpStream) -> String {

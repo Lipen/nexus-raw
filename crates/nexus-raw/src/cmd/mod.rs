@@ -328,8 +328,8 @@ pub(crate) fn parse_names(names: &[String]) -> Result<Vec<ArtifactName>, Error> 
 }
 
 /// Read one `--names-from` source: `-` is stdin, one name per line.
-/// Lines are trimmed; empty lines are skipped; anything else must parse
-/// through the same name grammar as `--name`.
+/// Lines are trimmed and empty lines are skipped.
+/// Anything else must parse through the same name grammar as `--name`.
 pub(crate) fn read_names_file(path: &str) -> Result<Vec<String>, Error> {
     let text = if path == "-" {
         let mut buf = String::new();

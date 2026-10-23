@@ -156,7 +156,7 @@ async fn stalled_upload_fails_within_the_stall_window() {
 
 #[tokio::test]
 async fn upload_refuses_a_source_whose_size_changed() {
-    // The plan carries a size; a build that rewrote the file before the send
+    // The plan carries a size. A build that rewrote the file before the send
     // would make the body disagree with Content-Length. The client re-stats
     // per attempt and refuses before a byte reaches the wire.
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
@@ -1598,7 +1598,7 @@ async fn mirror_failure_reports_the_structured_failure() {
 
 #[tokio::test]
 async fn mirror_recovers_through_flaky() {
-    // The first two requests per destination path answer 503; the default four attempts
+    // The first two requests per destination path answer 503. The default four attempts
     // absorb them, so one invocation pours the version and the repeat is a pure skip.
     let src_mock = MockNexus::start(Scenario::Atomic).unwrap();
     let dst_mock = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
@@ -2552,7 +2552,8 @@ async fn down_through_group_skips_a_failing_member_without_a_client_retry() {
 }
 
 /// The group refuses uploads before any member is contacted: the PUT answers 405.
-/// The client maps the 405 to `Error::Http`, whose verdict is exit 3; only 5xx are retryable, so the refusal fails fast.
+/// The client maps the 405 to `Error::Http`, whose verdict is exit 3.
+/// Only 5xx are retryable, so the refusal fails fast.
 #[tokio::test]
 async fn up_against_a_group_refuses_with_405() {
     let first = MockNexus::start(Scenario::Atomic).unwrap();

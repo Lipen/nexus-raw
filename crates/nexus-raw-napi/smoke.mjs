@@ -92,7 +92,7 @@ try {
 
   // diff resolves the report read-only: against a loopback server that answers
   // 404 to everything, the locally complete name is missing-remote.
-  // Explicit names keep the enumeration offline; the probes are the only traffic.
+  // Explicit names keep the enumeration offline. The probes are the only traffic.
   const absent = http.createServer((req, res) => {
     res.statusCode = 404
     res.end()

@@ -5,8 +5,8 @@
 //! spawn, argv parsing, the config, the plan, the transfer, the rendering.
 //! The gap between a `cli-up` number and its `up` number is the CLI's own cost.
 //!
-//! `just bench` builds the release binary and sets `NXR_BIN`; a bare
-//! `cargo bench` finds it under `target/` or fails with the instructions.
+//! `just bench` builds the release binary and sets `NXR_BIN`.
+//! A bare `cargo bench` finds it under `target/` or fails with the instructions.
 
 use std::time::Duration;
 

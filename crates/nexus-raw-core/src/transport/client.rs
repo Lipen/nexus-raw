@@ -132,7 +132,7 @@ pub struct NexusClient {
     /// The configured worker maximum: the AIMD budget never exceeds it.
     workers_max: usize,
     /// The run's AIMD worker budget, when one is attached (directory transfers).
-    /// Set by the facade after construction; primitive-only clients have none,
+    /// Set by the facade after construction. Primitive-only clients have none,
     /// and their retry outcomes never touch a budget.
     aimd: std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>,
 }
@@ -215,7 +215,7 @@ impl NexusClient {
 
     /// Attach the run's AIMD worker budget: the client reports every
     /// `Retry-After` failure and every success into it (§7).
-    /// Called by the facade once per run; the budget lives as long as the run.
+    /// Called by the facade once per run. The budget lives as long as the run.
     pub fn attach_aimd(&self, limit: Arc<crate::transport::aimd::WorkerLimit>) {
         *self.aimd.lock().expect("aimd attach lock") = Some(limit);
     }
@@ -429,8 +429,8 @@ impl NexusClient {
     /// The range probe of `doctor --deep`: one ranged GET (`bytes=0-0`), no
     /// retry loop, the answer reduced to the verdict inputs.
     ///
-    /// `206` means the server honors `Range`; `200` means the server (or a
-    /// proxy on the way) strips it; anything else is named as-is.
+    /// `206` means the server honors `Range`. `200` means the server (or a
+    /// proxy on the way) strips it. Anything else is named as-is.
     /// Read-only: a `bytes=0-0` GET transfers one byte and writes nothing.
     ///
     /// # Errors
@@ -837,7 +837,7 @@ impl NexusClient {
                     if status == 416 && prefix > 0 {
                         // The server refuses the range: the part is at or past the
                         // stored object's end. Finalize only when the file on disk
-                        // still holds exactly the bytes that were hashed; otherwise
+                        // still holds exactly the bytes that were hashed. Otherwise
                         // the part is stale or was changed under us, and resuming
                         // it would rename bytes that the object never carried.
                         // The 416 header is the current truth about the object

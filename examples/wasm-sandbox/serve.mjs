@@ -68,7 +68,7 @@ function proxyNexus(req, res, guards) {
   if (!PROXIED_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
     return deny(404, 'the sandbox proxy forwards repository and service paths only\n')
   }
-  // An absent Host is rare and harmless (nothing keys off it downstream); a present
+  // An absent Host is rare and harmless (nothing keys off it downstream). A present
   // Host must name this origin or a host the operator explicitly allowlisted.
   const host = req.headers.host ?? ''
   if (host && !guards.allowedHosts.has(host)) {
@@ -157,7 +157,7 @@ function proxyNexus(req, res, guards) {
   }
 }
 
-// Buffer a request body up to the cap; `null` means the cap was crossed.
+// Buffer a request body up to the cap. `null` means the cap was crossed.
 function readBody(req, cap) {
   return new Promise((resolve) => {
     const chunks = []
@@ -184,7 +184,8 @@ function readBody(req, cap) {
 }
 
 // One bucket per client address: at most `rateLimit` forwarded requests per window,
-// then 429 with Retry-After until the window turns. Returns the wait in seconds, or null.
+// then 429 with Retry-After until the window turns.
+// Returns the wait in seconds, or null.
 function limitRate(guards, address) {
   if (!guards.rateLimit) return null
   const now = Date.now()

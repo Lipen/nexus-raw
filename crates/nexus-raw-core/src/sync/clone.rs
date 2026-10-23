@@ -7,7 +7,7 @@
 //! whose bytes already match its remote marker but whose local marker is gone.
 //!
 //! The cache is an accelerator, never authority.
-//! A missing, corrupt or foreign cache falls back to hashing; `--verify`
+//! A missing, corrupt or foreign cache falls back to hashing. `--verify`
 //! ignores it entirely. `verify`, `audit` and `doctor` never read it.
 
 use std::collections::BTreeMap;
@@ -63,7 +63,7 @@ impl StateMode<'_> {
 /// One artifact of the clone plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CloneAction {
-    /// Fetch the bytes; the marker is written from the verified digest.
+    /// Fetch the bytes. The marker is written from the verified digest.
     Download {
         name: ArtifactName,
         size: Option<u64>,
@@ -271,7 +271,7 @@ pub(crate) fn classify(
 ///
 /// # Panics
 ///
-/// The classification runs in `spawn_blocking`; a panic there is an internal
+/// The classification runs in `spawn_blocking`. A panic there is an internal
 /// invariant break, and the same expectation the other blocking scans use.
 pub(crate) async fn local_facts(
     dir: &Path,

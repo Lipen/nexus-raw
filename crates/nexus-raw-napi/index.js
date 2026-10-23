@@ -12,7 +12,8 @@ const raw = require('./binding.cjs')
 
 // The raw addon appends the machine fields to the rejection message:
 // a trailing `nxr:exit <code>` line and, when present, a trailing `hint: ...`
-// line. They are promoted to `.exitCode` and `.hint` on a clean Error here.
+// line.
+// They are promoted to `.exitCode` and `.hint` on a clean Error here.
 const EXIT_LINE = /^nxr:exit (\d+)$/
 
 function parseRejectionMessage(message) {
@@ -66,7 +67,8 @@ function withEnrichedRejection(fn) {
 
 // Dot assignments, not an object literal: cjs-module-lexer only detects this
 // shape, and named ESM imports (`import { up } from 'nexus-raw'`) resolve
-// through it. Keep every export as its own `exports.<name> = ...` line.
+// through it.
+// Keep every export as its own `exports.<name> = ...` line.
 exports.get = withEnrichedRejection(raw.get)
 exports.put = withEnrichedRejection(raw.put)
 exports.head = withEnrichedRejection(raw.head)

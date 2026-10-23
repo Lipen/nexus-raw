@@ -1,8 +1,8 @@
 //! The composable behavior description: [`Spec`] drives the mock's knobs.
 //!
-//! A [`Scenario`] is a named preset; a [`Spec`] is the same knobs laid out as
+//! A [`Scenario`] is a named preset. A [`Spec`] is the same knobs laid out as
 //! independent layers a caller can compose and tweak.
-//! `Scenario -> Spec` is lossless; the drift guards stay on the enum, the
+//! `Scenario -> Spec` is lossless. The drift guards stay on the enum, the
 //! runtime reads the spec.
 
 use crate::scenario::Scenario;

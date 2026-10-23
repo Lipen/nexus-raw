@@ -10,7 +10,7 @@ const { spawn } = require('node:child_process')
 const path = require('node:path')
 
 // linux carries one static musl binary per arch, so the gnu-suffixed
-// package serves every libc; darwin and win32 map one to one.
+// package serves every libc. Darwin and win32 map one to one.
 const table = {
   'linux-x64': '@nexus-raw/nxr-linux-x64-gnu',
   'linux-arm64': '@nexus-raw/nxr-linux-arm64-gnu',

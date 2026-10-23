@@ -1,6 +1,6 @@
 // The client-side fake: a ServiceWorker that answers the same endpoints as `serve.mjs`,
 // from the same shared demo data, so the page runs on any static host with no backend.
-// index.html registers this worker only when the page is served as plain static files;
+// index.html registers this worker only when the page is served as plain static files.
 // `serve.mjs` serves its own fake (or a proxy) and rewrites the marker that keeps this off.
 //
 // The worker sits at the origin root with the default scope: the core grammar is

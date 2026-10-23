@@ -3,7 +3,8 @@
 // The unscoped bridge: every export re-exports @nexus-raw/nxr's enriched one.
 // Dot assignments, not an object literal: cjs-module-lexer only detects this
 // shape, and named ESM imports (`import { up } from 'nexus-raw'`) resolve
-// through it. Keep every export as its own `exports.<name> = ...` line.
+// through it.
+// Keep every export as its own `exports.<name> = ...` line.
 // The surface mirrors crates/nexus-raw-napi/index.js 1:1: the shim adds nothing.
 // `check-bridge-surface.sh` (docs CI) fails the pair on drift.
 const nxr = require('@nexus-raw/nxr')

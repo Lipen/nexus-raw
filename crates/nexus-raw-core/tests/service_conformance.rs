@@ -92,7 +92,7 @@ async fn repo_collection_scoped_hides_secret_repo_from_anonymous() {
         Some(false),
         "raw-secret must not resolve anonymously"
     );
-    // The authed list also carries raw-main; resolving it must work.
+    // The authed list also carries raw-main. Resolving it must work.
     let authed = creds_client(
         format!("{}repository/raw-main/", server.base_url()),
         "admin",
@@ -297,7 +297,7 @@ async fn eula_absent_is_gate_false() {
 async fn detail_in_hint_rides_the_hint() {
     let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::DetailInHint).unwrap();
     let nxr = client(server.base_url());
-    // A marker PUT through put_url is not on the facade; the facade write closest to the wire is
+    // A marker PUT through put_url is not on the facade. The facade write closest to the wire is
     // `point_clear` (a DELETE): the scenario answers it with the short body the hint carries.
     let target = format!("{}repository/raw-main/probe.pointer", server.base_url());
     let err = nxr.point_clear(&target).await.unwrap_err();

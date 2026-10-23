@@ -16,7 +16,8 @@
 //! let url = format!("{}1.14.0/version.json", server.base_url());
 //! ```
 //!
-//! Presets are named points in a behavior space; a [`Spec`] composes the space itself:
+//! Presets are named points in a behavior space.
+//! A [`Spec`] composes the space itself:
 //! layers stack (`Spec::atomic().with_auth(..).with_flaky(3)`), and `MockNexus::start_spec`
 //! runs a composed instance. A composed instance never enters the contract tables:
 //! presets and their drift guards are the contract, specs are code-level composition.

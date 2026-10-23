@@ -55,7 +55,7 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
                 .into_owned();
             // A backslash separates path components only on Windows. On Unix
             // it is a legal filename byte, and rewriting it would silently
-            // turn `a\b.zip` into the remote name `a/b.zip`; the grammar then
+            // turn `a\b.zip` into the remote name `a/b.zip`. The grammar then
             // rejects either the phantom or the collision.
             #[cfg(windows)]
             let rel = rel.replace('\\', "/");
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn backslash_is_not_a_separator_on_unix() {
-        // `a\b.zip` is one legal filename on unix; rewriting the backslash
+        // `a\b.zip` is one legal filename on unix. Rewriting the backslash
         // would upload it as the two-segment name `a/b.zip` and could collide
         // with a real `a/b.zip`. The grammar rejects the literal name instead.
         let tmp = tempfile::tempdir().unwrap();

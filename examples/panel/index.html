@@ -418,7 +418,7 @@
 
 // The browser is a plain file tree over `lsEntries`: breadcrumbs above,
 // `name/` rows for folders, `name` rows for files, any depth.
-// Downloads, deletes and uploads report through SSE job cards with bars;
+// Downloads, deletes and uploads report through SSE job cards with bars.
 // uploads stream their own XHR progress.
 const state = { serverUrl: null, repoUrl: null, repoName: null, dirSegs: [], activeIdx: -1 }
 
@@ -950,7 +950,8 @@ function jobCard(id, opLabel) {
 
 // The stream never closes permanently on a transient error: the server
 // replays the frame log, EventSource reconnects by itself, and the `start`
-// frame rewinds the card. A real loss (server gone) reports `lost`.
+// frame rewinds the card.
+// A real loss (server gone) reports `lost`.
 function follow(id, opLabel) {
   const card = jobCard(id, opLabel)
   const es = new EventSource(`/api/progress/${encodeURIComponent(id)}`)

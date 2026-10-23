@@ -20,7 +20,8 @@ pub struct NxrSummary {
     /// Local markers a `clone` rewrote from bytes that already matched the
     /// remote marker.
     pub sealed: u32,
-    /// Names the call deleted (`rm`). Transfers never delete and stay at 0.
+    /// Names the call deleted (`rm`).
+    /// Transfers never delete and stay at 0.
     pub removed: u32,
     pub failed: Vec<String>,
     /// The same names as `failed`, with their exit-code class.
