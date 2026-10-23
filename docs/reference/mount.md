@@ -55,8 +55,8 @@ Listings and attributes are cached for two seconds, so a rapid `ls -R` does not 
 | `--retry` | 4 | Attempts per HTTP request. |
 | `--connect-timeout-secs` | 15 | TCP connect timeout. |
 | `--stall-secs` | 30 | Fail a request when no bytes arrive for this long. |
-| `--block-kib` | 256 | One read block in KiB. |
-| `--cache-mib` | 256 | Read-block cache budget in MiB. |
+| `--block-kib` | 256 | One read block in KiB (minimum 4). |
+| `--cache-mib` | 256 | Read-block cache budget in MiB (minimum 1). |
 
 ## Verify
 

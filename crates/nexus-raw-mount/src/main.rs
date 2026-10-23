@@ -53,10 +53,10 @@ struct Cli {
     /// Fail a transfer when no bytes arrive for this many seconds.
     #[arg(long, default_value_t = 30)]
     stall_secs: u64,
-    /// Size of one read block, in KiB.
+    /// Size of one read block, in KiB (minimum 4).
     #[arg(long, default_value_t = 256)]
     block_kib: u64,
-    /// Read-block cache budget, in MiB.
+    /// Read-block cache budget, in MiB (minimum 1).
     #[arg(long, default_value_t = 256)]
     cache_mib: u64,
 }

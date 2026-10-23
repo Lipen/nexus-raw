@@ -11,6 +11,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Hints carry commands in backticks, `check-docs` and the real-Nexus battery stay quiet on success, and the battery keeps a TTY heartbeat without a hardcoded total.
   The demo reports its mock scenario count and aligns its `--` comments.
 
+### Fixed
+
+- The mount evicts cached blocks per inode and counts the released bytes exactly, so the cache budget no longer drifts.
+- The mount help and reference state the minimum `--block-kib` and `--cache-mib` values.
+
 ## [0.23.0] - 2026-10-22
 
 ### Added

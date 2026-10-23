@@ -53,6 +53,22 @@ struct State {
     attrs: HashMap<u64, Attrs>,
 }
 
+impl State {
+    /// Drop every cached block of one inode and keep `block_bytes` exact.
+    fn evict_blocks(&mut self, ino: u64) {
+        let mut dropped = 0usize;
+        self.blocks.retain(|(key, _), value| {
+            if *key == ino {
+                dropped += value.len();
+                false
+            } else {
+                true
+            }
+        });
+        self.block_bytes = self.block_bytes.saturating_sub(dropped);
+    }
+}
+
 /// A read-only view of one repository, mounted as a local directory.
 pub struct NexusFs {
     nxr: Arc<Nxr>,
@@ -272,8 +288,7 @@ impl NexusFs {
         let mut state = self.state();
         state.block_bytes += bytes.len();
         if state.block_bytes > self.cache_cap {
-            state.blocks.clear();
-            state.block_bytes = bytes.len();
+            state.evict_blocks(ino);
         }
         state.blocks.insert((ino, index), Arc::clone(&bytes));
         drop(state);
@@ -392,12 +407,7 @@ impl Filesystem for NexusFs {
     ) {
         {
             let mut state = self.state();
-            let before = state.blocks.len();
-            state.blocks.retain(|(key, _), _| *key != ino.0);
-            let removed = before - state.blocks.len();
-            state.block_bytes = state
-                .block_bytes
-                .saturating_sub(removed.saturating_mul(self.block as usize));
+            state.evict_blocks(ino.0);
         }
         reply.ok();
     }
@@ -472,7 +482,9 @@ fn parent_of(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{join, parent_of};
+    use super::{join, parent_of, State};
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[test]
     fn join_keeps_one_slash() {
@@ -485,5 +497,29 @@ mod tests {
         assert_eq!(parent_of("/"), "/");
         assert_eq!(parent_of("/a"), "/");
         assert_eq!(parent_of("/a/b"), "/a");
+    }
+
+    #[test]
+    fn eviction_is_per_ino_and_keeps_the_byte_count() {
+        let mut state = State {
+            nodes: HashMap::new(),
+            paths: HashMap::new(),
+            next_ino: 2,
+            blocks: HashMap::new(),
+            block_bytes: 0,
+            listings: HashMap::new(),
+            attrs: HashMap::new(),
+        };
+        state.blocks.insert((1, 0), Arc::new(vec![0; 10]));
+        state.blocks.insert((1, 1), Arc::new(vec![0; 3]));
+        state.blocks.insert((2, 0), Arc::new(vec![0; 7]));
+        state.block_bytes = 20;
+        state.evict_blocks(1);
+        assert_eq!(state.blocks.len(), 1, "the other inode stays cached");
+        assert!(state.blocks.contains_key(&(2, 0)));
+        assert_eq!(
+            state.block_bytes, 7,
+            "the short block is subtracted exactly"
+        );
     }
 }
