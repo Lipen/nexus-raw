@@ -46,6 +46,7 @@ pub async fn run(
         auth: net::auth_header(&args.user).context("resolve credentials")?,
         tls: args.tls(),
     };
+    let no_color = args.no_color || std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty());
     let servers = args.resolve_servers(&cfg)?;
     // Fail-fast: every configured server must answer before the screen opens.
     let mut tabs = Vec::with_capacity(servers.len());
@@ -55,7 +56,7 @@ pub async fn run(
             .with_context(|| format!("server {}", server.name.escape_debug()))?;
         tabs.push(Tab::new(server.clone(), repos));
     }
-    open_terminal(servers, tabs, cfg, cfg_path, args, session).await
+    open_terminal(servers, tabs, cfg, cfg_path, args, session, no_color).await
 }
 
 /// The effective format filter: the flag lifts it, the config default fills it in.
@@ -72,6 +73,7 @@ async fn open_terminal(
     cfg_path: Option<PathBuf>,
     args: Arc<Args>,
     session: net::Session,
+    no_color: bool,
 ) -> anyhow::Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
     let download_dir = cfg.download.dir.clone();
@@ -84,6 +86,7 @@ async fn open_terminal(
         all_formats,
         download_dir,
         session,
+        no_color,
         tx,
     );
     app.boot();

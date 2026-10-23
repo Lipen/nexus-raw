@@ -49,6 +49,7 @@
 //!     false,
 //!     net::dir_url("http://127.0.0.1:8081").into(),
 //!     net::Session::default(),
+//!     false,
 //!     tx,
 //! );
 //! app.boot();

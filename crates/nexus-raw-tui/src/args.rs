@@ -57,6 +57,10 @@ pub struct Args {
     #[arg(long)]
     pub all_formats: bool,
 
+    /// Disable the red error and green toast colours (also a non-empty NO_COLOR)
+    #[arg(long)]
+    pub no_color: bool,
+
     /// Headless mode: list the tree, download a subtree, print the summary
     #[arg(long)]
     pub smoke: bool,
@@ -173,6 +177,12 @@ mod tests {
         assert!(help[connection..].contains("--tls-insecure"), "{help}");
         assert!(help[connection..].contains("--ca-bundle"), "{help}");
         assert!(!help[connection..].contains("--smoke"), "{help}");
+    }
+
+    #[test]
+    fn no_color_flag_parses() {
+        let parsed = Args::parse_from(["nxr-tui", "--no-color", "http://h/"]);
+        assert!(parsed.no_color);
     }
 
     #[test]

@@ -81,6 +81,8 @@ Passwords never live in the config: credentials come from `-u` or the environmen
 TLS is one policy per session too: `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA, `--tls-insecure` skips verification, and the two exclude each other.
 The bundle carries the CA that signed the server certificate, not the server leaf.
 
+`--no-color` (or a non-empty `NO_COLOR`) drops the red error and green toast colours. Bold and reverse remain.
+
 ## Downloads
 
 A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.

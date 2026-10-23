@@ -29,6 +29,15 @@ fn selected() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
 }
 
+/// A semantic color, or the plain style when colours are disabled.
+fn semantic(no_color: bool, color: Color) -> Style {
+    if no_color {
+        Style::default()
+    } else {
+        Style::default().fg(color)
+    }
+}
+
 /// Draws one frame: header, body, download panel, status, toasts, overlay.
 /// The mutable borrow carries the list geometry back into the app.
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -325,13 +334,13 @@ fn draw_transfer(f: &mut Frame, app: &App, area: Rect) {
             total.map_or("?".to_owned(), fmt_bytes)
         )));
     }
-    lines.push(outcome_line(dl));
+    lines.push(outcome_line(dl, app.no_color));
     let panel = Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(panel, area);
 }
 
 /// The last line of the download panel: retry note, running count or the outcome.
-fn outcome_line(dl: &Transfer) -> Line<'static> {
+fn outcome_line(dl: &Transfer, no_color: bool) -> Line<'static> {
     match &dl.outcome {
         Some(DlOutcome::Done(s)) => Line::from(Span::styled(
             format!(
@@ -351,7 +360,7 @@ fn outcome_line(dl: &Transfer) -> Line<'static> {
             if let Some(hint) = hint {
                 text.push_str(&format!(" ({hint})"));
             }
-            Line::from(Span::styled(text, Style::default().fg(Color::Red)))
+            Line::from(Span::styled(text, semantic(no_color, Color::Red)))
         }
         None if dl.note.is_some() => {
             Line::from(Span::styled(dl.note.clone().unwrap_or_default(), dim()))
@@ -455,7 +464,7 @@ fn draw_toasts(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(
             Line::from(Span::styled(
                 format!(" {} ", toast.text),
-                Style::default().fg(Color::Green),
+                semantic(app.no_color, Color::Green),
             ))
             .right_aligned(),
             row,
@@ -833,4 +842,16 @@ fn error_overlay(modal: &ErrorModal, area: Rect, f: &mut Frame) {
             .wrap(Wrap { trim: false }),
         popup,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn semantic_colors_are_plain_when_disabled() {
+        assert_eq!(semantic(true, Color::Red), Style::default());
+        assert_eq!(semantic(true, Color::Green), Style::default());
+        assert_ne!(semantic(false, Color::Red), Style::default());
+    }
 }

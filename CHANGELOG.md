@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `up --prefix PREFIX` publishes only the names under a whole-segment prefix, keeping the relative path.
 - `mirror --plan` is the `--dry-run` alias.
 - `nxr-tui --ca-bundle FILE` (also `NXR_CA_BUNDLE`) and `--tls-insecure` apply one TLS policy to the session.
+- `nxr-tui --no-color` and a non-empty `NO_COLOR` drop the two semantic colours.
 
 ### Changed
 

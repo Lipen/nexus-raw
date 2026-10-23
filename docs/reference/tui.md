@@ -28,6 +28,9 @@ An unknown preset name is a usage error (exit 2) that names the known presets.
 The session also has one TLS policy, like the credentials: `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA, `--tls-insecure` skips verification, and the two exclude each other.
 The bundle carries the CA that signed the server certificate, not the server leaf.
 
+`--no-color` (or a non-empty `NO_COLOR`) drops the red error and green toast colours.
+Bold and reverse remain, so the layout still reads.
+
 Inside the TUI, `s` opens the servers overlay: every server the session knows, with the open ones marked.
 `enter` focuses the tab of the selected server or connects a new one in the background.
 `a` opens the add form.

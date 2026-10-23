@@ -778,6 +778,8 @@ pub struct App {
     pub session: Session,
     /// Repositories of every format may be opened, not only raw.
     pub all_formats: bool,
+    /// Disable the two semantic colours (red errors, green toasts).
+    pub no_color: bool,
     /// The left/right navigation mode of the tree.
     pub nav: Nav,
     /// The download directory from the config: the seed of the session destination.
@@ -863,6 +865,7 @@ impl App {
         all_formats: bool,
         download_dir: PathBuf,
         session: Session,
+        no_color: bool,
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Self {
         let nav = config.tui.nav;
@@ -871,6 +874,7 @@ impl App {
             servers,
             session,
             all_formats,
+            no_color,
             nav,
             destination: download_dir.clone(),
             dest_confirmed: false,
@@ -3686,6 +3690,7 @@ mod tests {
             all_formats,
             PathBuf::from("dl"),
             Session::default(),
+            false,
             tx,
         );
         app.boot();
@@ -5765,6 +5770,7 @@ mod tests {
             false,
             PathBuf::from("dl"),
             Session::default(),
+            false,
             tx,
         );
         app.boot();
@@ -6185,6 +6191,7 @@ mod tests {
             false,
             PathBuf::from("dl"),
             Session::default(),
+            false,
             tx,
         );
         app.boot();
@@ -6216,6 +6223,7 @@ mod tests {
             false,
             PathBuf::from("dl"),
             Session::default(),
+            false,
             tx,
         );
         app.boot();
@@ -6290,6 +6298,7 @@ mod tests {
             false,
             PathBuf::from("dl"),
             Session::default(),
+            false,
             tx,
         );
         app.boot();
