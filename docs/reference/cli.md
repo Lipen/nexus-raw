@@ -69,7 +69,7 @@ All flags are global: they may appear before or after the subcommand.
 | `--connect-timeout-secs <N>` | `15` | TCP connect timeout in seconds |
 | `--stall-secs <N>` | `30` | abort a transfer when no bytes arrive for this many seconds |
 | `--tls-insecure` | off | skip certificate verification |
-| `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). Native only, and mutually exclusive with `--tls-insecure` |
+| `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). The bundle carries the CA that signed the server certificate, not the bare server leaf. Native only, and mutually exclusive with `--tls-insecure` |
 | `--json` | off | machine output, see [output](#output) |
 | `-q, --quiet` | off | only the final summary line |
 | `-v, --verbose` | off | plan names and transfer starts |

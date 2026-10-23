@@ -221,6 +221,7 @@ hint: check the command line arguments
 ```
 
 A private CA does not need `--tls-insecure`: pass the PEM bundle with `--ca-bundle ca.pem` (or set `NXR_CA_BUNDLE`).
+The bundle must carry the CA that signed the server certificate; passing the server's own leaf is not enough.
 The certificates are added to the system store, several may sit in one file, and the two flags are mutually exclusive.
 
 ## Debugging aids

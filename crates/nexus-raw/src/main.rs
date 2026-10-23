@@ -54,6 +54,7 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) tls_insecure: bool,
     /// A PEM bundle of extra trust roots for a private CA (curl's --cacert).
+    /// The bundle carries the CA that signed the server certificate, not the bare server leaf.
     /// Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification.
     #[arg(
         long,

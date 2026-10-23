@@ -77,6 +77,7 @@ The search API is an index, not the store, and it is the only enumeration source
   A 301 on a read surfaces as a plain transport error with exit 3, and the client does not chase the `Location`.
 - TLS verification is on by default, and `--tls-insecure` is the only way off.
 - A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots. It conflicts with `--tls-insecure`.
+  The bundle carries the CA that signed the server certificate, not the bare server leaf.
 - Retries cover transport failures, 429 with `Retry-After`, and 5xx.
   A 404 is a data fact rather than a transport failure, so it is not retried and exits 1.
 - A stalled transfer fails once no bytes arrive for `--stall-secs`, and rerunning is safe.
