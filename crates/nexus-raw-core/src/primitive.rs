@@ -22,7 +22,8 @@ use crate::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::events::Dir;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::model::digest::{self, Digest};
+use crate::model::digest;
+use crate::model::digest::Digest;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::model::name::{percent_decode, ArtifactName};
 #[cfg(not(target_arch = "wasm32"))]
@@ -221,6 +222,28 @@ pub async fn put(
 /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
 pub async fn head(client: &NexusClient, url: &str) -> Result<HeadInfo, Error> {
     client.head_info(url).await
+}
+
+/// The `.sha256` marker digest of one object, when the server has a marker.
+///
+/// A missing marker is `None`; a marker outside the `sha256sum -c` format is
+/// [`Error::Mismatch`], because a digest that cannot be read cannot verify anything.
+///
+/// # Errors
+///
+/// Returns transport, auth or HTTP errors from the marker read, and
+/// [`Error::Mismatch`] when the marker does not parse.
+pub async fn sibling_digest(client: &NexusClient, url: &str) -> Result<Option<Digest>, Error> {
+    let marker_url = format!("{url}.sha256");
+    let Some(raw) = client.get_small(&marker_url).await? else {
+        return Ok(None);
+    };
+    let text = String::from_utf8_lossy(&raw);
+    let parsed = crate::model::sibling::parse_line(&text).map_err(|reason| Error::Mismatch {
+        name: url.to_owned(),
+        detail: format!("the .sha256 marker does not parse: {reason}"),
+    })?;
+    Ok(Some(parsed.digest))
 }
 
 /// The digest of a local file or of a remote object.

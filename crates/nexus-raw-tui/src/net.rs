@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use nexus_raw_core::creds;
-use nexus_raw_core::model::sibling;
 use nexus_raw_core::primitive;
 use nexus_raw_core::transport::client::NexusClient;
 use nexus_raw_core::{
@@ -158,7 +157,7 @@ pub fn head_size(
     });
 }
 
-/// Fetches the `.sha256` sibling marker of one file for the file card.
+/// Fetches the `.sha256` sibling marker of the object at `url`.
 /// `None` when the server has no marker. A malformed marker is an error,
 /// because a digest that cannot be read cannot verify anything.
 pub fn fetch_sibling(
@@ -174,15 +173,9 @@ pub fn fetch_sibling(
             let (events, _drain) = mpsc::unbounded_channel::<Event>();
             let progress = Progress::new(events);
             let client = NexusClient::new(&config(url.clone(), session.clone()), progress)?;
-            match client.get_small(&url).await? {
-                None => Ok(None),
-                Some(raw) => sibling::parse_line(&String::from_utf8_lossy(&raw))
-                    .map(|sib| Some(sib.digest.as_str().to_owned()))
-                    .map_err(|reason| Error::Mismatch {
-                        name: url.clone(),
-                        detail: format!("the .sha256 marker does not parse: {reason}"),
-                    }),
-            }
+            primitive::sibling_digest(&client, &url)
+                .await
+                .map(|digest| digest.map(|d| d.as_str().to_owned()))
         }
         .await;
         let _ = tx.send(Msg::Sibling { tab, gen, rel, res });
@@ -229,17 +222,7 @@ async fn fetch_one_inner(url: String, out: PathBuf, session: Session) -> Result<
     let (events, _drain) = mpsc::unbounded_channel::<Event>();
     let progress = Progress::new(events);
     let client = NexusClient::new(&config(url.clone(), session), progress)?;
-    let expected = match client.get_small(&format!("{url}.sha256")).await? {
-        None => None,
-        Some(raw) => Some(
-            sibling::parse_line(&String::from_utf8_lossy(&raw))
-                .map_err(|reason| Error::Mismatch {
-                    name: url.clone(),
-                    detail: format!("the .sha256 marker does not parse: {reason}"),
-                })?
-                .digest,
-        ),
-    };
+    let expected = primitive::sibling_digest(&client, &url).await?;
     let got = primitive::get(&client, &url, Some(out), true).await?;
     if let Some(want) = expected {
         let have = got.digest.clone().map(|d| d.as_str().to_owned());
@@ -525,6 +508,7 @@ fn fold_event(event: Event, dir: Dir) -> Option<Msg> {
 mod tests {
     use super::*;
     use mock_nexus::{MockNexus, Scenario};
+    use nexus_raw_core::model::sibling;
 
     use nexus_raw_core::Digest;
 
@@ -743,7 +727,7 @@ mod tests {
         let digest = Digest::of_bytes(&body);
         let marker = sibling::format_line("README.txt", &digest);
         mock.insert("repository/raw-main/README.txt.sha256", marker.as_bytes());
-        let url = format!("{}repository/raw-main/README.txt.sha256", mock.base_url());
+        let url = format!("{}repository/raw-main/README.txt", mock.base_url());
         let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
         fetch_sibling(tx, 0, 3, "README.txt".into(), url, Session::default());
         match rx.recv().await.unwrap() {

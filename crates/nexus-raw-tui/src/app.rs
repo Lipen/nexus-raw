@@ -2125,14 +2125,7 @@ impl App {
             url.clone(),
             session.clone(),
         );
-        net::fetch_sibling(
-            self.tx.clone(),
-            tab,
-            gen,
-            rel,
-            format!("{url}.sha256"),
-            session,
-        );
+        net::fetch_sibling(self.tx.clone(), tab, gen, rel, url, session);
     }
 
     fn open_servers_overlay(&mut self) {
