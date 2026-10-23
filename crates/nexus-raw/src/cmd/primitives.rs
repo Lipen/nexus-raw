@@ -260,16 +260,30 @@ async fn run_get_range(ctx: &Ctx, url: &str, out: Option<&Path>, spec: &str) -> 
         .ok_or_else(|| Error::Missing {
             names: vec![url.to_owned()],
         })?;
+    // A 416 reaches the core as an empty span: a start at or past the end is
+    // not a successful empty read, so name it before writing anything.
+    if bytes.is_empty() && len > 0 {
+        let info = ctx.nxr.head(url).await?;
+        if info.status == 404 {
+            return Err(Error::Missing {
+                names: vec![url.to_owned()],
+            });
+        }
+        if let Some(size) = info.size {
+            if start >= size {
+                return Err(Error::Misuse(format!(
+                    "range starts at {start}, past the end of {size} bytes"
+                )));
+            }
+        }
+    }
     let label = match end {
         Some(end) => format!("{start}-{end}"),
         None => format!("{start}-"),
     };
     match out {
         Some(path) => {
-            std::fs::write(path, &bytes).map_err(|e| Error::Io {
-                path: path.display().to_string(),
-                detail: e.to_string(),
-            })?;
+            write_range_file(path, &bytes)?;
             print_line(
                 ctx.json,
                 &format!("range {label}: {} bytes → {}", bytes.len(), path.display()),
@@ -296,6 +310,56 @@ async fn run_get_range(ctx: &Ctx, url: &str, out: Option<&Path>, spec: &str) -> 
         }
     }
     Ok(())
+}
+
+/// Write a range beside its destination through an exclusive temporary, then
+/// rename it into place: a symlink planted at the output is replaced, never
+/// followed. The `.nxr` prefix keeps the temporary out of every scan.
+fn write_range_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write as _;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    for n in 0..100u32 {
+        let candidate = parent.join(format!(".nxr-range-{}-{n}.tmp", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                let written = file.write_all(bytes).and_then(|()| file.flush());
+                drop(file);
+                if let Err(e) = written {
+                    let _ = std::fs::remove_file(&candidate);
+                    return Err(Error::Io {
+                        path: candidate.display().to_string(),
+                        detail: e.to_string(),
+                    });
+                }
+                std::fs::rename(&candidate, path).map_err(|e| {
+                    let _ = std::fs::remove_file(&candidate);
+                    Error::Io {
+                        path: path.display().to_string(),
+                        detail: e.to_string(),
+                    }
+                })?;
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(Error::Io {
+                    path: candidate.display().to_string(),
+                    detail: e.to_string(),
+                });
+            }
+        }
+    }
+    Err(Error::Io {
+        path: path.display().to_string(),
+        detail: "cannot create a temporary file beside the output".to_owned(),
+    })
 }
 
 /// Parse `START-END` or `START-` into an inclusive start and an optional end.

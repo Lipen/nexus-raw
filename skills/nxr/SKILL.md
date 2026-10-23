@@ -32,7 +32,7 @@ They resolve in this order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`)
 Values never appear in logs, `--json` output or error messages.
 
 TLS verifies by default.
-A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots; `--tls-insecure` is the last resort and conflicts with it.
+A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots. `--tls-insecure` is the last resort and conflicts with it.
 
 ## The command map
 
@@ -47,7 +47,7 @@ A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additio
 | fetch one file with the marker and resume | `nxr down <file-url> <dst-dir>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch one byte span | `nxr get <url> --range 100-199` |
-| publish a subtree | `nxr up <src-dir> <dir-url> --prefix <dir>/` |
+| publish a subtree | `nxr up <src-dir> <dir-url> --prefix <dir>/` (the whole tree is scanned first) |
 | stream one file to stdout | `nxr get <url>` |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |

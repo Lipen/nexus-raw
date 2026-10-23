@@ -66,6 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Config {
             base: "http://127.0.0.1:8080/demo/1.0.0/".into(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 8,
             retry_attempts: 4,
             connect_timeout: Duration::from_secs(15),

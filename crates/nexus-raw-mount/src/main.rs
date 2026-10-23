@@ -47,6 +47,7 @@ struct Cli {
         long,
         value_name = "FILE",
         env = "NXR_CA_BUNDLE",
+        hide_env_values = true,
         conflicts_with = "tls_insecure"
     )]
     ca_bundle: Option<std::path::PathBuf>,

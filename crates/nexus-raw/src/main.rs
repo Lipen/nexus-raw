@@ -61,6 +61,7 @@ pub(crate) struct Cli {
         global = true,
         value_name = "FILE",
         env = "NXR_CA_BUNDLE",
+        hide_env_values = true,
         conflicts_with = "tls_insecure"
     )]
     pub(crate) ca_bundle: Option<PathBuf>,

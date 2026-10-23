@@ -295,6 +295,11 @@ fn up_rejects_a_symlinked_entry() {
     expect_exit(&out, 2, "a symlink is misuse");
     assert!(stderr(&out).contains("symlink"), "{}", stderr(&out));
     assert!(
+        stderr(&out).contains("regular files or directories"),
+        "the hint must name the non-regular rule: {}",
+        stderr(&out)
+    );
+    assert!(
         put_requests(&srv).is_empty(),
         "the refusal must precede the wire"
     );
@@ -1957,6 +1962,49 @@ fn get_range_survives_a_range_ignoring_server() {
 }
 
 #[test]
+fn get_range_past_the_end_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/blob.bin", ALPHA);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("span.bin");
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "100-200",
+        "-o",
+        dst.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 2, "a range past the end");
+    assert!(stderr(&got).contains("past the end"), "{}", stderr(&got));
+    assert!(!dst.exists(), "no file for an unsatisfiable range");
+}
+
+#[test]
+#[cfg(unix)]
+fn get_range_never_follows_a_symlinked_output() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = b"0123456789";
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let dir = TempDir::new().unwrap();
+    let target = dir.path().join("target.bin");
+    std::fs::write(&target, b"keep me").unwrap();
+    let link = dir.path().join("out.bin");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let got = nxr(&["get", &url, "--range", "2-5", "-o", link.to_str().unwrap()]);
+    expect_exit(&got, 0, "range to a symlinked output");
+    assert_eq!(std::fs::read(&target).unwrap(), b"keep me");
+    assert_eq!(std::fs::read(&link).unwrap(), b"2345");
+    let meta = std::fs::symlink_metadata(&link).unwrap();
+    assert!(
+        meta.file_type().is_file(),
+        "the output must be replaced, not followed"
+    );
+}
+
+#[test]
 fn get_range_missing_object_is_data() {
     let srv = server(Scenario::Atomic);
     let url = format!("{}1.14.0/absent.bin", srv.base_url());
@@ -2019,6 +2067,18 @@ fn ca_bundle_env_is_read() {
     );
     expect_exit(&out, 2, "NXR_CA_BUNDLE");
     assert!(stderr(&out).contains("--ca-bundle"), "{}", stderr(&out));
+}
+
+#[test]
+fn ca_bundle_env_value_is_hidden_from_help() {
+    let out = nxr_env(&["--help"], &[("NXR_CA_BUNDLE", "/tmp/private-ca.pem")]);
+    expect_exit(&out, 0, "help with the CA env");
+    let text = stdout(&out);
+    assert!(text.contains("NXR_CA_BUNDLE"), "{text}");
+    assert!(
+        !text.contains("/tmp/private-ca.pem"),
+        "the env value must not leak into help: {text}"
+    );
 }
 
 #[test]

@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Config {
         base: format!("{repo}1.0.0/"),
         tls_insecure: false,
+        ca_bundle: None,
         workers: 8,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(15),

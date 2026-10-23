@@ -5,6 +5,7 @@
 //! a human generates by hand and a tree a bench builds are the same bytes.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
@@ -197,10 +198,21 @@ pub fn names_path(spec: TreeSpec) -> PathBuf {
 pub fn write_tree_at(root: &Path, spec: TreeSpec) -> std::io::Result<()> {
     let _ = fs::remove_dir_all(root);
     fs::create_dir_all(root)?;
+    // The setup is untimed, but the OS writeback is not: on a large tree the
+    // dirty pages land inside the timed transfer. `NXR_BENCH_FSYNC=1` moves
+    // the flush into setup, at the price of one fdatasync per file.
+    let fsync = std::env::var("NXR_BENCH_FSYNC").is_ok_and(|value| value == "1");
     for i in 0..spec.files {
         let path = root.join(spec.file_name(i));
         fs::create_dir_all(path.parent().expect("file names carry a parent"))?;
-        fs::write(path, spec.file_bytes(i))?;
+        let bytes = spec.file_bytes(i);
+        if fsync {
+            let mut file = fs::File::create(&path)?;
+            file.write_all(&bytes)?;
+            file.sync_data()?;
+        } else {
+            fs::write(path, bytes)?;
+        }
     }
     Ok(())
 }
@@ -241,6 +253,7 @@ pub fn config(base: String, workers: usize) -> Config {
     Config {
         base,
         tls_insecure: false,
+        ca_bundle: None,
         workers,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(15),

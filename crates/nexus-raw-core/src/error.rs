@@ -126,7 +126,7 @@ impl Error {
             Error::Enumerate { .. } => Some(
                 "repeat --name, use --names-from FILE, or use --ls when the server has the search API".into(),
             ),
-            Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved".into()),
+            Error::UnsafeName { .. } => Some("names must be relative paths of [A-Za-z0-9._-] segments and local entries must be regular files or directories: the .sha256 and .part suffixes are reserved".into()),
             Error::Auth { .. } => {
                 Some("pass -u user:pass or export NXR_AUTH (base64 user:pass)".into())
             }

@@ -50,6 +50,7 @@ pub async fn nxr_ls(dir_url: String, auth: Option<String>) -> Result<String, Str
     let cfg = Config {
         base: dir_url,
         tls_insecure: false,
+        ca_bundle: None,
         workers: WORKERS,
         retry_attempts: RETRY_ATTEMPTS,
         connect_timeout: Duration::from_secs(15),
@@ -88,6 +89,7 @@ pub async fn nxr_put(
     let cfg = Config {
         base: file_url.clone(),
         tls_insecure: false,
+        ca_bundle: None,
         workers: WORKERS,
         retry_attempts: RETRY_ATTEMPTS,
         connect_timeout: Duration::from_secs(15),

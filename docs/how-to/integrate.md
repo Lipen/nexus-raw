@@ -84,6 +84,7 @@ let nxr = Nxr::new(
     Config {
         base: "https://nexus.example.com/repository/raw-main/1.4.0/".into(),
         tls_insecure: false,
+        ca_bundle: None,
         workers: 8,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(15),

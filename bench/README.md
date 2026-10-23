@@ -41,9 +41,12 @@ Both dimensions are the environment's, so a curve costs no rebuild:
 | `NXR_BENCH_DEPTH` | `4` | maximum directory depth |
 | `NXR_BENCH_FANOUT` | `4` | directory fan-out per level |
 | `NXR_BENCH_SEED` | `42` | content seed |
+| `NXR_BENCH_FSYNC` | unset | `1` flushes every generated file before the clock. Use it on the 10k rung |
 
 A case is a rung of each ladder: `up/100f-4d-4w-2048b-seed42/8` is a hundred 2 KiB files at eight workers.
 The content is a SplitMix64 stream, so the same parameters build the same bytes on every machine and every run.
+The setup is untimed, but its writeback is not: on a large tree the dirty pages can land inside the timed transfer.
+Set `NXR_BENCH_FSYNC=1` to move that flush into setup. The 10k rung is not a client verdict without it.
 The default pair keeps a full run around a few minutes, and the heavy shapes are one variable away:
 
 ```bash

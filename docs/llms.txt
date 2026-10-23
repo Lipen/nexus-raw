@@ -33,9 +33,11 @@ Intent to command:
 | raw dir listing | `nxr ls <dir-url>` (`--json` for NDJSON) |
 | fetch one file | `nxr get <url> -o <file>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
+| fetch one byte span | `nxr get <url> --range 100-199` |
 | fetch a directory | `nxr down <dir-url> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | push a directory | `nxr up <dir> <dir-url>` |
+| push a subtree | `nxr up <dir> <dir-url> --prefix <dir>/` (the whole tree is scanned first) |
 | compare local vs remote | `nxr diff <dir> <dir-url> --ls` |
 | move a version | `nxr mv <src-url> <dst-url> --ls` |
 | copy a version | `nxr mirror <src-url> <dst-url> --ls` |

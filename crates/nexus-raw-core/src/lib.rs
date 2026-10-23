@@ -1,6 +1,9 @@
 //! The crate docs live in [`protocol.md`](src/protocol.md), included at compile time:
 //! this file carries the module tree and the re-exports, nothing else.
 #![doc = include_str!("protocol.md")]
+// The native transfer surface is compiled out on wasm: the browser uses the
+// read/write subset, so native-only helpers and fields read as dead code.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 pub mod config;
 pub mod creds;

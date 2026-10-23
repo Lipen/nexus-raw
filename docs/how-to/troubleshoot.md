@@ -193,13 +193,13 @@ Names are rejected before any request when they fail the grammar:
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name '../etc/passwd'
 error: unsafe name: ../etc/passwd: each segment must match [A-Za-z0-9._-]+, be 1..=255 bytes, and not be '.' or '..'
-hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments and local entries must be regular files or directories: the .sha256 and .part suffixes are reserved
 ```
 
 ```console
 $ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ vendor/evil/ --name 'app-1.4.0.zip.sha256'
 error: unsafe name: app-1.4.0.zip.sha256: reserved suffix .sha256 (artifact/marker collision)
-hint: names must be relative paths of [A-Za-z0-9._-] segments: the .sha256 and .part suffixes are reserved
+hint: names must be relative paths of [A-Za-z0-9._-] segments and local entries must be regular files or directories: the .sha256 and .part suffixes are reserved
 ```
 
 Exit 2 in both cases: path traversal is impossible by construction, and an artifact can never collide with its own marker.
@@ -221,7 +221,7 @@ hint: check the command line arguments
 ```
 
 A private CA does not need `--tls-insecure`: pass the PEM bundle with `--ca-bundle ca.pem` (or set `NXR_CA_BUNDLE`).
-The bundle must carry the CA that signed the server certificate; passing the server's own leaf is not enough.
+The bundle must carry the CA that signed the server certificate. Passing the server's own leaf is not enough.
 The certificates are added to the system store, several may sit in one file, and the two flags are mutually exclusive.
 
 ## Debugging aids
