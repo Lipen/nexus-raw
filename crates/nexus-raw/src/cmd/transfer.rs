@@ -29,6 +29,72 @@ pub(crate) struct UpModes {
     pub(crate) if_changed: bool,
 }
 
+/// Scan only the subtrees named by `--prefix`, keeping the prefix in each name.
+///
+/// The source root and every prefix component must be a real directory: a
+/// symlink never redirects the walk. Entries outside the prefixes are not
+/// read at all, so their symlinks and unsafe names cannot refuse the run.
+fn scan_prefixes(nxr: &Nxr, src: &Path, prefixes: &[String]) -> Result<Vec<ArtifactName>, Error> {
+    let parsed = prefixes
+        .iter()
+        .map(|p| NamePrefix::parse(p))
+        .collect::<Result<Vec<_>, _>>()?;
+    if parsed.iter().any(|p| p.as_str().is_empty()) {
+        return nxr.scan(src);
+    }
+    let root = std::fs::symlink_metadata(src).map_err(|e| Error::io(src, e))?;
+    if root.file_type().is_symlink() {
+        return Err(Error::UnsafeName {
+            name: src.display().to_string(),
+            reason: "symlinked source: dereference it before uploading".to_owned(),
+        });
+    }
+    if !root.is_dir() {
+        return Err(Error::Misuse(format!("not a directory: {}", src.display())));
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for prefix in &parsed {
+        let rel = prefix.as_str().trim_end_matches('/');
+        if rel.split('/').any(|seg| seg.starts_with('.')) {
+            return Err(Error::Misuse(format!(
+                "hidden entries are not artifacts: {}",
+                prefix.as_str()
+            )));
+        }
+        let mut cur = src.to_path_buf();
+        for seg in rel.split('/') {
+            cur.push(seg);
+            let meta = std::fs::symlink_metadata(&cur).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Error::Misuse(format!("prefix is not a directory: {}", cur.display()))
+                } else {
+                    Error::io(&cur, e)
+                }
+            })?;
+            if meta.file_type().is_symlink() {
+                return Err(Error::UnsafeName {
+                    name: rel.to_owned(),
+                    reason: "symlinked prefix: dereference or copy the target".to_owned(),
+                });
+            }
+            if !meta.is_dir() {
+                return Err(Error::Misuse(format!(
+                    "prefix is not a directory: {}",
+                    cur.display()
+                )));
+            }
+        }
+        for name in nxr.scan(&cur)? {
+            names.insert(ArtifactName::parse(&format!(
+                "{}{}",
+                prefix.as_str(),
+                name.as_str()
+            ))?);
+        }
+    }
+    Ok(names.into_iter().collect())
+}
+
 // The signature is the CLI surface: every argument is a user flag of `nxr up`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn up(
@@ -58,21 +124,12 @@ async fn run_up(
     prefixes: &[String],
     plan: bool,
 ) -> Result<(), Error> {
-    // The prefix filter runs on the local side, before markers or network
-    // work: `--prefix a/` publishes `a/x` as `a/x`, never as `x`.
+    // The prefix filter scans only the selected subtrees: an unselected
+    // symlink or unsafe name is never read.
     let selected = if prefixes.is_empty() {
         None
     } else {
-        let all = ctx.nxr.scan(src)?;
-        let parsed = prefixes
-            .iter()
-            .map(|p| NamePrefix::parse(p))
-            .collect::<Result<Vec<_>, _>>()?;
-        let kept: Vec<ArtifactName> = all
-            .iter()
-            .filter(|n| parsed.iter().any(|p| p.matches(n)))
-            .cloned()
-            .collect();
+        let kept = scan_prefixes(&ctx.nxr, src, prefixes)?;
         if kept.is_empty() {
             return Err(Error::Misuse(format!(
                 "nothing to upload: no names under the selected prefixes in {}",
@@ -81,15 +138,9 @@ async fn run_up(
         }
         if let Some(claim) = &claim {
             if !kept.contains(claim) {
-                let detail = if all.contains(claim) {
-                    format!("claim-first {claim} is outside the selected prefixes")
-                } else {
-                    format!(
-                        "claim-first {claim} is not among the scanned names of {}",
-                        src.display()
-                    )
-                };
-                return Err(Error::Misuse(detail));
+                return Err(Error::Misuse(format!(
+                    "claim-first {claim} is outside the selected prefixes"
+                )));
             }
         }
         Some(kept)

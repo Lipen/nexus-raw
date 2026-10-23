@@ -91,6 +91,60 @@ pub struct Nxr {
     last_aimd: Arc<std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>>,
 }
 
+fn validate_explicit_names(dir: &Path, names: &[ArtifactName]) -> Result<(), Error> {
+    let mut absent = Vec::new();
+    for name in names {
+        let mut cur = dir.to_path_buf();
+        let segments: Vec<&str> = name.as_str().split('/').collect();
+        let mut missing = false;
+        for (i, seg) in segments.iter().enumerate() {
+            if seg.starts_with('.') {
+                missing = true;
+                break;
+            }
+            cur.push(seg);
+            let meta = match std::fs::symlink_metadata(&cur) {
+                Ok(meta) => meta,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    missing = true;
+                    break;
+                }
+                Err(e) => return Err(Error::io(&cur, e)),
+            };
+            if meta.file_type().is_symlink() {
+                return Err(Error::UnsafeName {
+                    name: name.to_string(),
+                    reason: "symlinked entry: upload the target, not the link".to_owned(),
+                });
+            }
+            if i + 1 == segments.len() {
+                if meta.is_dir() {
+                    missing = true;
+                } else if !meta.is_file() {
+                    return Err(Error::UnsafeName {
+                        name: name.to_string(),
+                        reason: "non-regular entry: only files and directories are artifacts"
+                            .to_owned(),
+                    });
+                }
+            } else if !meta.is_dir() {
+                missing = true;
+            }
+            if missing {
+                break;
+            }
+        }
+        if missing {
+            absent.push(name.to_string());
+        }
+    }
+    if absent.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::Missing { names: absent })
+    }
+}
+
 impl Nxr {
     /// Build the facade from `cfg`, emitting events into `events`.
     ///
@@ -305,6 +359,33 @@ impl Nxr {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan(&self, dir: &Path) -> Result<Vec<ArtifactName>, Error> {
         sync::scan_dir(dir)
+    }
+
+    /// Resolve the names an `up` works on: an explicit list is validated path
+    /// by path, `None` scans the whole directory. The explicit path never
+    /// walks unrelated entries, so a caller that already scoped the tree pays
+    /// for its names only.
+    fn resolve_up_names(
+        &self,
+        dir: &Path,
+        names: Option<Vec<ArtifactName>>,
+    ) -> Result<Vec<ArtifactName>, Error> {
+        match names {
+            Some(list) => {
+                validate_explicit_names(dir, &list)?;
+                Ok(list)
+            }
+            None => {
+                let scanned = self.scan(dir)?;
+                if scanned.is_empty() {
+                    return Err(Error::misuse(format!(
+                        "nothing to upload: {} holds no artifacts",
+                        dir.display()
+                    )));
+                }
+                Ok(scanned)
+            }
+        }
     }
 
     /// The symmetric plan without transferring anything (`up --plan`).
@@ -588,7 +669,7 @@ impl Nxr {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the scan, [`Error::Misuse`] when `dir` is not a directory, the scan is empty, or the claim is unknown, and [`Error::Missing`] when a requested name is absent from the scan.
+    /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the scan or the explicit-name check, [`Error::Misuse`] when `dir` is not a directory, the scan is empty, or the claim is unknown, and [`Error::Missing`] when a requested name is absent from the tree.
     /// Returns [`Error::Mismatch`] when a local object is broken or as the first [`Verdict`](crate::error::Verdict) refusal of the diff, and the first transport/auth/HTTP failure or [`Error::Io`] from marker generation.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn up(
@@ -601,28 +682,7 @@ impl Nxr {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
-        let names = if let Some(list) = names {
-            let scanned = self.scan(dir)?;
-            let have: std::collections::HashSet<&ArtifactName> = scanned.iter().collect();
-            let absent: Vec<String> = list
-                .iter()
-                .filter(|n| !have.contains(n))
-                .map(std::string::ToString::to_string)
-                .collect();
-            if !absent.is_empty() {
-                return Err(Error::Missing { names: absent });
-            }
-            list
-        } else {
-            let scanned = self.scan(dir)?;
-            if scanned.is_empty() {
-                return Err(Error::misuse(format!(
-                    "nothing to upload: {} holds no artifacts",
-                    dir.display()
-                )));
-            }
-            scanned
-        };
+        let names = self.resolve_up_names(dir, names)?;
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
             up::generate_markers(dir, &mut locals).await?;
@@ -686,28 +746,7 @@ impl Nxr {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
-        let names = if let Some(list) = names {
-            let scanned = self.scan(dir)?;
-            let have: std::collections::HashSet<&ArtifactName> = scanned.iter().collect();
-            let absent: Vec<String> = list
-                .iter()
-                .filter(|n| !have.contains(n))
-                .map(std::string::ToString::to_string)
-                .collect();
-            if !absent.is_empty() {
-                return Err(Error::Missing { names: absent });
-            }
-            list
-        } else {
-            let scanned = self.scan(dir)?;
-            if scanned.is_empty() {
-                return Err(Error::misuse(format!(
-                    "nothing to upload: {} holds no artifacts",
-                    dir.display()
-                )));
-            }
-            scanned
-        };
+        let names = self.resolve_up_names(dir, names)?;
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
             up::generate_markers(dir, &mut locals).await?;

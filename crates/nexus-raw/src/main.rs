@@ -193,6 +193,7 @@ pub(crate) enum Cmd {
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,
         /// Keep only names under this whole-segment prefix (repeatable).
+        /// The selected subtrees are scanned; entries outside them are never read.
         #[arg(long, value_name = "PREFIX")]
         prefix: Vec<String>,
     },

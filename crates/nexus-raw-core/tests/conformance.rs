@@ -502,6 +502,40 @@ async fn up_manifest_missing_local_name_is_data_error() {
 }
 
 #[tokio::test]
+async fn explicit_up_hidden_name_is_data_error() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    std::fs::write(local.path().join(".hidden"), CONTENT).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), Some(names(&[".hidden"])), true, None)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Missing { .. }), "got {err:?}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn explicit_up_refuses_a_symlinked_parent() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    let local = TempDir::new().unwrap();
+    std::fs::create_dir(local.path().join("real")).unwrap();
+    std::fs::write(local.path().join("real/x.zip"), CONTENT).unwrap();
+    std::os::unix::fs::symlink(local.path().join("real"), local.path().join("link")).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+
+    let err = nxr
+        .up(local.path(), Some(names(&["link/x.zip"])), true, None)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::UnsafeName { .. }), "got {err:?}");
+    assert_eq!(err.exit_code(), 2);
+}
+
+#[tokio::test]
 async fn single_call_recovers_through_flaky() {
     let mock = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
     let local = TempDir::new().unwrap();

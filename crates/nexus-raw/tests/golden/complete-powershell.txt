@@ -154,7 +154,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
         'nxr;up' {
             [CompletionResult]::new('--claim-first', '--claim-first', [CompletionResultType]::ParameterName, 'Upload this file first, alone, before any other name (claim-first)')
             [CompletionResult]::new('--index-timeout', '--index-timeout', [CompletionResultType]::ParameterName, 'The visibility wait budget for --wait-index')
-            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
+            [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable). The selected subtrees are scanned; entries outside them are never read')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('-R', '-R ', [CompletionResultType]::ParameterName, 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials')

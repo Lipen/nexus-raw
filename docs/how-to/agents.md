@@ -35,7 +35,7 @@ Read access works for any user the server answers.
 Note: enumeration needs a name source (`--name` or the search API).
 Without one it exits 1 (cannot enumerate) and a `hint:` line names the source.
 
-`up --prefix` filters the transfer. The whole source tree is still scanned and validated.
+`up --prefix` scans only the selected subtrees. Entries outside them are never read.
 A private CA is `--ca-bundle ca.pem` (or `NXR_CA_BUNDLE`). The bundle carries the signing CA, not the server leaf.
 
 ## The contract for scripts

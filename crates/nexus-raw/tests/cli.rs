@@ -382,12 +382,71 @@ fn up_prefix_with_no_matches_is_misuse() {
         "--prefix",
         "z/",
     ]);
-    expect_exit(&out, 2, "an empty prefix selection");
+    expect_exit(&out, 2, "a missing prefix directory");
     assert!(
-        stderr(&out).contains("no names under the selected prefixes"),
+        stderr(&out).contains("prefix is not a directory"),
         "{}",
         stderr(&out)
     );
+}
+
+#[test]
+#[cfg(unix)]
+fn up_prefix_ignores_an_unselected_symlink() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    std::os::unix::fs::symlink(src.path().join("a"), src.path().join("b/link")).unwrap();
+    let up = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+    ]);
+    expect_exit(&up, 0, "a symlink outside the prefix");
+    assert_eq!(srv.store_get("1.14.0/a/x.bin").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/b/y.bin").is_none());
+}
+
+#[test]
+#[cfg(unix)]
+fn up_prefix_refuses_a_symlinked_prefix_root() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    std::fs::create_dir_all(src.path().join("a")).unwrap();
+    write_file(src.path(), "a/x.bin", ALPHA);
+    std::os::unix::fs::symlink(src.path().join("a"), src.path().join("b")).unwrap();
+    let out = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "b/",
+    ]);
+    expect_exit(&out, 2, "a symlinked prefix root");
+    assert!(stderr(&out).contains("symlink"), "{}", stderr(&out));
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+#[cfg(unix)]
+fn up_prefix_refuses_a_symlinked_source_root() {
+    let srv = server(Scenario::Atomic);
+    let real = TempDir::new().unwrap();
+    std::fs::create_dir_all(real.path().join("a")).unwrap();
+    write_file(real.path(), "a/x.bin", ALPHA);
+    let link = real.path().join("link");
+    std::os::unix::fs::symlink(real.path(), &link).unwrap();
+    let out = nxr(&[
+        "up",
+        link.to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+    ]);
+    expect_exit(&out, 2, "a symlinked source root");
+    assert!(stderr(&out).contains("symlink"), "{}", stderr(&out));
 }
 
 #[test]

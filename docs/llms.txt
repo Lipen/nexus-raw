@@ -37,7 +37,7 @@ Intent to command:
 | fetch a directory | `nxr down <dir-url> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | push a directory | `nxr up <dir> <dir-url>` |
-| push a subtree | `nxr up <dir> <dir-url> --prefix <dir>/` (the whole tree is scanned first) |
+| push a subtree | `nxr up <dir> <dir-url> --prefix <dir>/` (only the selected subtrees are scanned) |
 | compare local vs remote | `nxr diff <dir> <dir-url> --ls` |
 | move a version | `nxr mv <src-url> <dst-url> --ls` |
 | copy a version | `nxr mirror <src-url> <dst-url> --ls` |

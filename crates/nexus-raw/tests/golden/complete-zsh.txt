@@ -144,7 +144,7 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--claim-first=[Upload this file first, alone, before any other name (claim-first)]:NAME:_default' \
 '--index-timeout=[The visibility wait budget for --wait-index]:SECS:_default' \
-'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable). The selected subtrees are scanned; entries outside them are never read]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
