@@ -154,4 +154,25 @@ ui_ok "the disk cache holds digest-keyed blocks"
 "$fusermount" -u "$mnt"
 wait "$mount_pid" || true
 mount_pid=""
+
+ui_phase "mount" "remounting from the disk cache"
+"$bin/nxr-mount" --cache-dir "$work/cache" "$base" "$mnt" > "$work/mount2.log" 2>&1 &
+mount_pid=$!
+for _ in $(seq 1 100); do
+  mountpoint -q "$mnt" && break
+  sleep 0.1
+done
+if ! mountpoint -q "$mnt"; then
+  ui_fail "the second mount did not come up"
+  cat "$work/mount2.log" >&2
+  exit 1
+fi
+[ "$(cat "$mnt/hello.txt")" = "hello world" ] || fail "the cached hello.txt diverged"
+[ "$(sha256sum "$mnt/a/big.bin" | cut -d' ' -f1)" = "$(sha256sum "$work/data/repository/raw/a/big.bin" | cut -d' ' -f1)" ] ||
+  fail "the cached big.bin diverged"
+ui_ok "the second mount served the cached blocks"
+
+"$fusermount" -u "$mnt"
+wait "$mount_pid" || true
+mount_pid=""
 ui_success "mount" "passed"

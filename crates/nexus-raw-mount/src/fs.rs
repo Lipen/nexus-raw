@@ -286,10 +286,12 @@ impl NexusFs {
     /// One read block, served from memory, then the disk cache, then the network.
     ///
     /// The whole map is dropped when the budget is exceeded: one block is a bounded overshoot.
-    fn block(&self, ino: u64, url: &str, index: u64) -> Result<Arc<Vec<u8>>, Errno> {
+    fn block(&self, ino: u64, url: &str, index: u64, size: u64) -> Result<Arc<Vec<u8>>, Errno> {
         if let Some(bytes) = self.state().blocks.get(&(ino, index)).cloned() {
             return Ok(bytes);
         }
+        let start = index * self.block;
+        let expected = self.block.min(size.saturating_sub(start));
         let key = if self.disk.is_some() {
             self.digest_for(ino, url)
                 .map(|digest| Key::new(digest, self.block, index))
@@ -298,10 +300,11 @@ impl NexusFs {
         };
         if let (Some(disk), Some(key)) = (&self.disk, key.as_ref()) {
             if let Some(bytes) = disk.lock().unwrap_or_else(PoisonError::into_inner).get(key) {
-                return Ok(self.cache_block(ino, index, bytes));
+                if bytes.len() as u64 == expected {
+                    return Ok(self.cache_block(ino, index, bytes));
+                }
             }
         }
-        let start = index * self.block;
         let bytes = self
             .rt
             .block_on(self.nxr.read_range(url, start, self.block))
@@ -438,7 +441,7 @@ impl Filesystem for NexusFs {
         let first = offset / self.block;
         let last = (end - 1) / self.block;
         for index in first..=last {
-            let bytes = match self.block(ino.0, &url, index) {
+            let bytes = match self.block(ino.0, &url, index, attr.size) {
                 Ok(bytes) => bytes,
                 Err(err) => {
                     reply.error(err);
