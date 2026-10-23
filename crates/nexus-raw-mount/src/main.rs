@@ -183,9 +183,13 @@ mod tests {
 
     #[test]
     fn an_explicit_disk_budget_needs_the_cache_dir() {
-        assert!(
-            Cli::try_parse_from(["nxr-mount", "--disk-cache-mib", "8", "http://h/repo", "/mnt"])
-                .is_err()
-        );
+        assert!(Cli::try_parse_from([
+            "nxr-mount",
+            "--disk-cache-mib",
+            "8",
+            "http://h/repo",
+            "/mnt"
+        ])
+        .is_err());
     }
 }
