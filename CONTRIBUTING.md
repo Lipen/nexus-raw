@@ -6,13 +6,14 @@ The repository is a Rust workspace (`crates/`), a docs site (`docs/`) and five e
 ## Build and test
 
 ```bash
-just check        # fmt + clippy + prek + version-check + tests: the gate
+just check        # fmt + clippy + wasm-check + prek + version-check + tests: the gate
 just test         # unit and conformance suites alone
 just check-docs   # the docs site builds and every link resolves
 just demo         # a real session against the mock server and stub payloads
 ```
 
 `just` is optional: each recipe wraps `cargo`, `uvx`, or a repository script, and the recipe is the exact command the gate runs.
+The gate checks the wasm target once, so a fresh checkout needs `rustup target add wasm32-unknown-unknown`.
 
 The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`, the failure-injection server in `crates/mock-nexus`.
 Its scenario list is the contract: a scenario added for one client lands with the test that exercises it.

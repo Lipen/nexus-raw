@@ -91,6 +91,7 @@ pub struct Nxr {
     last_aimd: Arc<std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn validate_explicit_names(dir: &Path, names: &[ArtifactName]) -> Result<(), Error> {
     let mut absent = Vec::new();
     for name in names {
@@ -466,6 +467,7 @@ impl Nxr {
     /// by path, `None` scans the whole directory. The explicit path never
     /// walks unrelated entries, so a caller that already scoped the tree pays
     /// for its names only.
+    #[cfg(not(target_arch = "wasm32"))]
     fn resolve_up_names(
         &self,
         dir: &Path,

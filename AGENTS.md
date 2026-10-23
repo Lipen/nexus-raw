@@ -62,7 +62,7 @@ The canonical protocol text is kept outside this repository.
 ## Verify before reporting done
 
 ```bash
-just check        # fmt + clippy + prek + tests: the full gate
+just check        # fmt + clippy + wasm + prek + tests: the full gate
 just check-docs   # the docs site builds and every page resolves
 just test         # unit and conformance suites alone
 just nxr -- --help
@@ -82,7 +82,7 @@ New fields are additive.
 
 | Path | Role |
 |:-----|:-----|
-| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (the per-invocation `Config`), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
+| `crates/nexus-raw-core/src/` | the protocol: `transport/` (client, retry), `primitive.rs` (get/put/head/sha/sibling), `sync/` (scan, diff, up, down, rm, mirror), `layout/` (channel, ls), `model/` (name, digest, sibling, state, pointer tokens), `config.rs` (the per-invocation `Config`), `creds.rs`, `error.rs`, `events.rs`, and the `Nxr` facade as the single entry |
 | `crates/nexus-raw/src/` | the `nxr` binary: `main.rs` (clap), `alias.rs` (the `-R` named-remote file), `cmd/` (`primitives`, `transfer`, `layout`, `doctor`), `render/` (human, NDJSON) |
 |`crates/mock-nexus/`|the mock server (std-only HTTP/1.1) with the failure scenarios, as a lib for Rust tests and a binary for humans and external test suites|
 |`stand/real-nexus/`|the docker stand against a real Nexus: `just stand` locally, the same battery nightly in CI|

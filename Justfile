@@ -105,6 +105,7 @@ test-python:
 check:
     just fmt -- --check
     just clippy
+    just wasm-check
     just lint
     just version-check
     just deny
@@ -366,6 +367,12 @@ wasm *args:
     cd examples/wasm-sandbox && cargo build --target wasm32-unknown-unknown --release --locked
     cd examples/wasm-sandbox && wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/nexus_raw_example_wasm_sandbox.wasm
     cd examples/wasm-sandbox && node serve.mjs {{ args }}
+
+# The wasm surface is part of the product: the core must compile for the sandbox target.
+[doc('Check nexus-raw-core for wasm32 (the sandbox target).')]
+[group('check')]
+wasm-check:
+    {{ cargo }} check -p nexus-raw-core --target wasm32-unknown-unknown
 
 # Build the sandbox and run its smoke: the fake module, the wasm listing under
 # node and the ServiceWorker page in a headless browser when one is around.

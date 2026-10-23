@@ -39,6 +39,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The scan refuses a symlinked source root for plain `up` and `diff`, matching the scoped prefix scan.
 - The mount percent-encodes each path segment, so foreign names with spaces, `?`, `#`, `%` or unicode resolve correctly.
 - The mount forgets a node when the kernel drops its last lookup and reports synthetic inodes for unvisited listing entries, so long browsing sessions stay bounded.
+- The wasm32 build compiles again: the native prefix helpers are gated, and the gate checks the core for the sandbox target.
 
 ## [0.23.0] - 2026-10-22
 
