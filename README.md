@@ -183,6 +183,7 @@ nxr-mount https://nexus.example.com/repository/raw/ /mnt/nexus
 ```
 
 The mount is Linux only, and the release archives carry it next to `nxr`.
+An unprivileged mount needs `fusermount3` from the `fuse3` package.
 FUSE semantics, flags, the disk cache and the limits: [the mount reference](docs/reference/mount.md).
 
 ## Credentials
