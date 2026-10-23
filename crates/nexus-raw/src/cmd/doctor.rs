@@ -65,7 +65,19 @@ pub(crate) async fn run(
             Some("drop --tls-insecure, or install a real certificate on the server"),
         ));
     } else {
-        report.push(("tls", true, "verification is ON".to_owned(), None));
+        report.push((
+            "tls",
+            true,
+            if cli.ca_bundle.is_some() {
+                "verification is ON with a custom CA bundle".to_owned()
+            } else {
+                "verification is ON".to_owned()
+            },
+            None,
+        ));
+        if let Some(path) = &cli.ca_bundle {
+            report.push(("ca", true, format!("bundle: {}", path.display()), None));
+        }
     }
 
     report.push((
@@ -138,6 +150,7 @@ pub(crate) async fn run(
                 let cfg = nexus_raw_core::Config {
                     base: base.clone(),
                     tls_insecure: cli.tls_insecure,
+                    ca_bundle: cli.ca_bundle.clone(),
                     workers: 1,
                     retry_attempts: 1,
                     connect_timeout: std::time::Duration::from_secs(cli.connect_timeout_secs),

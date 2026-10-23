@@ -9,6 +9,7 @@ use crate::model::name::ArtifactName;
 ///
 /// Every regular file becomes a candidate name (relative path, `/` separated).
 /// Hidden path segments (starting with `.`) and `*.sha256` siblings are skipped: a sibling is the marker of its bytes, never an artifact of its own.
+/// A symlink or any other non-regular entry is a misuse error (exit 2), never a silent skip.
 /// Names that fail the grammar are a misuse error (exit 2), never silently skipped.
 ///
 /// # Errors
@@ -34,19 +35,8 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
                 continue;
             }
             let meta = std::fs::symlink_metadata(&path).map_err(|e| Error::io(&path, e))?;
-            if meta.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if !meta.is_file() {
-                continue;
-            }
-            if fname.ends_with(".sha256") {
-                continue;
-            }
-            // A `.part` file is local download staging, not an artifact. The
-            // name grammar rejects it, so a stale or foreign part fails loudly
-            // here instead of vanishing from the upload.
+            // The relative name is computed before the type checks: a refused
+            // entry must carry the name the user can see in the tree.
             let rel = path
                 .strip_prefix(dir)
                 .map_err(|_| Error::misuse(format!("scan root mismatch: {}", path.display())))?
@@ -58,6 +48,34 @@ pub fn scan_dir(dir: &Path) -> Result<Vec<ArtifactName>, Error> {
             // rejects either the phantom or the collision.
             #[cfg(windows)]
             let rel = rel.replace('\\', "/");
+            if meta.file_type().is_symlink() {
+                // A marker is local state, never an artifact: the marker
+                // writer's NOFOLLOW guard refuses it before any transfer.
+                if fname.ends_with(".sha256") {
+                    continue;
+                }
+                return Err(Error::UnsafeName {
+                    name: rel,
+                    reason: "symlinked entry: upload the target, not the link".to_owned(),
+                });
+            }
+            if meta.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                return Err(Error::UnsafeName {
+                    name: rel,
+                    reason: "non-regular entry: only files and directories are artifacts"
+                        .to_owned(),
+                });
+            }
+            if fname.ends_with(".sha256") {
+                continue;
+            }
+            // A `.part` file is local download staging, not an artifact. The
+            // name grammar rejects it, so a stale or foreign part fails loudly
+            // here instead of vanishing from the upload.
             names.push(ArtifactName::parse(&rel)?);
         }
     }
@@ -97,6 +115,22 @@ mod tests {
         assert!(
             matches!(err, Error::UnsafeName { .. }),
             "expected the grammar to refuse the literal backslash: {err:?}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn scan_rejects_a_symlinked_entry() {
+        // A `latest -> 1.4.0` link inside the tree used to vanish from the
+        // upload with no warning. The scan now carries the name and refuses.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir(root.join("1.4.0")).unwrap();
+        std::os::unix::fs::symlink(root.join("1.4.0"), root.join("latest")).unwrap();
+        let err = scan_dir(root).unwrap_err();
+        assert!(
+            matches!(err, Error::UnsafeName { .. }),
+            "a symlink must be refused, not silently dropped: {err:?}"
         );
     }
 

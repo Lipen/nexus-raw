@@ -5,11 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `--ca-bundle FILE` (also `NXR_CA_BUNDLE`) adds a PEM bundle of trust roots for a private CA.
+  It is native only and conflicts with `--tls-insecure`.
+- `get --range START-END|START-` reads one byte span, to a file or stdout.
+- `up --prefix PREFIX` publishes only the names under a whole-segment prefix, keeping the relative path.
+- `mirror --plan` is the `--dry-run` alias.
+
 ### Changed
 
 - The repository's terminal output follows one model: results on stdout, failures, warnings and hints on stderr, and colour is decided per stream.
   Hints carry commands in backticks, `check-docs` and the real-Nexus battery stay quiet on success, and the battery keeps a TTY heartbeat without a hardcoded total.
   The demo reports its mock scenario count and aligns its `--` comments.
+- The local scan refuses a symlink or any other non-regular entry with exit 2 and a hint, instead of silently dropping it from the upload.
 
 ### Fixed
 

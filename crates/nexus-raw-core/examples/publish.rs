@@ -65,6 +65,7 @@ fn nxr_for(
     let cfg = Config {
         base: base.to_owned(),
         tls_insecure: false,
+        ca_bundle: None,
         workers: 4,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(5),

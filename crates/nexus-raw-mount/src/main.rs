@@ -41,6 +41,15 @@ struct Cli {
     /// Skip TLS certificate verification.
     #[arg(long)]
     tls_insecure: bool,
+    /// A PEM bundle of extra trust roots for a private CA (also NXR_CA_BUNDLE).
+    /// Conflicts with --tls-insecure.
+    #[arg(
+        long,
+        value_name = "FILE",
+        env = "NXR_CA_BUNDLE",
+        conflicts_with = "tls_insecure"
+    )]
+    ca_bundle: Option<std::path::PathBuf>,
     /// Parallel requests and FUSE dispatch threads.
     #[arg(long, default_value_t = 8)]
     workers: usize,
@@ -96,6 +105,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let cfg = Config {
         base: cli.url.clone(),
         tls_insecure: cli.tls_insecure,
+        ca_bundle: cli.ca_bundle,
         workers: cli.workers,
         retry_attempts: cli.retry,
         connect_timeout: Duration::from_secs(cli.connect_timeout_secs),

@@ -47,6 +47,7 @@ pub fn config(base: String, auth: Option<String>) -> Config {
     Config {
         base,
         tls_insecure: false,
+        ca_bundle: None,
         workers: 8,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(15),

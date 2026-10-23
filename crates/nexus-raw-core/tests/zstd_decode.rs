@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 fn config(base: String) -> Config {
     Config {
         base,
+        ca_bundle: None,
         workers: 1,
         retry_attempts: 2,
         connect_timeout: Duration::from_secs(5),

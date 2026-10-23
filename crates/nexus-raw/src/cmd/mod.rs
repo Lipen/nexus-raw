@@ -66,7 +66,8 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             out,
             cont,
             segments,
-        } => primitives::get(cli, url, out.as_deref(), *cont, *segments).await,
+            range,
+        } => primitives::get(cli, url, out.as_deref(), *cont, *segments, range.as_deref()).await,
         Cmd::Put {
             url,
             file,
@@ -84,6 +85,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             wait_index,
             index_timeout,
             plan,
+            prefix,
         } => {
             let claim = match claim_first {
                 Some(raw) => Some(ArtifactName::parse(raw)?),
@@ -102,6 +104,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     on: *wait_index,
                     timeout: *index_timeout,
                 },
+                prefix,
                 *plan,
             )
             .await
@@ -287,6 +290,7 @@ pub(crate) fn make_nxr_with(
     let cfg = Config {
         base: base.to_owned(),
         tls_insecure: cli.tls_insecure,
+        ca_bundle: cli.ca_bundle.clone(),
         workers: cli.workers,
         retry_attempts: cli.retry,
         connect_timeout: Duration::from_secs(cli.connect_timeout_secs),

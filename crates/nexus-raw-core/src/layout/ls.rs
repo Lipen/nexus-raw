@@ -506,6 +506,7 @@ mod tests {
         let cfg = crate::config::Config {
             base: server.base_url(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 1,
             retry_attempts: 1,
             connect_timeout: std::time::Duration::from_secs(5),
@@ -557,6 +558,7 @@ mod tests {
         let cfg = crate::config::Config {
             base: server.base_url(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 1,
             retry_attempts: 1,
             connect_timeout: std::time::Duration::from_secs(5),
@@ -597,6 +599,7 @@ mod tests {
         let cfg = crate::config::Config {
             base: server.base_url(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 1,
             retry_attempts: 1,
             connect_timeout: std::time::Duration::from_secs(5),

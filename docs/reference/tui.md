@@ -89,7 +89,7 @@ Enter resolves the buffer against the working directory and checks it locally: a
 A confirmed folder starts the upload immediately: `put {folder} -> {position}`.
 With the local pane open, `p` prefills the picker with the folder of the pane.
 
-The upload drives the same core pipeline as `nxr up`: a local scan (hidden files, `.sha256` markers and `.part` files stay out, one unsafe name refuses the whole run before the first byte), marker generation for markerless files, the symmetric diff against the remote, then the transfer.
+The upload drives the same core pipeline as `nxr up`: a local scan (hidden files, `.sha256` markers and `.part` files stay out, a symlink or other non-regular entry refuses the whole run, one unsafe name refuses the whole run before the first byte), marker generation for markerless files, the symmetric diff against the remote, then the transfer.
 Markers are always generated: the TUI has no `--no-sha`.
 Same-digest objects are skipped, a divergence refuses the whole run, and an upload never deletes anything on the server.
 

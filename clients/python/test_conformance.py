@@ -779,6 +779,19 @@ class Reference(unittest.TestCase):
                 nx.put(url, CONTENT)
         self.assertEqual(nx.requests, [], "the refusal must precede the wire")
 
+    def test_name_grammar_fixture_matches_the_client(self):
+        """The shared fixture is the single name table: every valid segment passes and every invalid one is refused.
+
+        A grammar change lands in the fixture, the Rust test and this one in the same change, so the
+        two implementations cannot drift apart again.
+        """
+        fixture = json.loads((REPO_ROOT / "fixtures" / "name-grammar.json").read_text())
+        for segment in fixture["segments"]["valid"]:
+            nxr._check_name(segment)
+        for segment in fixture["segments"]["invalid"]:
+            with self.assertRaises(nxr.UnsafeName, msg=repr(segment)):
+                nxr._check_name(segment)
+
     def test_malformed_urls_are_misuse(self):
         """A URL with no host, or a scheme outside http(s), is a misuse: exit 2, nothing on the wire.
 

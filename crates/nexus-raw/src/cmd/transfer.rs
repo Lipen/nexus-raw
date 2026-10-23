@@ -29,6 +29,8 @@ pub(crate) struct UpModes {
     pub(crate) if_changed: bool,
 }
 
+// The signature is the CLI surface: every argument is a user flag of `nxr up`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn up(
     cli: &Cli,
     src: &Path,
@@ -36,25 +38,67 @@ pub(crate) async fn up(
     claim: Option<ArtifactName>,
     modes: UpModes,
     wait: WaitIndex,
+    prefixes: &[String],
     plan: bool,
 ) -> Result<(), Error> {
     let ctx = make_ctx(cli, dst)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_up(&ctx, src, claim, modes, wait, plan).await;
+    let result = run_up(&ctx, src, claim, modes, wait, prefixes, plan).await;
     finish(ctx).await;
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_up(
     ctx: &Ctx,
     src: &Path,
     claim: Option<ArtifactName>,
     modes: UpModes,
     wait: WaitIndex,
+    prefixes: &[String],
     plan: bool,
 ) -> Result<(), Error> {
+    // The prefix filter runs on the local side, before markers or network
+    // work: `--prefix a/` publishes `a/x` as `a/x`, never as `x`.
+    let selected = if prefixes.is_empty() {
+        None
+    } else {
+        let all = ctx.nxr.scan(src)?;
+        let parsed = prefixes
+            .iter()
+            .map(|p| NamePrefix::parse(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        let kept: Vec<ArtifactName> = all
+            .iter()
+            .filter(|n| parsed.iter().any(|p| p.matches(n)))
+            .cloned()
+            .collect();
+        if kept.is_empty() {
+            return Err(Error::Misuse(format!(
+                "nothing to upload: no names under the selected prefixes in {}",
+                src.display()
+            )));
+        }
+        if let Some(claim) = &claim {
+            if !kept.contains(claim) {
+                let detail = if all.contains(claim) {
+                    format!("claim-first {claim} is outside the selected prefixes")
+                } else {
+                    format!(
+                        "claim-first {claim} is not among the scanned names of {}",
+                        src.display()
+                    )
+                };
+                return Err(Error::Misuse(detail));
+            }
+        }
+        Some(kept)
+    };
     if plan {
-        let names = ctx.nxr.scan(src)?;
+        let names = match &selected {
+            Some(names) => names.clone(),
+            None => ctx.nxr.scan(src)?,
+        };
         let actions = if modes.if_changed {
             ctx.nxr
                 .up_if_changed_plan(src, Some(names), !modes.no_sha, claim)
@@ -71,15 +115,20 @@ async fn run_up(
     }
     if modes.if_changed {
         ctx.nxr
-            .up_if_changed(src, None, !modes.no_sha, claim)
+            .up_if_changed(src, selected.clone(), !modes.no_sha, claim)
             .await?;
     } else {
         // The Summary event is the single source for totals: the renderer prints it in both modes.
         // Printing a second copy here raced the renderer.
-        ctx.nxr.up(src, None, !modes.no_sha, claim).await?;
+        ctx.nxr
+            .up(src, selected.clone(), !modes.no_sha, claim)
+            .await?;
     }
     if wait.on {
-        let names = ctx.nxr.scan(src)?;
+        let names = match &selected {
+            Some(names) => names.clone(),
+            None => ctx.nxr.scan(src)?,
+        };
         let waited = ctx.nxr.wait_search_visible(&names, wait.timeout).await?;
         let total = names.len();
         let line = format!("search visibility: {waited}/{total}");

@@ -69,6 +69,7 @@ All flags are global: they may appear before or after the subcommand.
 | `--connect-timeout-secs <N>` | `15` | TCP connect timeout in seconds |
 | `--stall-secs <N>` | `30` | abort a transfer when no bytes arrive for this many seconds |
 | `--tls-insecure` | off | skip certificate verification |
+| `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). Native only, and mutually exclusive with `--tls-insecure` |
 | `--json` | off | machine output, see [output](#output) |
 | `-q, --quiet` | off | only the final summary line |
 | `-v, --verbose` | off | plan names and transfer starts |
@@ -76,7 +77,7 @@ All flags are global: they may appear before or after the subcommand.
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE] [--continue] [--segments N]
+nxr get <URL> [-o FILE] [--continue] [--segments N] [--range START-END|START-]
 ```
 
 GET a URL to a file or stdout.
@@ -88,6 +89,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `-o, --out <FILE>` | output file. stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
+| `--range <RANGE>` | one byte span, `START-END` or `START-`; `START-` reads to the end. Goes to `-o` or stdout; conflicts with `--continue` and `--segments` |
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
@@ -115,6 +117,11 @@ The HEAD gives the size, the spans stream into a staging area beside the output,
 A server that answers a ranged GET with the whole body gets a plain single-stream download instead: the fallback is announced on the events channel, never an error.
 An object smaller than the span count degrades to smaller segments, still byte-exact.
 
+`--range` reads one span instead of the whole object.
+`START-END` is inclusive, and `START-` reads from `START` to the end, with a HEAD for the size.
+The bytes go to `-o` or stdout: no `.part` file and no resume are involved.
+A missing object is exit 1, and a malformed range or a combination with `--continue`/`--segments` is exit 2.
+
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4
 get: 45 bytes → app.zip
@@ -126,7 +133,7 @@ $ echo $?
 |:----:|:-----|
 | `0` | body delivered |
 | `1` | the URL answered 404 (the object is absent), or local I/O failure around the part file |
-| `2` | misuse: a non-http URL, `--segments` with a stdout target, or a segment count outside `2..=64` |
+| `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, or `--range` with `--continue`/`--segments` |
 | `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
@@ -243,12 +250,13 @@ $ echo $?
 ## nxr up
 
 ```
-nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first <NAME>]
+nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first <NAME>] [--prefix PREFIX]...
 ```
 
 Upload a local directory.
 The directory is scanned, every file becomes an artifact whose relative path is its name, and the [symmetric diff](protocol.md#the-symmetric-diff) against the server decides what moves.
 Hidden entries (leading `.`) and `*.sha256` siblings are not artifacts.
+A symlink, socket, FIFO or any other non-regular entry is a misuse error (exit 2): the scan never follows a link.
 Repeated names transfer again, identical ones are skipped, and an interrupted `up` is finished by repeating the same command.
 
 | Flag | Meaning |
@@ -256,6 +264,7 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
 | `--if-changed` | skip names whose remote marker digest equals the local copy, re-upload the changed rest (a missing or foreign remote marker re-uploads the name) |
 | `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
+| `--prefix <PREFIX>` | publish only the names under this whole-segment prefix (`bom/`), repeatable. The relative path is kept, so `a/x` lands as `a/x` |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
 | `--wait-index` | after the run, poll the search index until every uploaded name is visible (see below) |
 | `--index-timeout <SECS>` | the visibility budget for `--wait-index` (default 30) |
@@ -337,7 +346,7 @@ $ echo $?
 |:----:|:-----|
 | `0` | plan executed, remote converged |
 | `1` | data refusal: `mismatch`, `incomplete`. local I/O failures |
-| `2` | misuse: not a directory, empty directory, unsafe name, a `--claim-first` name outside the directory |
+| `2` | misuse: not a directory, empty directory, unsafe name, a symlink or other non-regular entry, an empty `--prefix` selection, a `--claim-first` name outside the directory or the prefixes |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
 ### up --wait-index
@@ -558,19 +567,19 @@ $ echo $?
 ## nxr mirror
 
 ```
-nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run] [--src-user USER:PASS] [--dst-user USER:PASS] [--prefix PREFIX]
+nxr mirror <SRC_URL> <DST_URL> [--name NAME]... [--names-from FILE]... [--ls] [--dry-run|--plan] [--src-user USER:PASS] [--dst-user USER:PASS] [--prefix PREFIX]
 ```
 
 Pour a version from one repository into another: the source is only read, the destination receives bytes and markers through `up`'s write order.
 The enumeration lives at the source, with the same sources as `down`: repeatable `--name` or best-effort `--ls`.
 Without any source the run refuses with `cannot enumerate` (exit 1).
-`--dry-run` probes both sides and prints the plan (`copy <name>` for names that would transfer, `skip <name>` for converged ones) without writing to the destination.
+`--dry-run` (also `--plan`) probes both sides and prints the plan (`copy <name>` for names that would transfer, `skip <name>` for converged ones) without writing to the destination.
 
 | Flag | Meaning |
 |:-----|:--------|
 | `--name <NAME>` | one explicit name, repeat as needed |
 | `--ls` | best-effort enumeration through the server search API |
-| `--dry-run` | probe both sides and print the plan without writing to the destination |
+| `--dry-run, --plan` | probe both sides and print the plan without writing to the destination |
 | `--src-user USER:PASS` | credentials for the source only, overriding the shared `-u` |
 | `--dst-user USER:PASS` | credentials for the destination only, overriding the shared `-u` |
 | `--prefix <PREFIX>` | keep only names under this whole-segment prefix (`bom/`), repeatable |

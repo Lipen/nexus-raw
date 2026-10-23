@@ -53,6 +53,16 @@ pub(crate) struct Cli {
     /// Skip TLS certificate verification.
     #[arg(long, global = true)]
     pub(crate) tls_insecure: bool,
+    /// A PEM bundle of extra trust roots for a private CA (curl's --cacert).
+    /// Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification.
+    #[arg(
+        long,
+        global = true,
+        value_name = "FILE",
+        env = "NXR_CA_BUNDLE",
+        conflicts_with = "tls_insecure"
+    )]
+    pub(crate) ca_bundle: Option<PathBuf>,
     /// Emit one NDJSON event per line on stdout.
     #[arg(long, global = true)]
     pub(crate) json: bool,
@@ -84,6 +94,10 @@ pub(crate) enum Cmd {
         /// File output only: `--segments` with a stdout target is a misuse.
         #[arg(long, value_name = "N")]
         segments: Option<usize>,
+        /// Fetch one byte range: START-END or START- (inclusive), through a Range request.
+        /// Conflicts with --continue and --segments.
+        #[arg(long, value_name = "START-END", conflicts_with_all = ["cont", "segments"])]
+        range: Option<String>,
     },
     /// PUT a file, optionally with its sha-sibling marker.
     Put {
@@ -139,6 +153,9 @@ pub(crate) enum Cmd {
         /// Print the plan without transferring anything.
         #[arg(long, visible_alias = "dry-run")]
         plan: bool,
+        /// Keep only names under this whole-segment prefix (repeatable).
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Vec<String>,
     },
     /// Download a remote directory, or one file named by its URL, into a local one (§5.2, §5.2.1).
     Down {
@@ -297,8 +314,8 @@ pub(crate) enum Cmd {
         /// Best-effort enumeration through the server search API.
         #[arg(long)]
         ls: bool,
-        /// Print the plan without transferring anything.
-        #[arg(long)]
+        /// Print the plan without transferring anything (`--plan` is the same flag).
+        #[arg(long, visible_alias = "plan")]
         dry_run: bool,
         /// Credentials for the source only, overriding the shared `-u`.
         #[arg(long, value_name = "USER:PASS")]

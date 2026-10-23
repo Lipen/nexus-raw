@@ -21,6 +21,7 @@ A divergent complete artifact is never overwritten, so a rerun is always safe.
 - The marker of a name is always PUT after that name's bytes, and the order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments, and only the `.sha256` and `.part` suffixes and a `.nxr`-prefixed segment are reserved.
   A raw repository still holds foreign files with spaces, parens and unicode: `ls` and `down` handle them, and the alphabet constrains only what nxr itself writes.
+- The local scan refuses a symlink or any other non-regular entry: a link is never followed out of the source.
 - `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
   A channel is any token file, and dotted-numeric order is the only comparison nxr imposes (`--if-forward`).
 
@@ -29,6 +30,9 @@ A divergent complete artifact is never overwritten, so a rerun is always safe.
 They resolve in this order: `-u user:pass`, then `NXR_AUTH` (base64 `user:pass`), then `NXR_USERNAME` plus `NXR_PASSWORD`.
 `-u` puts the secret in argv, so prefer the environment variables in CI, and let `nxr doctor` flag the exposure.
 Values never appear in logs, `--json` output or error messages.
+
+TLS verifies by default.
+A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots; `--tls-insecure` is the last resort and conflicts with it.
 
 ## The command map
 
@@ -42,6 +46,8 @@ Values never appear in logs, `--json` output or error messages.
 | fetch one file | `nxr get <url> -o <file>` |
 | fetch one file with the marker and resume | `nxr down <file-url> <dst-dir>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
+| fetch one byte span | `nxr get <url> --range 100-199` |
+| publish a subtree | `nxr up <src-dir> <dir-url> --prefix <dir>/` |
 | stream one file to stdout | `nxr get <url>` |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |

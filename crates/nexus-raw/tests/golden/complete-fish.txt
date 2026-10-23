@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_nxr_global_optspecs
-    string join \n u/user= R/remote= workers= retry= connect-timeout-secs= stall-secs= tls-insecure json q/quiet v/verbose h/help V/version
+    string join \n u/user= R/remote= workers= retry= connect-timeout-secs= stall-secs= tls-insecure ca-bundle= json q/quiet v/verbose h/help V/version
 end
 
 function __fish_nxr_needs_command
@@ -30,6 +30,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -l workers -d 'Parallel artifact t
 complete -c nxr -n "__fish_nxr_needs_command" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_needs_command" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_needs_command" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_needs_command" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_needs_command" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_needs_command" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_needs_command" -s q -l quiet -d 'Print only the final summary line'
@@ -58,12 +59,14 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "complete" -d 'Print a shell
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l segments -d 'Fetch through N concurrent byte-range requests (2 to 64). File output only: `--segments` with a stdout target is a misuse' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l range -d 'Fetch one byte range: START-END or START- (inclusive), through a Range request. Conflicts with --continue and --segments' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -77,6 +80,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand put" -l workers -d 'Parallel art
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand put" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l stdin -d 'Read the bytes from stdin instead of a file: the body is buffered (Content-Length is part of the protocol), then sent as one PUT'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l sha -d 'Also PUT `<url>`.sha256 with the sha256sum-style marker'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l tls-insecure -d 'Skip TLS certificate verification'
@@ -90,6 +94,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand head" -l workers -d 'Parallel ar
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand head" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s q -l quiet -d 'Print only the final summary line'
@@ -101,6 +106,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -l workers -d 'Parallel art
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print only the final summary line'
@@ -108,12 +114,14 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -s v -l verbose -d 'Print m
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l index-timeout -d 'The visibility wait budget for --wait-index' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l workers -d 'Parallel artifact transfers' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand up" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l no-sha -d 'Skip marker generation and marker uploads'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l if-changed -d 'Skip names whose remote marker digest already equals the local copy, re-upload the changed rest'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l wait-index -d 'After the run, poll the search index until every uploaded name is visible (the index lags behind writes on a real server)'
@@ -133,6 +141,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -l workers -d 'Parallel ar
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand down" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l ls -d 'Best-effort enumeration through the server search API'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l fresh -d 'Ignore existing part files: every name downloads from zero'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l plan -l dry-run -d 'Print the plan without transferring anything'
@@ -149,6 +158,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand clone" -l workers -d 'Parallel a
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand clone" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l no-state -d 'Do not read or write the local fact cache: hash every local file'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l verify -d 'Ignore the cache and hash every local file, even unchanged ones'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l plan -l dry-run -d 'Print the plan without transferring anything'
@@ -167,6 +177,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -l workers -d 'Parallel ar
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l ls -d 'Best-effort enumeration through the server search API'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l fallback -d 'With `--via`: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l tls-insecure -d 'Skip TLS certificate verification'
@@ -183,6 +194,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand audit" -s R -l remote -d 'A remo
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand audit" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l bytes -d 'Download every asset and hash it against its marker: the only pass that catches silent bitrot'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l json -d 'Emit NDJSON events instead of the human report'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l tls-insecure -d 'Skip TLS certificate verification'
@@ -198,6 +210,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -l workers -d 'Parallel arti
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l ls -d 'Best-effort enumeration through the server search API'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l yes -d 'Delete for real. Without it the run prints the plan and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l tls-insecure -d 'Skip TLS certificate verification'
@@ -211,6 +224,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand point" -l workers -d 'Parallel a
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand point" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print only the final summary line'
@@ -227,8 +241,9 @@ complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l workers -d 'Parallel 
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l ls -d 'Best-effort enumeration through the server search API'
-complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dry-run -d 'Print the plan without transferring anything'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dry-run -l plan -d 'Print the plan without transferring anything (`--plan` is the same flag)'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print only the final summary line'
@@ -245,6 +260,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mv" -l workers -d 'Parallel arti
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l ls -d 'Best-effort enumeration through the server search API'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l yes -d 'Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l tls-insecure -d 'Skip TLS certificate verification'
@@ -258,6 +274,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand ls" -l workers -d 'Parallel arti
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l assets -d 'List the object names under a version directory URL'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -270,6 +287,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s q -l quiet -d 'Print only the final summary line'
@@ -284,6 +302,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s q -l quiet -d 'Print only the final summary line'
@@ -295,6 +314,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l if-forward -d 'Keep the current token when it already compares >= the new one'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -310,6 +330,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand verify" -l workers -d 'Parallel 
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print only the final summary line'
@@ -322,6 +343,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l workers -d 'Parallel 
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l deep -d 'Probe the server\'s behavior: range, content-length, search, repo type, version. Read-only'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -334,6 +356,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s q -l quiet -d 'Print only the final summary line'
@@ -351,6 +374,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s q -l quiet -d 'Print only the final summary line'
@@ -362,6 +386,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s q -l quiet -d 'Print only the final summary line'
@@ -373,6 +398,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l detail -d 'Also fetch the full repository settings: answers only to an nx-admin'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -387,6 +413,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s q -l quiet -d 'Print only the final summary line'
@@ -398,6 +425,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l accept -d 'Accept the presented disclaimer when the gate is closed'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l json -d 'Emit one NDJSON event per line on stdout'
@@ -416,6 +444,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand complete" -l workers -d 'Paralle
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l retry -d 'Attempts per HTTP request' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l connect-timeout-secs -d 'TCP connect timeout in seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l json -d 'Emit one NDJSON event per line on stdout'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s q -l quiet -d 'Print only the final summary line'

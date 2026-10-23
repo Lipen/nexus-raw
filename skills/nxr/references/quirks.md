@@ -60,6 +60,7 @@ The search API is an index, not the store, and it is the only enumeration source
 - A `.nxr`-prefixed segment is reserved too: those names are the transfer tool's local staging and cache.
 - A raw repository still holds foreign files with spaces, parens and unicode.
   `ls` and `down` display and fetch them, and the alphabet constrains only what nxr itself writes.
+- The local scan refuses a symlink or any other non-regular entry: it never follows a link out of the tree.
 - `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
   nxr never claims or rewrites them implicitly.
 
@@ -75,6 +76,7 @@ The search API is an index, not the store, and it is the only enumeration source
 - Redirects are never followed.
   A 301 on a read surfaces as a plain transport error with exit 3, and the client does not chase the `Location`.
 - TLS verification is on by default, and `--tls-insecure` is the only way off.
+- A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots. It conflicts with `--tls-insecure`.
 - Retries cover transport failures, 429 with `Retry-After`, and 5xx.
   A 404 is a data fact rather than a transport failure, so it is not retried and exits 1.
 - A stalled transfer fails once no bytes arrive for `--stall-secs`, and rerunning is safe.

@@ -41,6 +41,7 @@ fn nxr(args: &[&str]) -> Output {
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
         .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE")
         .output()
         .expect("nxr binary runs")
 }
@@ -53,6 +54,7 @@ fn nxr_stdin(args: &[&str], stdin: &str) -> Output {
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
         .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -73,7 +75,8 @@ fn nxr_env(args: &[&str], env: &[(&str, &str)]) -> Output {
     cmd.args(args)
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
-        .env_remove("NXR_PASSWORD");
+        .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE");
     for (k, v) in env {
         cmd.env(k, v);
     }
@@ -112,6 +115,14 @@ fn write_file(dir: &Path, name: &str, bytes: &[u8]) {
 
 fn read_file(dir: &Path, name: &str) -> Vec<u8> {
     std::fs::read(dir.join(name)).expect("fixture read")
+}
+
+/// The two-subtree tree the `up --prefix` tests filter: `a/x.bin` and `b/y.bin`.
+fn seed_prefix_tree(src: &TempDir) {
+    std::fs::create_dir_all(src.path().join("a")).unwrap();
+    std::fs::create_dir_all(src.path().join("b")).unwrap();
+    write_file(src.path(), "a/x.bin", ALPHA);
+    write_file(src.path(), "b/y.bin", BETA);
 }
 
 /// Lowercase hex sha256 of `bytes`: the digest oracle for markers.
@@ -268,6 +279,110 @@ fn up_rejects_a_part_staging_file() {
     let out = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
     expect_exit(&out, 2, "a part staging file is misuse");
     assert!(stderr(&out).contains(".part"), "{}", stderr(&out));
+}
+
+#[test]
+#[cfg(unix)]
+fn up_rejects_a_symlinked_entry() {
+    // An interior `latest -> 1.4.0` link used to vanish from the upload.
+    // The scan now refuses it before any byte moves.
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    std::fs::create_dir_all(src.path().join("1.4.0")).unwrap();
+    write_file(src.path(), "1.4.0/a.zip", ALPHA);
+    std::os::unix::fs::symlink(src.path().join("1.4.0"), src.path().join("latest")).unwrap();
+    let out = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(&out, 2, "a symlink is misuse");
+    assert!(stderr(&out).contains("symlink"), "{}", stderr(&out));
+    assert!(
+        put_requests(&srv).is_empty(),
+        "the refusal must precede the wire"
+    );
+}
+
+#[test]
+fn up_prefix_uploads_only_the_selected_tree() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let up = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+    ]);
+    expect_exit(&up, 0, "up --prefix");
+    assert_eq!(srv.store_get("1.14.0/a/x.bin").as_deref(), Some(ALPHA));
+    assert!(srv.store_get("1.14.0/b/y.bin").is_none());
+    assert!(src.path().join("a/x.bin.sha256").exists());
+    assert!(
+        !src.path().join("b/y.bin.sha256").exists(),
+        "a filtered-out name must not get a local marker"
+    );
+}
+
+#[test]
+fn up_prefix_plan_shows_only_the_selected_tree() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let plan = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+        "--plan",
+    ]);
+    expect_exit(&plan, 0, "up --prefix --plan");
+    let text = stdout(&plan);
+    assert!(text.contains("a/x.bin"), "{text}");
+    assert!(!text.contains("b/y.bin"), "{text}");
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+fn up_prefix_refuses_a_claim_outside() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let out = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "a/",
+        "--claim-first",
+        "b/y.bin",
+    ]);
+    expect_exit(&out, 2, "claim outside the prefix");
+    assert!(
+        stderr(&out).contains("outside the selected prefixes"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(put_requests(&srv).is_empty());
+}
+
+#[test]
+fn up_prefix_with_no_matches_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    seed_prefix_tree(&src);
+    let out = nxr(&[
+        "up",
+        src.path().to_str().unwrap(),
+        &dir_url(&srv),
+        "--prefix",
+        "z/",
+    ]);
+    expect_exit(&out, 2, "an empty prefix selection");
+    assert!(
+        stderr(&out).contains("no names under the selected prefixes"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]
@@ -1430,6 +1545,7 @@ fn nxr_r(args: &[&str], cfg_dir: &tempfile::TempDir, env: &[(&str, &str)]) -> Ou
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
         .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE")
         .env("XDG_CONFIG_HOME", cfg_dir.path());
     for (k, v) in env {
         cmd.env(k, v);
@@ -1451,6 +1567,7 @@ fn nxr_r_in(
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
         .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE")
         .env("XDG_CONFIG_HOME", cfg_dir.path());
     for (k, v) in env {
         cmd.env(k, v);
@@ -1789,6 +1906,139 @@ fn sha_misuse_is_exit_2() {
 /// storage 404, a data fact (exit 1), not a transport failure (exit 3).
 /// Scripts branch on the class: 0 proceed, 1 absent, 3 retry later.
 #[test]
+fn get_range_reads_the_exact_span() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("span.bin");
+    let got = nxr(&["get", &url, "--range", "2-5", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "get --range");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[2..=5]);
+    assert!(stdout(&got).contains("range 2-5"), "{}", stdout(&got));
+}
+
+#[test]
+fn get_range_open_ended_reads_the_tail() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let got = nxr(&["get", &url, "--range", "5-", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "get --range open ended");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[5..]);
+}
+
+#[test]
+fn get_range_to_stdout_writes_only_the_span() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let got = nxr(&["get", &url, "--range", "2-5"]);
+    expect_exit(&got, 0, "get --range to stdout");
+    assert_eq!(got.stdout, payload[2..=5]);
+}
+
+#[test]
+fn get_range_survives_a_range_ignoring_server() {
+    let srv = server(Scenario::IgnoreRange);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("span.bin");
+    let got = nxr(&["get", &url, "--range", "2-5", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "get --range on an ignoring server");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[2..=5]);
+}
+
+#[test]
+fn get_range_missing_object_is_data() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}1.14.0/absent.bin", srv.base_url());
+    let got = nxr(&["get", &url, "--range", "0-1"]);
+    expect_exit(&got, 1, "a missing range target is data");
+}
+
+#[test]
+fn get_range_with_segments_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/blob.bin", ALPHA);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("span.bin");
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "2-5",
+        "--segments",
+        "2",
+        "-o",
+        dst.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 2, "range and segments conflict");
+}
+
+#[test]
+fn ca_bundle_missing_file_is_misuse() {
+    let out = nxr(&[
+        "get",
+        "http://127.0.0.1:9/x",
+        "--ca-bundle",
+        "/nonexistent/ca.pem",
+    ]);
+    expect_exit(&out, 2, "missing CA bundle");
+    assert!(stderr(&out).contains("--ca-bundle"), "{}", stderr(&out));
+}
+
+#[test]
+fn ca_bundle_garbage_is_misuse() {
+    let dir = TempDir::new().unwrap();
+    let pem = dir.path().join("ca.pem");
+    std::fs::write(&pem, b"not a certificate\n").unwrap();
+    let out = nxr(&[
+        "get",
+        "http://127.0.0.1:9/x",
+        "--ca-bundle",
+        pem.to_str().unwrap(),
+    ]);
+    expect_exit(&out, 2, "unparseable CA bundle");
+    assert!(stderr(&out).contains("--ca-bundle"), "{}", stderr(&out));
+}
+
+#[test]
+fn ca_bundle_env_is_read() {
+    let out = nxr_env(
+        &["get", "http://127.0.0.1:9/x"],
+        &[("NXR_CA_BUNDLE", "/nonexistent/ca.pem")],
+    );
+    expect_exit(&out, 2, "NXR_CA_BUNDLE");
+    assert!(stderr(&out).contains("--ca-bundle"), "{}", stderr(&out));
+}
+
+#[test]
+fn ca_bundle_conflicts_with_tls_insecure() {
+    let out = nxr(&[
+        "get",
+        "http://127.0.0.1:9/x",
+        "--ca-bundle",
+        "/tmp/ca.pem",
+        "--tls-insecure",
+    ]);
+    expect_exit(&out, 2, "contradictory trust flags");
+    assert!(
+        stderr(&out).contains("cannot be used with"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
 fn get_missing_object_is_data_not_transport() {
     let srv = server(Scenario::Atomic);
     let url = format!("{}1.14.0/no-such-object.bin", dir_url(&srv));
@@ -1871,7 +2121,8 @@ fn json_failure_prints_ndjson_only() {
     cmd.args(["--json", "get", "--retry", "1", &url, "-o", "x.bin"])
         .env_remove("NXR_AUTH")
         .env_remove("NXR_USERNAME")
-        .env_remove("NXR_PASSWORD");
+        .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE");
     let out = cmd.output().expect("nxr binary runs");
     assert_eq!(code(&out), 1, "the storage 404 is data");
 
@@ -3470,6 +3721,31 @@ fn mirror_dry_run_prints_plan_without_writing() {
     assert!(
         dst.store_get("1.14.0/a.zip").is_none(),
         "a dry run writes nothing to the destination"
+    );
+}
+
+#[test]
+fn mirror_plan_is_the_dry_run_alias() {
+    let src = server(Scenario::Atomic);
+    src.insert("1.14.0/a.zip", ALPHA);
+    let dst = server(Scenario::Atomic);
+    let plan = nxr(&[
+        "mirror",
+        &dir_url(&src),
+        &dir_url(&dst),
+        "--plan",
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&plan, 0, "mirror --plan");
+    assert!(
+        stdout(&plan).contains("copy a.zip"),
+        "got: {}",
+        stdout(&plan)
+    );
+    assert!(
+        dst.store_get("1.14.0/a.zip").is_none(),
+        "the plan alias writes nothing"
     );
 }
 

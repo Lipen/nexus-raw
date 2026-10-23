@@ -32,6 +32,7 @@ fn config(mock: &MockNexus, auth: Option<String>) -> Config {
 fn config_at(base: String, auth: Option<String>) -> Config {
     Config {
         base,
+        ca_bundle: None,
         workers: 4,
         retry_attempts: 4,
         connect_timeout: Duration::from_secs(5),

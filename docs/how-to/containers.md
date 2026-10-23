@@ -109,6 +109,7 @@ COPY --from=ghcr.io/lipen/nexus-raw:<version> /nxr /usr/local/bin/nxr
 
 - The binary is a static-pie musl executable, so it needs no libc and no loader.
 - It does need the trust store: `gcr.io/distroless/static:nonroot` carries `/etc/ssl/certs/ca-certificates.crt` and sets `SSL_CERT_FILE`, and a `scratch` image has neither.
+- A private CA still needs no rebuild: mount the PEM bundle and pass `--ca-bundle /run/ca.pem`, or set `NXR_CA_BUNDLE`, and the roots are added to the store the image already carries.
 - The base has no shell and no package manager, so there is no `docker run -it <image> sh` and nothing in the image that could run one.
 - It runs as the `nonroot` user (uid 65532, the entry is in `/etc/passwd`), never as root.
 - The image is assembled from the release archives, not rebuilt from source: the release workflow unpacks `nxr-linux-x64.tar.gz` and `nxr-linux-aarch64.tar.gz` into `bin/amd64/` and `bin/arm64/`, and `packaging/container/Dockerfile` copies the binary out of there.

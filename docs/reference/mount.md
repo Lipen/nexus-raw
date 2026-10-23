@@ -15,7 +15,7 @@ nxr-mount https://nexus.example/repository/raw /mnt/nexus
 
 The URL is the repository directory to mount.
 Credentials come from `-u user:pass`, `NXR_AUTH` (base64) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order, exactly like `nxr`.
-`--tls-insecure` skips certificate verification, and `--workers` caps parallel requests and FUSE dispatch threads.
+`--tls-insecure` skips certificate verification, `--ca-bundle FILE` adds a private CA (also `NXR_CA_BUNDLE`), and `--workers` caps parallel requests and FUSE dispatch threads.
 
 Unmount with `fusermount3 -u /mnt/nexus`.
 
@@ -51,6 +51,7 @@ Listings and attributes are cached for two seconds, so a rapid `ls -R` does not 
 | :-- | :-- | :-- |
 | `-u, --user` | env | Credentials as `user:pass`, curl style. |
 | `--tls-insecure` | off | Skip TLS certificate verification. |
+| `--ca-bundle` | none | A PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). Conflicts with `--tls-insecure`. |
 | `--workers` | 8 | Parallel requests and FUSE dispatch threads. |
 | `--retry` | 4 | Attempts per HTTP request. |
 | `--connect-timeout-secs` | 15 | TCP connect timeout. |

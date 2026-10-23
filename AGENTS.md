@@ -22,6 +22,7 @@ The canonical protocol text is kept outside this repository.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
   Only the `.sha256` and `.part` suffixes and a `.nxr`-prefixed segment (local staging and cache) are reserved.
   `version.json`, `latest` and `nightly` are ordinary names with no protocol meaning.
+- The local scan refuses a symlink or any other non-regular entry: a link is never followed.
 - A channel is any token file.
   Dotted-numeric order is the only comparison the tool imposes (`--if-forward`).
 - Credentials come from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order.

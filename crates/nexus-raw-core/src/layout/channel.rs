@@ -115,6 +115,7 @@ mod tests {
         let cfg = Config {
             base: "http://mock/".into(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 1,
             retry_attempts: 1,
             connect_timeout: Duration::from_secs(1),

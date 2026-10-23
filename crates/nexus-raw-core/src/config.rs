@@ -2,6 +2,7 @@
 //!
 //! Every call is self-sufficient: the base URL comes from the command line, credentials from `-u` or env (see [`crate::creds`]).
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::error::Error;
@@ -15,6 +16,9 @@ pub struct Config {
     pub base: String,
     /// Skip TLS certificate verification.
     pub tls_insecure: bool,
+    /// A PEM bundle of extra trust roots for a private CA (`--ca-bundle`).
+    /// Native only: the browser owns its trust store.
+    pub ca_bundle: Option<PathBuf>,
     /// Parallel artifact transfers.
     pub workers: usize,
     /// Attempts per HTTP request.
@@ -33,6 +37,7 @@ impl std::fmt::Debug for Config {
         f.debug_struct("Config")
             .field("base", &self.base)
             .field("tls_insecure", &self.tls_insecure)
+            .field("ca_bundle", &self.ca_bundle)
             .field("workers", &self.workers)
             .field("retry_attempts", &self.retry_attempts)
             .field("connect_timeout", &self.connect_timeout)
@@ -60,6 +65,11 @@ impl Config {
         }
         if self.connect_timeout.is_zero() || self.stall_timeout.is_zero() {
             return Err(Error::misuse("timeouts must be positive"));
+        }
+        if self.tls_insecure && self.ca_bundle.is_some() {
+            return Err(Error::misuse(
+                "--ca-bundle and --tls-insecure are mutually exclusive: pick one trust policy",
+            ));
         }
         Ok(())
     }
@@ -151,6 +161,7 @@ mod tests {
         Config {
             base: base.to_owned(),
             tls_insecure: false,
+            ca_bundle: None,
             workers: 8,
             retry_attempts: 4,
             connect_timeout: Duration::from_secs(15),
@@ -171,6 +182,14 @@ mod tests {
         bad.workers = 8;
         bad.retry_attempts = 0;
         assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn ca_bundle_and_tls_insecure_conflict() {
+        let mut c = cfg("https://h/");
+        c.ca_bundle = Some(PathBuf::from("ca.pem"));
+        c.tls_insecure = true;
+        assert!(c.validate().is_err());
     }
 
     #[test]

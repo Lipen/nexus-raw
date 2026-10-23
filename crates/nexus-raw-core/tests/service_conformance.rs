@@ -9,6 +9,7 @@ fn client(base: String) -> Nxr {
     let cfg = Config {
         base,
         tls_insecure: false,
+        ca_bundle: None,
         workers: 1,
         retry_attempts: 1,
         connect_timeout: std::time::Duration::from_secs(5),
@@ -23,6 +24,7 @@ fn creds_client(base: String, user: &str, pass: &str) -> Nxr {
     let cfg = Config {
         base,
         tls_insecure: false,
+        ca_bundle: None,
         workers: 1,
         retry_attempts: 1,
         connect_timeout: std::time::Duration::from_secs(5),

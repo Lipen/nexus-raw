@@ -1,0 +1,103 @@
+{
+  "comment": "One name table for every implementation. Segments are single path components checked by the Python reference client; names are whole artifact names checked by the Rust grammar. The canonical protocol text lives outside this repository: this fixture is its executable projection for the clients.",
+  "segments": {
+    "valid": [
+      "pinned.xml",
+      "a-b.c_d",
+      "latest",
+      "nightly",
+      "version.json",
+      "X.PART",
+      "x.SHA256",
+      "...",
+      ".hidden"
+    ],
+    "invalid": [
+      "",
+      ".",
+      "..",
+      "a b",
+      "a/b",
+      "~x",
+      "🦀",
+      ".nxr-state.json",
+      ".NXR-tmp-1-x",
+      "x.sha256",
+      "x.part"
+    ]
+  },
+  "names": {
+    "valid": [
+      "pinned.xml",
+      "bom/linux-x86_64.json",
+      "a-b.c_d",
+      "latest",
+      "nightly",
+      "version.json",
+      "X.PART",
+      "x.SHA256",
+      "...",
+      "a/.hidden",
+      "artifact.part/data",
+      "dir.with.dots/file"
+    ],
+    "invalid": [
+      {
+        "name": "",
+        "reason": "empty"
+      },
+      {
+        "name": "/abs",
+        "reason": "absolute"
+      },
+      {
+        "name": "a//b",
+        "reason": "empty segment"
+      },
+      {
+        "name": "a/",
+        "reason": "trailing slash"
+      },
+      {
+        "name": "a/./b",
+        "reason": "dot segment"
+      },
+      {
+        "name": "a/../b",
+        "reason": "dot-dot segment"
+      },
+      {
+        "name": "x.sha256",
+        "reason": "reserved suffix"
+      },
+      {
+        "name": "x.part",
+        "reason": "reserved suffix"
+      },
+      {
+        "name": "x.part.sha256",
+        "reason": "reserved suffix"
+      },
+      {
+        "name": ".nxr-state.json",
+        "reason": "reserved prefix"
+      },
+      {
+        "name": "a/.nxr-part-0123456789abcdef",
+        "reason": "reserved prefix"
+      },
+      {
+        "name": "a b",
+        "reason": "alphabet"
+      },
+      {
+        "name": "a\\b",
+        "reason": "alphabet"
+      },
+      {
+        "name": "🦀",
+        "reason": "alphabet"
+      }
+    ]
+  }
+}

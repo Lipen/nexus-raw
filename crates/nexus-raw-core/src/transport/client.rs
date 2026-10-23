@@ -170,20 +170,39 @@ impl NexusClient {
         // the native builder options are gated to native targets.
         #[cfg(not(target_arch = "wasm32"))]
         let builder = {
-            let b = reqwest::Client::builder()
+            let mut b = reqwest::Client::builder()
                 .connect_timeout(cfg.connect_timeout)
                 // Control requests (probe, marker PUT, delete, small get/put) have no body
                 // loop to watch: this read timeout is their only stall guard.
                 .read_timeout(cfg.stall_timeout)
                 .redirect(reqwest::redirect::Policy::none());
             if cfg.tls_insecure {
-                b.danger_accept_invalid_certs(true)
-            } else {
-                b
+                b = b.danger_accept_invalid_certs(true);
             }
+            if let Some(path) = &cfg.ca_bundle {
+                let pem = std::fs::read(path)
+                    .map_err(|e| Error::misuse(format!("--ca-bundle {}: {e}", path.display())))?;
+                let certs = reqwest::Certificate::from_pem_bundle(&pem)
+                    .map_err(|e| Error::misuse(format!("--ca-bundle {}: {e}", path.display())))?;
+                if certs.is_empty() {
+                    return Err(Error::misuse(format!(
+                        "--ca-bundle {}: no PEM certificate found",
+                        path.display()
+                    )));
+                }
+                b = b.tls_certs_merge(certs);
+            }
+            b
         };
         #[cfg(target_arch = "wasm32")]
-        let builder = reqwest::Client::builder();
+        let builder = {
+            if cfg.ca_bundle.is_some() {
+                return Err(Error::misuse(
+                    "--ca-bundle is native only: the browser owns its trust store",
+                ));
+            }
+            reqwest::Client::builder()
+        };
         let http = builder
             .build()
             .map_err(|e| Error::misuse(format!("http client: {e}")))?;

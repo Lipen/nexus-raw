@@ -23,6 +23,7 @@ _nxr() {
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -47,6 +48,7 @@ _arguments "${_arguments_options[@]}" : \
 '-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '--segments=[Fetch through N concurrent byte-range requests (2 to 64). File output only\: \`--segments\` with a stdout target is a misuse]:N:_default' \
+'(--continue --segments)--range=[Fetch one byte range\: START-END or START- (inclusive), through a Range request. Conflicts with --continue and --segments]:START-END:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
@@ -55,6 +57,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--continue[Resume from an existing \`<out>\`.part through a Range request]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -79,6 +82,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '(-f --file)--stdin[Read the bytes from stdin instead of a file\: the body is buffered (Content-Length is part of the protocol), then sent as one PUT]' \
 '--sha[Also PUT \`<url>\`.sha256 with the sha256sum-style marker]' \
 '--tls-insecure[Skip TLS certificate verification]' \
@@ -102,6 +106,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -123,6 +128,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -138,6 +144,7 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--claim-first=[Upload this file first, alone, before any other name (claim-first)]:NAME:_default' \
 '--index-timeout=[The visibility wait budget for --wait-index]:SECS:_default' \
+'*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
@@ -146,6 +153,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--no-sha[Skip marker generation and marker uploads]' \
 '--if-changed[Skip names whose remote marker digest already equals the local copy, re-upload the changed rest]' \
 '--wait-index[After the run, poll the search index until every uploaded name is visible (the index lags behind writes on a real server)]' \
@@ -177,6 +185,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--ls[Best-effort enumeration through the server search API]' \
 '--fresh[Ignore existing part files\: every name downloads from zero]' \
 '--plan[Print the plan without transferring anything]' \
@@ -205,6 +214,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--no-state[Do not read or write the local fact cache\: hash every local file]' \
 '--verify[Ignore the cache and hash every local file, even unchanged ones]' \
 '--plan[Print the plan without transferring anything]' \
@@ -235,6 +245,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--ls[Best-effort enumeration through the server search API]' \
 '--fallback[With \`--via\`\: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run]' \
 '--tls-insecure[Skip TLS certificate verification]' \
@@ -262,6 +273,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--bytes[Download every asset and hash it against its marker\: the only pass that catches silent bitrot]' \
 '--json[Emit NDJSON events instead of the human report]' \
 '--tls-insecure[Skip TLS certificate verification]' \
@@ -287,6 +299,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--ls[Best-effort enumeration through the server search API]' \
 '--yes[Delete for real. Without it the run prints the plan and touches nothing]' \
 '--tls-insecure[Skip TLS certificate verification]' \
@@ -310,6 +323,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -336,8 +350,10 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--ls[Best-effort enumeration through the server search API]' \
-'--dry-run[Print the plan without transferring anything]' \
+'--dry-run[Print the plan without transferring anything (\`--plan\` is the same flag)]' \
+'--plan[Print the plan without transferring anything (\`--plan\` is the same flag)]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -365,6 +381,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--ls[Best-effort enumeration through the server search API]' \
 '--yes[Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing]' \
 '--tls-insecure[Skip TLS certificate verification]' \
@@ -389,6 +406,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--assets[List the object names under a version directory URL]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -411,6 +429,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -439,6 +458,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -460,6 +480,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--if-forward[Keep the current token when it already compares >= the new one]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -515,6 +536,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -537,6 +559,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--deep[Probe the server'\''s behavior\: range, content-length, search, repo type, version. Read-only]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -559,6 +582,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -587,6 +611,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -608,6 +633,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -629,6 +655,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--detail[Also fetch the full repository settings\: answers only to an nx-admin]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -653,6 +680,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \
@@ -674,6 +702,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--accept[Accept the presented disclaimer when the gate is closed]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
@@ -740,6 +769,7 @@ _arguments "${_arguments_options[@]}" : \
 '--retry=[Attempts per HTTP request]:N:_default' \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
+'(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print only the final summary line]' \

@@ -55,8 +55,8 @@ surface="$(perl -0777 -ne '
   while (/\[arg\(((?:[^()]|\([^()]*\))*)\)\]\s*(?:pub\(crate\)\s*)?([a-z_][a-z0-9_]*)\s*:/g) {
     my ($attrs, $field) = ($1, $2);
     next if $attrs =~ /\bskip\b/;
-    if ($attrs =~ /(?:^|[,(]\s*)long\s*=\s*"([^"]*)"/) { print "flag $1\n" }
-    elsif ($attrs =~ /(?:^|[,(]\s*)long(?:\s*[,)]|\s*$)/) { (my $l = $field) =~ s/_/-/g; print "flag $l\n" }
+    if ($attrs =~ /(?:^|[,(])\s*long\s*=\s*"([^"]*)"/m) { print "flag $1\n" }
+    elsif ($attrs =~ /(?:^|[,(])\s*long(?:\s*[,)]|\s*$)/m) { (my $l = $field) =~ s/_/-/g; print "flag $l\n" }
     while ($attrs =~ /(?:visible_)?alias\s*=\s*"([^"]*)"/g) { print "alias $1\n" }
   }
 ' "$src" crates/nexus-raw/src/cmd/*.rs | sort -u)"

@@ -31,6 +31,7 @@ dist/1.4.0/
 
 Every relative path under the directory is an artifact name.
 Segments match `[A-Za-z0-9._-]+`, and only the `.sha256` and `.part` suffixes are reserved: `latest`, `nightly` and `version.json` are ordinary names if your convention uses them.
+A symlink, socket or FIFO in the tree is a misuse error (exit 2): the scan never follows a link out of the source.
 Before anything touches the network, every local file is classified against its sibling marker (see [the four states of an object](troubleshoot.md#the-four-states-of-an-object)).
 
 ## Look before you leap: the plan

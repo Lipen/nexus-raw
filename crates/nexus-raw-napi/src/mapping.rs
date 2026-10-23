@@ -42,6 +42,7 @@ pub fn build_config(base: &str, common: &CommonOpts) -> Result<Config, Error> {
     let cfg = Config {
         base: base.to_owned(),
         tls_insecure: common.tls_insecure.unwrap_or(false),
+        ca_bundle: None,
         workers: usize::try_from(common.workers.unwrap_or(DEFAULT_WORKERS))
             .map_err(|_| Error::Misuse("workers must be a small positive number".into()))?,
         retry_attempts: common.retry.unwrap_or(DEFAULT_RETRY),
