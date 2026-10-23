@@ -25,6 +25,7 @@ pub struct CommonOpts {
     pub connect_timeout_ms: Option<u32>,
     pub stall_ms: Option<u32>,
     pub tls_insecure: Option<bool>,
+    pub ca_bundle: Option<String>,
 }
 
 /// Build the per-invocation core config from a base URL plus common options.
@@ -42,7 +43,7 @@ pub fn build_config(base: &str, common: &CommonOpts) -> Result<Config, Error> {
     let cfg = Config {
         base: base.to_owned(),
         tls_insecure: common.tls_insecure.unwrap_or(false),
-        ca_bundle: None,
+        ca_bundle: common.ca_bundle.as_ref().map(std::path::PathBuf::from),
         workers: usize::try_from(common.workers.unwrap_or(DEFAULT_WORKERS))
             .map_err(|_| Error::Misuse("workers must be a small positive number".into()))?,
         retry_attempts: common.retry.unwrap_or(DEFAULT_RETRY),
@@ -143,6 +144,20 @@ mod tests {
         assert_eq!(cfg.stall_timeout, Duration::from_millis(60_000));
         assert!(cfg.tls_insecure);
         assert_eq!(cfg.normalized_base().unwrap(), "http://host/repo/");
+    }
+
+    #[test]
+    fn ca_bundle_maps_to_the_config() {
+        let _env = ENV_LOCK.lock().unwrap();
+        let common = CommonOpts {
+            ca_bundle: Some("ca.pem".into()),
+            ..Default::default()
+        };
+        let cfg = build_config("https://host/repo/", &common).unwrap();
+        assert_eq!(
+            cfg.ca_bundle.as_deref(),
+            Some(std::path::Path::new("ca.pem"))
+        );
     }
 
     #[test]

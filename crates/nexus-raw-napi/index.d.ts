@@ -33,6 +33,8 @@ export interface NxrCommonOpts {
   stallMs?: number
   /** Skip TLS certificate verification, default false. */
   tlsInsecure?: boolean
+  /** A PEM bundle of extra trust roots for a private CA. Conflicts with `tlsInsecure`. */
+  caBundle?: string
   /**
    * Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
    * Events cross threads: every event has reached the callback by the time the
@@ -148,6 +150,8 @@ export interface NxrHeadResult {
 export interface NxrUpOpts extends NxrCommonOpts {
   /** Restrict the transfer to these explicit names. */
   names?: string[]
+  /** Restrict the transfer to these whole-segment prefixes, keeping their paths. */
+  prefixes?: string[]
   /** Upload this file first, alone, before any other name (claim-first). */
   claimFirst?: string
   /** Skip marker generation and marker uploads. */

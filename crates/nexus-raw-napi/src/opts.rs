@@ -32,6 +32,9 @@ pub struct NxrCommonOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -46,6 +49,7 @@ pub(crate) fn split_common(
     connect_timeout_ms: Option<u32>,
     stall_ms: Option<u32>,
     tls_insecure: Option<bool>,
+    ca_bundle: Option<String>,
     on_event: Option<EventCallback>,
 ) -> (CommonOpts, Option<EventCallback>) {
     let (auth_user, auth_pass) = match auth {
@@ -61,6 +65,7 @@ pub(crate) fn split_common(
             connect_timeout_ms,
             stall_ms,
             tls_insecure,
+            ca_bundle,
         },
         on_event,
     )
@@ -83,6 +88,9 @@ pub struct NxrGetOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -110,6 +118,9 @@ pub struct NxrPutOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -134,11 +145,16 @@ pub struct NxrUpOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
     /// Restrict the transfer to these explicit names.
     pub names: Option<Vec<String>>,
+    /// Restrict the transfer to these whole-segment prefixes, keeping their paths.
+    pub prefixes: Option<Vec<String>>,
     /// Upload this file first, alone, before any other name (claim-first).
     pub claim_first: Option<String>,
     /// Skip marker generation and marker uploads.
@@ -164,6 +180,9 @@ pub struct NxrDownOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -195,6 +214,9 @@ pub struct NxrCloneOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -226,6 +248,9 @@ pub struct NxrDiffOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -254,6 +279,9 @@ pub struct NxrRmOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -282,6 +310,9 @@ pub struct NxrMirrorOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,
@@ -314,6 +345,9 @@ pub struct NxrVerifyOpts {
     pub stall_ms: Option<u32>,
     /// Skip TLS certificate verification, default false.
     pub tls_insecure: Option<bool>,
+    /// A PEM bundle of extra trust roots for a private CA.
+    /// Conflicts with `tls_insecure`.
+    pub ca_bundle: Option<String>,
     /// Progress stream: the JSON-parsed events the CLI prints as NDJSON lines.
     #[napi(ts_type = "(event: object) => void")]
     pub on_event: Option<EventCallback>,

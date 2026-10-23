@@ -26,6 +26,7 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -66,6 +67,7 @@ pub async fn put(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -111,6 +113,7 @@ pub async fn head(url: String, opts: Option<NxrCommonOpts>) -> Result<NxrHeadRes
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -154,6 +157,7 @@ pub async fn sha(target: String, opts: Option<NxrCommonOpts>) -> Result<String> 
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&target, &common).map_err(js_error)?;

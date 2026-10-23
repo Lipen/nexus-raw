@@ -3,7 +3,7 @@ use std::path::Path;
 use napi::bindgen_prelude::Either;
 use napi::Result;
 use napi_derive::napi;
-use nexus_raw_core::{ArtifactName, CloneAction, Mode, NamePrefix, Nxr, StateMode};
+use nexus_raw_core::{ArtifactName, CloneAction, Error, Mode, NamePrefix, Nxr, StateMode};
 use tokio::sync::mpsc;
 
 use crate::error::js_error;
@@ -38,6 +38,7 @@ pub async fn up(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&dst_url, &common).map_err(js_error)?;
@@ -45,6 +46,26 @@ pub async fn up(
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     // Pure parsing first: no events can precede the pump.
     let parsed_names: Option<Vec<ArtifactName>> = parse_names(o.names)?;
+    let names = match (parsed_names, o.prefixes) {
+        (Some(_), Some(_)) => {
+            drop(nxr);
+            return Err(js_error(Error::Misuse(
+                "use names or prefixes, not both".into(),
+            )));
+        }
+        (Some(names), None) => Some(names),
+        (None, Some(prefixes)) => {
+            let scanned = match nxr.scan_prefixes(Path::new(&src_dir), &prefixes) {
+                Ok(names) => names,
+                Err(e) => {
+                    drop(nxr);
+                    return Err(js_error(e));
+                }
+            };
+            Some(scanned)
+        }
+        (None, None) => None,
+    };
     let claim = match &o.claim_first {
         Some(raw) => Some(ArtifactName::parse(raw).map_err(js_error)?),
         None => None,
@@ -52,7 +73,6 @@ pub async fn up(
     let gen_markers = !o.no_sha.unwrap_or(false);
     // The pump starts before any network call: every early return from here drops the facade before draining the pump.
     let pump = spawn_pump(rx, on_event);
-    let names: Option<Vec<ArtifactName>> = parsed_names;
     if o.dry_run.unwrap_or(false) {
         let scanned = match names {
             Some(n) => n,
@@ -114,6 +134,7 @@ pub async fn down(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
@@ -167,6 +188,7 @@ pub async fn clone(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
@@ -207,6 +229,7 @@ pub async fn clone_plan(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
@@ -294,6 +317,7 @@ pub async fn diff(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&remote_url, &common).map_err(js_error)?;
@@ -347,6 +371,7 @@ pub async fn rm(src_url: String, opts: Option<NxrRmOpts>) -> Result<Either<NxrSu
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&src_url, &common).map_err(js_error)?;
@@ -407,6 +432,7 @@ pub async fn mirror(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let side_auth = |side: &Option<NxrAuth>| match side {
@@ -463,6 +489,7 @@ pub async fn verify(dir: String, opts: Option<NxrVerifyOpts>) -> Result<NxrSumma
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     // verify is local-only: the base is a placeholder, like the CLI.

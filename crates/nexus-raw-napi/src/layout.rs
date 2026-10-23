@@ -22,6 +22,7 @@ pub async fn channel_get(url: String, opts: Option<NxrCommonOpts>) -> Result<Opt
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -54,6 +55,7 @@ pub async fn channel_set(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -92,6 +94,7 @@ pub async fn point_clear(url: String, opts: Option<NxrCommonOpts>) -> Result<Nxr
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -124,6 +127,7 @@ pub async fn ls_assets(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<S
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -162,6 +166,7 @@ pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -213,6 +218,7 @@ pub async fn service_repos(url: String, opts: Option<NxrCommonOpts>) -> Result<V
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
@@ -272,6 +278,7 @@ pub async fn service_assets(
         o.connect_timeout_ms,
         o.stall_ms,
         o.tls_insecure,
+        o.ca_bundle,
         o.on_event,
     );
     let cfg = mapping::build_config(&url, &common).map_err(js_error)?;
