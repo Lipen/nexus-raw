@@ -224,14 +224,14 @@ jobs:
           workspaces: examples/wasm-sandbox
           cache-on-failure: true
 
+      # The sandbox build also compiles the workspace core by path. This check
+      # is cheap and reports a core error before the bindgen pipeline.
+      - name: Check the workspace core for wasm32
+        run: cargo check -p nexus-raw-core --target wasm32-unknown-unknown
+
       - name: Build the sandbox for wasm32
         working-directory: examples/wasm-sandbox
         run: cargo build --target wasm32-unknown-unknown --release --locked
-
-      # The example pins the published core, so the sandbox build alone does not
-      # compile the workspace core for wasm32: check it directly.
-      - name: Check the workspace core for wasm32
-        run: cargo check -p nexus-raw-core --target wasm32-unknown-unknown
 
       # wasm-bindgen refuses to generate glue across versions, so the CLI comes
       # from the release of exactly the version the lockfile resolved.
