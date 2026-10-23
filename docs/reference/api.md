@@ -99,6 +99,7 @@ Every method mirrors a CLI command one-to-one.
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
 | `scan_prefixes(dir, prefixes)` | `Vec<ArtifactName>` | the `up --prefix` input set | only the selected subtrees are read, keeping each prefix in the name |
+| `sibling_digest(url)` | `Option<Digest>` | the `.sha256` marker read | the marker digest when present, `None` when absent, a malformed marker is `Mismatch` |
 | `diff(dir, names, mode, markers)` | `Vec<Action>` | `up --plan` | the symmetric plan without transferring |
 | `delta(dir, enum_src)` | `Vec<Delta>` | `nxr diff` | the local-against-storage report: `Same`, `MissingLocal`, `MissingRemote`, `Diverged` (size and/or sha), nothing written |
 | `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |

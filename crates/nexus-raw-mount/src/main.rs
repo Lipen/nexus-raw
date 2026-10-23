@@ -5,6 +5,8 @@
 //! Listings go through the search API, reads go through ranged GETs, and nothing is written.
 
 #[cfg(target_os = "linux")]
+mod cache;
+#[cfg(target_os = "linux")]
 mod fs;
 
 #[cfg(target_os = "linux")]
@@ -69,6 +71,12 @@ struct Cli {
     /// Read-block cache budget, in MiB (minimum 1).
     #[arg(long, default_value_t = 256)]
     cache_mib: u64,
+    /// A directory for a digest-keyed disk cache of read blocks (opt-in).
+    #[arg(long, value_name = "DIR")]
+    cache_dir: Option<std::path::PathBuf>,
+    /// The disk cache budget, in MiB (minimum 1; only with --cache-dir).
+    #[arg(long, default_value_t = 1024, requires = "cache_dir")]
+    disk_cache_mib: u64,
 }
 
 #[cfg(target_os = "linux")]
@@ -124,6 +132,18 @@ fn run(cli: Cli) -> Result<(), String> {
     runtime.spawn(async move { while receiver.recv().await.is_some() {} });
     let nxr = Nxr::new(cfg, sender).map_err(|e| e.to_string())?;
     let base = nxr.base().trim_end_matches('/').to_owned();
+    let disk = match cli.cache_dir {
+        Some(dir) => Some(
+            cache::DiskCache::new(
+                dir,
+                cli.disk_cache_mib
+                    .saturating_mul(1024 * 1024)
+                    .max(1024 * 1024),
+            )
+            .map_err(|e| format!("cache dir: {e}"))?,
+        ),
+        None => None,
+    };
 
     let filesystem = fs::NexusFs::new(
         Arc::new(nxr),
@@ -133,6 +153,7 @@ fn run(cli: Cli) -> Result<(), String> {
         usize::try_from(cli.cache_mib.saturating_mul(1024 * 1024))
             .unwrap_or(usize::MAX)
             .max(1024 * 1024),
+        disk,
     );
 
     let mut options = fuser::Config::default();

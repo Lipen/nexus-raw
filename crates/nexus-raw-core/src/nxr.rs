@@ -403,6 +403,30 @@ impl Nxr {
         Ok(RangeOutcome { start, end, bytes })
     }
 
+    /// The `.sha256` marker digest of one object, when the server has a marker.
+    ///
+    /// A missing marker is `None`; a marker outside the `sha256sum -c` format is
+    /// [`Error::Mismatch`], because a digest that cannot be read cannot verify
+    /// anything.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the marker read, and
+    /// [`Error::Mismatch`] when the marker does not parse.
+    pub async fn sibling_digest(&self, url: &str) -> Result<Option<Digest>, Error> {
+        let marker_url = format!("{url}.sha256");
+        let Some(raw) = self.client.get_small(&marker_url).await? else {
+            return Ok(None);
+        };
+        let text = String::from_utf8_lossy(&raw);
+        let parsed =
+            crate::model::sibling::parse_line(&text).map_err(|reason| Error::Mismatch {
+                name: url.to_owned(),
+                detail: format!("the .sha256 marker does not parse: {reason}"),
+            })?;
+        Ok(Some(parsed.digest))
+    }
+
     /// The sha256 of a file or URL (spec §5.1).
     ///
     /// # Errors

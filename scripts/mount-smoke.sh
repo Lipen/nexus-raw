@@ -62,6 +62,8 @@ mkdir -p "$mnt" "$work/data/repository/raw/a/b"
 printf 'hello world\n' > "$work/data/repository/raw/hello.txt"
 head -c 1000000 /dev/urandom > "$work/data/repository/raw/a/big.bin"
 printf 'nested\n' > "$work/data/repository/raw/a/b/n.txt"
+printf '%s  hello.txt\n' "$(sha256sum "$work/data/repository/raw/hello.txt" | cut -d' ' -f1)" > "$work/data/repository/raw/hello.txt.sha256"
+printf '%s  big.bin\n' "$(sha256sum "$work/data/repository/raw/a/big.bin" | cut -d' ' -f1)" > "$work/data/repository/raw/a/big.bin.sha256"
 
 mock_pid=""
 mount_pid=""
@@ -118,7 +120,7 @@ case "$listing" in
 esac
 
 ui_phase "mount" "mounting the repository"
-"$bin/nxr-mount" "$base" "$mnt" > "$work/mount.log" 2>&1 &
+"$bin/nxr-mount" --cache-dir "$work/cache" "$base" "$mnt" > "$work/mount.log" 2>&1 &
 mount_pid=$!
 for _ in $(seq 1 100); do
   mountpoint -q "$mnt" && break
@@ -138,7 +140,7 @@ fail() {
 
 ui_phase "mount" "comparing the tree"
 [ "$(cat "$mnt/hello.txt")" = "hello world" ] || fail "hello.txt content diverged"
-diff -r -x .probe "$work/data/repository/raw" "$mnt" || fail "the tree diverged"
+diff -r -x .probe -x '*.sha256' "$work/data/repository/raw" "$mnt" || fail "the tree diverged"
 [ "$(stat -c %s "$mnt/a/big.bin")" = "1000000" ] || fail "big.bin size diverged"
 [ "$(sha256sum "$work/data/repository/raw/a/big.bin" | cut -d' ' -f1)" = "$(sha256sum "$mnt/a/big.bin" | cut -d' ' -f1)" ] ||
   fail "big.bin digest diverged"
@@ -146,6 +148,8 @@ if (printf x > "$mnt/new.txt") 2>/dev/null; then
   fail "a write to the read-only mount succeeded"
 fi
 ui_ok "tree, size, digest and read-only behavior"
+find "$work/cache" -type f -name '*-*' -print -quit | grep -q . || fail "the disk cache stayed empty"
+ui_ok "the disk cache holds digest-keyed blocks"
 
 "$fusermount" -u "$mnt"
 wait "$mount_pid" || true

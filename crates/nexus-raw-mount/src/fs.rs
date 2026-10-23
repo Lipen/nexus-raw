@@ -12,12 +12,13 @@ use std::ffi::OsStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::cache::{DiskCache, Key};
 use fuser::{
     AccessFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation,
     INodeNo, LockOwner, OpenFlags, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
     ReplyOpen, ReplyStatfs, Request,
 };
-use nexus_raw_core::{EntryKind, Error, Nxr};
+use nexus_raw_core::{Digest, EntryKind, Error, Nxr};
 use tokio::runtime::Handle;
 
 /// How long the kernel may cache an attribute or a listing.
@@ -43,6 +44,12 @@ struct Attrs {
     attr: FileAttr,
 }
 
+/// The marker digest of one node, cached for [`TTL`].
+struct DigestEntry {
+    at: Instant,
+    digest: Option<Digest>,
+}
+
 struct State {
     nodes: HashMap<u64, Node>,
     paths: HashMap<String, u64>,
@@ -51,6 +58,7 @@ struct State {
     block_bytes: usize,
     listings: HashMap<u64, Listing>,
     attrs: HashMap<u64, Attrs>,
+    digests: HashMap<u64, DigestEntry>,
 }
 
 impl State {
@@ -81,6 +89,7 @@ pub struct NexusFs {
     cache_cap: usize,
     uid: u32,
     gid: u32,
+    disk: Option<Mutex<DiskCache>>,
     state: Mutex<State>,
 }
 
@@ -91,7 +100,14 @@ enum Resolved {
 }
 
 impl NexusFs {
-    pub fn new(nxr: Arc<Nxr>, rt: Handle, base: String, block: u64, cache_cap: usize) -> Self {
+    pub fn new(
+        nxr: Arc<Nxr>,
+        rt: Handle,
+        base: String,
+        block: u64,
+        cache_cap: usize,
+        disk: Option<DiskCache>,
+    ) -> Self {
         let mut nodes = HashMap::new();
         let mut paths = HashMap::new();
         nodes.insert(
@@ -111,6 +127,7 @@ impl NexusFs {
             cache_cap,
             uid,
             gid,
+            disk: disk.map(Mutex::new),
             state: Mutex::new(State {
                 nodes,
                 paths,
@@ -119,6 +136,7 @@ impl NexusFs {
                 block_bytes: 0,
                 listings: HashMap::new(),
                 attrs: HashMap::new(),
+                digests: HashMap::new(),
             }),
         }
     }
@@ -265,12 +283,23 @@ impl NexusFs {
         Ok(out)
     }
 
-    /// One read block, fetched on demand and cached.
+    /// One read block, served from memory, then the disk cache, then the network.
     ///
     /// The whole map is dropped when the budget is exceeded: one block is a bounded overshoot.
     fn block(&self, ino: u64, url: &str, index: u64) -> Result<Arc<Vec<u8>>, Errno> {
         if let Some(bytes) = self.state().blocks.get(&(ino, index)).cloned() {
             return Ok(bytes);
+        }
+        let key = if self.disk.is_some() {
+            self.digest_for(ino, url)
+                .map(|digest| Key::new(digest, self.block, index))
+        } else {
+            None
+        };
+        if let (Some(disk), Some(key)) = (&self.disk, key.as_ref()) {
+            if let Some(bytes) = disk.lock().unwrap_or_else(PoisonError::into_inner).get(key) {
+                return Ok(self.cache_block(ino, index, bytes));
+            }
         }
         let start = index * self.block;
         let bytes = self
@@ -280,6 +309,16 @@ impl NexusFs {
         let Some(bytes) = bytes else {
             return Err(Errno::ENOENT);
         };
+        if let (Some(disk), Some(key)) = (&self.disk, key.as_ref()) {
+            disk.lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .put(key, &bytes);
+        }
+        Ok(self.cache_block(ino, index, bytes))
+    }
+
+    /// Insert one block into the memory cache and return it.
+    fn cache_block(&self, ino: u64, index: u64, bytes: Vec<u8>) -> Arc<Vec<u8>> {
         let bytes = Arc::new(bytes);
         let mut state = self.state();
         state.block_bytes += bytes.len();
@@ -288,7 +327,34 @@ impl NexusFs {
         }
         state.blocks.insert((ino, index), Arc::clone(&bytes));
         drop(state);
-        Ok(bytes)
+        bytes
+    }
+
+    /// The marker digest of one file, cached for [`TTL`].
+    ///
+    /// Without a marker there is no content identity, so the disk cache stays out of the way.
+    fn digest_for(&self, ino: u64, url: &str) -> Option<Digest> {
+        {
+            let state = self.state();
+            if let Some(entry) = state.digests.get(&ino) {
+                if entry.at.elapsed() < TTL {
+                    return entry.digest.clone();
+                }
+            }
+        }
+        let digest = self
+            .rt
+            .block_on(self.nxr.sibling_digest(url))
+            .ok()
+            .flatten();
+        self.state().digests.insert(
+            ino,
+            DigestEntry {
+                at: Instant::now(),
+                digest: digest.clone(),
+            },
+        );
+        digest
     }
 }
 
@@ -558,6 +624,7 @@ mod tests {
             block_bytes: 0,
             listings: HashMap::new(),
             attrs: HashMap::new(),
+            digests: HashMap::new(),
         };
         state.blocks.insert((1, 0), Arc::new(vec![0; 10]));
         state.blocks.insert((1, 1), Arc::new(vec![0; 3]));

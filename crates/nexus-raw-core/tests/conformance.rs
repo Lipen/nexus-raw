@@ -536,6 +536,32 @@ async fn explicit_up_refuses_a_symlinked_parent() {
 }
 
 #[tokio::test]
+async fn sibling_digest_reads_the_marker_and_refuses_a_bad_one() {
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    mock.insert(&format!("{VERSION}/a.zip"), CONTENT);
+    let digest = Digest::of_bytes(CONTENT);
+    mock.insert(
+        &format!("{VERSION}/a.zip.sha256"),
+        sibling::format_line("a.zip", &digest).as_bytes(),
+    );
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let url = format!("{}1.0.0/a.zip", mock.base_url());
+    assert_eq!(nxr.sibling_digest(&url).await.unwrap(), Some(digest));
+
+    let absent = format!("{}1.0.0/absent.zip", mock.base_url());
+    assert_eq!(nxr.sibling_digest(&absent).await.unwrap(), None);
+
+    mock.insert(&format!("{VERSION}/bad.zip"), CONTENT);
+    mock.insert(&format!("{VERSION}/bad.zip.sha256"), b"not a marker");
+    let bad = format!("{}1.0.0/bad.zip", mock.base_url());
+    assert!(matches!(
+        nxr.sibling_digest(&bad).await.unwrap_err(),
+        Error::Mismatch { .. }
+    ));
+}
+
+#[tokio::test]
 async fn single_call_recovers_through_flaky() {
     let mock = MockNexus::start(Scenario::Flaky { first_failures: 2 }).unwrap();
     let local = TempDir::new().unwrap();

@@ -17,6 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Node bindings accept `caBundle` for a private CA and `prefixes` on `up`.
 - The Node `get` accepts `range`, with the same span rules as the CLI.
 - `Nxr::scan_prefixes` and `Nxr::get_range` expose the scoped scan and the one-span read to library consumers.
+- `nxr-mount --cache-dir DIR` keeps read blocks on disk, keyed by the marker digest, so a remount reuses them. An object without a marker stays memory-only.
+- `Nxr::sibling_digest` reads a `.sha256` marker without a transfer. A malformed marker is `Mismatch`.
 
 ### Changed
 
