@@ -215,6 +215,12 @@ jobs:
           cp -r skills stage/skills
           archive="nxr-${{ matrix.name }}.tar.gz"
           tar -czf "$archive" -C stage .
+          name="nxr"
+          if [ "${{ runner.os }}" = "Windows" ]; then name="nxr.exe"; fi
+          tar -tzf "$archive" | grep -qx "./$name" || { echo "$name missing from $archive" >&2; exit 1; }
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            tar -tzf "$archive" | grep -qx "./nxr-mount" || { echo "nxr-mount missing from $archive" >&2; exit 1; }
+          fi
           # macOS ships shasum, not GNU sha256sum; the emitted lines are the
           # same "hash  name" either way, which is what SHA256SUMS needs.
           if command -v sha256sum > /dev/null 2>&1; then
@@ -805,7 +811,7 @@ jobs:
   # `latest` stays on the previous stable version.
   verify:
     name: Verify the published release
-    needs: [publish, pypi, npm, bridge]
+    needs: [build, publish, pypi, npm, bridge]
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -823,6 +829,20 @@ jobs:
 
       - name: Build the mock server
         run: cargo build -q -p mock-nexus
+
+      - name: Download the linux-x64 archive
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bins-linux-x64
+          path: ${{ runner.temp }}/bins
+
+      # The shipped archive is the artifact users get: both binaries must run.
+      - name: Run the archive binaries
+        run: |
+          mkdir -p "$RUNNER_TEMP/archive"
+          tar -xzf "$RUNNER_TEMP/bins/nxr-linux-x64.tar.gz" -C "$RUNNER_TEMP/archive" ./nxr ./nxr-mount
+          "$RUNNER_TEMP/archive/nxr" --version
+          "$RUNNER_TEMP/archive/nxr-mount" --version
 
       - name: Every artifact is visible on the registries
         run: scripts/registry-audit.sh
