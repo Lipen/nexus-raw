@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The repository's terminal output follows one model: results on stdout, failures, warnings and hints on stderr, and colour is decided per stream.
   Hints carry commands in backticks, `check-docs` and the real-Nexus battery stay quiet on success, and the battery keeps a TTY heartbeat without a hardcoded total.
-  The demo footer aligns its `--` comments.
+  The demo reports its mock scenario count and aligns its `--` comments.
 
 ## [0.23.0] - 2026-10-22
 
