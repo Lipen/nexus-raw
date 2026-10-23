@@ -1,6 +1,6 @@
 # Conformance
 
-A client for a storage protocol is only as good as its failure handling, so the failure modes are first-class fixtures.
+Failure handling decides whether a storage client works, so the mock server turns every failure mode into a fixture.
 This page maps every fixture to the invariant it pins and to the test that pins it.
 The design reasoning behind these guarantees lives in [Design](design.md), the wire behavior they approximate in the [protocol reference](../reference/protocol.md).
 
@@ -11,7 +11,7 @@ A scenario selects a failure mode.
 The scenario list has one home: the `Scenario` enum in `crates/mock-nexus/src/scenario.rs`, with each mode's exact behavior in its doc comment.
 The Rust suites, the mock binary (`mock-nexus --print-scenarios`) and any external harness all read that one list, so it never forks.
 
-The mock keeps its own answers honest: a status answer that can reach a HEAD (401, 403, 405, 503) carries the body's `Content-Length` but no body bytes (RFC 9110 §9.3.2), and a request head past the 64 KiB bound is answered with 400 instead of a silent hang-up.
+The mock also follows the protocol in its own answers: a status answer that can reach a HEAD (401, 403, 405, 503) carries the body's `Content-Length` but no body bytes (RFC 9110 §9.3.2), and a request head past the 64 KiB bound is answered with 400 instead of a silent hang-up.
 
 <figure>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" role="img" aria-labelledby="dg-table-t dg-table-d" font-family="inherit">
@@ -218,4 +218,4 @@ cargo run -p mock-nexus -- rate-limit --rate-429s 3 --retry-after-secs 5 --port 
 ```
 
 It prints its address and serves until killed: point any client at it, including ones this project does not know about.
-For the failure-to-symptom path from a consumer's chair, see [when it breaks](../how-to/troubleshoot.md), and for the error taxonomy the [errors and exit codes](../reference/errors.md) reference.
+To trace a failure from the symptom a consumer sees, start with [when it breaks](../how-to/troubleshoot.md). The error taxonomy is in [errors and exit codes](../reference/errors.md).

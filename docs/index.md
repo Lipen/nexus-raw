@@ -63,8 +63,8 @@ What the recording shows, one beat per command:
 4. **Verify**: `nxr verify` checks every digest offline, no network.
 
 Every line is real output: the binary this repository builds, against its [mock server](explanation/conformance.md).
-`just demo` replays the session on your machine and takes it further: an edited artifact, the refusal to overwrite it, a flaky and an authenticating server.
-The full tour: [run the demo](how-to/demo.md).
+`just demo` replays the session on your machine and shows more: an edited artifact, the refusal to overwrite it, a flaky server and one that requires credentials.
+The full demo: [run it](how-to/demo.md).
 [Get started](get-started.md) is the same four commands, copy-pasteable.
 
 ## What do you want to do?
@@ -72,7 +72,7 @@ The full tour: [run the demo](how-to/demo.md).
 <div class="nxr-go" markdown>
 
 - [:material-language-rust: **First transfer in Rust** *The facade, one transfer, the local mock.* `cargo add nexus-raw-core`](tutorials/rust/)
-- [:material-language-typescript: **First transfer in Node** *Promises over the same surface, a diff before any write.* `pnpm add nexus-raw`](tutorials/node/)
+- [:material-language-typescript: **First transfer in Node** *The same API as promises, a diff before any write.* `pnpm add @nexus-raw/nxr`](tutorials/node/)
 - [:material-console: **First transfer in a terminal** *The release binary and the one-liners.* `nxr up`](tutorials/ops/)
 - [:material-upload: **Publish a version** *The claim lands first, bytes and markers follow.* `nxr up --claim-first`](how-to/publish/)
 - [:material-download: **Fetch artifacts** *Named files come down verified, an interrupted pull resumes.* `nxr down`](how-to/consume/)
@@ -82,4 +82,4 @@ The full tour: [run the demo](how-to/demo.md).
 
 </div>
 
-<p class="nxr-go__under" markdown>Under the hood: [every flag of every command](reference/cli.md), the four primitives included · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>
+<p class="nxr-go__under" markdown>More: [every flag of every command](reference/cli.md), the four primitives included · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>

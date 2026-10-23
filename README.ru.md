@@ -8,7 +8,9 @@
 
 `nxr` работает как curl для raw-репозитория Sonatype Nexus.
 
-Один движок, три поверхности: CLI `nxr`, Rust-крейт `nexus-raw-core` (фасад `Nxr`) и npm-пакет `nexus-raw` для Node, отдающий тот же фасад промисами через napi-аддон.
+CLI это `nxr`.
+Rust-библиотека `nexus-raw-core` с фасадом `Nxr`.
+npm-пакет `@nexus-raw/nxr` это napi-аддон, который отдаёт фасад `Nxr` промисами.
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
@@ -152,7 +154,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 ## Для агентов
 
-Кулинарная книга на одной странице: намерение -> команда -> ожидаемый результат, в [docs/how-to/agents.md](docs/how-to/agents.md).
+Шпаргалка на одной странице: намерение -> команда -> ожидаемый результат, в [docs/how-to/agents.md](docs/how-to/agents.md).
 Машиночитаемый индекс документации: [llms.txt](docs/llms.txt).
 
 ## Документация

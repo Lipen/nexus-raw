@@ -8,7 +8,9 @@
 
 `nxr` is curl for a Sonatype Nexus raw repository.
 
-The same engine ships as three surfaces: the `nxr` CLI, the `nexus-raw-core` Rust crate (the `Nxr` facade), and the `nexus-raw` npm package for Node, which exposes the same facade as promises over a napi addon.
+The CLI is `nxr`.
+The Rust library is `nexus-raw-core`, with the `Nxr` facade.
+The Node package is `@nexus-raw/nxr`, a napi addon that wraps the `Nxr` facade in promises.
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
 [![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
@@ -21,7 +23,7 @@ The same engine ships as three surfaces: the `nxr` CLI, the `nexus-raw-core` Rus
 
 ## Install
 
-Prebuilt binaries ride on [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), with checksums in [`SHA256SUMS`](https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS):
+Prebuilt binaries are on [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), with checksums in [`SHA256SUMS`](https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS):
 
 | File | Platform |
 |:-----|:---------|
@@ -54,9 +56,8 @@ Pin a published release when the workflow needs a fixed CLI, replacing `<version
 ```
 
 The action's default `cargo-binstall` fallback reads the crate metadata and downloads the release archive.
-Nothing on the upstream side is involved.
-The upstream manifest is only for the action's first-class tool list and its own checksum and attestation gate.
-The composite action in this repository stays the verified path, because it checks `SHA256SUMS` itself.
+The upstream manifest only feeds the action's built-in tool list and its checksum and attestation gate.
+The composite action in this repository is the verified path, because it checks `SHA256SUMS` itself.
 
 With Homebrew on macOS and Linux, through the tap in this repository:
 
@@ -106,7 +107,7 @@ From a checkout:
 cargo install --path crates/nexus-raw --locked
 ```
 
-The cargo paths build from source, so they need Rust 1.88 or newer.
+The cargo commands build from source, so they need Rust 1.88 or newer.
 Check the install with `nxr --version`.
 
 ## Quick start
@@ -190,7 +191,7 @@ export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 
 ## For agents
 
-The one-page cookbook: intent -> command -> expected result, in [docs/how-to/agents.md](docs/how-to/agents.md).
+The one-page cheat sheet: intent -> command -> expected result, in [docs/how-to/agents.md](docs/how-to/agents.md).
 The machine-readable doc index is [llms.txt](https://lipen.github.io/nexus-raw/llms.txt).
 
 ## Docs

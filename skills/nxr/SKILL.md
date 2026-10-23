@@ -100,7 +100,7 @@ The full list, with the reasoning, is in [references/quirks.md](references/quirk
 
 ## When not to use nxr
 
-- Talking to a non-raw Nexus format for transfers (maven, npm, pypi, docker): use that ecosystem's client.
+- Talking to a non-raw Nexus format for transfers (maven, npm, pypi, docker): use the client for that format.
   `nxr service assets` can still browse any format.
 - Local filesystem work: `verify` is the only offline command.
 - Anything that wants a manifest, a lockfile or a config file: nxr deliberately has none, and the tree layout is the caller's.

@@ -53,7 +53,7 @@ An alias may name a version directory, a repository root or a server root: the a
 
 1. `-u user:pass` wins over everything.
 2. The alias credentials (resolved at call time: env variables read, `pass_cmd` run).
-3. Ambient env (`NXR_AUTH`, `NXR_USERNAME`+`NXR_PASSWORD`) — but only when neither `-u` nor the alias carry credentials.
+3. Ambient env (`NXR_AUTH`, `NXR_USERNAME`+`NXR_PASSWORD`), but only when neither `-u` nor the alias carry credentials.
 
 `NXR_CONFIG=/path/to/file` moves the file.
 The priority stays.
@@ -63,7 +63,7 @@ The priority stays.
 - An unknown alias: misuse (exit 2) listing the known names.
 - A missing env variable or a failing `pass_cmd`: misuse (exit 2) naming the source.
 - A half credential source (a user without a password): misuse (exit 2).
-- A broken or missing file: misuse (exit 2) — and it is only read when `-R` named an alias.
+- A broken or missing file: misuse (exit 2). It is only read when `-R` named an alias.
 
 Anonymous through a bare alias is legal: a real Nexus answers 401 with the usual hint when the credentials were required.
 
