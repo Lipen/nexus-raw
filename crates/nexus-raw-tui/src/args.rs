@@ -29,16 +29,16 @@ pub struct Args {
     pub bases: Vec<String>,
 
     /// Open the named server preset from the config file (repeatable)
-    #[arg(short, long)]
+    #[arg(short, long, help_heading = "Connection")]
     pub server: Vec<String>,
 
     /// Credentials as user:pass, curl style
     /// (env fallback: NXR_AUTH, or NXR_USERNAME + NXR_PASSWORD)
-    #[arg(short, long)]
+    #[arg(short, long, help_heading = "Connection")]
     pub user: Option<String>,
 
     /// Skip TLS certificate verification
-    #[arg(long)]
+    #[arg(long, help_heading = "Connection")]
     pub tls_insecure: bool,
 
     /// A PEM bundle of extra trust roots for a private CA (also NXR_CA_BUNDLE)
@@ -48,7 +48,8 @@ pub struct Args {
         value_name = "FILE",
         env = "NXR_CA_BUNDLE",
         hide_env_values = true,
-        conflicts_with = "tls_insecure"
+        conflicts_with = "tls_insecure",
+        help_heading = "Connection"
     )]
     pub ca_bundle: Option<PathBuf>,
 
@@ -161,6 +162,17 @@ mod tests {
             name: name.to_owned(),
             url: url.to_owned(),
         }
+    }
+
+    #[test]
+    fn help_groups_the_connection_flags() {
+        use clap::CommandFactory as _;
+        let help = Args::command().render_help().to_string();
+        let connection = help.find("Connection").expect("the connection section");
+        assert!(help[..connection].contains("--smoke"), "{help}");
+        assert!(help[connection..].contains("--tls-insecure"), "{help}");
+        assert!(help[connection..].contains("--ca-bundle"), "{help}");
+        assert!(!help[connection..].contains("--smoke"), "{help}");
     }
 
     #[test]
