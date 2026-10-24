@@ -3,7 +3,7 @@
 A standalone crate that pulls the library the way an outside user would.
 Between releases it rides the workspace as a path dependency: breaking core
 changes land on master ahead of the next publish.
-Flip to a registry version (`nexus-raw-core = "0.23"`) once it is out.
+Flip to a registry version (`nexus-raw-core = "0.24"`) once it is out.
 It is deliberately outside the nexus-raw workspace.
 
 Run it:

@@ -21,7 +21,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true }
 # The version is what crates.io resolves; the path is what this workspace builds.
-nexus-raw-core = { path = "../nexus-raw-core", version = "0.23.0" }
+nexus-raw-core = { path = "../nexus-raw-core", version = "0.24.0" }
 
 # `fuser` without the `libfuse` feature speaks the kernel protocol in pure Rust:
 # no build-time libfuse, but an unprivileged mount at runtime needs `fusermount3`.
