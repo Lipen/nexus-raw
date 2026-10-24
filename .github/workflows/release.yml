@@ -215,11 +215,14 @@ jobs:
           cp -r skills stage/skills
           archive="nxr-${{ matrix.name }}.tar.gz"
           tar -czf "$archive" -C stage .
+          # Read the whole listing first: `grep -q` on a live tar pipe kills tar
+          # with SIGPIPE, and the job shell runs with pipefail.
+          entries=$(tar -tzf "$archive")
           name="nxr"
           if [ "${{ runner.os }}" = "Windows" ]; then name="nxr.exe"; fi
-          tar -tzf "$archive" | grep -qx "./$name" || { echo "$name missing from $archive" >&2; exit 1; }
+          echo "$entries" | grep -qx "./$name" || { echo "$name missing from $archive" >&2; exit 1; }
           if [ "${{ runner.os }}" = "Linux" ]; then
-            tar -tzf "$archive" | grep -qx "./nxr-mount" || { echo "nxr-mount missing from $archive" >&2; exit 1; }
+            echo "$entries" | grep -qx "./nxr-mount" || { echo "nxr-mount missing from $archive" >&2; exit 1; }
           fi
           # macOS ships shasum, not GNU sha256sum; the emitted lines are the
           # same "hash  name" either way, which is what SHA256SUMS needs.
