@@ -460,3 +460,32 @@ jobs:
         env:
           MOCK_NEXUS_BIN: ${{ github.workspace }}/target/debug/mock-nexus
         run: python3 test_conformance.py
+
+  mount-smoke:
+    name: Mount smoke (FUSE)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install fuse3
+        run: sudo apt-get update && sudo apt-get install -y fuse3
+
+      # The smoke script skips silently without /dev/fuse, which would make a
+      # green job meaningless: assert the device and the helper are present.
+      - name: Assert the FUSE prerequisites
+        run: |
+          [ -e /dev/fuse ] || { echo "no /dev/fuse on the runner" >&2; exit 1; }
+          command -v fusermount3 >/dev/null || { echo "no fusermount3" >&2; exit 1; }
+
+      - name: Run the mount smoke
+        run: scripts/mount-smoke.sh

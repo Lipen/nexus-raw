@@ -34,9 +34,6 @@ The mount therefore resolves a node in two steps:
 Each name segment is percent-encoded when a repository URL is built, so a foreign name with spaces, `?`, `#`, `%` or unicode resolves.
 
 Reads are lazy and block-cached: one block is `--block-kib` KiB (256 by default), fetched with a ranged GET, and the cache is bounded by `--cache-mib` (256 by default).
-With `--cache-dir DIR`, blocks are also written to disk, keyed by the object's `.sha256` marker digest, the block size and the block index.
-An overwritten object gets new keys, so a cached block cannot serve stale bytes.
-An object without a marker stays memory-only.
 A server that ignores `Range` still works: the whole body is sliced to the requested span.
 A read past the end of a file is empty, and `release` drops that file's blocks.
 
@@ -64,8 +61,6 @@ A listing reports a synthetic inode for an entry the kernel has not looked up. T
 | `--stall-secs` | 30 | Fail a request when no bytes arrive for this long. |
 | `--block-kib` | 256 | One read block in KiB (minimum 4). |
 | `--cache-mib` | 256 | Read-block cache budget in MiB (minimum 1). |
-| `--cache-dir` | none | A directory for the opt-in digest-keyed disk cache. Blocks persist between mounts. |
-| `--disk-cache-mib` | 1024 | The disk cache budget in MiB (minimum 1, only with `--cache-dir`). |
 
 ## Verify
 

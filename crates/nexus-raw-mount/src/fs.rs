@@ -7,18 +7,16 @@
 //! Reads are block-cached, listings and attributes live for [`TTL`], and no lock is held across a
 //! network call: the cache mutex only guards map lookups and inserts.
 
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, Instant, SystemTime};
-
-use crate::cache::{DiskCache, Key};
 use fuser::{
     AccessFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation,
     INodeNo, LockOwner, OpenFlags, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
     ReplyOpen, ReplyStatfs, Request,
 };
-use nexus_raw_core::{Digest, EntryKind, Error, Nxr};
+use nexus_raw_core::{EntryKind, Error, Nxr};
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::runtime::Handle;
 
 /// How long the kernel may cache an attribute or a listing.
@@ -44,12 +42,6 @@ struct Attrs {
     attr: FileAttr,
 }
 
-/// The marker digest of one node, cached for [`TTL`].
-struct DigestEntry {
-    at: Instant,
-    digest: Option<Digest>,
-}
-
 struct State {
     nodes: HashMap<u64, Node>,
     paths: HashMap<String, u64>,
@@ -58,7 +50,6 @@ struct State {
     block_bytes: usize,
     listings: HashMap<u64, Listing>,
     attrs: HashMap<u64, Attrs>,
-    digests: HashMap<u64, DigestEntry>,
     lookups: HashMap<u64, u64>,
 }
 
@@ -92,7 +83,6 @@ impl State {
         self.lookups.remove(&ino);
         self.attrs.remove(&ino);
         self.listings.remove(&ino);
-        self.digests.remove(&ino);
         self.evict_blocks(ino);
         if let Some(node) = self.nodes.remove(&ino) {
             self.paths.remove(&node.path);
@@ -112,7 +102,6 @@ pub struct NexusFs {
     cache_cap: usize,
     uid: u32,
     gid: u32,
-    disk: Option<Mutex<DiskCache>>,
     state: Mutex<State>,
 }
 
@@ -123,14 +112,7 @@ enum Resolved {
 }
 
 impl NexusFs {
-    pub fn new(
-        nxr: Arc<Nxr>,
-        rt: Handle,
-        base: String,
-        block: u64,
-        cache_cap: usize,
-        disk: Option<DiskCache>,
-    ) -> Self {
+    pub fn new(nxr: Arc<Nxr>, rt: Handle, base: String, block: u64, cache_cap: usize) -> Self {
         let mut nodes = HashMap::new();
         let mut paths = HashMap::new();
         nodes.insert(
@@ -150,7 +132,6 @@ impl NexusFs {
             cache_cap,
             uid,
             gid,
-            disk: disk.map(Mutex::new),
             state: Mutex::new(State {
                 nodes,
                 paths,
@@ -159,7 +140,6 @@ impl NexusFs {
                 block_bytes: 0,
                 listings: HashMap::new(),
                 attrs: HashMap::new(),
-                digests: HashMap::new(),
                 lookups: HashMap::new(),
             }),
         }
@@ -314,28 +294,14 @@ impl NexusFs {
         Ok(out)
     }
 
-    /// One read block, served from memory, then the disk cache, then the network.
+    /// One read block, fetched on demand and cached.
     ///
     /// The whole map is dropped when the budget is exceeded: one block is a bounded overshoot.
-    fn block(&self, ino: u64, url: &str, index: u64, size: u64) -> Result<Arc<Vec<u8>>, Errno> {
+    fn block(&self, ino: u64, url: &str, index: u64) -> Result<Arc<Vec<u8>>, Errno> {
         if let Some(bytes) = self.state().blocks.get(&(ino, index)).cloned() {
             return Ok(bytes);
         }
         let start = index * self.block;
-        let expected = self.block.min(size.saturating_sub(start));
-        let key = if self.disk.is_some() {
-            self.digest_for(ino, url)
-                .map(|digest| Key::new(digest, self.block, index))
-        } else {
-            None
-        };
-        if let (Some(disk), Some(key)) = (&self.disk, key.as_ref()) {
-            if let Some(bytes) = disk.lock().unwrap_or_else(PoisonError::into_inner).get(key) {
-                if bytes.len() as u64 == expected {
-                    return Ok(self.cache_block(ino, index, bytes));
-                }
-            }
-        }
         let bytes = self
             .rt
             .block_on(self.nxr.read_range(url, start, self.block))
@@ -343,16 +309,6 @@ impl NexusFs {
         let Some(bytes) = bytes else {
             return Err(Errno::ENOENT);
         };
-        if let (Some(disk), Some(key)) = (&self.disk, key.as_ref()) {
-            disk.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .put(key, &bytes);
-        }
-        Ok(self.cache_block(ino, index, bytes))
-    }
-
-    /// Insert one block into the memory cache and return it.
-    fn cache_block(&self, ino: u64, index: u64, bytes: Vec<u8>) -> Arc<Vec<u8>> {
         let bytes = Arc::new(bytes);
         let mut state = self.state();
         state.block_bytes += bytes.len();
@@ -361,34 +317,7 @@ impl NexusFs {
         }
         state.blocks.insert((ino, index), Arc::clone(&bytes));
         drop(state);
-        bytes
-    }
-
-    /// The marker digest of one file, cached for [`TTL`].
-    ///
-    /// Without a marker there is no content identity, so the disk cache stays out of the way.
-    fn digest_for(&self, ino: u64, url: &str) -> Option<Digest> {
-        {
-            let state = self.state();
-            if let Some(entry) = state.digests.get(&ino) {
-                if entry.at.elapsed() < TTL {
-                    return entry.digest.clone();
-                }
-            }
-        }
-        let digest = self
-            .rt
-            .block_on(self.nxr.sibling_digest(url))
-            .ok()
-            .flatten();
-        self.state().digests.insert(
-            ino,
-            DigestEntry {
-                at: Instant::now(),
-                digest: digest.clone(),
-            },
-        );
-        digest
+        Ok(bytes)
     }
 }
 
@@ -483,7 +412,7 @@ impl Filesystem for NexusFs {
         let first = offset / self.block;
         let last = (end - 1) / self.block;
         for index in first..=last {
-            let bytes = match self.block(ino.0, &url, index, attr.size) {
+            let bytes = match self.block(ino.0, &url, index) {
                 Ok(bytes) => bytes,
                 Err(err) => {
                     reply.error(err);
@@ -651,7 +580,6 @@ mod tests {
             block_bytes: 0,
             listings: HashMap::new(),
             attrs: HashMap::new(),
-            digests: HashMap::new(),
             lookups: HashMap::new(),
         }
     }

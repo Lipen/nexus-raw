@@ -18,7 +18,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Node `get` accepts `range`, with the same span rules as the CLI.
 - The Linux release archives carry `nxr-mount` next to `nxr`, and the Homebrew formula installs it when present.
 - `Nxr::scan_prefixes` and `Nxr::get_range` expose the scoped scan and the one-span read to library consumers.
-- `nxr-mount --cache-dir DIR` keeps read blocks on disk, keyed by the marker digest, so a remount reuses them. An object without a marker stays memory-only, and a cached span of the wrong length is refetched.
 - `Nxr::sibling_digest` reads a `.sha256` marker without a transfer. A malformed marker is `Mismatch`.
 
 ### Changed
@@ -41,6 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The mount percent-encodes each path segment, so foreign names with spaces, `?`, `#`, `%` or unicode resolve correctly.
 - The mount forgets a node when the kernel drops its last lookup and reports synthetic inodes for unvisited listing entries, so long browsing sessions stay bounded.
 - The wasm32 build compiles again: the native prefix helpers are gated, and the gate checks the core for the sandbox target.
+- The unreleased `--cache-dir` mount experiment was removed before it shipped. The mount stays memory-only.
 
 ## [0.23.0] - 2026-10-22
 

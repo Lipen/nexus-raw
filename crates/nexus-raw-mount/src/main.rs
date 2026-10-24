@@ -5,8 +5,6 @@
 //! Listings go through the search API, reads go through ranged GETs, and nothing is written.
 
 #[cfg(target_os = "linux")]
-mod cache;
-#[cfg(target_os = "linux")]
 mod fs;
 
 #[cfg(target_os = "linux")]
@@ -23,7 +21,7 @@ use nexus_raw_core::{creds, Config, Nxr};
 
 /// Mount a Nexus raw repository as a local directory.
 #[cfg(target_os = "linux")]
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(
     name = "nxr-mount",
     version,
@@ -71,12 +69,6 @@ struct Cli {
     /// Read-block cache budget, in MiB (minimum 1).
     #[arg(long, default_value_t = 256)]
     cache_mib: u64,
-    /// A directory for a digest-keyed disk cache of read blocks (opt-in).
-    #[arg(long, value_name = "DIR")]
-    cache_dir: Option<std::path::PathBuf>,
-    /// The disk cache budget, in MiB (minimum 1; only with --cache-dir).
-    #[arg(long, default_value_t = 1024, requires = "cache_dir")]
-    disk_cache_mib: u64,
 }
 
 #[cfg(target_os = "linux")]
@@ -132,18 +124,6 @@ fn run(cli: Cli) -> Result<(), String> {
     runtime.spawn(async move { while receiver.recv().await.is_some() {} });
     let nxr = Nxr::new(cfg, sender).map_err(|e| e.to_string())?;
     let base = nxr.base().trim_end_matches('/').to_owned();
-    let disk = match cli.cache_dir {
-        Some(dir) => Some(
-            cache::DiskCache::new(
-                dir,
-                cli.disk_cache_mib
-                    .saturating_mul(1024 * 1024)
-                    .max(1024 * 1024),
-            )
-            .map_err(|e| format!("cache dir: {e}"))?,
-        ),
-        None => None,
-    };
 
     let filesystem = fs::NexusFs::new(
         Arc::new(nxr),
@@ -153,7 +133,6 @@ fn run(cli: Cli) -> Result<(), String> {
         usize::try_from(cli.cache_mib.saturating_mul(1024 * 1024))
             .unwrap_or(usize::MAX)
             .max(1024 * 1024),
-        disk,
     );
 
     let mut options = fuser::Config::default();
@@ -177,19 +156,9 @@ mod tests {
     use clap::Parser;
 
     #[test]
-    fn the_disk_cache_budget_defaults_without_a_cache_dir() {
-        assert!(Cli::try_parse_from(["nxr-mount", "http://h/repo", "/mnt"]).is_ok());
-    }
-
-    #[test]
-    fn an_explicit_disk_budget_needs_the_cache_dir() {
-        assert!(Cli::try_parse_from([
-            "nxr-mount",
-            "--disk-cache-mib",
-            "8",
-            "http://h/repo",
-            "/mnt"
-        ])
-        .is_err());
+    fn help_names_no_disk_cache() {
+        let err = Cli::try_parse_from(["nxr-mount", "--help"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
+        assert!(!err.to_string().contains("cache-dir"));
     }
 }
