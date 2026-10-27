@@ -950,8 +950,8 @@ Check a repository for integrity and print what it finds: one line per finding, 
 The default structural mode reads metadata only: the raw tree (the authoritative listing, markers included), one small GET per marker, and the search facts as an independent cross-check when the index is alive.
 Asset bytes are never read.
 It classifies `orphan` (bytes without marker), `dangling_marker` (marker without bytes), `unparseable_marker` (a marker outside the `sha256sum -c` format) and `diverged_fact` (marker digest and search fact disagree).
-A refusal of the search listing (400/404) refuses the audit with the enumeration hint: an audit over an incomplete listing is not an audit. A fresh upload missing from the lagging index is not a finding: the tree and the markers are the truth, not the index.
-A fresh upload missing from the not-yet-caught-up index is not a finding: the tree and the markers are the truth, not the index.
+A refusal of the search listing (400/404) refuses the audit with the enumeration hint, because an audit over an incomplete listing is not an audit.
+A fresh upload missing from a not-yet-caught-up index is not a finding: the tree and the markers are the truth, not the index.
 
 `--bytes` adds a download and sha256 check of every asset against its marker: the only mode that catches silent bitrot, at the price of reading every object.
 `--sample N` byte-checks a deterministic stride sample of N objects instead, so a sampled run selects the same objects and is reproducible.
