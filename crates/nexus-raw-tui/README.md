@@ -1,28 +1,29 @@
 # nxr-tui
 
-A terminal browser over Nexus raw repositories, built on the [`nexus-raw-core`](../../crates/nexus-raw-core) facade.
-One tab per server, the repository list of the server, then the tree of the selected repository at any depth, with subtree downloads, a live filter and a servers overlay that can add a server and save it as a preset.
+A terminal browser over Nexus raw repositories.
+It shows one tab per server, the repository tree at any depth, subtree downloads, a live filter, and saved server presets.
+It is built on the [`nexus-raw-core`](https://crates.io/crates/nexus-raw-core) facade, so every download follows the same rules as `nxr down`: verified, resumable, and never overwriting a divergent object.
+
+## Install and run
 
 ```bash
+cargo install nexus-raw-tui
+
 nxr-tui http://127.0.0.1:8081/          # one server from the command line
 nxr-tui                                 # every preset of the config file
 nxr-tui --server main --server backup   # two named presets as two tabs
 ```
 
-A quick way to get a server is the repository mock:
+A temporary server for a trial run comes from the repository mock:
 
 ```bash
-just mock &          # the mock server: cargo run -p mock-nexus -- atomic --port 8081
+just mock &          # or: cargo run -p mock-nexus -- atomic --port 8081
 just tui http://127.0.0.1:8081/
 ```
 
-## The fail-fast contract
-
-The bootstrap validates everything before the terminal switches to the alternate screen.
-Every server must answer `service_repos`, and the repository lists are the first screen, already populated.
-Any failure prints `error:` and the matching `hint:` to stderr and exits with `Error::exit_code()`: 0 ok, 1 data, 2 misuse, 3 transport.
-The TUI never opens on unknown ground, so there is no error screen and no dead alternate screen.
-The same bootstrap runs in `--smoke` mode, which is how CI exercises it.
+Credentials follow the same rules as `nxr` and are resolved once per session for all servers: `-u user:pass`, `NXR_AUTH`, or `NXR_USERNAME` + `NXR_PASSWORD`.
+Passwords are never stored in the config file.
+For TLS, `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA and `--tls-insecure` skips verification. The two options exclude each other.
 
 ## Keys
 
@@ -33,8 +34,8 @@ The same bootstrap runs in `--smoke` mode, which is how CI exercises it.
 | `home`/`end`, `g`/`G` | first/last row |
 | `right`, `enter` | open a folder or repository, download a file |
 | `left`, `esc`/`backspace` | up one level, then back to the repositories |
-| `e` | toggle the tree navigation mode (see below) |
-| `d` | download the selected entry: a folder downloads its subtree |
+| `e` | toggle the tree navigation mode |
+| `d` | download the selected entry, a folder downloads its subtree |
 | `D` | download the whole current directory |
 | `r` | refresh the current listing |
 | `i` | info on the selected entry (HEAD size for files) |
@@ -42,22 +43,16 @@ The same bootstrap runs in `--smoke` mode, which is how CI exercises it.
 | `tab`/`backtab`, `1`-`9` | switch server tabs |
 | `s` | servers overlay: switch or add, `a` opens the add form |
 | `?` | keybindings overlay |
-| `q`/`ctrl-c` | quit. twice while a download runs |
+| `q`/`ctrl-c` | quit, twice while a download runs |
 | mouse | wheel scrolls, click selects, double click opens |
 
-## Tree modes
-
-`e` toggles how the left/right arrows navigate, and the status line shows the mode (`nav enter` / `nav expand`). The choice is saved to the config file.
-
-- `nav enter` (default): `right` enters a folder, `left` goes back up.
-- `nav expand`: `right` expands a folder inline (`▸`/`▾` markers, indented children, loading folders show `…`), `left` collapses it or jumps to the parent row. `enter` keeps entering folders, and the expansion folds on descend, on refresh and on the mode switch.
-
-The mode is the config key `tui.nav = "enter" | "expand"`.
+`e` toggles how the arrows navigate: `nav enter` (the default, `right` enters a folder) or `nav expand` (`right` expands a folder inline, `left` collapses it).
+The status line shows the mode, and the choice is saved to the config as `tui.nav`.
 
 ## Config
 
-The config file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`. `--config` overrides both.
-`nxr-tui --init-config` writes a commented template and refuses to overwrite.
+The file is `$XDG_CONFIG_HOME/nxr-tui/config.toml`, falling back to `$HOME/.config/nxr-tui/config.toml`.
+`--config` overrides both, and `nxr-tui --init-config` writes a commented template without overwriting anything.
 
 ```toml
 version = 1
@@ -75,34 +70,30 @@ url = "http://127.0.0.1:8081/"
 ```
 
 Every `[[server]]` is a preset: it opens with `--server <name>`, and all of them open when `nxr-tui` runs with no arguments.
-The `s` overlay inside the TUI adds a server and saves it as a preset under a fresh unique name.
-Passwords never live in the config: credentials come from `-u` or the environment (`NXR_AUTH`, or `NXR_USERNAME` + `NXR_PASSWORD`) at every launch, one set for all servers of the session, exactly like the `nxr` CLI.
-
-TLS is one policy per session too: `--ca-bundle FILE` (or `NXR_CA_BUNDLE`) adds a private CA, `--tls-insecure` skips verification, and the two exclude each other.
-The bundle carries the CA that signed the server certificate, not the server leaf.
-
-`--no-color` (or a non-empty `NO_COLOR`) drops the red error and green toast colours. Bold and reverse remain.
+The `s` overlay adds a server and saves it as a fresh preset.
+`--no-color` (or a non-empty `NO_COLOR`) drops the error and toast colours.
 
 ## Downloads
 
-A download always runs as one `down` call with `Enumeration::Names`, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
-Downloads are one at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`.
-Everything else keeps working: browsing, filters, refreshes, info, tab switches, even adding a server.
-Navigation within the tab cancels a still-walking request.
-A running transfer is never interrupted by the UI.
-Files land complete or not at all: the sha sibling is verified, a diverging complete object is never overwritten, reruns skip what already landed.
-A panel shows the plan, the files in flight with byte progress and the final summary.
-Errors never close the TUI: a refused listing or download only paints the status bar, with the message plus its `Error::hint()` text.
+A download is one `down` call with explicit names, from the repository root into `<download.dir>/<repo>/`, mirroring repo-relative paths.
+One at a time: while the panel runs, `d` and `D` answer `download in flight: one at a time`, and everything else keeps working.
+A file is either complete or absent, a rerun skips what is already present, and an error only updates the status bar instead of closing the TUI.
+A panel shows the plan, the files in flight with byte progress, and the final summary.
 
-## Headless smoke mode
+## Fail-fast bootstrap
 
-`--smoke` runs the browse-and-download flow without the terminal and prints what it sees: the repository list of every server, a two-level tree walk of the first hosted raw repository, then a subtree download with the summary.
-The exit code follows `Error::exit_code()`.
+Before the terminal switches to the alternate screen, every server must answer `service_repos`.
+Any failure prints `error:` and the matching `hint:` to stderr and exits with the core exit code: `0` ok, `1` data, `2` misuse, `3` transport.
+The TUI starts only after this check succeeds, so it has no error screen.
 
-## Layout
+`--smoke` runs the same bootstrap and a browse-and-download flow headless: the repository list of every server, a two-level tree walk, then a subtree download.
+CI exercises the binary that way.
+
+<details>
+<summary>For contributors: layout and tests</summary>
 
 | Path | Role |
-|:-----|:-----|
+|:-----|:------|
 | `src/lib.rs` | the crate docs and the re-exports |
 | `src/args.rs` | clap arguments and server resolution (URLs, presets, config) |
 | `src/config.rs` | the config file: load, save, template, XDG path |
@@ -112,10 +103,17 @@ The exit code follows `Error::exit_code()`.
 | `src/tui.rs` | the terminal loop: bootstrap, raw mode, input thread, pump |
 | `src/smoke.rs` | `--smoke`: the same flow headless |
 
-## Tests
-
 ```bash
 cargo test -p nexus-raw-tui
 ```
 
 The suite covers argument resolution, the config roundtrip, navigation including the arrow keys, the filter, per-tab generations and stale-result drops, the add-server flow with config persistence, the quit guard, mouse wheel and click, the fail-fast bootstrap against a live mock and against dead and malformed URLs, the recursive subtree walk, and end-to-end binary runs including a config-preset smoke.
+
+</details>
+
+## More
+
+- Keys, config, presets and the smoke mode in full: [the TUI reference](https://lipen.github.io/nexus-raw/reference/tui/).
+- The library underneath: [nexus-raw-core](https://crates.io/crates/nexus-raw-core).
+- The CLI for scripts: [nexus-raw](https://crates.io/crates/nexus-raw).
+- License: MIT.
