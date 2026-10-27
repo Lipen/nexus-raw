@@ -1,12 +1,13 @@
 # nxr
 
-`nxr` is curl for a Sonatype Nexus raw repository: publish and fetch version directories in parallel, digest-verified, resumable.
+`nxr` is curl for a Sonatype Nexus raw repository: the HTTP primitives, plus parallel directory transfers with sha256 markers and resume.
 
 It is one static binary, and the server needs no additional component.
 The URL is an argument, credentials come from the call or from the environment, and the repository contents are the only state.
 
-- Completion is bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
-- Every transfer diffs first, so a rerun transfers only what is missing and resumes what was interrupted.
+- Names are arbitrary relative paths, and the tool imposes no repository layout.
+- A directory transfer compares the local tree with the server before copying and moves only the difference.
+  An interrupted transfer resumes.
 - A divergent complete artifact is refused, never overwritten.
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
   Every error carries a `hint:` line.
@@ -37,7 +38,7 @@ Check the install with `nxr --version`.
 BASE=https://nexus.example.com/repository/raw-main
 
 nxr up dist/1.4.0/ "$BASE/1.4.0/"                   # publish, with generated markers
-nxr channel set "$BASE/latest" 1.4.0 --if-forward   # name the version
+nxr channel set "$BASE/latest" 1.4.0 --if-forward   # write the channel token
 V=$(nxr channel get "$BASE/latest")
 printf 'app-1.4.0.zip\nmanifest.json\n' > names.txt
 nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt
@@ -54,6 +55,8 @@ plan: 4 to upload, 0 to download, 0 up to date
 uploaded 4, downloaded 0, skipped 0
 ```
 
+The example above is one common pipeline: a release directory and a channel that names its current version.
+Both are conventions of the caller: `version.json`, `latest` and `nightly` are ordinary names, and `nxr channel` only stores and compares a token.
 Run the same command again and nothing transfers, because the server already holds byte-identical copies with equal markers.
 If a transfer is interrupted, run it again: what landed is skipped, the rest continues from a `Range` request.
 
@@ -79,9 +82,9 @@ The ones a release pipeline needs:
 |:--------|:-----|
 | `nxr clone <URL> <DIR>` | clone a whole repository, with an optional fact cache that skips re-hashing unchanged files |
 | `nxr audit <URL>` | integrity report: orphans, dangling markers, disagreeing facts. `--bytes` verifies every object, `--sample N` a deterministic sample |
-| `nxr mirror <SRC> <DST>` | copy a version between two repositories |
+| `nxr mirror <SRC> <DST>` | copy a set of names between two repositories |
 | `nxr mv <SRC> <DST>` | mirror, then delete at the source once the pour converged |
-| `nxr rm <URL>` | delete a version: a plan by default, `--yes` deletes markers first, then bytes |
+| `nxr rm <URL>` | delete the listed names: a plan by default, `--yes` deletes markers first, then bytes |
 | `nxr point <URL>` | delete one pointer file, idempotently |
 | `nxr service repos\|status\|repo\|assets\|eula <URL>` | the server's REST API: repositories, liveness, settings, the search snapshot |
 | `nxr complete <shell>` | shell completion for bash, zsh, fish and PowerShell |

@@ -88,7 +88,7 @@ Every plan call returns the actions instead of writing, which is how `--plan` an
 ## Guarantees
 
 - `up` writes markers by default and generates the missing local siblings.
-  The bytes are written first and the marker of the same name after them.
+  The bytes are written first and the marker of the same name after them, and `--no-sha` uploads bytes only.
 - `down` requires an enumeration source: an empty name list is an error rather than an implicit "everything".
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
   Only the `.sha256` and `.part` suffixes and a `.nxr`-prefixed segment are reserved.

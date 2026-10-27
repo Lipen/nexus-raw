@@ -1,13 +1,12 @@
 <div align="center">
 
 <a href="https://lipen.github.io/nexus-raw/how-to/demo/">
-<img src="docs/assets/img/session.svg" alt="A recorded nxr session: publishing a version directory, naming it with a channel, fetching it back and verifying it against the mock server" width="760">
+<img src="docs/assets/img/session.svg" alt="A recorded nxr session: publishing a directory, naming it with a channel, fetching it back and verifying it against the mock server" width="760">
 </a>
 
 # nexus-raw
 
-**Publish and fetch version directories in a Sonatype Nexus raw repository.
-Transfers run in parallel, every artifact carries a sha256 marker, and an interrupted transfer resumes.**
+**curl for a Sonatype Nexus raw repository: HTTP primitives, parallel directory transfers, sha256 markers and resume.**
 
 `nxr` is a single static binary and needs nothing installed on the server.
 Each call takes its URL as an argument and reads credentials from the call or from the environment.
@@ -22,24 +21,29 @@ Each call takes its URL as an argument and reads credentials from the call or fr
 
 ## Overview
 
-A raw repository stores objects over plain HTTP: one request per file.
-A release is a directory of files that must all arrive, must stay verifiable after the fact, and must survive a pipeline that stops halfway.
+A Nexus raw repository stores arbitrary objects over HTTP: any path can hold any bytes, and the server imposes no layout.
+`nxr` exposes that store at two levels.
+The primitives `get`, `put`, `head` and `sha` work on one URL at a time.
+The directory commands `up` and `down` transfer a whole tree: they scan the local directory, compare it with the remote listing, and move only the difference, in parallel.
 
-Most pipelines do this with a shell script around `curl`.
-Such a script accumulates retries, stall detection, digest checks and temporary files, and every project that publishes artifacts ends up maintaining its own copy.
-
-`nxr` defines the same behavior once, with fixed semantics:
+The directory commands add the parts that a shell script around `curl` otherwise has to reimplement:
 
 | Requirement | Script around `curl` | `nxr` |
 |:---|:---|:---|
 | parallel transfer | `xargs -P` | worker pool, `--workers N` |
 | skip files already on the server | a custom listing comparison | symmetric diff on every run |
-| a digest per artifact | a second request piped to `sha256sum -c` | `<name>.sha256` markers checked during the transfer |
+| a completion marker per artifact | a second request piped to `sha256sum -c` | `<name>.sha256` markers checked during the transfer |
 | resume after an interruption | `curl -C -` per URL, without a digest check | hidden part files, `Range` resume, digest re-checked |
 | protection against overwriting | none | a complete object with a different digest is rejected |
 | separation of failure classes | one exit code | 1 data, 2 misuse, 3 transport, plus a `hint:` line |
 
-Publishing a directory is then one command: `nxr up dist/1.4.0/ "$BASE/1.4.0/"`.
+These are defaults, not requirements.
+Names are arbitrary relative paths.
+`--no-sha` uploads bytes without markers.
+`nxr channel` writes a token file wherever the caller points it and attaches no meaning to the token.
+A directory of release files is one common case rather than a layout the tool imposes: `version.json`, `latest` and `nightly` are ordinary names.
+
+A whole directory is uploaded with one command: `nxr up dist/1.4.0/ "$BASE/1.4.0/"`.
 
 ## Install
 
@@ -111,8 +115,8 @@ The image variants and the cache layout are described in [run it as a container]
 
 ## Quick start
 
-Five commands cover a release cycle: publish the directory, name the version, read the name back, fetch the files, and verify them.
-`BASE` is the repository URL.
+The example below is one common pipeline: a directory of release files, a channel that names the current version, and a verified fetch.
+`BASE` is the repository URL, and both the layout and the channel are the caller's choices.
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
@@ -163,18 +167,21 @@ The [get-started page](docs/get-started.md) runs the same session against a loca
 
 ## How it works
 
-The protocol has five concepts.
+The transfer model has five concepts.
 An invocation needs the URL, the local files and the markers stored next to the artifacts.
 
-- **Version directory.** Every relative path under the source directory becomes an artifact name, so `dist/1.4.0/bom/x.json` is stored as `bom/x.json` under the destination URL.
-- **Marker.** An artifact is complete when its bytes and a `<name>.sha256` sibling in `sha256sum -c` format are both present.
-  `up` generates missing markers and uploads them after the artifacts, `down` checks each stream against the server marker, and `verify` checks the pair offline.
+- **Name.** Every relative path under the source directory becomes a remote path, so `dist/1.4.0/bom/x.json` is stored as `bom/x.json` under the destination URL.
+  Names are relative paths of `[A-Za-z0-9._-]` segments.
+- **Marker.** An artifact can be completed with a `<name>.sha256` sibling in `sha256sum -c` format.
+  `up` generates missing markers and uploads them after the artifacts by default, `down` checks each stream against the server marker, and `verify` checks the pair offline.
+  `--no-sha` turns the marker convention off.
 - **Symmetric diff.** Both directions compare the local tree with the remote listing before transferring and move only the difference, so a repeated command completes an interrupted run instead of repeating it.
 - **Channel.** A channel is a token file at any URL, such as `latest` or `stable`.
-  `--if-forward` compares tokens in dotted-numeric order and rejects a move to an older token.
+  The tool stores and compares the token and attaches no further meaning to it, and `--if-forward` only adds a dotted-numeric comparison.
 - **Part file.** An interrupted download remains in a hidden `.nxr-part-<hash>` file and never reaches its final path in a partial state.
   A repeated command continues it with one `Range` request.
 
+Nothing here requires a version scheme, and no command reads a manifest or a directory convention.
 A complete artifact whose local digest differs from the server marker is reported and not overwritten.
 
 ## Common commands
@@ -200,9 +207,9 @@ A URL that ends at a file is the one exception: `nxr down "$BASE/1.4.0/app.zip" 
 |:--------|:------------|
 | `nxr clone <URL> <DIR>` | clone a whole repository, with an optional fact cache that skips re-hashing unchanged files |
 | `nxr audit <URL>` | report integrity problems: orphans, dangling and unparseable markers, disagreeing facts. `--bytes` verifies every object, `--sample N` verifies a deterministic sample |
-| `nxr mirror <SRC> <DST>` | copy a version between two repositories, using the same diff and rejection rules |
-| `nxr mv <SRC> <DST>` | mirror a version and then delete it at the source, after the copy converged |
-| `nxr rm <URL>` | delete a version: a plan by default, `--yes` deletes markers first and bytes after them, a 404 counts as success |
+| `nxr mirror <SRC> <DST>` | copy a set of names between two repositories, using the same diff and rejection rules |
+| `nxr mv <SRC> <DST>` | mirror a set of names and then delete them at the source, after the copy converged |
+| `nxr rm <URL>` | delete the listed names: a plan by default, `--yes` deletes markers first and bytes after them, a 404 counts as success |
 | `nxr point <URL>` | delete one pointer file. Absence is not an error. |
 | `nxr service repos\|status\|repo\|assets\|eula <URL>` | the server REST API: repository list, liveness, settings, search snapshot, EULA state |
 | `nxr complete <shell>` | shell completion for bash, zsh, fish or PowerShell |
@@ -310,7 +317,7 @@ The same protocol is also available as a terminal browser, a FUSE mount, a Rust 
 | **Rust library** `nexus-raw-core` | the `Nxr` facade with the same transfers, events and rejections, in process | `cargo add nexus-raw-core` |
 | **Node package** `@nexus-raw/nxr` | the CLI operations as promises, with the `nxr` command included | `npm install @nexus-raw/nxr` |
 
-Server-to-server copies also run from the CLI: `nxr mirror` copies a version between repositories, `nxr clone` copies a whole repository, and `nxr audit` reports what is inconsistent inside one.
+Server-to-server copies also run from the CLI: `nxr mirror` copies a set of names between repositories, `nxr clone` copies a whole repository, and `nxr audit` reports what is inconsistent inside one.
 
 - TUI keys, configuration and headless mode: [TUI reference](docs/reference/tui.md).
 - FUSE semantics, flags and the read-only limits: [the mount](docs/reference/mount.md).
