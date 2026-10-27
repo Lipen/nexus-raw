@@ -1,4 +1,4 @@
-{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.12.0","title":"nxr 0.12.0 · against mock-nexus (slow)","clear":17100,"cycle":17550,"lines":[
+{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.24.0","title":"nxr 0.24.0 · against mock-nexus (slow)","clear":17100,"cycle":17550,"lines":[
 [0, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first app-1.4.0.zip --workers 1"],
 [100, "plan: 4 to upload, 0 to download, 0 up to date"],
 [100, "↑ app-1.4.0.zip ok"],
@@ -9,20 +9,20 @@
 [100, ""],
 [100, "# give the version a name, so consumers never hard-code it"],
 [100, "$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward"],
-[200, "channel: set http://127.0.0.1:8734/latest → 1.4.0"],
-[200, ""],
-[200, "# fetch that version back, digests checked on the way in"],
+[150, "channel: set http://127.0.0.1:8734/latest → 1.4.0"],
+[150, ""],
+[150, "# fetch that version back, digests checked on the way in"],
 [200, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --names-from dist/1.4.0/names.txt --workers 1"],
 [250, "plan: 0 to upload, 3 to download, 0 up to date"],
-[750, "↓ app-1.4.0.zip ok"],
-[800, "↓ bom/linux-x86_64.json ok"],
-[800, "↓ pinned.xml ok"],
-[800, "uploaded 0, downloaded 3, skipped 0"],
-[800, ""],
-[800, "# check every digest offline, no network"],
-[800, "$ nxr verify vendor/1.4.0/"],
-[900, "uploaded 0, downloaded 0, skipped 3"],
-[900, "verify: 3 ok, FAILED: none"]
+[700, "↓ app-1.4.0.zip ok"],
+[750, "↓ bom/linux-x86_64.json ok"],
+[750, "↓ pinned.xml ok"],
+[750, "uploaded 0, downloaded 3, skipped 0"],
+[750, ""],
+[750, "# check every digest offline, no network"],
+[750, "$ nxr verify vendor/1.4.0/"],
+[800, "uploaded 0, downloaded 0, skipped 3"],
+[800, "verify: 3 ok, FAILED: none"]
 ],"at":[
 500, 1445, 1875, 2255, 2635, 3015, 3395, 3775, 4225, 4715, 5540, 5985, 6435, 6915, 7910, 8340, 8720, 9100, 9480, 9860, 10310, 10710, 11340, 11720
 ],"kinds":[

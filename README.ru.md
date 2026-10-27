@@ -6,172 +6,340 @@
 
 # nexus-raw
 
-`nxr` работает как curl для raw-репозитория Sonatype Nexus.
+**Публикация и загрузка каталогов версий в raw-репозитории Sonatype Nexus.
+Передачи идут параллельно, каждый артефакт сопровождается маркером sha256, прерванная передача продолжается с места обрыва.**
 
-CLI это `nxr`.
-Rust-библиотека `nexus-raw-core` с фасадом `Nxr`.
-npm-пакет `@nexus-raw/nxr` это napi-аддон, который отдаёт фасад `Nxr` промисами.
+`nxr` это один статический бинарник, на сервере ничего устанавливать не нужно.
+Каждый вызов принимает URL аргументом и берёт учётные данные из вызова или из окружения.
 
 [![CI](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/ci.yml)
-[![Docs](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml/badge.svg)](https://github.com/Lipen/nexus-raw/actions/workflows/docs.yml)
 [![crates.io](https://img.shields.io/crates/v/nexus-raw.svg)](https://crates.io/crates/nexus-raw)
 [![npm](https://img.shields.io/npm/v/@nexus-raw/nxr.svg)](https://www.npmjs.com/package/@nexus-raw/nxr)
 
-[Документация](https://lipen.github.io/nexus-raw/) · [Установка](#установка) · [Быстрый старт](#быстрый-старт) · [Команды](#команды) · [README in English](README.md)
+[Документация](https://lipen.github.io/nexus-raw/) · [Установка](#установка) · [Быстрый старт](#быстрый-старт) · [Частые команды](#частые-команды) · [CI](#ci) · [README in English](README.md)
 
 </div>
 
+## Обзор
+
+Raw-репозиторий хранит объекты поверх обычного HTTP: один запрос на файл.
+Релиз это каталог файлов, которые должны приехать целиком, оставаться проверяемыми спустя время и переживать пайплайн, остановленный на середине.
+
+Обычно для этого пишут shell-скрипт вокруг `curl`.
+Такой скрипт накапливает ретраи, детект зависших соединений, проверку дайджестов и временные файлы, и каждый проект, публикующий артефакты, поддерживает свою копию.
+
+`nxr` задаёт то же поведение один раз, с фиксированной семантикой:
+
+| Требование | Скрипт вокруг `curl` | `nxr` |
+|:---|:---|:---|
+| параллельная передача | `xargs -P` | пул воркеров, `--workers N` |
+| пропуск файлов, уже лежащих на сервере | собственная сверка листингов | симметричный diff на каждом запуске |
+| дайджест на каждый артефакт | второй запрос в `sha256sum -c` | маркеры `<name>.sha256`, проверяемые по ходу передачи |
+| докачка после обрыва | `curl -C -` по одному URL, без проверки дайджеста | скрытые part-файлы, `Range`, повторная проверка дайджеста |
+| защита от перезаписи | отсутствует | завершённый объект с другим дайджестом отклоняется |
+| разделение классов ошибок | один код возврата | 1 данные, 2 misuse, 3 транспорт, плюс строка `hint:` |
+
+После этого публикация каталога это одна команда: `nxr up dist/1.4.0/ "$BASE/1.4.0/"`.
+
 ## Установка
 
-Готовые бинарники лежат в [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), контрольные суммы в [`SHA256SUMS`](https://github.com/Lipen/nexus-raw/releases/latest/download/SHA256SUMS):
-
-| Файл | Платформа |
-|:-----|:----------|
-| [`nxr-linux-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-linux-x64.tar.gz) | Linux x86_64, статическая сборка |
-| [`nxr-linux-aarch64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-linux-aarch64.tar.gz) | Linux arm64, статическая сборка |
-| [`nxr-darwin-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-x64.tar.gz) | macOS Intel |
-| [`nxr-darwin-arm64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-darwin-arm64.tar.gz) | macOS Apple silicon |
-| [`nxr-windows-x64.tar.gz`](https://github.com/Lipen/nexus-raw/releases/latest/download/nxr-windows-x64.tar.gz) | Windows x86_64 |
-
-Те же архивы умеет забирать `cargo binstall`:
+Бинарник публикуется как готовые архивы, формула Homebrew, npm-пакет с командой `nxr` и образ контейнера.
+Любой из способов ставит один и тот же бинарник, а `nxr --version` печатает установленную версию.
 
 ```bash
-cargo binstall nexus-raw
-```
-
-Через Homebrew на macOS и Linux (tap живёт в этом репозитории):
-
-```bash
+# Homebrew, macOS и Linux
 brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
 brew install lipen/nexus-raw/nexus-raw
-```
 
-Из npm, нативный аддон ставится готовым пакетом:
+# готовый статический архив, без шага сборки
+cargo binstall nexus-raw
 
-```bash
+# npm-пакет, который заодно кладёт `nxr` в PATH
 npm install @nexus-raw/nxr
+
+# образ контейнера
+docker run --rm ghcr.io/lipen/nexus-raw:latest --version
 ```
 
-Из crates.io:
+Архивы для Linux x64 и arm64, macOS Intel и Apple silicon, и Windows x64 приложены к [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), рядом лежит файл `SHA256SUMS`.
+Установка из исходников, список архивов и детали контейнера описаны ниже.
+
+<details>
+<summary>Установка из исходников, список архивов и контейнер</summary>
+
+Крейт собирается из исходников и требует Rust 1.88 или новее:
 
 ```bash
 cargo install nexus-raw
 ```
 
-Из репозитория:
+Из репозитория или из готового checkout:
 
 ```bash
 cargo install --git https://github.com/Lipen/nexus-raw nexus-raw --locked
-```
-
-Из checkout:
-
-```bash
 cargo install --path crates/nexus-raw --locked
 ```
 
-Варианты через cargo собирают из исходников, поэтому нужен Rust 1.88 или новее.
-Проверить установку: `nxr --version`.
+Архивы релиза, по одному файлу на платформу:
+
+| Файл | Платформа |
+|:-----|:----------|
+| `nxr-linux-x64.tar.gz` | Linux x86_64, статическая сборка |
+| `nxr-linux-aarch64.tar.gz` | Linux arm64, статическая сборка |
+| `nxr-darwin-x64.tar.gz` | macOS Intel |
+| `nxr-darwin-arm64.tar.gz` | macOS Apple silicon |
+| `nxr-windows-x64.tar.gz` | Windows x86_64 |
+
+Workflow, которому нужен зафиксированный релиз, может поставить его через `taiki-e/install-action`, заменив `<version>` на номер релиза:
+
+```yaml
+- uses: taiki-e/install-action@v2
+  with:
+    tool: nexus-raw@<version>
+```
+
+Контейнер запускает тот же статический бинарник на базе distroless.
+Чтобы передавать локальные пути, примонтируйте рабочий каталог:
+
+```bash
+docker run --rm -v "$PWD:/w" -w /w ghcr.io/lipen/nexus-raw:latest up ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+```
+
+Варианты образа и раскладка кэша описаны в разделе [запуск в контейнере](docs/how-to/containers.md).
+
+</details>
 
 ## Быстрый старт
 
-От каталога с файлами до проверенной локальной копии:
+Пять команд покрывают цикл релиза: опубликовать каталог, назвать версию, прочитать имя обратно, забрать файлы и проверить их.
+`BASE` это URL репозитория.
 
 ```bash
 BASE=https://nexus.example.com/repository/raw-main
 
-# down берёт перечень имён из флагов
+# все файлы из dist/1.4.0/ уходят параллельно, за каждым артефактом
+# следует сгенерированный маркер .sha256
 nxr up dist/1.4.0/ "$BASE/1.4.0/"
+
+# канал это файл-токен
+# --if-forward допускает только сдвиг вперёд
 nxr channel set "$BASE/latest" 1.4.0 --if-forward
+
+# потребители читают текущую версию из канала
 V=$(nxr channel get "$BASE/latest")
-printf 'app-1.4.0.zip\n' > names.txt
+
+# перечисленные имена скачиваются, хэшируются по ходу передачи и сверяются
+# с серверным маркером до того, как файл получит итоговое имя
+printf 'app-1.4.0.zip\nmanifest.json\n' > names.txt
 nxr down "$BASE/$V/" vendor/prebuilt --names-from names.txt
+
+# локальные байты, маркеры и дайджесты проверяются без обращения к сети
 nxr verify vendor/prebuilt
 ```
 
-Если передача прервалась, запустите ту же команду снова: уже полученное пропускается, остальное скачивается дальше.
+Вывод здесь сокращён:
 
-## Команды
+```console
+$ nxr up dist/1.4.0/ "$BASE/1.4.0/"
+plan: 4 to upload, 0 to download, 0 up to date
+↑ manifest.json ok
+↑ pinned.xml ok
+↑ bom/linux-x86_64.json ok
+↑ app-1.4.0.zip ok
+uploaded 4, downloaded 0, skipped 0
 
-| Команда | Делает |
-|:--------|:-------|
-| `nxr get <URL> [-o FILE] [--continue] [--segments N] [--range RANGE]` | GET в файл (через `.part`, докачка через Range, `N` параллельных спанов или один точный диапазон) или stdout |
-| `nxr put <URL> -f FILE [--sha]` | PUT байтов, с `--sha` ещё и `.sha256`-маркер |
-| `nxr head <URL>` | статус, размер, content type |
-| `nxr sha <FILE\|URL>` | потоковый sha256 файла или удалённого объекта |
-| `nxr up <SRC_DIR> <DST_URL> [--no-sha] [--if-changed] [--plan] [--claim-first NAME] [--prefix P]...` | скан → дифф → PUT байтов + маркеров параллельными воркерами. `--prefix` публикует поддерево с сохранением пути |
-| `nxr down <SRC_URL> <DST_DIR> [--name N]... [--names-from FILE]... [--ls] [--fresh] [--segments N] [--plan] [--prefix P]` | перечисление → дифф → скачивание с хэшем → переименование + локальный маркер. `--segments` режет каждый артефакт на параллельные Range-запросы |
-| `nxr clone <URL> <DIR> [--state FILE] [--no-state] [--verify] [--plan] [--prefix P]` | клон всего репозитория: проверенные загрузки, запечатывание локальных маркеров, необязательный кэш фактов, который не перехэширует неизменённые файлы |
-| `nxr diff <LOCAL_DIR> <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--via search [--fallback]]` | сравнение локального каталога с хранилищем: `same` / `missing-local` / `missing-remote` / `diverged` (размер, sha). Код 1 при различиях, ничего не пишет. `--via search` читает удалённые факты из search-листинга |
-| `nxr mirror <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--dry-run\|--plan] [--src-user U] [--dst-user U] [--prefix P]` | перечисление у источника → дифф у получателя → копирование байтов и маркеров |
-| `nxr rm <SRC_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes]` | перечисление → план по умолчанию, `--yes` делает DELETE каждого маркера, затем байтов (404 считается успехом, read-only отказывает) |
-| `nxr mv <SRC_URL> <DST_URL> [--name N]... [--names-from F]... [--ls] [--prefix P] [--yes] [--src-user U] [--dst-user U]` | mirror в приёмник, затем удаление в источнике: план по умолчанию, `--yes` двигает (пока перенос не сошёлся, ничего не удаляется) |
-| `nxr point <URL>` | DELETE файла-указателя (channel ref, отсутствие допустимо) |
-| `nxr ls <URL> [--assets]` | листинг raw-дерева каталога на любой глубине (папки с `/`). `--assets`: плоские имена артефактов |
-| `nxr channel get <URL>` | токен канала (`unset`, если пусто) |
-| `nxr channel set <URL> <TOKEN> [--if-forward]` | запись токена (`--if-forward` допускает только сдвиг вперёд в dotted-numeric порядке) |
-| `nxr verify <DIR>` | локально байты + маркер + digest, без сети |
-| `nxr doctor [URL]` | учётные данные, TLS, настройки, достижимость |
-| `nxr service repos <URL>` | список репозиториев сервера (service REST API, подходит любой URL этого сервера) |
-| `nxr service status <URL>` | живость сервера и записываемость за URL |
-| `nxr service repo <URL> [--detail]` | что за репозиторий за URL. `--detail` добавляет полные настройки (только nx-admin) |
-| `nxr service assets <URL> [--q Q] [--prefix P]` | все ассеты репозитория через search API, любого формата |
-| `nxr service eula <URL> [--accept]` | EULA-гейт сервера. `--accept` открывает его (nx-admin) |
-| `nxr complete <shell>` | печатает скрипт автодополнения в stdout (bash, zsh, fish, powershell) |
+$ nxr down "$BASE/1.4.0/" vendor/prebuilt --names-from names.txt
+plan: 0 to upload, 2 to download, 0 up to date
+↓ app-1.4.0.zip ok
+↓ manifest.json ok
+uploaded 0, downloaded 2, skipped 0
 
-`down`, `diff`, `mirror`, `mv` и `rm` берут перечисление явно: повторяемый `--name`, `--names-from FILE` (по одному имени в строке, `-` это stdin) или best-effort `--ls` при наличии на сервере search API.
-Без источника команда отказывает.
-Исключение: `nxr down <file-url> <dst-dir>`, где URL оканчивается файлом, это источник из одного имени.
-Файл ложится в `<dst-dir>/<leaf>` с обычными маркером, докачкой и проверкой digest.
-
-Exit-коды: 0 ок, 1 данные, 2 misuse, 3 транспорт.
-Каждая ошибка печатает `hint:`.
-`--json` печатает по одному JSON-объекту на строку в stdout.
-
-## Терминальный браузер
-
-`nxr-tui` открывает raw-репозиторий в терминале: по вкладке на сервер, дерево репозитория на любой глубине, скачивание поддеревьев, живой фильтр и пресеты серверов.
-
-```bash
-cargo install nexus-raw-tui
-nxr-tui https://nexus.example.com/     # или без аргументов: пресеты из конфига
+$ nxr verify vendor/prebuilt
+verify: 2 ok, FAILED: none
 ```
 
-Клавиши, файл конфигурации и headless-режим smoke: [справочник TUI](docs/reference/tui.md).
+Повторная команда переносит только те имена, которых ещё нет.
+Страница [get-started](docs/get-started.md) проходит ту же сессию против локального мок-сервера, включая прерванную передачу.
+
+## Как это работает
+
+В протоколе пять понятий.
+Вызову нужны URL, локальные файлы и маркеры, лежащие рядом с артефактами.
+
+- **Каталог версии.** Каждый относительный путь под исходным каталогом становится именем артефакта, поэтому `dist/1.4.0/bom/x.json` хранится как `bom/x.json` под целевым URL.
+- **Маркер.** Артефакт завершён, когда на месте и его байты, и сосед `<name>.sha256` в формате `sha256sum -c`.
+  `up` генерирует недостающие маркеры и загружает их после артефактов, `down` сверяет каждый поток с серверным маркером, а `verify` проверяет пару офлайн.
+- **Симметричный diff.** Оба направления сравнивают локальное дерево с удалённым листингом до передачи и переносят только разницу, поэтому повторная команда завершает прерванный запуск, а не повторяет его.
+- **Канал.** Канал это файл-токен по любому URL, например `latest` или `stable`.
+  `--if-forward` сравнивает токены в dotted-numeric порядке и отклоняет сдвиг на более старый токен.
+- **Part-файл.** Прерванная загрузка остаётся в скрытом файле `.nxr-part-<hash>` и не попадает в итоговый путь в неполном виде.
+  Повторная команда продолжает его одним запросом `Range`.
+
+Завершённый артефакт, локальный дайджест которого расходится с серверным маркером, попадает в отчёт и не перезаписывается.
+
+## Частые команды
+
+| Команда | Описание |
+|:--------|:---------|
+| `nxr up <DIR> <URL>` | загрузить каталог: скан, diff, затем PUT байтов и маркеров параллельно |
+| `nxr down <URL> <DIR>` | скачать перечисленные артефакты, с проверкой и докачкой |
+| `nxr verify <DIR>` | проверить локальные байты, маркеры и дайджесты без обращения к сети |
+| `nxr diff <DIR> <URL>` | отчёт о различиях (`same`, `missing-local`, `missing-remote`, `diverged`) без записи. При наличии различий код возврата 1. |
+| `nxr ls <URL>` | листинг каталога на любой глубине. `--assets` печатает плоские имена артефактов |
+| `nxr channel get\|set` | прочитать токен канала или записать его с `--if-forward` |
+| `nxr doctor [URL]` | сообщить учётные данные, настройки TLS и достижимость, не печатая секретов |
+| `nxr get\|put\|head\|sha` | примитивы уровня curl, с ретраями, детектом зависаний и дайджестами |
+
+`down`, `diff` и `rm` требуют источник имён: `--name`, `--names-from FILE` или `--ls`, если на сервере есть search API.
+Единственное исключение это URL, который оканчивается файлом: `nxr down "$BASE/1.4.0/app.zip" vendor/` скачивает этот файл.
+
+<details>
+<summary>Остальные команды и глобальные флаги</summary>
+
+| Команда | Описание |
+|:--------|:---------|
+| `nxr clone <URL> <DIR>` | клонировать целый репозиторий, с необязательным кэшем фактов, который не перехэширует неизменённые файлы |
+| `nxr audit <URL>` | отчёт о целостности: сироты, висячие и непарсящиеся маркеры, расходящиеся факты. `--bytes` проверяет каждый объект, `--sample N` проверяет детерминированную выборку |
+| `nxr mirror <SRC> <DST>` | скопировать версию между двумя репозиториями по тем же правилам diff и отказа |
+| `nxr mv <SRC> <DST>` | скопировать версию и затем удалить её в источнике, после того как копия сошлась |
+| `nxr rm <URL>` | удалить версию: по умолчанию план, `--yes` удаляет сначала маркеры, затем байты, ответ 404 считается успехом |
+| `nxr point <URL>` | удалить один файл-указатель. Отсутствие файла не является ошибкой. |
+| `nxr service repos\|status\|repo\|assets\|eula <URL>` | REST API сервера: список репозиториев, живость, настройки, снимок поиска, состояние EULA |
+| `nxr complete <shell>` | автодополнение для bash, zsh, fish или PowerShell |
+
+Глобальные флаги: `-u user:pass`, `-R ALIAS`, `--workers N`, `--retry N`, `--connect-timeout-secs`, `--stall-secs`, `--tls-insecure`, `--ca-bundle FILE`, `--json`, `-q` и `-v`.
+
+Флаги, форматы вывода и краевые случаи описаны в [справочнике CLI](docs/reference/cli.md).
+`nxr <command> --help` описывает установленный бинарник.
+
+</details>
+
+## CI
+
+Workflow GitHub Actions может использовать composite action из этого репозитория:
+
+```yaml
+- uses: Lipen/nexus-raw@vX.Y.Z
+  with:
+    command: up
+    args: ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
+    auth: ${{ secrets.NEXUS }}     # user:password, экспортируется через окружение
+```
+
+`vX.Y.Z` это тег релиза: актуальный номер стоит в [английском README](README.md#ci).
+
+Коды возврата разделяют классы ошибок: `0` успех, `1` проблема с данными, которую повтор воспроизведёт, `2` некорректный вызов, `3` проблема транспорта, после которой более поздний запуск должен пройти.
+Поскольку передачи докачиваются, повтор команды безопасен:
+
+```bash
+nxr up "dist/$VERSION/" "$BASE/$VERSION/" || status=$?
+case ${status:-0} in
+  0) echo published ;;
+  3) sleep 60; nxr up "dist/$VERSION/" "$BASE/$VERSION/" ;;
+  *) exit 1 ;;
+esac
+```
+
+С флагом `--json` передача печатает по одному событию NDJSON на строку и завершается событием `summary`, по которому job может выставить условие.
+Учётные данные берутся из masked-переменных CI: `NXR_USERNAME` и `NXR_PASSWORD`, либо один `NXR_AUTH` с base64 от `user:password`.
+
+<details>
+<summary>Другие темы CI</summary>
+
+Те же архивы можно поставить через апстримный action, который применяет собственные проверки контрольных сумм и аттестаций:
+
+```yaml
+- uses: taiki-e/install-action@v2
+  with:
+    tool: nexus-raw
+```
+
+GitLab CI, гейт `jq` по событию `summary`, masked-переменные и цикл ретраев описаны в разделе [использование в CI](docs/how-to/ci.md).
+Классы кодов возврата с причинами и исправлениями собраны в [ошибках и кодах возврата](docs/reference/errors.md).
+
+</details>
 
 ## Учётные данные
 
-Источники в порядке проверки: `-u user:pass`, затем `NXR_AUTH` (base64 от `user:pass`), затем `NXR_USERNAME` + `NXR_PASSWORD`.
-`-R <алиас>` называет ремоут из `~/.config/nxr/config.toml` (один TOML из именованных URL + источников кредов): файл читается только когда флаг называет алиас. Подробности: [how-to/config.md](docs/how-to/config.md).
+Источники проверяются в этом порядке, используется первый найденный:
+
+1. `-u user:pass` в вызове.
+   Значение видно в `ps`, поэтому способ подходит только для ручного запуска.
+2. `NXR_AUTH`, base64 от `user:pass`.
+3. `NXR_USERNAME` и `NXR_PASSWORD`, которые задаются вместе.
 
 ```bash
 export NXR_USERNAME="my-login"
 export NXR_PASSWORD="my-password"
 
-# или одно значение для CI: base64 от "my-login:my-password"
+# или одно значение, что обычно удобнее в CI
 export NXR_AUTH="$(printf '%s:%s' 'my-login' 'my-password' | base64)"
 ```
 
-`nxr doctor [URL]` называет сработавший источник, не печатая значений.
+`nxr doctor [URL]` сообщает, какой источник сработал, и не печатает значение.
 
-## Для агентов
+<details>
+<summary>Именованные ремоуты и файл алиасов</summary>
 
-Шпаргалка на одной странице: намерение -> команда -> ожидаемый результат, в [docs/how-to/agents.md](docs/how-to/agents.md).
-Машиночитаемый индекс документации: [llms.txt](docs/llms.txt).
+Длинные URL можно назвать в необязательном TOML-файле.
+Файл читается только когда `-R` называет алиас из него, поэтому вызов без `-R` ведёт себя одинаково на любой машине:
+
+```toml
+# ~/.config/nxr/config.toml
+[alias.releases]
+url = "https://nexus.example.com/repository/raw-main"
+user_env = "NEXUS_USERNAME"
+pass_env = "NEXUS_PASSWORD"
+```
+
+```bash
+nxr -R releases up dist/1.4.0/ 1.4.0/   # относительный путь приклеивается к URL алиаса
+```
+
+`NXR_CONFIG=/path/to/file` читает файл из другого места.
+Правила приоритета описаны в разделе [именованные ремоуты](docs/how-to/config.md).
+
+</details>
+
+## Другие клиенты
+
+Тот же протокол доступен в виде трёх других клиентов и библиотеки.
+
+| Компонент | Описание | Установка |
+|:---|:---|:---|
+| **Терминальный браузер** `nxr-tui` | вкладки на сервер, дерево репозитория на любой глубине, скачивание поддеревьев, живой фильтр, сохранённые пресеты | `cargo install nexus-raw-tui` |
+| **Монтирование** `nxr-mount` | raw-репозиторий как локальный каталог только для чтения, ленивые Range-чтения через FUSE. Работает только на Linux. | входит в архивы релиза |
+| **Rust-библиотека** `nexus-raw-core` | фасад `Nxr` с теми же передачами, событиями и отказами в процессе | `cargo add nexus-raw-core` |
+| **npm-пакет** `@nexus-raw/nxr` | операции CLI в виде промисов, команда `nxr` в комплекте | `npm install @nexus-raw/nxr` |
+
+Копирование между серверами тоже выполняется из CLI: `nxr mirror` копирует версию между репозиториями, `nxr clone` копирует целый репозиторий, а `nxr audit` сообщает, что внутри него рассогласовано.
+
+- Клавиши TUI, конфигурация и headless-режим: [справочник TUI](docs/reference/tui.md).
+- Семантика FUSE, флаги и ограничения режима только для чтения: [монтирование](docs/reference/mount.md).
+- Фасад, его слои и гарантии: [Rust API](docs/reference/api.md).
+- Поверхность промисов и формы ошибок: [быстрый старт на Node](docs/tutorials/node.md).
 
 ## Документация
 
-Гайды и справочник: <https://lipen.github.io/nexus-raw/>.
-Что изменилось между релизами: [CHANGELOG.md](CHANGELOG.md).
-Исходники в [docs/](docs/).
-Локально сайт поднимается `just docs`.
+- Сайт документации: <https://lipen.github.io/nexus-raw/>, исходники в [docs/](docs/).
+- [Get started](docs/get-started.md) проходит одну сессию против локального мок-сервера.
+- [Протокол](docs/reference/protocol.md) и [инварианты](docs/reference/invariants.md) написаны для тех, кто реализует собственный клиент.
+- [Design](docs/explanation/design.md) фиксирует принятые решения, а [conformance](docs/explanation/conformance.md) описывает тестовые доказательства гарантий выше.
+- Что изменилось между релизами: [CHANGELOG.md](CHANGELOG.md).
+- `just docs` поднимает сайт локально с живой перезагрузкой.
+
+## Для агентов
+
+- [docs/how-to/agents.md](docs/how-to/agents.md) сопоставляет задачу с командой и выводом, который её подтверждает.
+- Тот же материал доступен как скилл для Claude, omp и других агентов: `scripts/install-skill.sh` из checkout или копия из [`skills/nxr/`](skills/nxr).
+- Машиночитаемый индекс документации: [llms.txt](https://lipen.github.io/nexus-raw/llms.txt).
+- У каждой ошибки есть строка `hint:`, а `--json` печатает NDJSON, который разбирает программа.
 
 ## Участие
 
-Сборка, тесты, коммиты, изменения протокола и чеклист релиза: [CONTRIBUTING.md](CONTRIBUTING.md).
-Устройство репозитория и правила изменений: [AGENTS.md](AGENTS.md).
-`just check` запускает полный цикл проверок.
-`just demo` проигрывает записанную сессию против локального мок-сервера.
+[CONTRIBUTING.md](CONTRIBUTING.md) описывает сборку, тесты, правила коммитов, изменения протокола и чеклист релиза.
+[AGENTS.md](AGENTS.md) описывает устройство репозитория и правила изменений.
+`just check` запускает полный цикл проверок, а `just demo` проигрывает записанную сессию против локального мок-сервера.
 
 ## Лицензия
 

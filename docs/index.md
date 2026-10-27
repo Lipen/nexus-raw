@@ -4,13 +4,24 @@
 
 # curl for a Nexus raw repository
 
-`nxr` publishes and fetches version directories whose files are digest-verified on the way in and on the way out.
-One binary, nothing to install on the server: the URL in argv, credentials from the call or the environment, and an alias file read only when `-R` names it.
+`nxr` publishes and fetches version directories in a Sonatype Nexus raw repository.
+Every artifact carries a sha256 marker, and an interrupted transfer resumes.
+The CLI is one static binary, and the server needs no additional component.
 
 [Get started](get-started.md){ .md-button .md-button--primary }
 [The 30-second version](#the-30-second-version){ .md-button }
 
 </div>
+
+```bash
+brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
+brew install lipen/nexus-raw/nexus-raw
+cargo binstall nexus-raw                  # a prebuilt static archive
+npm install @nexus-raw/nxr                # the Node package, `nxr` included
+```
+
+Release archives are published for Linux x64 and arm64, macOS Intel and Apple silicon, and Windows x64, together with a distroless container image.
+[Get started](get-started.md) covers installation and the first transfer.
 
 ## The 30-second version
 
@@ -55,31 +66,63 @@ One binary, nothing to install on the server: the URL in argv, credentials from 
 
 </figure>
 
-What the recording shows, one beat per command:
+The recording runs four commands:
 
-1. **Publish**: `nxr up` puts a version directory on the server, the claim name first, then the bytes and their `.sha256` markers.
-2. **Name**: `nxr channel set --if-forward` points `latest` at it, and a pointer only moves forward.
-3. **Fetch**: `nxr down` pulls that version back, and an interrupted pull resumes by repeating the same command.
-4. **Verify**: `nxr verify` checks every digest offline, no network.
+1. **Publish**: `nxr up` uploads a version directory in parallel, generates the missing `.sha256` markers, and skips files that are already present.
+2. **Name**: `nxr channel set --if-forward` points `latest` at the version, and the guard rejects a move to an older token.
+3. **Fetch**: `nxr down` downloads the listed files, hashes each stream and checks it against the server marker before the file gets its final name.
+4. **Verify**: `nxr verify` checks every digest offline.
 
-Every line is real output: the binary this repository builds, against its [mock server](explanation/conformance.md).
-`just demo` replays the session on your machine and shows more: an edited artifact, the refusal to overwrite it, a flaky server and one that requires credentials.
+The output is real: the binary built from this repository, running against its [mock server](explanation/conformance.md).
+`just demo` replays the session locally and also shows an edited artifact, the refusal to overwrite it, a flaky server and a server that requires credentials.
 The full demo: [run it](how-to/demo.md).
-[Get started](get-started.md) is the same four commands, copy-pasteable.
 
-## What do you want to do?
+## Guarantees
+
+The following properties hold for every command rather than depending on a flag:
+
+- An artifact is complete only when its bytes and a `<name>.sha256` marker are both on the server.
+  `up` writes the markers, `down` checks the downloaded stream against them, and `verify` checks the pair offline.
+- A complete artifact whose digest differs from the local copy is reported and not overwritten.
+- A repeated command transfers only what is missing, and an interrupted download continues from a hidden part file with one `Range` request.
+- Exit codes separate the failure classes: `0` success, `1` data, `2` misuse, `3` transport.
+  Every error carries a `hint:` line naming the next check.
+- The server needs no agent, plugin or index, because the repository contents and the URL are the whole instruction.
+
+## Start here
 
 <div class="nxr-go" markdown>
 
-- [:material-language-rust: **First transfer in Rust** *The facade, one transfer, the local mock.* `cargo add nexus-raw-core`](tutorials/rust/)
-- [:material-language-typescript: **First transfer in Node** *The same API as promises, a diff before any write.* `pnpm add @nexus-raw/nxr`](tutorials/node/)
-- [:material-console: **First transfer in a terminal** *The release binary and the one-liners.* `nxr up`](tutorials/ops/)
-- [:material-upload: **Publish a version** *The claim lands first, bytes and markers follow.* `nxr up --claim-first`](how-to/publish/)
-- [:material-download: **Fetch artifacts** *Named files come down verified, an interrupted pull resumes.* `nxr down`](how-to/consume/)
-- [:material-play-circle: **See it run** *The full session against the mock, then on your machine.* `just demo`](how-to/demo/)
-- [:material-robot: **Use it in CI** *Exit codes, NDJSON events, credentials from the environment.* `nxr --json`](how-to/ci/)
-- [:material-wrench: **When it breaks** *Decode the error, recover, rerun safely.* `nxr doctor`](how-to/troubleshoot/)
+- [:material-console: **First transfer in a terminal** *Install the binary, then publish, name, fetch and verify a directory.* `nxr up`](get-started.md)
+- [:material-language-rust: **First transfer in Rust** *The `Nxr` facade and one transfer against the local mock.* `cargo add nexus-raw-core`](tutorials/rust/)
+- [:material-language-typescript: **First transfer in Node** *The same operations as promises, with a diff before any write.* `pnpm add @nexus-raw/nxr`](tutorials/node/)
+- [:material-upload: **Publish a version** *Upload order, markers, channels and a nightly release pattern.* `nxr up --claim-first`](how-to/publish/)
+- [:material-download: **Fetch artifacts** *Enumerating names, downloading a subset, resuming an interrupted pull.* `nxr down`](how-to/consume/)
+- [:material-play-circle: **See it run** *The recorded session against the mock server, and the same run on your machine.* `just demo`](how-to/demo/)
+- [:material-robot: **Use it in CI** *Exit codes, NDJSON events and credentials from the environment.* `nxr --json`](how-to/ci/)
+- [:material-wrench: **When it breaks** *Read the error and its hint, fix the cause, repeat the command.* `nxr doctor`](how-to/troubleshoot/)
 
 </div>
 
-<p class="nxr-go__under" markdown>More: [every flag of every command](reference/cli.md), the four primitives included · [the wire protocol](reference/protocol.md) · [the Rust API](reference/api.md) · [why it is shaped this way](explanation/design.md).</p>
+## Other clients and libraries
+
+The same protocol is implemented by three other clients and one library.
+Each reads and writes the same store, so a version published by the CLI is visible to all of them.
+
+<div class="nxr-go" markdown>
+
+- [:material-view-dashboard: **Browse in a terminal** *`nxr-tui` opens a tab per server and shows the tree at any depth, with subtree downloads and a live filter.* `cargo install nexus-raw-tui`](reference/tui.md)
+- [:material-folder-network: **Mount the repository** *`nxr-mount` exposes a repository as a read-only directory with lazy ranged reads over FUSE.* `nxr-mount <URL> /mnt/nexus`](reference/mount.md)
+- [:material-transit-connection-variant: **Copy between servers** *`nxr mirror` copies a version between repositories and `nxr clone` copies a whole repository.* `nxr mirror`](how-to/compare.md)
+- [:material-shield-check: **Audit integrity** *`nxr audit` reports orphans, dangling markers and disagreeing facts, over metadata or over every byte.* `nxr audit --bytes`](how-to/audit.md)
+
+</div>
+
+<p class="nxr-go__under" markdown>In process instead of in a shell: [the Rust facade](tutorials/rust.md) and [the Node promises](tutorials/node.md).
+More: [every flag of every command](reference/cli.md), including the four primitives · [the wire protocol](reference/protocol.md) · [why it is shaped this way](explanation/design.md).</p>
+
+## For agents
+
+An agent can work from [the intent cookbook](how-to/agents.md), which maps a task to a command and to the output that confirms it.
+Every error carries a `hint:` line, and `--json` produces NDJSON that a program can parse.
+The installable skill lives in [`skills/nxr`](https://github.com/Lipen/nexus-raw/tree/master/skills/nxr), and the machine-readable index is [llms.txt](llms.txt).
