@@ -1,0 +1,29 @@
+# Weekly action pin refresh.
+#
+# The pins themselves are a supply-chain requirement, see scripts/check-action-pins.sh.
+# Dependabot writes the new 40-hex SHA and the trailing "# vX.Y.Z" comment together,
+# so a merged pull request keeps both the gate and the comments honest.
+#
+# The two dtolnay/rust-toolchain pins reference branches ("stable" and "1.88"), not
+# release tags, so they are refreshed by hand: the branch itself carries the
+# toolchain default in its action.yml.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: master
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+    labels:
+      - dependencies
