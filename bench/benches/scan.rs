@@ -1,9 +1,10 @@
 //! `scan`: the local walk behind every plan.
 //! `up`, `diff` and `delta` all start from it, so its cost rides on every flow.
 
+use std::hint::black_box;
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use nexus_raw_bench::{config, matrix, write_tree};
 use nexus_raw_core::Nxr;
 use tokio::sync::mpsc;
