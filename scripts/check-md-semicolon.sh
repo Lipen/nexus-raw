@@ -26,11 +26,19 @@ while IFS= read -r -d '' file; do
   # a lowercase/uppercase word, `; `, and another word on the same line.
   # Inside a raw <figure> HTML block the semicolons are CSS or SVG syntax,
   # not typography: skip those lines too.
+  # Inline code spans are syntax as well, so they are removed before the
+  # pattern runs. Exempting whole lines that merely contained a semicolon
+  # between two spans hid real splices, such as a table cell reading
+  # "`ls` at any depth; `--assets` prints the names".
   matches=$(awk '
     /^```/ { fence = !fence; next }
     /<figure>/ { html = 1 }
     /<\/figure>/ { html = 0 }
-    !fence && !html && /; / && !/`[^`]*;[^`]*`/ { print FILENAME ":" FNR ": " $0 }
+    !fence && !html {
+      line = $0
+      gsub(/`[^`]*`/, "", line)
+      if (line ~ /; /) print FILENAME ":" FNR ": " $0
+    }
   ' "$file")
   if [ -n "$matches" ]; then
     echo "$matches" >&2
