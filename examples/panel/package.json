@@ -2,7 +2,7 @@
   "name": "nexus-raw-example-panel",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.26.0",
+  "packageManager": "pnpm@12.16.1",
   "description": "A minimal web panel over the nexus-raw Node bindings",
   "scripts": {
     "start": "node server.mjs"

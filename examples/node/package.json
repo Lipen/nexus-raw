@@ -2,7 +2,7 @@
   "name": "nexus-raw-example-node",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.26.0",
+  "packageManager": "pnpm@12.16.1",
   "description": "A runnable consumer of the local nexus-raw addon; the published package is checked by the nightly smoke",
   "scripts": {
     "start": "node publish-and-consume.mjs"
