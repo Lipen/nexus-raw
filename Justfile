@@ -8,7 +8,7 @@ default:
 
 # Tool switches, one place to change them.
 cargo := "cargo"
-prek := "uvx prek@0.5.5"
+prek := "uvx prek@0.5.7"
 
 # Usage example: `just cargo test -p nexus-raw-core`.
 [doc('Run any cargo subcommand with flags.')]
@@ -448,7 +448,7 @@ demo-cast *args:
 [doc('Serve the docs site with live reload (http://localhost:8000).')]
 [group('docs')]
 docs *args:
-    uvx zensical@0.0.71 serve {{ args }}
+    uvx zensical@0.0.73 serve {{ args }}
 
 # A docs link or config typo fails the build instead of shipping broken pages.
 [doc('Build the docs, check hints, llms.txt and fail on issues.')]

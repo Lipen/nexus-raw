@@ -9,9 +9,9 @@ hooks = [
   { id = "cargo-clippy", name = "cargo clippy", entry = "cargo clippy --workspace --all-targets -- -D warnings", language = "system", pass_filenames = false },
   { id = "check-external-names", name = "check external names", entry = "scripts/check-external-names.sh", language = "system", pass_filenames = false, types = ["text"] },
   { id = "check-md-semicolon", name = "check markdown semicolons", entry = "scripts/check-md-semicolon.sh", language = "system", pass_filenames = false, types = ["markdown"] },
-  { id = "ruff-check", name = "ruff check", entry = "uvx ruff@0.17.1 check clients/python", language = "system", pass_filenames = false, types = ["python"] },
-  { id = "ruff-format", name = "ruff format", entry = "uvx ruff@0.17.1 format --check clients/python", language = "system", pass_filenames = false, types = ["python"] },
-  { id = "ty-check", name = "ty check", entry = "uvx ty@0.0.89 check clients/python/nxr.py", language = "system", pass_filenames = false, types = ["python"] },
+  { id = "ruff-check", name = "ruff check", entry = "uvx ruff@0.17.3 check clients/python", language = "system", pass_filenames = false, types = ["python"] },
+  { id = "ruff-format", name = "ruff format", entry = "uvx ruff@0.17.3 format --check clients/python", language = "system", pass_filenames = false, types = ["python"] },
+  { id = "ty-check", name = "ty check", entry = "uvx ty@0.0.94 check clients/python/nxr.py", language = "system", pass_filenames = false, types = ["python"] },
   { id = "shellcheck", name = "shellcheck", entry = "uvx --from shellcheck-py==0.11.0.1 shellcheck -S warning", language = "system", types = ["shell"] },
   # The workflow files are code: this catches an expression that cannot
   # evaluate, a matrix key an entry does not carry, and the inline shell

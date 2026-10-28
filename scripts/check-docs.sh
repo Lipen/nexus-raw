@@ -35,7 +35,7 @@ run_check "the skill" "$here/check-skill.sh"
 run_check "action pins" "$here/check-action-pins.sh"
 
 ui_phase "docs" "building the site"
-uvx zensical@0.0.71 build --strict "$@" || {
+uvx zensical@0.0.73 build --strict "$@" || {
     ui_fail "docs build"
     ui_hint 'run `just docs` to preview the site'
     exit 1
