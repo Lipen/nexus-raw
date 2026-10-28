@@ -12,7 +12,8 @@ The agent minimum:
 - Every error prints one `hint:` line on stderr telling the next thing to check.
   The hint carries `server says:` with the short 4xx/5xx body.
 - `--json` is machine output.
-  Transfers, `rm` and `verify` print one NDJSON event per line, with a `summary` event last.
+  Transfers, `rm` and `verify` print one NDJSON event per line and a `summary` event once the transfer stage is reached.
+  Per-name failures are listed in the summary and also emitted as `error` objects after it, and a command that fails earlier (an enumeration refusal, a divergence in the diff) prints the `error` object alone.
   `put` and `get -o` print artifact events and then one final object with the byte count and digest.
   `ls` and `doctor` print one object per entry or per check, and `head`, `sha`, `channel`, `point` and `service …` print a single object.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.

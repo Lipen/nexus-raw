@@ -33,7 +33,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -l stall-secs -d 'Fail a transfer 
 complete -c nxr -n "__fish_nxr_needs_command" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_needs_command" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_needs_command" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_needs_command" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_needs_command" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_needs_command" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_needs_command" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_needs_command" -s V -l version -d 'Print version'
@@ -70,7 +70,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand get" -l ca-bundle -d 'A PEM bund
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand get" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s f -l file -d 'The file to send' -r -F
@@ -85,7 +85,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand put" -l stdin -d 'Read the bytes
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l sha -d 'Also PUT `<url>`.sha256 with the sha256sum-style marker'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand put" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand put" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand put" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -97,7 +97,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand head" -l stall-secs -d 'Fail a t
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand head" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand head" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand head" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -109,7 +109,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand sha" -l stall-secs -d 'Fail a tr
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand sha" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand sha" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l claim-first -d 'Upload this file first, alone, before any other name (claim-first)' -r
@@ -128,7 +128,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand up" -l wait-index -d 'After the 
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l plan -l dry-run -d 'Print the plan without transferring anything'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand up" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand up" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand up" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l name -d 'One explicit name (repeatable)' -r
@@ -147,7 +147,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -l fresh -d 'Ignore existi
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l plan -l dry-run -d 'Print the plan without transferring anything'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l state -d 'Where to keep the local fact cache (default: <DIR>/.nxr-state.json)' -r -F
@@ -164,7 +164,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand clone" -l verify -d 'Ignore the 
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l plan -l dry-run -d 'Print the plan without transferring anything'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand clone" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand clone" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l name -d 'One explicit name (repeatable)' -r
@@ -182,7 +182,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand diff" -l ls -d 'Best-effort enum
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l fallback -d 'With `--via`: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand diff" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand diff" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand diff" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l sample -d 'Byte-check a deterministic sample of N assets instead of all (requires --bytes)' -r
@@ -198,7 +198,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand audit" -l ca-bundle -d 'A PEM bu
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l bytes -d 'Download every asset and hash it against its marker: the only pass that catches silent bitrot'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l json -d 'Emit NDJSON events instead of the human report'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -l tls-insecure -d 'Skip TLS certificate verification'
-complete -c nxr -n "__fish_nxr_using_subcommand audit" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand audit" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand audit" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l name -d 'One explicit name (repeatable)' -r
@@ -215,7 +215,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand rm" -l ls -d 'Best-effort enumer
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l yes -d 'Delete for real. Without it the run prints the plan and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand rm" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand rm" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -227,7 +227,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand point" -l stall-secs -d 'Fail a 
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand point" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand point" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l name -d 'One explicit name (repeatable)' -r
@@ -246,7 +246,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l ls -d 'Best-effort en
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l dry-run -l plan -d 'Print the plan without transferring anything (`--plan` is the same flag)'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand mirror" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l name -d 'One explicit name (repeatable)' -r
@@ -265,7 +265,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand mv" -l ls -d 'Best-effort enumer
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l yes -d 'Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand mv" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand mv" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand mv" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -278,7 +278,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand ls" -l ca-bundle -d 'A PEM bundl
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l assets -d 'List the object names under a version directory URL'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand ls" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand ls" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand ls" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -290,7 +290,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and not __fish_seen_subcommand_from get set help" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
@@ -305,7 +305,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from get" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -318,7 +318,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l if-forward -d 'Keep the current token when it already compares >= the new one'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from set" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand channel; and __fish_seen_subcommand_from help" -f -a "get" -d 'Print the current token. An unset channel prints `unset`'
@@ -333,7 +333,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand verify" -l stall-secs -d 'Fail a
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand verify" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand verify" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l probe-name -d 'The object the deep probes target (default: a soft autolookup of the root)' -r
@@ -347,7 +347,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l ca-bundle -d 'A PEM b
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l deep -d 'Probe the server\'s behavior: range, content-length, search, repo type, version. Read-only'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand doctor" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -359,7 +359,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_sub
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and not __fish_seen_subcommand_from repos status repo assets eula help" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'
@@ -377,7 +377,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repos" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -389,7 +389,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from status" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -402,7 +402,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l detail -d 'Also fetch the full repository settings: answers only to an nx-admin'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from repo" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l q -d 'The server-side search query, passed through' -r
@@ -416,7 +416,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from assets" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
@@ -429,7 +429,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcomm
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l accept -d 'Accept the presented disclaimer when the gate is closed'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from eula" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand service; and __fish_seen_subcommand_from help" -f -a "repos" -d 'List the repositories of the server behind `url` (a server root or any repository URL)'
@@ -447,7 +447,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand complete" -l stall-secs -d 'Fail
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -l json -d 'Emit one NDJSON event per line on stdout'
-complete -c nxr -n "__fish_nxr_using_subcommand complete" -s q -l quiet -d 'Print only the final summary line'
+complete -c nxr -n "__fish_nxr_using_subcommand complete" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand complete" -s h -l help -d 'Print help'
 complete -c nxr -n "__fish_nxr_using_subcommand help; and not __fish_seen_subcommand_from get put head sha up down clone diff audit rm point mirror mv ls channel verify doctor service complete help" -f -a "get" -d 'GET a URL to a file or stdout'

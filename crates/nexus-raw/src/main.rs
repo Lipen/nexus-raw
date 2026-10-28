@@ -105,7 +105,7 @@ pub(crate) struct Cli {
     /// Emit one NDJSON event per line on stdout.
     #[arg(long, global = true, help_heading = "Global options")]
     pub(crate) json: bool,
-    /// Print only the final summary line.
+    /// Print the summary line, plus any failures.
     #[arg(short = 'q', long, global = true, help_heading = "Global options")]
     pub(crate) quiet: bool,
     /// Print more detail: transfer starts and plan names.

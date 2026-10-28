@@ -71,7 +71,7 @@ All flags are global: they may appear before or after the subcommand.
 | `--tls-insecure` | off | skip certificate verification |
 | `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). The bundle carries the CA that signed the server certificate, not the bare server leaf. Native only, and mutually exclusive with `--tls-insecure` |
 | `--json` | off | machine output, see [output](#output) |
-| `-q, --quiet` | off | only the final summary line |
+| `-q, --quiet` | off | the summary line, plus any failures |
 | `-v, --verbose` | off | plan names and transfer starts |
 
 ## nxr get
@@ -683,7 +683,7 @@ $ echo $?
 | `2` | misuse: an unsafe `--name` |
 | `3` | transport or auth failure: the `failed:` list names where the run stopped |
 
-`--json` prints one event per name and the summary last.
+`--json` prints one event per name, then a `summary` event. A refusal before the deletion stage prints a single `error` object.
 A rerun emits `missing` events and still exits 0:
 
 ```json
@@ -1239,11 +1239,11 @@ The line vocabulary:
 - `↑ name ok`, `↓ name ok`, `○ name skipped` when a name settles.
 - `× name removed`, `○ name missing` when `rm` settles a name (`× name` in `-v` before the DELETEs go out).
 - `↻ name: retry N (reason)` when an attempt is replayed.
-- `uploaded N, downloaded N, skipped N`, the final summary of every transfer.
-- `removed N, skipped K`, the final summary of `rm`, replacing the upload/download line when something was deleted.
+- `uploaded N, downloaded N, skipped N`, the summary of every transfer.
+- `removed N, skipped K`, the summary of `rm`, replacing the upload/download line when something was deleted.
 - `failed: name, name` after the summary, when names did not land.
 
-`-q` trims to the final summary line.
+`-q` keeps the summary line and the failure lines, and drops the per-name progress and the plan.
 `-v` adds plan names and transfer starts, each with the size in human units (`↓ app.zip 24 B`, `↑ log.txt 1.2 KiB`).
 
 Colors are terminal-only.

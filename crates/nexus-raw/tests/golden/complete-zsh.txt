@@ -26,8 +26,8 @@ _nxr() {
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -61,8 +61,8 @@ _arguments "${_arguments_options[@]}" : \
 '--continue[Resume from an existing \`<out>\`.part through a Range request]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -87,8 +87,8 @@ _arguments "${_arguments_options[@]}" : \
 '--sha[Also PUT \`<url>\`.sha256 with the sha256sum-style marker]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -109,8 +109,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -131,8 +131,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -161,8 +161,8 @@ _arguments "${_arguments_options[@]}" : \
 '--dry-run[Print the plan without transferring anything]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -192,8 +192,8 @@ _arguments "${_arguments_options[@]}" : \
 '--dry-run[Print the plan without transferring anything]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -221,8 +221,8 @@ _arguments "${_arguments_options[@]}" : \
 '--dry-run[Print the plan without transferring anything]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -250,8 +250,8 @@ _arguments "${_arguments_options[@]}" : \
 '--fallback[With \`--via\`\: fall back to the probe-based delta when the search API refuses (400/404), instead of failing the run]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -277,8 +277,8 @@ _arguments "${_arguments_options[@]}" : \
 '--bytes[Download every asset and hash it against its marker\: the only pass that catches silent bitrot]' \
 '--json[Emit NDJSON events instead of the human report]' \
 '--tls-insecure[Skip TLS certificate verification]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -304,8 +304,8 @@ _arguments "${_arguments_options[@]}" : \
 '--yes[Delete for real. Without it the run prints the plan and touches nothing]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -326,8 +326,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -356,8 +356,8 @@ _arguments "${_arguments_options[@]}" : \
 '--plan[Print the plan without transferring anything (\`--plan\` is the same flag)]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -386,8 +386,8 @@ _arguments "${_arguments_options[@]}" : \
 '--yes[Move for real. Without it the run prints both plans (the pour and the delete) and touches nothing]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -410,8 +410,8 @@ _arguments "${_arguments_options[@]}" : \
 '--assets[List the object names under a version directory URL]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -432,8 +432,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -461,8 +461,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -484,8 +484,8 @@ _arguments "${_arguments_options[@]}" : \
 '--if-forward[Keep the current token when it already compares >= the new one]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -539,8 +539,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -563,8 +563,8 @@ _arguments "${_arguments_options[@]}" : \
 '--deep[Probe the server'\''s behavior\: range, content-length, search, repo type, version. Read-only]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -585,8 +585,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -614,8 +614,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -636,8 +636,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -659,8 +659,8 @@ _arguments "${_arguments_options[@]}" : \
 '--detail[Also fetch the full repository settings\: answers only to an nx-admin]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -683,8 +683,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -706,8 +706,8 @@ _arguments "${_arguments_options[@]}" : \
 '--accept[Accept the presented disclaimer when the gate is closed]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \
@@ -772,8 +772,8 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
-'-q[Print only the final summary line]' \
-'--quiet[Print only the final summary line]' \
+'-q[Print the summary line, plus any failures]' \
+'--quiet[Print the summary line, plus any failures]' \
 '-v[Print more detail\: transfer starts and plan names]' \
 '--verbose[Print more detail\: transfer starts and plan names]' \
 '-h[Print help]' \

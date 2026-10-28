@@ -203,7 +203,7 @@ impl Progress {
 
 /// Human console rendering.
 ///
-/// `-q` keeps only the final summary.
+/// `-q` keeps the summary line and the failure lines.
 /// `-v` adds transfer starts and plan names.
 /// Live byte progress draws one in-place stderr line when stderr is a terminal.
 fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Paint) {
