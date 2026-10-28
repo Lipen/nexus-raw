@@ -62,7 +62,7 @@ The canonical protocol text is kept outside this repository.
 ## Verify before reporting done
 
 ```bash
-just check        # fmt + clippy + wasm + prek + tests: the full gate
+just check        # wasm + prek (fmt and clippy included) + deny + tests: the full gate
 just check-docs   # the docs site builds and every page resolves
 just test         # unit and conformance suites alone
 just nxr -- --help

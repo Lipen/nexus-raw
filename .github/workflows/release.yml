@@ -71,21 +71,16 @@ jobs:
 
       # The same checks `just check` asserts locally, plus the docs gate:
       # nothing publishes until the exact dispatched tree passes.
-      - name: Run rustfmt
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
+      # Rustfmt and clippy run with the rest of the prek hook set below.
       - name: Check the core for wasm
         run: cargo check -p nexus-raw-core --target wasm32-unknown-unknown
 
       - name: Run tests
         run: cargo test --workspace
 
-      # The local gate runs the whole prek hook set, not only rustfmt and
-      # clippy: actionlint, the markdown rules and the hygiene hooks are part
-      # of what "the same checks" means.
+      # The local gate runs the whole prek hook set: rustfmt, clippy,
+      # actionlint, the markdown rules and the hygiene hooks are all part of
+      # what "the same checks" means.
       - name: Run the prek hooks
         run: uvx prek@0.5.5 run --all-files
 

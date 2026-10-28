@@ -99,12 +99,11 @@ test-python:
     {{ cargo }} build -q -p mock-nexus
     python3 -m unittest discover clients/python
 
-# The full gate a change must pass before it lands: fmt, clippy, prek, tests.
-[doc('The whole gate: fmt + clippy + prek + tests + version agreement.')]
+# The full gate a change must pass before it lands: wasm, the prek hooks
+# (fmt and clippy included), tests and the version agreement.
+[doc('The whole gate: wasm + prek + tests + version agreement.')]
 [group('check')]
 check:
-    just fmt -- --check
-    just clippy
     just wasm-check
     just lint
     just version-check

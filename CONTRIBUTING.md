@@ -6,7 +6,7 @@ The repository is a Rust workspace (`crates/`), a docs site (`docs/`) and five e
 ## Build and test
 
 ```bash
-just check        # fmt + clippy + wasm-check + prek + version-check + tests: the gate
+just check        # wasm-check + prek (fmt, clippy, the hooks) + version-check + deny + tests: the gate
 just test         # unit and conformance suites alone
 just check-docs   # the docs site builds and every link resolves
 just demo         # a real session against the mock server and stub payloads
