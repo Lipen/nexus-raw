@@ -212,7 +212,7 @@ A claim name outside the scanned directory is misuse (exit 2).
 
 | Surface | Part file | On failure | On success |
 |:--------|:----------|:-----------|:-----------|
-| `get -o FILE` | `<FILE>.part` | removed on a clean failure; only a killed run leaves one | renamed to `FILE` |
+| `get -o FILE` | `<FILE>.part` | removed on a clean failure. Only a killed run leaves one | renamed to `FILE` |
 | `down` | `.nxr-part-<32 hex>` per name | kept, because it is the resume fuel | renamed to the name |
 | `put` / `up` | none | PUTs replay whole | none |
 
@@ -368,7 +368,7 @@ The transfer order follows the user's enumeration verbatim: no name is special.
 
 | Aspect | Behavior |
 |:-------|:---------|
-| auth | `Basic`, attached to every request when credentials resolve; `-u` beats `NXR_AUTH` beats `NXR_USERNAME`+`NXR_PASSWORD` |
+| auth | `Basic`, attached to every request when credentials resolve. `-u` beats `NXR_AUTH`, which beats `NXR_USERNAME`+`NXR_PASSWORD` |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
 | retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry, other 4xx never, except 429 |
 | `Retry-After` | any retryable status (429 or 5xx) honors a `Retry-After` pause in seconds, clamped to 1..=60. It replaces the backoff, and exhausting attempts is exit 3 |

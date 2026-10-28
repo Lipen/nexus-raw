@@ -89,7 +89,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `-o, --out <FILE>` | output file. stdout when omitted |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
-| `--range <RANGE>` | one byte span, `START-END` or `START-`; `START-` reads to the end. Goes to `-o` or stdout; conflicts with `--continue` and `--segments` |
+| `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. The span goes to `-o` or stdout. Conflicts with `--continue` and `--segments` |
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
@@ -375,7 +375,7 @@ Every artifact is streamed into a part file, hashed on the fly, checked against 
 | Flag | Meaning |
 |:-----|:--------|
 | `--name <NAME>` | one explicit name, repeat as needed |
-| `--names-from <FILE>` | read names from a file, one per line (`-` is stdin); repeatable, combines with `--name` |
+| `--names-from <FILE>` | read names from a file, one per line (`-` is stdin). Repeatable, combines with `--name` |
 | `--ls` | best-effort enumeration through the server search API |
 | `--fresh` | ignore existing part files, every name downloads from zero |
 | `--segments <N>` | split each artifact into `N` concurrent Range spans, 2..=64. The worker budget still caps the total concurrency |
@@ -422,8 +422,8 @@ The downloaded directory verifies offline, because every fetched name gets a loc
 $ cat vendor/app/app-1.4.0.zip.sha256
 a8a242091894256798c34ed08c990bccb4a275883335d9209f9954b12e36ac1f  app-1.4.0.zip
 $ nxr verify vendor/app/
-verify: 2 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 2
+verify: 2 ok, FAILED: none
 $ echo $?
 0
 ```
@@ -486,7 +486,7 @@ $ echo $?
 0
 ```
 
-The `--json` plan lines carry `{"plan":"download|skip|seal","name":…}`; the summary gains `"sealed"`, the count of markers written without a transfer.
+The `--json` plan lines carry `{"plan":"download|skip|seal","name":…}`. The summary gains `"sealed"`, the count of markers written without a transfer.
 
 | Exit | When |
 |:----:|:-----|
@@ -549,7 +549,7 @@ A fully converged directory reports every name as `same` and exits 0.
 `--via search --ls` builds the remote side of the report from the search API's per-asset facts (name, digest, size), the same listing `nxr service assets` reads.
 One paged listing replaces the HEAD-and-sibling pair per name, so a big tree is compared in O(pages) requests.
 The report shape, the sections and the exit codes are the plain `diff` ones.
-`--prefix` filters the search facts client-side; `--name`/`--names-from` are refused (they would fight the listing as the name source) unless `--fallback` names them as the degraded source.
+`--prefix` filters the search facts client-side. `--name` and `--names-from` are refused (they would fight the listing as the name source) unless `--fallback` names them as the degraded source.
 
 The honesty rules, enforced in code:
 A searched asset that lacks a search-reported digest counts as changed (`diverged` with `sha: false`), never as `same`: there is nothing to verify against.
@@ -816,7 +816,7 @@ $ echo $?
 ```
 
 `--assets` lists the artifact names under a version directory (`/repository/<name>/<group…>/<version>/`), the enumeration `down --ls` consumes.
-The tree form (`ls <URL>`) works at any depth, the repository root included; `--assets` makes the same version-directory assumption the transfer commands make.
+The tree form (`ls <URL>`) works at any depth, the repository root included. `--assets` makes the same version-directory assumption the transfer commands make.
 It scopes the search with `q=<directory>/` exactly like the entry listing, and cuts the names client-side.
 Neither listing sends the `group` parameter: on one measured Nexus release it matched Maven coordinates rather than raw path prefixes, and nested listings lied.
 Treat both as conveniences only.
@@ -916,13 +916,10 @@ No network.
 Every checked name must be complete: bytes present, sibling present, digest matching.
 Markerless, broken or missing names are reported and the exit is 1.
 
-| Flag | Meaning |
-|:-----|:--------|
-
 ```console
 $ nxr verify dist/1.4.0/
-verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
+verify: 3 ok, FAILED: none
 $ echo $?
 0
 $ printf 'tampered' >> dist/1.4.0/pinned.xml

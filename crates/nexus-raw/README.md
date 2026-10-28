@@ -70,7 +70,7 @@ The ones a release pipeline needs:
 | `nxr down <URL> <DIR>` | fetch named artifacts, verified and resumable |
 | `nxr verify <DIR>` | check local bytes, markers and digests, offline |
 | `nxr diff <DIR> <URL>` | report the delta, write nothing, exit 1 on a difference |
-| `nxr ls <URL>` | list a directory URL at any depth, `--assets` for flat names |
+| `nxr ls <URL>` | list a directory URL at any depth through the server search API, `--assets` for flat names |
 | `nxr channel get\|set` | read a channel token, or write one with `--if-forward` |
 | `nxr doctor [URL]` | credentials, TLS, settings and reachability, secrets never printed |
 | `nxr get\|put\|head\|sha` | the curl primitives, with retries, stall detection and digests |

@@ -16,7 +16,7 @@ The canonical protocol text is kept outside this repository.
   A divergent complete artifact is never overwritten.
   `up` writes markers by default and generates missing local siblings.
   `--no-sha` is the explicit opt-out.
-- `down` takes its names from repeatable `--name`, `--names-from`, `--ls`, or a URL that ends at a file (the parent directory is the base, the leaf is the name); without any source it refuses with `cannot enumerate`.
+- `down` takes its names from repeatable `--name`, `--names-from`, `--ls`, or a URL that ends at a file (the parent directory is the base, the leaf is the name). Without any source it refuses with `cannot enumerate`.
 - The marker is always PUT after the bytes of the same name.
 - The order between names is free.
 - Names are relative paths of `[A-Za-z0-9._-]` segments.
@@ -90,8 +90,8 @@ New fields are additive.
 | `crates/nexus-raw-napi/` | the Node bindings (npm package `@nexus-raw/nxr`, plus the unscoped `nexus-raw` bridge): the CLI surface as promises over the `Nxr` facade, with `index.js`/`index.d.ts` entry files and napi CLI packaging |
 | `crates/nexus-raw-tui/` | the `nxr-tui` binary: a terminal browser over raw repositories (tabs, presets, filters, downloads), a lib with the state machine, rendering and config plus a thin bin |
 | `crates/nexus-raw-mount/` | the `nxr-mount` binary: a read-only FUSE view of a repository (Linux, pure-Rust `fuser`, no libfuse at build time), a companion to `nxr` and a second consumer of the core facade |
-| `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package), `examples/panel` (the web panel on the napi bindings, `just panel`), `examples/wasm-sandbox` (the browser sandbox, `just wasm`) and `examples/rust` (crate on the crates.io version); run with `just demo` / `just example-node` / `just panel` / `just wasm` / `just example-rust` |
-| `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches over the core (`scan`, `diff`, `up`, `down`, `down-slow`) and the real binary (`cli`), the environment-driven dataset and worker ladders, the deterministic tree generator, and the report pipeline (`just bench-report`, `just bench-compare`); the workflow and the measurement rules live in `bench/README.md` |
+| `examples/` | standalone external-consumer demos, excluded from the workspace: `examples/demo` (the mock-server stand behind the landing animation, `just demo`), `examples/node` (pnpm project on the npm package), `examples/panel` (the web panel on the napi bindings, `just panel`), `examples/wasm-sandbox` (the browser sandbox, `just wasm`) and `examples/rust` (crate on the crates.io version). Run them with `just demo` / `just example-node` / `just panel` / `just wasm` / `just example-rust` |
+| `bench/` | the opt-in benchmark ecosystem, a standalone workspace excluded from the gate: criterion benches over the core (`scan`, `diff`, `up`, `down`, `down-slow`) and the real binary (`cli`), the environment-driven dataset and worker ladders, the deterministic tree generator, and the report pipeline (`just bench-report`, `just bench-compare`). The workflow and the measurement rules live in `bench/README.md` |
 |`clients/python/`|the stdlib-only reference client and its conformance suite against the mock scenario table: every scenario is tested or explicitly skip-listed, an unclassified scenario fails the suite. ruff and ty gate it, and `just check` runs the suite|
 
 ## Commits

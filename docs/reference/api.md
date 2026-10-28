@@ -81,7 +81,7 @@ let nxr = Nxr::new(
 Build it from `-u user:pass`, `NXR_AUTH` (base64 `user:pass`) or `NXR_USERNAME` + `NXR_PASSWORD`, exactly as the CLI does.
 `creds::resolve` does this for you.
 `Config::validate` enforces the ranges the CLI flags map onto: workers in `1..=64`, positive timeouts.
-`ca_bundle: Some(PathBuf)` adds a PEM bundle of extra trust roots (the CLI's `--ca-bundle`); it is native only and conflicts with `tls_insecure`.
+`ca_bundle: Some(PathBuf)` adds a PEM bundle of extra trust roots (the CLI's `--ca-bundle`). It is native only and conflicts with `tls_insecure`.
 
 A complete, self-contained round trip (publish a directory against a scratch server and fetch it back) is `cargo run -p nexus-raw-core --example publish`.
 It starts its own mock server, so the example runs with zero setup, and its shape (build config → open channel → `up` → `down` → drop facade → join the event printer) is the intended embedding pattern.

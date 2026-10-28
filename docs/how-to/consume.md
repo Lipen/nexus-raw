@@ -144,8 +144,8 @@ Before building against the result, or after any manual fiddling, check every ar
 
 ```console
 $ nxr verify vendor/app/
-verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
+verify: 3 ok, FAILED: none
 ```
 
 A tampered file is named and the run exits 1:

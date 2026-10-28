@@ -11,13 +11,15 @@ The agent minimum:
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
 - Every error prints one `hint:` line on stderr telling the next thing to check.
   The hint carries `server says:` with the short 4xx/5xx body.
-- `--json` is machine output: transfers, `rm`, `verify`, `put` and `get -o` print one NDJSON event per line, the summary last.
+- `--json` is machine output.
+  Transfers, `rm` and `verify` print one NDJSON event per line, with a `summary` event last.
+  `put` and `get -o` print artifact events and then one final object with the byte count and digest.
   `ls` and `doctor` print one object per entry or per check, and `head`, `sha`, `channel`, `point` and `service …` print a single object.
 - Credentials: `-u user:pass`, or `NXR_AUTH` (base64 `user:pass`), or `NXR_USERNAME` + `NXR_PASSWORD`.
   Without `-R` there is no config file in play, by design.
 - Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R releases ls 1.4.0/`).
   The file is read only when the flag names an alias, nothing is picked up implicitly.
-- Listing needs an enumeration source: repeatable `--name`, or `--ls` (search API).
+- Listing needs an enumeration source: repeatable `--name`, `--names-from FILE`, or `--ls` (search API).
 - Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
 - A ready-made agent skill lives in the repo at `skills/nxr/SKILL.md`, with `references/recipes.md` and `references/quirks.md`.
   Install it with `scripts/install-skill.sh`.
@@ -34,7 +36,7 @@ Intent to command:
 | fetch one file | `nxr get <url> -o <file>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch one byte span | `nxr get <url> --range 100-199` |
-| fetch a directory | `nxr down <dir-url> --names-from list.txt` |
+| fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | push a directory | `nxr up <dir> <dir-url>` |
 | push a subtree | `nxr up <dir> <dir-url> --prefix <dir>/` (only the selected subtrees are scanned) |

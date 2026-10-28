@@ -26,7 +26,9 @@ The pinned image is pulled on first use.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429
   (no rate limiting locally).
 
-## The `q` page-cutter measurement (manual; `battery.sh` pins the resulting rule)
+## The `q` page-cutter measurement (manual)
+
+`battery.sh` pins the resulting rule.
 
 `search-pages.sh` seeds a few thousand names over several prefixes and depths
 and measures whether the search `q` parameter may cut the full walk that the

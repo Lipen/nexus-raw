@@ -72,7 +72,7 @@ The recording runs four commands:
 3. **Fetch**: `nxr down` downloads the listed files, hashes each stream and checks it against the server marker before the file gets its final name.
 4. **Verify**: `nxr verify` checks every digest offline.
 
-The recording uses a release directory and a `latest` channel as an example. The tool requires neither.
+The recording uses a release directory and a `latest` channel, both conventions of the caller.
 The output is real: the binary built from this repository, running against its [mock server](explanation/conformance.md).
 `just demo` replays the session locally and also shows an edited artifact, the refusal to overwrite it, a flaky server and a server that requires credentials.
 The full demo: [run it](how-to/demo.md).
@@ -87,7 +87,8 @@ The following properties hold for every command rather than depending on a flag:
 - A repeated command transfers only what is missing, and an interrupted download continues from a hidden part file with one `Range` request.
 - Exit codes separate the failure classes: `0` success, `1` data, `2` misuse, `3` transport.
   Every error carries a `hint:` line naming the next check.
-- The server needs no agent, plugin or index, because the repository contents and the URL are the whole instruction.
+- The server needs no agent or plugin, so the repository contents are the state.
+  Commands that need a listing use the server search API and refuse with a hint when it is unavailable.
 
 ## Start here
 

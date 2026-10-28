@@ -45,6 +45,15 @@ A directory of release files is one common case rather than a layout the tool im
 
 A whole directory is uploaded with one command: `nxr up dist/1.4.0/ "$BASE/1.4.0/"`.
 
+The primitives need no directory, and they keep the same retries, stall detection and digest checks:
+
+```bash
+nxr put "$BASE/1.4.0/app.zip" -f dist/app.zip --sha   # PUT the bytes and their .sha256 marker
+nxr get "$BASE/1.4.0/app.zip" -o app.zip --continue   # GET, resuming an existing app.zip.part
+nxr head "$BASE/1.4.0/app.zip"                        # status, size and content type
+nxr sha app.zip                                       # sha256 of a local file or a remote object
+```
+
 ## Install
 
 The binary is published as prebuilt archives, as a Homebrew formula, as an npm package that includes the `nxr` command, and as a container image.
@@ -181,7 +190,7 @@ An invocation needs the URL, the local files and the markers stored next to the 
 - **Part file.** An interrupted download remains in a hidden `.nxr-part-<hash>` file and never reaches its final path in a partial state.
   A repeated command continues it with one `Range` request.
 
-Nothing here requires a version scheme, and no command reads a manifest or a directory convention.
+No command reads a manifest or assumes a directory convention.
 A complete artifact whose local digest differs from the server marker is reported and not overwritten.
 
 ## Common commands
@@ -192,7 +201,7 @@ A complete artifact whose local digest differs from the server marker is reporte
 | `nxr down <URL> <DIR>` | download the listed artifacts, verified, with resume |
 | `nxr verify <DIR>` | check local bytes, markers and digests without network access |
 | `nxr diff <DIR> <URL>` | report differences (`same`, `missing-local`, `missing-remote`, `diverged`) without writing anything. Exit code 1 when a difference exists. |
-| `nxr ls <URL>` | list a directory URL at any depth. `--assets` prints flat artifact names |
+| `nxr ls <URL>` | list a directory URL at any depth through the server search API. `--assets` prints flat artifact names |
 | `nxr channel get\|set` | read a channel token, or write one with `--if-forward` |
 | `nxr doctor [URL]` | report credentials, TLS settings and reachability without printing secrets |
 | `nxr get\|put\|head\|sha` | the curl primitives, with retries, stall detection and digests |

@@ -64,7 +64,7 @@ V=1.4.0
 ```
 
 No server handy?
-From the repository checkout, `cargo run -p mock-nexus -- atomic --port 8080` plays one; set `BASE=http://127.0.0.1:8080/repository/raw-main`.
+From the repository checkout, `cargo run -p mock-nexus -- atomic --port 8080` plays one. Set `BASE=http://127.0.0.1:8080/repository/raw-main`.
 The transcripts below ran against that mock, with the host shown as `nexus.example.com`.
 
 One object, up and down:
@@ -125,8 +125,8 @@ plan: 0 to upload, 2 to download, 0 up to date
 ↓ bom/sbom.json ok
 uploaded 0, downloaded 2, skipped 0
 $ nxr verify "vendor/$V/"
-verify: 2 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 2
+verify: 2 ok, FAILED: none
 ```
 
 The diff verdict rides the exit code: `0` when every name is `same`, `1` when the report holds a difference.

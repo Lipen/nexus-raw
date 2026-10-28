@@ -230,7 +230,7 @@ The classification that produces these verdicts is specified in [the symmetric d
 ## In NDJSON
 
 Transfer-level failures surface in the summary's `failed` list, its structured `failures` list, and in `retrying` events rather than as separate error objects.
-`failed` keeps the legacy strings, so a mismatch carries `name: detail`; `failures` carries `{"code","name"}` with the exit-code class.
+`failed` keeps the legacy strings, so a mismatch carries `name: detail`. `failures` carries `{"code","name"}` with the exit-code class.
 
 ```json
 {"attempt":2,"event":"retrying","name":"extra.txt","reason":"transport: https://nexus.example.com/repository/raw-main/flaky/app.bin: HTTP 503"}

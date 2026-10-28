@@ -43,8 +43,8 @@ Flags:
   `GET /api/repos?url=<server>` lists repositories.
   `GET /api/entries?url=<dir>` lists the immediate children of a raw directory.
   `POST /api/down` with `{"url": <dir>, "path": <subtree>, "dir": <target>}` starts a download job and answers `{"id": ...}`.
-  `POST /api/rm` with `{"url": <dir>, "path": <subtree>, "file": <name?>, "dryRun": true}` answers the delete plan without deleting; the same body without `dryRun` starts a delete job.
-  `POST /api/put?url=<file-url>&sha=1` takes the raw request body as the file bytes, uploads them through `nxr.put` and writes the `.sha256` marker; `sha=0` opts out of the marker.
+  `POST /api/rm` with `{"url": <dir>, "path": <subtree>, "file": <name?>, "dryRun": true}` answers the delete plan without deleting. The same body without `dryRun` starts a delete job.
+  `POST /api/put?url=<file-url>&sha=1` takes the raw request body as the file bytes, uploads them through `nxr.put` and writes the `.sha256` marker. With `sha=0` the marker is omitted.
   The target must point inside `/repository/<name>/`, like every other route: the panel is not a relay to arbitrary hosts, and it refuses any POST that carries a foreign `Origin` header.
   The put body is capped at 100 MiB per file.
   `GET /api/progress/<id>` is the SSE stream of a job.

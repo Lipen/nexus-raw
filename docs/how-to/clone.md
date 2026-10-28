@@ -31,8 +31,8 @@ nxr verify vendor/raw-main/
 ```
 
 ```
-verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
+verify: 3 ok, FAILED: none
 ```
 
 ## The update run

@@ -187,6 +187,6 @@ This repository ships a composite action that installs the prebuilt `nxr` from t
     auth: ${{ secrets.NXR_AUTH }}   # user:password, exported as NXR_USERNAME/NXR_PASSWORD
 ```
 
-The `version` input defaults to `latest`, the newest release; pass the action tag's number (`with: version: X.Y.Z`, without the leading `v`) to pin the binary to the same release as the action.
+The `version` input defaults to `latest`, the newest release. Pass the action tag's number (`with: version: X.Y.Z`, without the leading `v`) to pin the binary to the same release as the action.
 The binary is checksum-verified against the release `SHA256SUMS` before it runs, and the action fetches the release of its own repository, not of the caller's workflow repository.
 Linux (x64, aarch64), macOS (x64, aarch64) and windows-x64 runners are supported.

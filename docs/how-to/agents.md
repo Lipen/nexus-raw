@@ -20,19 +20,19 @@ Read access works for any user the server answers.
 | download a file in 8 spans | `nxr get <url> -o <file> --segments 8` | bytes on disk, digest checked | 0 |
 | download one byte span | `nxr get <url> --range 100-199` | the span on stdout, or on disk with `-o` | 0 |
 | download to stdout | `nxr get <url>` (no `-o`) | the stream on stdout | 0 |
-| download a folder | `nxr down <dir-url> --names-from list.txt` | `downloaded N` | 0 |
+| download a folder | `nxr down <dir-url> <dst-dir> --names-from list.txt` | `downloaded N` | 0 |
 | clone a repository | `nxr clone <repo-url> <dst-dir>` | a clone with the fact cache | 0 |
 | upload a folder | `nxr up <dir> <dir-url>` | `uploaded N` + `.sha256` markers | 0 |
 | upload a subtree | `nxr up <dir> <dir-url> --prefix <dir>/` | `uploaded N` for the selected names | 0 |
 | what differs? | `nxr diff <dir> <dir-url> --ls` | the delta: local/remote/same | 0 |
-| move a version | `nxr mirror <src-url> <dst-url> --names-from list.txt` | `uploaded N, downloaded N` | 0 |
-| rename a version | `nxr mv <src-url> <dst-url> --names-from list.txt` | mirror + delete the source | 0 |
+| copy a version | `nxr mirror <src-url> <dst-url> --names-from list.txt` | `uploaded N, downloaded N` | 0 |
+| move a version | `nxr mv <src-url> <dst-url> --names-from list.txt` | mirror + delete the source | 0 |
 | delete a version | `nxr rm <dir-url> --names-from list.txt` | the marker deleted first, then the bytes | 0 |
 | drop a pointer | `nxr point <ptr-url>` | the pointer file is gone | 0 |
 | verify locally | `nxr verify <dir>` | digests and markers agree | 0 |
 | diagnose access | `nxr doctor <url>` | credentials/TLS/reachability, item by item | 0 |
 
-Note: enumeration needs a name source (`--name` or the search API).
+Note: enumeration needs a name source (`--name`, `--names-from`, or the search API through `--ls`).
 Without one it exits 1 (cannot enumerate) and a `hint:` line names the source.
 
 `up --prefix` scans only the selected subtrees. Entries outside them are never read.

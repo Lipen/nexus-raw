@@ -143,8 +143,8 @@ Each artifact arrives with its own `<name>.sha256` sibling, so the result verifi
 
 ```console
 $ nxr verify vendor/app/
-verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
+verify: 3 ok, FAILED: none
 ```
 
 ## Break it on purpose
@@ -199,8 +199,8 @@ The part file is gone, `app-1.4.0.zip` is complete, and `verify` passes:
 
 ```console
 $ nxr verify vendor/resume/
-verify: 3 ok, FAILED: none
 uploaded 0, downloaded 0, skipped 3
+verify: 3 ok, FAILED: none
 ```
 
 ## Next steps
