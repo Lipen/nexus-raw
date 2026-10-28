@@ -5,7 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Security
+
+- The compression stack moves to `zstd` 0.14.3, past [RUSTSEC-2026-0391](https://rustsec.org/advisories/RUSTSEC-2026-0391).
+  The vulnerable `with_context` constructors ranged over `>=0.13.2, <0.14.3`, and `zstd` arrives through `reqwest` for HTTP body decoding.
+
+### Fixed
+
+- The `-q/--quiet` help text, the output reference and the generated shell completions agree that failures survive quiet mode.
 
 ## [0.24.0] - 2026-10-24
 
