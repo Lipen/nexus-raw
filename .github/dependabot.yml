@@ -5,8 +5,11 @@
 # so a merged pull request keeps both the gate and the comments honest.
 #
 # The two dtolnay/rust-toolchain pins reference branches ("stable" and "1.88"), not
-# release tags, so they are refreshed by hand: the branch itself carries the
-# toolchain default in its action.yml.
+# release tags: the branch commit carries the toolchain default in its action.yml.
+# Dependabot cannot tell them apart, so it is ignored by name here, not through
+# groups.exclude-patterns: the exclusion would still produce a standalone pull request
+# that swaps the 1.88 commit for the stable one and leaves the "# 1.88" comment lying.
+# Those two pins are refreshed by hand, both at once.
 version: 2
 
 updates:
@@ -19,6 +22,8 @@ updates:
       time: "06:00"
       timezone: Etc/UTC
     open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
     groups:
       actions:
         patterns:

@@ -54,7 +54,7 @@ The canonical protocol text is kept outside this repository.
 | the terminal output of a script | `scripts/ui.sh`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | the recorded session and the landing animation | `examples/demo/README.md` |
 | the version agreement check | `scripts/version-check.sh` |
-| refreshing an action pin | `.github/dependabot.yml` (the weekly automatic path), `scripts/check-action-pins.sh` (the rule), the `dtolnay/rust-toolchain` branch pins by hand |
+| refreshing an action pin | `.github/dependabot.yml` (weekly automatic path, except `dtolnay/rust-toolchain`: branch pins, refreshed by hand), `scripts/check-action-pins.sh` (the rule) |
 | a quickstart's commands and outputs | `docs/tutorials/` (rust, node, ops) |
 | the release pipeline, the tag rule and the published consumer gate | `.github/workflows/release.yml`, `scripts/check-release-tag.sh`, `scripts/verify-published.sh`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | the benches and the baseline workflow | `bench/README.md`, the harness in `bench/src/lib.rs` |
