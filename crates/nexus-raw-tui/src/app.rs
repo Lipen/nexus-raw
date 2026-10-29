@@ -2796,12 +2796,11 @@ impl App {
             }
             SaveAsField::Name => {
                 let name = dialog.name.trim().to_owned();
-                if name.is_empty() || name == "." || name == ".." {
-                    self.status = "the name is empty or a dot segment".into();
-                    return;
-                }
-                if name.contains('/') || name.contains('\\') || name.contains('\0') {
-                    self.status = "the name carries a slash or a nul byte".into();
+                // The typed name becomes a local directory: one safe component,
+                // the rule the server-chosen names obey (no dot segment, no
+                // slash, nothing the platform would normalize away).
+                if !config::safe_dir_name(&name) {
+                    self.status = "the name must be one ordinary folder name".into();
                     return;
                 }
                 let raw_dir = dialog.dir.trim().to_owned();
@@ -4458,7 +4457,8 @@ mod tests {
             }
             other => panic!("unexpected message: {other:?}"),
         }
-        // A slash in the name is refused before anything happens.
+        // A slash in the name is refused before anything happens: the typed
+        // name must be one ordinary folder name.
         app.handle(Msg::Key(key(KeyCode::Char('D'))));
         let Mode::SaveAs(dialog) = app.mode.clone() else {
             panic!("D opens the dialog");
@@ -4469,7 +4469,11 @@ mod tests {
         }
         let before = app.pending;
         app.handle(Msg::Key(key(KeyCode::Enter)));
-        assert!(app.status.contains("slash"), "{:?}", app.status);
+        assert!(
+            app.status.contains("ordinary folder name"),
+            "{:?}",
+            app.status
+        );
         assert_eq!(app.pending, before, "nothing spawned");
         assert!(matches!(app.mode, Mode::SaveAs(_)));
         let _ = dialog;
