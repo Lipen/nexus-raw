@@ -231,11 +231,13 @@ The NDJSON shapes are fixed by golden tests, and `Event::to_json()` is the singl
 | `Removing { name }` | before a name's DELETEs go out | `{"event":"removing","name":"a.zip"}` |
 | `Removed { name }` | when at least one of the name's objects was deleted | `{"event":"removed","name":"a.zip"}` |
 | `Missing { name }` | when every DELETE of the name answered 404 | `{"event":"missing","name":"a.zip"}` |
+| `Warning { text }` | when an enumeration left out rows the protocol cannot carry (a search name outside the artifact grammar) | `{"event":"warning","text":"the search listing holds 1 name(s) outside the artifact grammar: …"}` |
 | `Summary(Summary)` | last event of every transfer | `{"event":"summary","kind":"transfer","uploaded":1,"downloaded":0,"skipped":2,"sealed":0,"removed":0,"failed":[],"failures":[]}` |
 
 `dir` renders as the state prefix: `Dir::Up` → `"uploading"`, `Dir::Down` → `"downloading"`.
 `ArtifactDone` reuses the same `artifact` event with the final state: `"done"`, or `"skipped"` when the diff found nothing to move.
 `total` is `null` when the server advertises no `Content-Length`.
+A `Warning` is a run-level notice, not a failure: the CLI renders it as a `warning:` line on stderr, and it survives `--quiet` like a failure does.
 
 A real stream, captured by `down --name app-1.4.0.zip --json` against the mock:
 
