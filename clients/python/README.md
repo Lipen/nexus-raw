@@ -20,6 +20,7 @@ The interesting rules are all client-side and all present:
   5xx and transport failures retry with backoff (4 attempts, 0.5s x 2^n, capped, jittered).
   A retryable status (429 or 5xx) honors its `Retry-After` pause, clamped to 1..=60 seconds, in place of the backoff.
 - Redirects are never followed: a 301 surfaces as `HttpError` with the status.
+- A 405 to a PUT is `ReadOnlyError` (exit 1, never retried, the hint names the group repository), the class the Rust core gives it: a refused write is a data verdict, not a transport one.
 - The per-operation socket timeout is the stall watchdog: a frozen server aborts the attempt, a slow-but-moving transfer never trips it.
 - `ls` walks `/service/rest/v1/search/assets` with continuation tokens, capped at 1000 pages, and diagnoses a repository-scoped 400 as "missing or not raw".
   With `directory`, it scopes the walk the way a directory listing does: the search asks with `q=<directory>/` and the client keeps the paths under that whole-segment prefix, so the server's loose `q` can only widen the pages, never the answer.

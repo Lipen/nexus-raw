@@ -62,6 +62,14 @@ pub async fn up(
                     return Err(js_error(e));
                 }
             };
+            // The CLI refuses an empty selection: "resolved with nothing" reads
+            // as "published" to a caller, and the release never landed.
+            if scanned.is_empty() {
+                drop(nxr);
+                return Err(js_error(Error::Misuse(format!(
+                    "nothing to upload: no names under the selected prefixes in {src_dir}"
+                ))));
+            }
             Some(scanned)
         }
         (None, None) => None,
@@ -195,7 +203,8 @@ pub async fn clone(
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     let prefixes = parse_prefixes(o.prefixes)?;
-    let mode = clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false));
+    let mode =
+        clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false)).map_err(js_error)?;
     let pump = spawn_pump(rx, on_event);
     let summary = nxr
         .clone_to(
@@ -236,7 +245,8 @@ pub async fn clone_plan(
     let (tx, rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     let prefixes = parse_prefixes(o.prefixes)?;
-    let mode = clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false));
+    let mode =
+        clone_state_mode(o.state.as_deref(), o.no_state.unwrap_or(false)).map_err(js_error)?;
     let pump = spawn_pump(rx, on_event);
     let actions = nxr
         .clone_plan(
@@ -262,14 +272,24 @@ fn parse_prefixes(raw: Option<Vec<String>>) -> Result<Vec<NamePrefix>> {
         .collect()
 }
 
-fn clone_state_mode(state: Option<&str>, no_state: bool) -> StateMode<'_> {
-    if no_state {
+fn clone_state_mode<'a>(
+    state: Option<&'a str>,
+    no_state: bool,
+) -> std::result::Result<StateMode<'a>, nexus_raw_core::Error> {
+    // The CLI makes the two flags a clap conflict: `noState` must not win
+    // silently over an explicit path.
+    if no_state && state.is_some() {
+        return Err(nexus_raw_core::Error::Misuse(
+            "state and noState exclude each other: pass one".to_owned(),
+        ));
+    }
+    Ok(if no_state {
         StateMode::Off
     } else if let Some(path) = state {
         StateMode::At(Path::new(path))
     } else {
         StateMode::Default
-    }
+    })
 }
 
 fn clone_action(action: &CloneAction) -> NxrClonePlanAction {

@@ -79,6 +79,18 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
             resumed_from: 0.0,
         });
     }
+    // A resume needs the sibling part file of a named output: without `out`
+    // there is nothing to resume and the flag would be silently dead.
+    if o.cont.unwrap_or(false) && out.is_none() {
+        drop(nxr);
+        return Err(finish_pump_err(
+            pump,
+            Error::Misuse(
+                "continue resumes a sibling part file: pass out, or drop continue".into(),
+            ),
+        )
+        .await);
+    }
     let outcome = nxr.get(&url, out, o.cont.unwrap_or(false)).await;
     drop(nxr);
     let outcome: GetOutcome = match outcome {
@@ -119,18 +131,33 @@ pub async fn put(
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     let pump = spawn_pump(rx, on_event);
     // A byte body is staged through a temp file that lives until the PUT ends.
+    // The file carries the artifact's own name, so the progress events name the
+    // upload instead of a random temp file.
     let staged = match &source {
         Either::A(_) => None,
         Either::B(body) => {
-            let mut file = tempfile::NamedTempFile::new().map_err(napi::Error::from)?;
-            std::io::Write::write_all(file.as_file_mut(), body.as_ref())
+            let dir = tempfile::Builder::new()
+                .prefix("nxr-put-")
+                .tempdir()
                 .map_err(napi::Error::from)?;
-            Some(file)
+            let leaf = url
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or("body.bin");
+            let name = if nexus_raw_core::ArtifactName::parse(leaf).is_ok() {
+                leaf
+            } else {
+                "body.bin"
+            };
+            let path = dir.path().join(name);
+            std::fs::write(&path, body.as_ref()).map_err(napi::Error::from)?;
+            Some((dir, path))
         }
     };
     let path = match (&source, &staged) {
         (Either::A(path), _) => PathBuf::from(path),
-        (Either::B(_), Some(file)) => file.path().to_owned(),
+        (Either::B(_), Some((_, path))) => path.clone(),
         (Either::B(_), None) => unreachable!("a byte body always stages a temp file"),
     };
     let uploaded = nxr.put(&url, &path, o.sha.unwrap_or(false)).await;
@@ -183,14 +210,37 @@ pub async fn head(url: String, opts: Option<NxrCommonOpts>) -> Result<NxrHeadRes
 pub async fn sha(target: String, opts: Option<NxrCommonOpts>) -> Result<String> {
     // A local file needs no HTTP client at all.
     if !mapping::is_url_target(&target) {
+        // The CLI's classes: a missing path, a directory or a non-http scheme is
+        // a command-line mistake (exit 2), anything else around the file is I/O
+        // (exit 1).
+        if let Some((scheme, _)) = target.split_once("://") {
+            return Err(js_error(Error::Misuse(format!(
+                "sha takes an http(s) URL or a local path, got a {scheme} URL"
+            ))));
+        }
         let path = PathBuf::from(&target);
+        match std::fs::metadata(&path) {
+            Ok(meta) if meta.is_file() => {}
+            Ok(_) => {
+                return Err(js_error(Error::Misuse(format!(
+                    "not a file: {}",
+                    path.display()
+                ))))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(js_error(Error::Misuse(format!(
+                    "no such local file or http(s) URL: {target}"
+                ))))
+            }
+            Err(e) => return Err(js_error(Error::io(&path, e))),
+        }
         return digest::sha256_file(&path)
             .map(|d| d.as_str().to_owned())
             .map_err(|e| {
-                js_error(nexus_raw_core::Error::Misuse(format!(
-                    "{}: {e}",
-                    path.display()
-                )))
+                js_error(Error::Io {
+                    path: path.display().to_string(),
+                    detail: e.to_string(),
+                })
             });
     }
     let o = opts.unwrap_or_default();

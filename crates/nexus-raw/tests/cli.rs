@@ -3865,7 +3865,9 @@ fn diff_equal_directory_exits_zero() {
     expect_exit(&named, 0, "an equal named diff is exit 0");
 }
 
-/// `--prefix` keeps only whole-segment matches on both sides.
+/// `--prefix` keeps only whole-segment matches on both sides, the local-only
+/// entries included: the enumeration filter alone would leave a name the remote
+/// does not have as `missing-remote`.
 #[test]
 fn diff_prefix_filters_both_sides() {
     let srv = server(Scenario::Atomic);
@@ -3873,8 +3875,11 @@ fn diff_prefix_filters_both_sides() {
     let local = TempDir::new().unwrap();
     std::fs::create_dir_all(local.path().join("a")).unwrap();
     std::fs::create_dir_all(local.path().join("b")).unwrap();
+    std::fs::create_dir_all(local.path().join("c")).unwrap();
     write_file(local.path(), "a/x.bin", ALPHA);
     write_file(local.path(), "b/y.bin", BETA);
+    // Local only: never uploaded, so only the local scan knows it.
+    write_file(local.path(), "c/z.bin", GAMMA);
     expect_exit(
         &nxr(&["up", local.path().to_str().unwrap(), &base]),
         0,
@@ -3896,6 +3901,27 @@ fn diff_prefix_filters_both_sides() {
     let text = stdout(&out);
     assert!(text.contains("same a/x.bin"), "{text}");
     assert!(!text.contains("b/y.bin"), "the other prefix is out: {text}");
+    assert!(
+        !text.contains("c/z.bin"),
+        "a local-only name outside the prefix is filtered too: {text}"
+    );
+
+    // The control: without the prefix, the local-only name reports as missing.
+    let all = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--name",
+        "a/x.bin",
+        "--name",
+        "b/y.bin",
+    ]);
+    expect_exit(&all, 1, "a local-only name is a difference");
+    assert!(
+        stdout(&all).contains("c/z.bin"),
+        "the local-only name reports without a prefix: {}",
+        stdout(&all)
+    );
 }
 
 /// `diff` prints one line per entry and changes nothing on either side.

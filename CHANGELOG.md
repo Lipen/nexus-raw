@@ -15,6 +15,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The Node bindings refuse what the CLI refuses, instead of picking silently:
+  `ls` together with `names` is misuse (it used to drop the names, so `rm` with both deleted the whole listing), `up` with a prefix selection that holds no artifacts is misuse (it used to resolve an empty summary), and `get` with `cont` and no `out` is misuse (it used to ignore the resume).
+  `sha` on an unreadable local file is an I/O refusal (exit 1) like the CLI, not misuse, and `clone` rejects `state` next to `noState` instead of letting one win.
+- A `diff` with `prefixes` filters the whole report in the core, so a local-only name outside the prefixes no longer reports as `missing-remote`.
+  The CLI and the Node bindings share the rule, and the CLI's own filter is gone.
+- A byte body staged by the Node `put` carries the artifact's own name, so its progress events name the upload instead of a temp file.
+- The Node result types declare the fields that cross the boundary as `null` (`sha256`, `contentType`, `size`, `from`, `digest`, the delta sides) as `| null`, matching what the runtime returns.
+  The Node `diff` examples in the README and the quickstart pass the enumeration source the call needs.
+- The Python reference client classifies a 405 to a PUT as `ReadOnlyError` (exit 1, the hint names the group repository), matching the core.
 - `ls --assets` names the names it leaves out: a server can hold a row outside the artifact grammar (a space, a percent-decoded slash), which the protocol cannot transfer, so the listing reports the count instead of dropping it silently.
   The `hidden` NDJSON event now carries a `reason` (`marker` from the tree listing, `grammar` from `--assets`).
 - The mount leaves a listing name that is not one path component (a decoded `/`, a nul byte, a dot segment) out of `readdir`: `lookup` refuses such a name, so the row could never open.

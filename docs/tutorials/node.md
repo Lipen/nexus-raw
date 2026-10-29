@@ -58,8 +58,9 @@ console.log(`up: uploaded ${upSummary.uploaded}`)
 const downSummary = await down(repo, 'vendor', { names: ['app.bin', 'bom/deps.json'] })
 console.log(`down: downloaded ${downSummary.downloaded}`)
 
-// Compare before writing anything: the local tree against the storage.
-const report = await diff('dist', repo)
+// Compare before writing anything. `diff` takes the same enumeration source as
+// `down`: the name list, or `{ ls: true }` where the server has the search API.
+const report = await diff('dist', repo, { names: ['app.bin', 'bom/deps.json'] })
 for (const entry of report.entries) {
   console.log(entry.state, entry.path)
 }
@@ -89,7 +90,9 @@ Add a local file and ask for the delta again, still writing nothing:
 ```js
 writeFileSync('dist/notes.txt', 'scratch')
 
-const second = await diff('dist', repo)
+const second = await diff('dist', repo, {
+  names: ['app.bin', 'bom/deps.json', 'notes.txt'],
+})
 for (const entry of second.entries) {
   if (entry.state !== 'same') console.log(entry.state, entry.path)
 }

@@ -15,6 +15,7 @@ import base64
 import contextlib
 import hashlib
 import http.client
+import http.server
 import json
 import os
 import pathlib
@@ -813,6 +814,50 @@ class Reference(unittest.TestCase):
             with self.assertRaises(nxr.NxrError, msg=token):
                 nx.channel_set("http://127.0.0.1:1/latest", token)
         self.assertEqual(nx.requests, [], "the refusal must precede the wire")
+
+
+class GroupWrites(unittest.TestCase):
+    """Deployments that are not scenarios: a group repository refuses every write.
+
+    Kept outside `Conformance`, whose methods map one-to-one onto the scenario
+    table: a group is a deployment kind (`MockNexus::start_group` on the Rust
+    side), not a row the mock lists.
+    """
+
+    def test_a_405_to_a_put_is_the_read_only_verdict(self):
+        """A 405 to a PUT is the read-only refusal, not an auth or transport one.
+
+        A group repository answers 405 to every write: the class is exit 1, the
+        attempt is never retried, and the hint names the group.
+        """
+
+        class Refusing(http.server.BaseHTTPRequestHandler):
+            puts = 0
+
+            def do_PUT(self):
+                Refusing.puts += 1
+                self.send_response(405)
+                self.send_header("Allow", "GET,HEAD")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Refusing)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            nx = nxr.Nxr()
+            url = f"http://127.0.0.1:{server.server_port}/repository/raw/x/a.bin"
+            with self.assertRaises(nxr.ReadOnlyError) as raised:
+                nx.put(url, CONTENT)
+            self.assertEqual(raised.exception.status, 405)
+            self.assertEqual(raised.exception.exit_code, 1)
+            self.assertIn("group", raised.exception.hint)
+            self.assertEqual(Refusing.puts, 1, "a refused write is never retried")
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == "__main__":

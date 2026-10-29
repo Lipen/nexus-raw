@@ -10,8 +10,15 @@ pub(crate) fn resolve_enumeration(
     ls: bool,
     no_source_reason: &'static str,
 ) -> std::result::Result<Enumeration, nexus_raw_core::Error> {
-    let _ = nxr;
     if ls {
+        // `ls` is a whole-listing source, not a filter: a command that also names
+        // files would act on the listing, not on the names. The CLI refuses the
+        // same combination; a destructive call must not widen silently.
+        if parsed_names.is_some() {
+            return Err(nexus_raw_core::Error::Misuse(
+                "ls cannot be combined with names: pass one enumeration source".to_owned(),
+            ));
+        }
         return Ok(Enumeration::Search);
     }
     if let Some(v) = parsed_names {

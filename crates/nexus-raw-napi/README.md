@@ -31,8 +31,9 @@ console.log(`uploaded ${published.uploaded}`)
 const fetched = await down(repo, 'vendor/prebuilt', { names: ['app-1.4.0.zip', 'manifest.json'] })
 console.log(`downloaded ${fetched.downloaded}`)
 
-// Compare before writing anything.
-const report = await diff('dist/1.4.0', repo)
+// Compare before writing anything. `diff` needs an enumeration source like
+// `down` does: the names, or `{ ls: true }` when the server has the search API.
+const report = await diff('dist/1.4.0', repo, { names: ['app-1.4.0.zip', 'manifest.json'] })
 for (const entry of report.entries) console.log(entry.state, entry.path)
 ```
 

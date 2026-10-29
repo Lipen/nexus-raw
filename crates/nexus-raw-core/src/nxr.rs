@@ -58,6 +58,15 @@ pub enum Enumeration {
 }
 
 impl Enumeration {
+    /// The prefixes this source carries: empty unless [`Enumeration::with_prefixes`] built it.
+    #[must_use]
+    pub fn prefixes(&self) -> &[crate::model::name::NamePrefix] {
+        match self {
+            Self::Filtered { prefixes, .. } => prefixes,
+            Self::Names(_) | Self::Search => &[],
+        }
+    }
+
     /// Keep only the names under one of `prefixes` (the `--prefix` filter).
     /// Applied after resolution and dedup: the inner source stays the single place enumeration happens.
     ///
@@ -89,6 +98,19 @@ pub struct Nxr {
     /// The AIMD budget of the most recent directory transfer, kept for
     /// introspection: conformance tests assert the limit was reduced after 429s.
     last_aimd: Arc<std::sync::Mutex<Option<Arc<crate::transport::aimd::WorkerLimit>>>>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Keep only the entries under one of `prefixes`: the `--prefix` rule the whole
+/// delta obeys, the local-only entries included.
+fn filter_prefixes(entries: Vec<Delta>, prefixes: &[crate::model::name::NamePrefix]) -> Vec<Delta> {
+    if prefixes.is_empty() {
+        return entries;
+    }
+    entries
+        .into_iter()
+        .filter(|entry| prefixes.iter().any(|prefix| prefix.matches(entry.name())))
+        .collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -526,14 +548,19 @@ impl Nxr {
     /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the local scan, [`Error::Enumerate`] when the enumeration is empty, and transport, auth or HTTP errors while probing the remote states.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn delta(&self, dir: &Path, enum_src: Enumeration) -> Result<Vec<Delta>, Error> {
+        // The prefix filter narrows the whole report, not just the remote side:
+        // the local scan sees every name, and a local-only entry outside the
+        // prefixes would otherwise report as `missing-remote`.
+        let prefixes = enum_src.prefixes().to_vec();
         let remote_names = self.resolve_names(enum_src).await?;
         let local_names = sync::scan_dir(dir)?;
         let locals = sync::local_statuses(dir, local_names).await;
         let remotes = self.remote_states_for(&remote_names).await?;
         let d = dir.to_owned();
-        tokio::task::spawn_blocking(move || delta::compare(&d, locals, remotes))
+        let entries = tokio::task::spawn_blocking(move || delta::compare(&d, locals, remotes))
             .await
-            .map_err(|e| Error::misuse(format!("task panicked: {e}")))
+            .map_err(|e| Error::misuse(format!("task panicked: {e}")))?;
+        Ok(filter_prefixes(entries, &prefixes))
     }
 
     /// The delta report built from the search API's per-asset facts (`diff --via search`).
@@ -562,9 +589,11 @@ impl Nxr {
             remotes.retain(|(n, _)| prefixes.iter().any(|p| p.matches(n)));
         }
         let d = dir.to_owned();
-        tokio::task::spawn_blocking(move || delta::compare_search(&d, locals, remotes))
-            .await
-            .map_err(|e| Error::misuse(format!("task panicked: {e}")))
+        let entries =
+            tokio::task::spawn_blocking(move || delta::compare_search(&d, locals, remotes))
+                .await
+                .map_err(|e| Error::misuse(format!("task panicked: {e}")))?;
+        Ok(filter_prefixes(entries, prefixes))
     }
 
     /// Audit the repository at the facade base (§11).
