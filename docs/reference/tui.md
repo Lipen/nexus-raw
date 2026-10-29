@@ -84,7 +84,8 @@ The session starts with `download.dir` from the config.
 A file lands as `{destination}/{name}`, a subtree as `{destination}/{name}/...`, a whole repository as `{destination}/{repo}/...`.
 Nothing is written outside the destination, and nothing is written before a dialog is confirmed.
 
-That boundary is enforced at the data, not at the key: a repository row survives only when its URL shares the session's scheme, host and port and its name is one ordinary directory segment, and a listing name that fails the artifact grammar is refused with `refused:` before a transfer starts.
+That boundary is enforced at the data, not at the key: a repository row survives only when its URL shares the session's scheme, host and port and its name is one ordinary directory segment, and a listing segment that is not one safe path component (a decoded `/`, a `..`, a control byte, a trailing dot or space) is refused with `refused:` before a transfer starts.
+Spaces and unicode are ordinary filesystem names, so a folder the server calls `Release Notes` downloads like any other.
 A server that names a repository `/home/user/.ssh`, puts a percent-encoded `/` into a file name or points a repository at another host therefore changes the list and the status line, never the filesystem.
 
 ## Put

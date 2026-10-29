@@ -669,7 +669,7 @@ fn alive(_pid: u32) -> bool {
 /// directory: `create_dir_all` and `rename` follow intermediate symlinks, so a planted
 /// `bom -> ~/.config` would land the artifact outside the destination.
 /// The root itself is the caller's choice and stays allowed.
-pub(crate) fn ensure_symlink_free(parent: &Path, root: &Path) -> Result<(), Error> {
+pub fn ensure_symlink_free(parent: &Path, root: &Path) -> Result<(), Error> {
     let mut cur = parent.to_owned();
     while cur.starts_with(root) && cur != root {
         match std::fs::symlink_metadata(&cur) {

@@ -22,6 +22,17 @@ fn pressed(key: &KeyEvent, expected: char) -> bool {
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
 }
 
+/// Whether a server-supplied relative path is one safe local path: every
+/// segment is one ordinary component (the rule [`config::safe_dir_name`] states
+/// for a name, applied per segment).
+///
+/// The protocol's artifact grammar is not the rule here: a folder the server
+/// names `Release Notes` is a perfectly safe local directory, while a segment
+/// with a decoded `/`, a `..` or a control byte is not.
+fn safe_rel(rel: &str) -> bool {
+    !rel.is_empty() && rel.split('/').all(crate::config::safe_dir_name)
+}
+
 /// A text character for an input field: Shift is part of the character,
 /// so uppercase paths and names type as typed.
 fn text_char(key: &KeyEvent) -> Option<char> {
@@ -2601,9 +2612,9 @@ impl App {
             let Some(row) = rows.iter().find(|r| r.rel == rel) else {
                 continue;
             };
-            // A server-chosen name becomes a local path below the destination:
-            // an unsafe one is refused here instead of escaping the anchor.
-            if ArtifactName::parse(&rel).is_err() {
+            // A server-chosen path becomes a local path below the destination:
+            // an unsafe segment is refused here instead of escaping the anchor.
+            if !safe_rel(&rel) {
                 refused += 1;
                 continue;
             }
@@ -2873,34 +2884,18 @@ impl App {
             return;
         };
         let rel = self.full_rel(&path, &row.rel);
-        // Every listing name that becomes a local path passes the grammar here:
-        // a server path with a percent-encoded `/` decodes into a name that
-        // `base.join` would follow straight out of the destination.
-        let Ok(rel_name) = ArtifactName::parse(&rel) else {
-            self.status = format!(
-                "refused: the server sent an unsafe name {}",
-                row.name.escape_debug()
-            );
+        // Every segment that becomes a local path must be one safe component:
+        // a decoded `/` or a `..` in any of them would leave the destination,
+        // while spaces and unicode are ordinary names for the filesystem.
+        if !safe_rel(&rel) || (flat && !safe_rel(&row.name)) {
+            self.status = format!("refused: an unsafe path segment in {}", rel.escape_debug());
             return;
-        };
-        let flat_name = if flat {
-            match ArtifactName::parse(&row.name) {
-                Ok(name) => Some(name),
-                Err(_) => {
-                    self.status = format!(
-                        "refused: the server sent an unsafe name {}",
-                        row.name.escape_debug()
-                    );
-                    return;
-                }
-            }
-        } else {
-            None
-        };
+        }
         let url = format!("{}{}", t.here_url(), row.rel);
-        let out = match flat_name {
-            Some(name) => base.join(name.as_str()),
-            None => base.join(rel_name.as_str()),
+        let out = if flat {
+            base.join(&row.name)
+        } else {
+            base.join(&rel)
         };
         if !out.starts_with(&base) {
             self.status = "refused: the name escapes the destination".into();
@@ -3059,8 +3054,11 @@ impl App {
             }
             Ok(repos) => {
                 // A new server: the tab opens and the server joins the config.
-                let count = repos.len();
-                self.tabs.push(Tab::new(server.clone(), repos));
+                // The count is the tab's own: the ingest filter drops rows, and
+                // the status must not promise more than the screen shows.
+                let tab = Tab::new(server.clone(), repos);
+                let count = tab.repos.len();
+                self.tabs.push(tab);
                 self.tab = self.tabs.len() - 1;
                 self.mode = Mode::Normal;
                 self.status = format!(
@@ -3865,6 +3863,38 @@ mod tests {
             },
         }]);
         assert!(app.transfer.is_none(), "nothing may start");
+        assert!(app.status.starts_with("refused"), "{}", app.status);
+    }
+
+    #[tokio::test]
+    async fn a_download_takes_a_folder_name_with_a_space() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![])], false);
+        let row = Row {
+            name: "x.bin".into(),
+            rel: "x.bin".into(),
+            kind: EntryKind::File,
+            depth: 0,
+            expanded: false,
+            loading: false,
+        };
+        // Spaces and unicode are ordinary filesystem names: the protocol's
+        // artifact grammar is not the rule for a local directory.
+        app.download_file(
+            vec!["Release Notes".into()],
+            &row,
+            PathBuf::from("dl"),
+            false,
+        );
+        let started = app.transfer.as_ref().and_then(|t| t.retry.as_ref());
+        assert!(
+            matches!(started, Some(Retry::Get { out, .. }) if out == &PathBuf::from("dl/Release Notes/x.bin")),
+            "{started:?}"
+        );
+
+        // A `..` breadcrumb is still refused before anything starts.
+        app.transfer = None;
+        app.download_file(vec!["..".into()], &row, PathBuf::from("dl"), false);
+        assert!(app.transfer.is_none());
         assert!(app.status.starts_with("refused"), "{}", app.status);
     }
 

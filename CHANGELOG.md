@@ -23,6 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
+  The marker of the previous download is dropped before the next transfer: left in place it became the resume guard's expectation and refused a legitimately changed object.
+- The browser's single-file download refuses a symlinked directory on the way to the target, the same rule the directory transfer applies, and it accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.
+- A repository name ending in a dot or a space, or made only of them, is refused by the browser's name rule: on Windows such a name resolves to a different directory.
   The marker write is one core helper (`sibling::write_marker`) now, shared with `down` and the clone seal.
 - A locally broken bytes/marker pair names its repair: the error says to delete the stale sibling, which the next scan regenerates, or to restore the bytes. The old hint pointed at "two sides" for a disagreement that is purely local.
 - `clone` creates a missing destination the way `down` does, instead of failing with an I/O error named after a part file under a directory that does not exist.
@@ -37,7 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A byte body staged by the Node `put` carries the artifact's own name, so its progress events name the upload instead of a temp file.
 - The Node result types mark an unknown fact as optional (`sha256?`, `contentType?`, `size?`, `from?`, `digest?`, the delta sides): the bridge omits a `None` instead of sending `null`, and the delta-side docs claimed `null` before.
   The Node `diff` examples in the README and the quickstart pass the enumeration source the call needs.
-- The Python reference client classifies a 405 to a PUT as `ReadOnlyError` (exit 1, the hint names the group repository), matching the core.
+- The Python reference client classifies a 405 to a PUT as `ReadOnlyError` (exit 1, the hint names the group repository), matching the core, and exports the class in `__all__` like every other documented error.
 - `ls --assets` names the names it leaves out: a server can hold a row outside the artifact grammar (a space, a percent-decoded slash), which the protocol cannot transfer, so the listing reports the count instead of dropping it silently.
   The `hidden` NDJSON event now carries a `reason` (`marker` from the tree listing, `grammar` from `--assets`).
 - The mount leaves a listing name that is not one path component (a decoded `/`, a nul byte, a dot segment) out of `readdir`: `lookup` refuses such a name, so the row could never open.

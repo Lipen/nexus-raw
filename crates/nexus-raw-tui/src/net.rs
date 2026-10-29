@@ -220,6 +220,9 @@ async fn fetch_one_inner(
     // config), so creating it here is not an implicit side effect.
     // A single-file get cannot fall back to the walk's directory creation.
     if let Some(dir) = out.parent() {
+        // A planted `dst/app -> ~/.config` must not receive the artifact or its
+        // marker: the same rule the directory transfer applies.
+        nexus_raw_core::sync::down::ensure_symlink_free(dir, &dst)?;
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| Error::io(dir, e))?;
@@ -228,6 +231,15 @@ async fn fetch_one_inner(
     let progress = Progress::new(events);
     let client = NexusClient::new(&config(url.clone(), session), progress)?;
     let expected = primitive::sibling_digest(&client, &url).await?;
+    // A marker from an earlier download names the bytes that download produced.
+    // Left in place it becomes the `get` resume guard's expectation and vetoes a
+    // legitimately changed object, so it goes before the transfer: the remote
+    // marker (or the absence of one) is the truth, and the fresh marker is
+    // written from the received bytes below.
+    let mut stale = out.clone().into_os_string();
+    stale.push(".sha256");
+    let stale = PathBuf::from(stale);
+    let _ = tokio::fs::remove_file(&stale).await;
     let got = primitive::get(&client, &url, Some(out.clone()), true).await?;
     if let Some(want) = expected {
         let have = got.digest.clone().map(|d| d.as_str().to_owned());
@@ -753,6 +765,86 @@ mod tests {
             std::fs::read_to_string(PathBuf::from(sib)).unwrap(),
             sibling::format_line("app.bin", &Digest::of_bytes(&body)),
         );
+    }
+
+    /// A second download of a changed object must land: the marker the browser
+    /// wrote last time cannot veto the new bytes.
+    #[tokio::test]
+    async fn fetch_one_replaces_a_changed_object() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        let first = b"first body\n".to_vec();
+        let second = b"second body, changed\n".to_vec();
+        mock.insert("repository/raw-main/app.bin", &first);
+        let url = format!("{}repository/raw-main/app.bin", mock.base_url());
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("app.bin");
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        fetch_one(
+            tx.clone(),
+            url.clone(),
+            out.clone(),
+            dir.path().to_path_buf(),
+            Session::default(),
+        );
+        while let Some(msg) = rx.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                res.expect("the first download");
+                break;
+            }
+        }
+        assert_eq!(std::fs::read(&out).unwrap(), first);
+
+        // The repository republishes the same name with new bytes.
+        mock.insert("repository/raw-main/app.bin", &second);
+        let (tx2, mut rx2) = mpsc::unbounded_channel::<Msg>();
+        fetch_one(
+            tx2,
+            url,
+            out.clone(),
+            dir.path().to_path_buf(),
+            Session::default(),
+        );
+        while let Some(msg) = rx2.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                res.expect("the changed object downloads over the old marker");
+                break;
+            }
+        }
+        assert_eq!(std::fs::read(&out).unwrap(), second);
+        let mut sib = out.clone().into_os_string();
+        sib.push(".sha256");
+        assert_eq!(
+            std::fs::read_to_string(PathBuf::from(sib)).unwrap(),
+            sibling::format_line("app.bin", &Digest::of_bytes(&second)),
+        );
+    }
+
+    /// A symlinked intermediate directory is refused, the rule the directory
+    /// transfer applies: a planted `dst/app -> elsewhere` receives nothing.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fetch_one_refuses_a_symlinked_directory() {
+        let mock = MockNexus::start(Scenario::Atomic).unwrap();
+        mock.insert("repository/raw-main/app/x.bin", b"x".as_slice());
+        let url = format!("{}repository/raw-main/app/x.bin", mock.base_url());
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), dir.path().join("app")).unwrap();
+        let out = dir.path().join("app/x.bin");
+        let (tx, mut rx) = mpsc::unbounded_channel::<Msg>();
+        fetch_one(tx, url, out, dir.path().to_path_buf(), Session::default());
+        while let Some(msg) = rx.recv().await {
+            if let Msg::Dl(DlEv::Done(res)) = msg {
+                let err = res.expect_err("a symlinked directory is refused");
+                assert!(err.to_string().contains("symlink"), "{err}");
+                assert!(
+                    !elsewhere.path().join("x.bin").exists(),
+                    "nothing lands through the link"
+                );
+                return;
+            }
+        }
+        panic!("the transfer never finished");
     }
 
     #[tokio::test]

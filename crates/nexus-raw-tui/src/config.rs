@@ -133,7 +133,13 @@ fn split_host_port(authority: &str) -> (&str, Option<&str>) {
 #[must_use]
 pub fn safe_dir_name(name: &str) -> bool {
     let path = std::path::Path::new(name);
+    // Win32 strips trailing spaces and dots from a component, so `.. ` or `a.`
+    // names something other than it reads: only a name that survives verbatim is
+    // safe, on every platform.
+    let trimmed = name.trim_end_matches(['.', ' ']);
     !name.is_empty()
+        && trimmed.len() == name.len()
+        && !trimmed.is_empty()
         && name.len() <= 255
         && !name.contains(['/', '\\', '\0'])
         && !name.chars().any(char::is_control)
@@ -458,6 +464,13 @@ mod tests {
         assert!(!safe_dir_name("a/b"));
         assert!(!safe_dir_name("a\\b"));
         assert!(!safe_dir_name("a\nb"));
+        // Win32 strips trailing spaces and dots from a component: `.. ` would
+        // name the parent, `a.` would name `a`.
+        assert!(!safe_dir_name(".. "));
+        assert!(!safe_dir_name("..."));
+        assert!(!safe_dir_name(" "));
+        assert!(!safe_dir_name("a."));
+        assert!(!safe_dir_name("a "));
         assert!(!safe_dir_name(""));
         assert!(!safe_dir_name(&"a".repeat(256)));
     }
