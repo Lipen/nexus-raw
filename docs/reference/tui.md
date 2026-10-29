@@ -74,6 +74,7 @@ The overlay works against a refusing server the same way the CLI does: the error
 The card shows the name, the path from the repository root, the full URL, the size from a HEAD request and the sha256 from the `.sha256` marker when the server has one.
 Inside the card: `s` downloads the file into the destination folder, `o` picks another destination and returns to the card, `c` copies the URL, `esc`/`enter`/`q` close.
 The download is a direct `get` with the digest verified against the marker: no enumeration is involved.
+The file then gets the marker the browser computed, named relative to the destination exactly as `down` names it, so the downloaded tree passes `nxr verify` offline.
 
 ## The destination folder
 
@@ -208,7 +209,7 @@ Values never appear in logs or on screen.
 
 ## Downloads
 
-A file entry downloads through the direct `get` primitive into `{destination}/{rel}`, with the `.sha256` marker verified when the server has one.
+A file entry downloads through the direct `get` primitive into `{destination}/{rel}`, with the `.sha256` marker verified when the server has one and written beside the file afterwards, so the tree verifies offline.
 A folder entry (`d` on a folder, `D` on the current directory) and a whole repository (`d` on the repositories screen) walk the subtree with `ls_entries()` recursively and download the set in one transfer.
 The `D` dialog shows the target path live before anything starts, and nothing is written until it is confirmed.
 

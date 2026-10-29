@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncWriteExt;
 
 use crate::error::{Error, Verdict, DATA_EXIT};
 use crate::events::{Dir, Failure, Summary};
@@ -505,15 +504,7 @@ async fn seal(dir: &Path, name: &ArtifactName, digest: &Digest) -> Result<(), Er
             .map_err(|e| Error::io(parent, e))?;
     }
     let sib = sibling_path(dir, name);
-    let marker = sibling::format_line(name.as_str(), digest);
-    let mut f = crate::transport::client::write_options(false)
-        .open(&sib)
-        .await
-        .map_err(|e| Error::io(&sib, e))?;
-    f.write_all(marker.as_bytes())
-        .await
-        .map_err(|e| Error::io(&sib, e))?;
-    f.flush().await.map_err(|e| Error::io(&sib, e))
+    sibling::write_marker(&sib, name.as_str(), digest).await
 }
 
 fn marker_digest(dir: &Path, name: &ArtifactName) -> Option<Digest> {

@@ -22,6 +22,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
+  The marker write is one core helper (`sibling::write_marker`) now, shared with `down` and the clone seal.
 - A locally broken bytes/marker pair names its repair: the error says to delete the stale sibling, which the next scan regenerates, or to restore the bytes. The old hint pointed at "two sides" for a disagreement that is purely local.
 - `clone` creates a missing destination the way `down` does, instead of failing with an I/O error named after a part file under a directory that does not exist.
 - `nxr-mount` refuses a URL outside `/repository/<name>/…` at startup with exit 2 and the listing's own message, instead of mounting a tree whose listings can never resolve.

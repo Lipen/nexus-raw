@@ -18,6 +18,33 @@ pub fn format_line(name: &str, digest: &Digest) -> String {
     format!("{}  {name}\n", digest.as_str())
 }
 
+/// Write the canonical marker beside its bytes, with the policy every transfer
+/// shares: the file is rewritten in place and never opened through a symlink, so
+/// a link planted at the marker path cannot receive it.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`](crate::error::Error::Io) when the open, the write or
+/// the flush fails.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn write_marker(
+    path: &std::path::Path,
+    name: &str,
+    digest: &Digest,
+) -> Result<(), crate::error::Error> {
+    use crate::error::Error;
+    let line = format_line(name, digest);
+    let mut file = crate::transport::client::write_options(false)
+        .open(path)
+        .await
+        .map_err(|e| Error::io(path, e))?;
+    use tokio::io::AsyncWriteExt as _;
+    file.write_all(line.as_bytes())
+        .await
+        .map_err(|e| Error::io(path, e))?;
+    file.flush().await.map_err(|e| Error::io(path, e))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sibling {
     pub digest: Digest,

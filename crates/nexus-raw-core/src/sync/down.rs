@@ -320,17 +320,9 @@ async fn finish_download(
     if let Err(e) = tokio::fs::rename(part, &final_bytes).await {
         return Err((name.clone(), Outcome::Failed(Error::io(&final_bytes, e))));
     }
-    let marker = sibling::format_line(name.as_str(), &actual);
     let sib_final = sibling_path(dir, name);
-    let marker_write = async {
-        let mut f = crate::transport::client::write_options(false)
-            .open(&sib_final)
-            .await?;
-        f.write_all(marker.as_bytes()).await?;
-        f.flush().await
-    };
-    if let Err(e) = marker_write.await {
-        return Err((name.clone(), Outcome::Failed(Error::io(&sib_final, e))));
+    if let Err(e) = sibling::write_marker(&sib_final, name.as_str(), &actual).await {
+        return Err((name.clone(), Outcome::Failed(e)));
     }
     if emit_done {
         client
