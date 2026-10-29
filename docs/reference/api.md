@@ -122,6 +122,7 @@ Every method mirrors a CLI command one-to-one.
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
 | `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
+| `ls_assets_counted()` | `(Vec<ArtifactName>, usize)` | `nxr ls --assets` | the same listing with the count of rows left out because they are outside the artifact grammar |
 
 One parameter deserves its one-liner:
 
@@ -158,6 +159,7 @@ let client = NexusClient::new(&cfg, nexus_raw_core::Progress::new(tx))?;
 ```
 
 The primitive layer is four functions over that client.
+`head_info` reports any status (the `nxr head` primitive, where a 404 or a 503 is a result), while `head_transfer` is the transfer-grade HEAD: a non-2xx goes through the status classifier and the retry loop, so a 5xx retries and a 401 is the auth verdict.
 `sha` of a local file never touches the network:
 
 ```rust
@@ -191,6 +193,7 @@ fn what_would_up_scan(nxr: &Nxr) -> Result<(), nexus_raw_core::Error> {
 An `Action` is one name's line of a plan and has exactly three shapes: `Upload { name, size, digest }`, `Download { name, size, digest }` and `Skip { name, digest }`.
 `Mode::Up` and `Mode::Down` select which side wins a single-completed-copy name, per the [symmetric diff matrix](protocol.md#the-symmetric-diff).
 The digest inside an `Upload` action is present only when markers are enabled: knowing the digest and writing the marker are separate concerns.
+A marker is written through `model::sibling::write_marker`, the one place that opens the path for a rewrite without following a symlink: `down`, the clone seal and the browser's single-file download share it.
 
 Every directory transfer runs under an adaptive worker budget: it starts at the configured maximum, halves in-flight capacity on every `Retry-After` failure (a 429), and recovers one worker per success streak, never above the maximum.
 The budget lives on the facade for the duration of a run.
@@ -200,6 +203,7 @@ The wire behavior is unchanged: a polite client on a throttling server, byte-for
 ## L2: layout
 
 `layout` reads and writes the conventional objects: channel refs and search-based listings.
+`layout::ls::repository_of(url)` validates the `/repository/<name>/…` shape and returns the repository name: a caller that serves a whole tree before its first listing (the mount) refuses a wrongly shaped URL with it at startup, instead of serving an empty tree.
 `channel_set` returns `ChannelOutcome::Written { from }` or `ChannelOutcome::Skipped { current }`, where the forward-only guard compares tokens in dotted-numeric order.
 
 ## Enumeration
@@ -214,6 +218,7 @@ The variants mirror the CLI's enumeration flags:
 | `Enumeration::Search` | `--ls` | best-effort: walks the server search API with continuation tokens |
 | `Enumeration::Filtered { inner, prefixes }` | `--prefix` | the inner source, narrowed to whole-segment prefixes after resolution |
 
+A filtered source narrows the whole delta report, the local-only names included: a local name outside the selected prefixes never appears as `missing-remote`.
 An enumeration that produces zero names refuses with `Enumerate`, because an empty plan is treated as a wrong URL rather than as success.
 
 ## Events
