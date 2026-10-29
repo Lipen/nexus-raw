@@ -52,6 +52,12 @@ mount-smoke:
 brew-formula *args:
     @scripts/brew-formula.sh {{ args }}
 
+# Fail when the committed formula lags or drifted from the latest release.
+[doc('Check the Homebrew formula against the latest release.')]
+[group('brew')]
+brew-check:
+    @scripts/check-brew-formula.sh
+
 # `--auth user:pass` and scenario flags come after the scenario name.
 # Usage: `just mock atomic --port 8080`.
 [doc('Serve the mock Nexus.')]

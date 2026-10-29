@@ -31,10 +31,12 @@ just brew-formula
 just brew-formula 0.22.1
 ```
 
-`--check` compares the committed formula against the release and exits 1 on drift:
+The formula follows the published releases, not the workspace manifest: a version bump on master is ahead of it until the release lands.
+`scripts/check-brew-formula.sh` catches a forgotten or half-done bump:
 
 ```bash
-scripts/brew-formula.sh --check
+just brew-check
 ```
 
-`scripts/version-check.sh` holds the formula's version line to the workspace.
+It re-renders the latest release's formula from its `SHA256SUMS` and diffs it against the committed file, so a wrong version and a hand-edited checksum both fail.
+The daily smoke workflow and CI on master run it, which makes a formula left behind red within a day.

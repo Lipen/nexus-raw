@@ -126,6 +126,16 @@ jobs:
       - name: Check the version agrees everywhere
         run: scripts/version-check.sh
 
+      # The formula is a post-release artifact, so this watches master's
+      # published state and not a PR: a branch opened before a release
+      # predates the bump and would go red for nothing.
+      # The check reads the latest release, so a release that publishes
+      # while the bump is still uncommitted turns the next master run red
+      # until the formula lands.
+      - name: Check the tap formula against the latest release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: scripts/check-brew-formula.sh
+
   # The dependency gate: licenses, advisories, bans, sources. A lockfile
   # change that carries a vulnerability or a foreign source is red here,
   # not only in a release rehearsal.

@@ -38,3 +38,15 @@ jobs:
       # every desktop OS: main, CLI, example, bridge require and bridge ESM.
       - name: Run the published consumer checks
         run: scripts/verify-published.sh latest
+
+  # The tap formula is a post-release artifact: a forgotten bump leaves
+  # `brew upgrade` on the previous release, and the release run cannot see
+  # an omission that follows it. This watches the published state daily.
+  formula:
+    name: Tap formula
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the formula against the latest release
+        run: scripts/check-brew-formula.sh
