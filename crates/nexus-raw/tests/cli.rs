@@ -5105,6 +5105,60 @@ fn via_search_matches_plain_diff_and_needs_one_listing() {
     );
 }
 
+/// `--prefix` filters the search-side delta too, a local-only name included:
+/// the remote side is narrowed by the search facts, the local scan is not.
+#[test]
+fn via_search_prefix_filters_local_only_names() {
+    let srv = server(Scenario::Atomic);
+    let local = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(local.path().join("sub")).unwrap();
+    write_file(local.path(), "sub/a.zip", ALPHA);
+    // Local only: never uploaded and never in the search page.
+    write_file(local.path(), "notes.txt", GAMMA);
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/sub/a.zip","size":{},"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        ALPHA.len(),
+        hex_digest(ALPHA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+    let base = repo_dir_url(&srv);
+
+    let all = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
+    expect_exit(&all, 1, "the local-only name is a difference");
+    let text = stdout(&all);
+    assert!(text.contains("same sub/a.zip"), "{text}");
+    assert!(
+        text.contains("missing-remote notes.txt"),
+        "the unfiltered report names the local-only row: {text}"
+    );
+
+    let filtered = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+        "--prefix",
+        "sub/",
+    ]);
+    expect_exit(&filtered, 0, "the filtered search delta is clean");
+    let text = stdout(&filtered);
+    assert_eq!(
+        text, "same sub/a.zip\n",
+        "the prefix filters both sides: {text}"
+    );
+}
+
 /// A digestless search entry can never read as `same`: the missing fact reports as a divergence.
 #[test]
 fn via_search_digestless_entry_is_not_same() {

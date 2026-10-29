@@ -504,6 +504,7 @@ nxr diff <LOCAL_DIR> <SRC_URL> [--name NAME]... [--names-from FILE]... [--ls] [-
 Compare a local directory against a remote one and print the delta, changing nothing on either side.
 The enumeration is the one `down` uses: repeatable `--name` or best-effort `--ls`.
 The name set is the union of the local scan and the enumeration, so a local-only name shows up as `missing-remote` even when the enumeration is restricted.
+`--prefix` is the exception: it narrows the whole report, the local-only rows included, so a local name outside the selected prefixes never appears.
 
 | Section | Meaning |
 |:--------|:--------|
