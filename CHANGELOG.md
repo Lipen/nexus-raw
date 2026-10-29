@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `clone` creates a missing destination the way `down` does, instead of failing with an I/O error named after a part file under a directory that does not exist.
 - `nxr-mount` refuses a URL outside `/repository/<name>/…` at startup with exit 2 and the listing's own message, instead of mounting a tree whose listings can never resolve.
   The check runs before any request, so a wrong URL costs nothing.
 - The `--ls` and `ls --assets` URL-shape refusal names the alternative: a host without the search API takes `--name` or `--names-from`, and the message says so instead of leaving the user with a Nexus path rule.

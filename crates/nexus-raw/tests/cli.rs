@@ -934,6 +934,31 @@ fn clone_copies_a_repository_and_skips_on_the_second_run() {
     );
 }
 
+/// `clone` creates a missing destination, the way `down` does: a fresh path is
+/// the normal case, and the part files must not fail on it.
+#[test]
+fn clone_creates_a_missing_destination() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let holder = TempDir::new().unwrap();
+    let nested = holder.path().join("fresh/deep");
+    let out = nxr(&["clone", &base, nested.to_str().unwrap()]);
+    expect_exit(&out, 0, "clone creates the destination");
+    assert_eq!(read_file(&nested, "a.zip"), ALPHA);
+    assert!(
+        nested.join(".nxr-state.json").is_file(),
+        "the default cache lands in the new destination"
+    );
+}
+
 /// `clone --plan` prints the actions and writes nothing.
 #[test]
 fn clone_plan_writes_nothing() {

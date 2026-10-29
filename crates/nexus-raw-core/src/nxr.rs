@@ -1074,6 +1074,12 @@ impl Nxr {
         state_mode: crate::sync::StateMode<'_>,
         verify: bool,
     ) -> Result<Summary, Error> {
+        // A fresh destination is created, like `down` does: the part files land
+        // under it, and a missing directory would fail as a raw I/O error named
+        // after a staging file.
+        tokio::fs::create_dir_all(dir)
+            .await
+            .map_err(|e| Error::io(dir, e))?;
         let (actions, state, state_path) = self
             .clone_prepare(dir, prefixes, state_mode, verify)
             .await?;
