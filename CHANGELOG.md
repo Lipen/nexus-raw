@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.24.1] - 2026-10-29
+
 ### Security
 
 - The compression stack moves to `zstd` 0.14.3, past [RUSTSEC-2026-0391](https://rustsec.org/advisories/RUSTSEC-2026-0391).
@@ -554,7 +558,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/Lipen/nexus-raw/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/Lipen/nexus-raw/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/Lipen/nexus-raw/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/Lipen/nexus-raw/compare/v0.22.0...v0.22.1

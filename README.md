@@ -235,7 +235,7 @@ The flags, output formats and edge cases are documented in the [CLI reference](d
 A GitHub Actions workflow can use the composite action from this repository:
 
 ```yaml
-- uses: Lipen/nexus-raw@v0.24.0
+- uses: Lipen/nexus-raw@v0.24.1
   with:
     command: up
     args: ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
