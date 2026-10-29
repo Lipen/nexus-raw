@@ -114,10 +114,14 @@ fn run(cli: Cli) -> Result<(), String> {
         auth,
     };
     cfg.validate().map_err(|e| e.to_string())?;
+    // Normalize before anything echoes the URL: `normalize_base` refuses a
+    // userinfo, a query or a fragment without repeating them, so the shape
+    // message below can never print a credential.
+    let url = nexus_raw_core::config::normalize_base(&cli.url).map_err(|e| e.to_string())?;
     // A directory listing needs the repository name from the URL: a URL outside
     // `/repository/<name>/...` can never list anything, so refuse it here
     // instead of mounting a tree that stays empty.
-    nexus_raw_core::layout::ls::repository_of(&cli.url).map_err(|e| e.to_string())?;
+    nexus_raw_core::layout::ls::repository_of(&url).map_err(|e| e.to_string())?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -142,7 +146,9 @@ fn run(cli: Cli) -> Result<(), String> {
     let mut options = fuser::Config::default();
     options.mount_options = vec![
         fuser::MountOption::RO,
-        fuser::MountOption::FSName(cli.url.clone()),
+        // The normalized URL: the raw input could carry a credential, and the
+        // mount name shows up in `mount` output.
+        fuser::MountOption::FSName(url.clone()),
         fuser::MountOption::Subtype("nxr".to_owned()),
         fuser::MountOption::DefaultPermissions,
     ];
