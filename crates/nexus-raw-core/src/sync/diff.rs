@@ -172,7 +172,7 @@ pub fn classify(
             (LocalStatus::Broken(detail), _) => {
                 return Err(Verdict::Mismatch {
                     name: name.to_string(),
-                    detail: format!("local object is broken and must not be overwritten: {detail}"),
+                    detail: crate::model::state::broken_detail(detail),
                 });
             }
             (LocalStatus::Absent, RemoteStatus::Absent) => missing.push(name.to_string()),
@@ -254,7 +254,7 @@ pub fn classify_if_changed(
         if let LocalStatus::Broken(detail) = &local {
             return Err(Verdict::Mismatch {
                 name: name.to_string(),
-                detail: format!("local object is broken and must not be overwritten: {detail}"),
+                detail: crate::model::state::broken_detail(detail),
             });
         }
         if let RemoteStatus::Broken(detail) = &remote {

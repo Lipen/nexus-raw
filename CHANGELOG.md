@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A locally broken bytes/marker pair names its repair: the error says to delete the stale sibling, which the next scan regenerates, or to restore the bytes. The old hint pointed at "two sides" for a disagreement that is purely local.
 - `clone` creates a missing destination the way `down` does, instead of failing with an I/O error named after a part file under a directory that does not exist.
 - `nxr-mount` refuses a URL outside `/repository/<name>/…` at startup with exit 2 and the listing's own message, instead of mounting a tree whose listings can never resolve.
   The check runs before any request, so a wrong URL costs nothing.

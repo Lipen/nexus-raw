@@ -74,3 +74,17 @@ pub fn local_status(dir: &Path, name: &ArtifactName) -> LocalStatus {
         Err(e) => LocalStatus::Broken(format!("bytes unreadable: {e}")),
     }
 }
+
+/// The detail of a local bytes/marker disagreement, with the recovery a user
+/// can actually take: both halves are local.
+///
+/// A marker that no longer matches its bytes is common after a rebuild that
+/// reused a name. `nxr` never regenerates such a marker by itself, because that
+/// would bless an edit a consumer may already hold: the fix is to delete the
+/// stale sibling (the next scan regenerates it) or to restore the bytes.
+pub(crate) fn broken_detail(detail: &str) -> String {
+    format!(
+        "local object is broken and must not be overwritten: {detail}. \
+         Delete the stale sibling to regenerate it, or restore the bytes, then rerun"
+    )
+}

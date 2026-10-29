@@ -227,7 +227,7 @@ pub(crate) async fn generate_markers(
             LocalStatus::Broken(detail) => {
                 return Err(Error::Mismatch {
                     name: name.to_string(),
-                    detail: format!("local object is broken and must not be overwritten: {detail}"),
+                    detail: crate::model::state::broken_detail(detail),
                 })
             }
             LocalStatus::Markerless => jobs.push((name.clone(), st.clone())),

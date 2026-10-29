@@ -187,7 +187,7 @@ pub(crate) fn classify(
             (LocalFact::Broken(detail), _) => {
                 return Err(Verdict::Mismatch {
                     name: name.to_string(),
-                    detail: format!("local object is broken and must not be overwritten: {detail}"),
+                    detail: crate::model::state::broken_detail(detail),
                 });
             }
             (_, RemoteStatus::Broken(detail)) => {

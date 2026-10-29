@@ -3316,6 +3316,31 @@ fn failing_up_still_flushes_ndjson_events() {
 }
 
 /// doctor: missing credentials are a warning (exit 0), explicit credentials pass clean (exit 0).
+/// A locally edited artifact whose marker still pins the old digest is refused,
+/// and the error names the fix: delete the stale sibling.
+#[test]
+fn a_stale_local_marker_names_the_fix() {
+    let srv = server(Scenario::Atomic);
+    let base = dir_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seed the pair",
+    );
+    // The bytes change, the marker does not.
+    write_file(src.path(), "a.zip", BETA);
+    let out = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&out, 1, "the stale local pair is a refusal");
+    let err = stderr(&out);
+    assert!(err.contains("local object is broken"), "{err}");
+    assert!(
+        err.contains("Delete the stale sibling"),
+        "the fix is named: {err}"
+    );
+}
+
 /// A broken setting (retry 0) is a failure (exit 2).
 #[test]
 fn doctor_exit_codes() {

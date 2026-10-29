@@ -190,7 +190,7 @@ Upload:
 
 Marker-after-bytes is what makes `Markerless` mean "under-uploaded": a client never trusts a marker whose bytes are absent, and a crash between steps 2 and 3 is recoverable by design.
 A local sibling that does not match its bytes stops the run at step 1.
-The file is never touched and nothing is uploaded.
+The file is never touched and nothing is uploaded: the repair is to delete the stale sibling, which the next scan regenerates from the bytes, or to restore the bytes.
 
 A PUT answered `405` is the read-only refusal, the same class a `DELETE` gets: exit `1`, never retried, and the hint names the group repository.
 A group refuses every write by design, and a host that serves files without accepting them answers the same way.

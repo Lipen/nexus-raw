@@ -53,6 +53,7 @@ stateDiagram-v2
 `Complete` means bytes plus a sibling whose digest matches.
 `Markerless` means bytes only: normal mid-transfer, suspicious when a run finished.
 `Broken` means bytes and marker disagree, and `nxr` will not fix it by overwriting: the next `up` or `down` refuses with `mismatch` until a human deletes or repairs one side.
+When the pair is local, the repair is local too: delete the stale `.sha256` and the next scan regenerates it from the bytes.
 `Absent` means no bytes, and a marker without bytes reads as `Absent`.
 
 ## Divergent objects are never overwritten
@@ -63,9 +64,11 @@ A local file drifted after its marker was written:
 
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
-error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6
+error: mismatch: pinned.xml: local object is broken and must not be overwritten: digest mismatch: sibling 8eed95dc200589a2b132c182fac5ce9335866b9d2aa0225760ef944bac4b09c5, actual 4925cd5b6a8a02b33a3bd303661d19a84a640c533b32b78229659be743c1d2f6. Delete the stale sibling to regenerate it, or restore the bytes, then rerun
 hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object
 ```
+
+The error names the repair: `rm pinned.xml.sha256`, then rerun, and the scan writes a fresh marker from the bytes it finds.
 
 The same name holds two different artifacts on the two sides, for example a rebuild published into a version directory that was already used:
 
