@@ -108,6 +108,9 @@ fn main() {
         if value["read_only"].as_bool() == Some(true) {
             spec = spec.with_read_only();
         }
+        if value["static_host"].as_bool() == Some(true) {
+            spec = spec.with_static_host();
+        }
         if value["markerless"].as_bool() == Some(true) {
             spec = spec.with_markerless();
         }
