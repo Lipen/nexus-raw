@@ -301,7 +301,9 @@ struct BaseParts {
 pub(crate) fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
     let err = || {
         Error::misuse(format!(
-            "URL {base:?} must point inside /repository/<name>/<group…>/"
+            "URL {base:?} must point inside /repository/<name>/<group…>/: the search needs the \
+             repository name from the URL, so pass --name or --names-from on a host without \
+             the search API"
         ))
     };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;
@@ -323,7 +325,9 @@ pub(crate) fn split_prefix(base: &str) -> Result<(String, Vec<String>), Error> {
 fn split_base(base: &str) -> Result<BaseParts, Error> {
     let err = || {
         Error::misuse(format!(
-            "URL {base:?} must point inside /repository/<name>/<group…>/<version>/"
+            "URL {base:?} must point inside /repository/<name>/<group…>/<version>/: the search needs the \
+             repository name and a version scope from the URL, so pass --name or --names-from on a \
+             host without the search API"
         ))
     };
     let url = reqwest::Url::parse(base).map_err(|_| err())?;

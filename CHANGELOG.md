@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The `--ls` and `ls --assets` URL-shape refusal names the alternative: a host without the search API takes `--name` or `--names-from`, and the message says so instead of leaving the user with a Nexus path rule.
 - The Node bindings refuse what the CLI refuses, instead of picking silently:
   `ls` together with `names` is misuse (it used to drop the names, so `rm` with both deleted the whole listing), `up` with a prefix selection that holds no artifacts is misuse (it used to resolve an empty summary), and `get` with `cont` and no `out` is misuse (it used to ignore the resume).
   `sha` on an unreadable local file is an I/O refusal (exit 1) like the CLI, not misuse, and `clone` rejects `state` next to `noState` instead of letting one win.
