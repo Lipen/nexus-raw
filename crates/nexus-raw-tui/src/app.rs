@@ -2642,6 +2642,27 @@ impl App {
             self.status = "transfer in flight: one at a time".into();
             return;
         }
+        // The last line of defence for the queue: every file target sits under
+        // its own destination. The constructors validate the names already, and
+        // a new one must not be able to skip that.
+        let mut refused = 0usize;
+        let items: Vec<Retry> = items
+            .into_iter()
+            .filter(|item| match item {
+                Retry::Get { out, dst, .. } if !out.starts_with(dst) => {
+                    refused += 1;
+                    false
+                }
+                _ => true,
+            })
+            .collect();
+        if items.is_empty() {
+            // Nothing survived: the refusal is the only thing to report.
+            if refused > 0 {
+                self.status = format!("refused {refused} item(s) outside the destination");
+            }
+            return;
+        }
         self.queue = items.into_iter().collect();
         self.drain_queue();
     }
@@ -3795,6 +3816,56 @@ mod tests {
             assert!(app.transfer.is_none(), "{name} must never start a transfer");
             assert!(app.status.starts_with("refused:"), "{name}: {}", app.status);
         }
+    }
+
+    #[tokio::test]
+    async fn the_queue_refuses_a_target_outside_its_destination() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![])], false);
+        let repo = RepoRow {
+            name: "raw-main".into(),
+            format: "raw".into(),
+            kind: "hosted".into(),
+            url: "http://127.0.0.1:1/repository/raw-main/".into(),
+        };
+        app.start_queue(vec![
+            Retry::Get {
+                url: "http://x/a".into(),
+                out: PathBuf::from("/etc/passwd"),
+                dst: PathBuf::from("dl"),
+                repo: repo.clone(),
+            },
+            Retry::Get {
+                url: "http://x/b".into(),
+                out: PathBuf::from("dl/b"),
+                dst: PathBuf::from("dl"),
+                repo,
+            },
+        ]);
+        // The queue drains into the transfer slot: the valid item is in flight,
+        // the escaping one never started.
+        let started = match app.transfer.as_ref().and_then(|t| t.retry.as_ref()) {
+            Some(Retry::Get { url, .. }) => url.clone(),
+            other => panic!("expected the valid get to start, got {other:?}"),
+        };
+        assert_eq!(started, "http://x/b");
+        assert!(app.queue.is_empty());
+
+        // A queue where every target escapes reports the refusal instead of
+        // starting anything.
+        app.transfer = None;
+        app.start_queue(vec![Retry::Get {
+            url: "http://x/c".into(),
+            out: PathBuf::from("/etc/shadow"),
+            dst: PathBuf::from("dl"),
+            repo: RepoRow {
+                name: "raw-main".into(),
+                format: "raw".into(),
+                kind: "hosted".into(),
+                url: "http://127.0.0.1:1/repository/raw-main/".into(),
+            },
+        }]);
+        assert!(app.transfer.is_none(), "nothing may start");
+        assert!(app.status.starts_with("refused"), "{}", app.status);
     }
 
     #[test]

@@ -138,6 +138,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
                 } => {
                     println!("  retry {attempt} {name}: {reason}");
                 }
+                Event::Warning { text } => eprintln!("warning: {text}"),
                 Event::Summary(_)
                 | Event::ArtifactStarted { .. }
                 | Event::ArtifactBytes { .. }

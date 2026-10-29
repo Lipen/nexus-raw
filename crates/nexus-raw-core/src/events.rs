@@ -101,6 +101,12 @@ pub enum Event {
     Missing {
         name: String,
     },
+    /// The run left rows out that it cannot act on: a search listing holds a name
+    /// outside the artifact grammar, which no transfer can carry.
+    /// One sentence, rendered as `warning: <text>` on stderr.
+    Warning {
+        text: String,
+    },
     Summary(Summary),
 }
 
@@ -180,6 +186,10 @@ impl Event {
             Event::Missing { name } => serde_json::json!({
                 "event": "missing",
                 "name": name,
+            }),
+            Event::Warning { text } => serde_json::json!({
+                "event": "warning",
+                "text": text,
             }),
             Event::Summary(s) => serde_json::json!({
                 // Two commands emit `event: "summary"` with disjoint payloads
@@ -302,6 +312,11 @@ impl Progress {
         let _ = self.tx.send(Event::Missing {
             name: name.to_owned(),
         });
+    }
+
+    /// A run-level warning: the caller names what it left out and why.
+    pub fn warning(&self, text: impl Into<String>) {
+        let _ = self.tx.send(Event::Warning { text: text.into() });
     }
 
     pub fn summary(&self, summary: &Summary) {

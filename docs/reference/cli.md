@@ -1233,7 +1233,7 @@ An unknown shell is misuse: exit 2, the message names the four supported shells,
 ## Output
 
 Human output goes to stdout.
-`error:` and `hint:` lines go to stderr.
+`error:`, `hint:` and `warning:` lines go to stderr.
 The line vocabulary:
 
 - `plan: N to upload, N to download, N up to date`, once per transfer.
@@ -1245,6 +1245,7 @@ The line vocabulary:
 - `failed: name, name` after the summary, when names did not land.
 
 `-q` keeps the summary line and the failure lines, and drops the per-name progress and the plan.
+A `warning:` line is not chatter: it names rows the run had to leave out, so it survives `-q` with the failures.
 `-v` adds plan names and transfer starts, each with the size in human units (`↓ app.zip 24 B`, `↑ log.txt 1.2 KiB`).
 
 Colors are terminal-only.
@@ -1273,7 +1274,8 @@ Artifact lines arrive in worker completion order, not plan order.
 
 `--json` switches stdout to NDJSON:
 
-- `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `summary`).
+- `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `warning`, `summary`).
+  A `warning` event carries `{"event":"warning","text":"<one sentence>"}` and says what the run left out, for example a search listing entry outside the artifact grammar that no transfer can carry.
   Every `summary` carries `"kind"`: `"transfer"` for the streams above, `"audit"` for `nxr audit`, which reports its own counts under the same `event` name.
   A transfer `summary` also carries `"failures"`: a list of `{"code","name"}` objects for the same artifacts as `failed`, in the same order, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
   `failed` keeps its legacy strings, so a digest mismatch there still reads `name: detail`, while `failures` always carries the bare name.

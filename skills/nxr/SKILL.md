@@ -67,7 +67,7 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
 
 ## The machine contract
 
-- Exit codes: `0` ok, `1` data (a 404, a digest miss, `cannot enumerate`), `2` misuse (a bad invocation), `3` transport (network, auth, 5xx).
+- Exit codes: `0` ok, `1` data (a 404, a digest miss, `cannot enumerate`, a refused write: 405 to a PUT or 403/405 to a DELETE), `2` misuse (a bad invocation), `3` transport (network, auth, 5xx).
 - Every error prints one `hint:` line on stderr saying what to check next.
   The hint ends with `server says: <first body line>` when the server sent one.
 - Enumeration needs a source: a repeatable `--name`, a `--names-from FILE` (`-` reads stdin), or `--ls` for the server search API.

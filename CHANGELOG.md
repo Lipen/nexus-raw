@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A `warning` event, rendered as a `warning:` line on stderr and as `{"event":"warning","text":...}` under `--json`, names the rows an enumeration left out because they are outside the artifact grammar: `down --ls`, `clone`, `diff --via search` and the list command share it, so a transfer no longer loses such a name silently.
+  The Node bindings surface the same event, and the skill carries the exit-code rule.
+
 ### Security
 
 - `nxr-tui` downloads keep every server-chosen name inside the destination.

@@ -79,6 +79,7 @@ The search API is an index, not the store, and it is the only enumeration source
 - A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additional roots. It conflicts with `--tls-insecure`.
   The bundle carries the CA that signed the server certificate, not the bare server leaf.
 - Retries cover transport failures, 429 with `Retry-After`, and 5xx.
+- A group repository, or any host without PUT, refuses writes with `405`: that is the read-only refusal, exit 1, never retried, and the hint names the group. A `403` to a write stays the auth verdict.
   A 404 is a data fact rather than a transport failure, so it is not retried and exits 1.
 - A stalled transfer fails once no bytes arrive for `--stall-secs`, and rerunning is safe.
 

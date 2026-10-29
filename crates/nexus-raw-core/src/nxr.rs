@@ -584,7 +584,14 @@ impl Nxr {
     ) -> Result<Vec<Delta>, Error> {
         let local_names = sync::scan_dir(dir)?;
         let locals = sync::local_statuses(dir, local_names).await;
-        let mut remotes = layout::ls::search_assets_facts(&self.client, &self.base).await?;
+        let (mut remotes, skipped) =
+            layout::ls::search_assets_facts(&self.client, &self.base).await?;
+        if skipped > 0 {
+            self.events.warning(format!(
+                "the search listing holds {skipped} name(s) outside the artifact grammar: \
+                 they are left out, and the protocol cannot transfer them"
+            ));
+        }
         if !prefixes.is_empty() {
             remotes.retain(|(n, _)| prefixes.iter().any(|p| p.matches(n)));
         }
@@ -1102,13 +1109,19 @@ impl Nxr {
         ),
         Error,
     > {
-        let names: Vec<ArtifactName> =
-            crate::layout::ls::search_repo_assets(&self.client, &self.base)
-                .await?
-                .into_iter()
-                .map(|(name, _, _)| name)
-                .filter(|name| prefixes.is_empty() || prefixes.iter().any(|p| p.matches(name)))
-                .collect();
+        let (assets, skipped) =
+            crate::layout::ls::search_repo_assets_counted(&self.client, &self.base).await?;
+        if skipped > 0 {
+            self.events.warning(format!(
+                "the search listing holds {skipped} name(s) outside the artifact grammar: \
+                 they are left out, and the protocol cannot transfer them"
+            ));
+        }
+        let names: Vec<ArtifactName> = assets
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .filter(|name| prefixes.is_empty() || prefixes.iter().any(|p| p.matches(name)))
+            .collect();
         if names.is_empty() {
             return Err(Error::Enumerate {
                 url: self.base.clone(),
@@ -1181,7 +1194,17 @@ impl Nxr {
                 v.retain(|n| seen.insert(n.clone()));
                 v
             }
-            Enumeration::Search => layout::ls::search_assets(&self.client, &self.base).await?,
+            Enumeration::Search => {
+                let (names, skipped) =
+                    layout::ls::search_assets_counted(&self.client, &self.base).await?;
+                if skipped > 0 {
+                    self.events.warning(format!(
+                        "the search listing holds {skipped} name(s) outside the artifact grammar: \
+                         they are left out, and the protocol cannot transfer them"
+                    ));
+                }
+                names
+            }
             Enumeration::Filtered { inner, prefixes } => {
                 let all = Box::pin(self.resolve_names(*inner)).await?;
                 let total = all.len();

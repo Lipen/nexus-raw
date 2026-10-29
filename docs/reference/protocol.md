@@ -343,6 +343,7 @@ The property that a directory query never drops a name is versioned, not verifie
 The stand battery pins it against the pinned Nexus image (`stand/real-nexus/battery.sh`): a seeded directory's `q` listing must equal the repository-wide walk restricted to that directory.
 Repository-wide walks (`audit`, `diff --via search`, the `up --wait-index` visibility poll) send no `q`: there the page set has to be the repository, and a filter the audit trusts would be a hole in the audit.
 Every walk is bounded per invocation at 1000 pages of 50 rows (50 000 objects), and a walk that hits the bound refuses with `cannot enumerate`: never a silently truncated listing.
+A row whose path is outside the artifact grammar (a space, a percent-decoded slash) is not an artifact any client can transfer: a walk leaves it out and reports the count as a warning, so the listing is short by name, never by accident.
 
 If your consumers need a machine-readable name list, publish one as an ordinary artifact.
 `nxr` itself does not read it: the list belongs to the pipeline that consumes it.

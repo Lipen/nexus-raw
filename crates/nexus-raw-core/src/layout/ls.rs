@@ -188,22 +188,41 @@ pub async fn search_repo_assets(
     client: &NexusClient,
     base: &str,
 ) -> Result<Vec<(ArtifactName, Option<Digest>, Option<u64>)>, Error> {
+    Ok(search_repo_assets_counted(client, base).await?.0)
+}
+
+/// The same walk with the number of names it left out.
+///
+/// Markers are hidden by design and not counted.
+/// A name outside the artifact grammar cannot be transferred, so it is skipped
+/// and counted, and the caller names it: a backup must not lose an object
+/// silently.
+///
+/// # Errors
+///
+/// The same as [`search_repo_assets`].
+pub async fn search_repo_assets_counted(
+    client: &NexusClient,
+    base: &str,
+) -> Result<(Vec<(ArtifactName, Option<Digest>, Option<u64>)>, usize), Error> {
     let (repo, prefix) = split_prefix(base)?;
     let assets = walk(client, base, &repo, None).await?;
     let mut out = Vec::new();
+    let mut skipped = 0usize;
     for asset in assets {
         let rel = drop_segments(&asset.path, prefix.len());
         if rel.is_empty() || rel.ends_with(".sha256") {
             continue;
         }
         let Ok(name) = ArtifactName::parse(&rel) else {
+            skipped += 1;
             continue;
         };
         out.push((name, asset.sha256, asset.size));
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out.dedup_by(|a, b| a.0 == b.0);
-    Ok(out)
+    Ok((out, skipped))
 }
 
 /// The same walk as [`search_assets`], carrying the search-reported facts per name:
@@ -216,6 +235,10 @@ pub async fn search_repo_assets(
 /// The walk stays repository-wide on purpose: this is the delta's remote side, where a
 /// narrowed page set would report existing objects as absent, so `q` is not sent.
 ///
+/// The second element is how many names the walk left out because they are
+/// outside the artifact grammar: no transfer can carry them, and the caller
+/// names the count instead of losing them silently.
+///
 /// # Errors
 ///
 /// Returns [`Error::Misuse`] when `dir_url` is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
@@ -224,11 +247,12 @@ pub async fn search_repo_assets(
 pub(crate) async fn search_assets_facts(
     client: &NexusClient,
     dir_url: &str,
-) -> Result<Vec<(ArtifactName, crate::sync::delta::Side)>, Error> {
+) -> Result<(Vec<(ArtifactName, crate::sync::delta::Side)>, usize), Error> {
     let parts = split_base(dir_url)?;
     let assets = walk(client, dir_url, &parts.repo, None).await?;
     let version_prefix = format!("{}/", parts.version);
     let mut out = Vec::new();
+    let mut skipped = 0usize;
     for asset in assets {
         let rel = drop_segments(&asset.path, parts.group.len());
         let Some(rel) = rel.strip_prefix(&version_prefix) else {
@@ -237,10 +261,13 @@ pub(crate) async fn search_assets_facts(
         if rel.is_empty() {
             continue;
         }
-        // The search sees markers too, and a marker name carries the reserved
-        // suffix: it is not an artifact, so skip it instead of failing the
-        // whole listing on it.
+        // The search sees markers too: they are derived data, hidden by design,
+        // so they are not counted as skipped.
+        if rel.ends_with(".sha256") {
+            continue;
+        }
         let Ok(name) = ArtifactName::parse(rel) else {
+            skipped += 1;
             continue;
         };
         out.push((
@@ -253,7 +280,7 @@ pub(crate) async fn search_assets_facts(
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out.dedup_by(|a, b| a.0 == b.0);
-    Ok(out)
+    Ok((out, skipped))
 }
 
 /// The audit listing: every repository object as served, markers included,

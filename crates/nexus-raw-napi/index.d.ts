@@ -51,7 +51,7 @@ export interface NxrCommonOpts {
  * `removing`/`removed`/`missing` from `rm`, `summary` from everything that moves or deletes bytes.
  */
 export interface NxrEvent {
-  event?: 'plan' | 'artifact' | 'retrying' | 'removing' | 'removed' | 'missing' | 'summary'
+  event?: 'plan' | 'artifact' | 'retrying' | 'removing' | 'removed' | 'missing' | 'warning' | 'summary'
   /** `plan` only: the name lists of the diff. */
   upload?: string[]
   download?: string[]
@@ -67,6 +67,8 @@ export interface NxrEvent {
   /** `retrying` only. */
   attempt?: number
   reason?: string
+  /** `warning` only: rows the run had to leave out, one sentence. */
+  text?: string
   /** `summary` only. */
   uploaded?: number
   downloaded?: number

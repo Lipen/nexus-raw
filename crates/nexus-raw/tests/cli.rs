@@ -857,6 +857,42 @@ fn ls_assets_names_the_count_outside_the_grammar() {
     assert!(hidden.contains("\"count\":1"), "{hidden}");
 }
 
+/// A transfer that leaves out a name outside the grammar says so: the warning
+/// names the count on stderr, and the valid names still land.
+#[test]
+fn down_ls_warns_about_names_outside_the_grammar() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    srv.insert("repository/raw-main/1.14.0/a.bin", ALPHA);
+    srv.insert("repository/raw-main/1.14.0/sp file.bin", BETA);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "z.bin", GAMMA);
+    let base = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    // The scenario's index answers the store only after the first storage PUT.
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up arms the index",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&["down", &base, dst.path().to_str().unwrap(), "--ls"]);
+    expect_exit(&down, 0, "the valid names download");
+    let err = stderr(&down);
+    assert!(
+        err.contains("warning:"),
+        "a warning line is required: {err}"
+    );
+    assert!(
+        err.contains("outside the artifact grammar"),
+        "the warning names the cause: {err}"
+    );
+    assert!(dst.path().join("a.bin").is_file(), "the valid name lands");
+    assert!(
+        !dst.path().join("sp file.bin").exists(),
+        "the untransferable name never lands"
+    );
+}
+
 // ---- clone ----------------------------------------------------------------
 
 fn clone_repo_url(srv: &MockNexus) -> String {

@@ -311,6 +311,9 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             }
             println!("{}", paint.yellow(&format!("○ {name} missing")));
         }
+        // Warnings are not chatter: they name rows the run had to leave out,
+        // so they go to stderr and survive `--quiet` like a failure does.
+        Event::Warning { text } => eprintln!("warning: {text}"),
         Event::Summary(s) => {
             let mut text = if s.removed > 0 {
                 format!("removed {}, skipped {}", s.removed, s.skipped)
