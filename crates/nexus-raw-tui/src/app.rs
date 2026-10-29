@@ -138,12 +138,10 @@ impl Tab {
     /// A fresh tab over a bootstrapped repository list.
     #[must_use]
     pub fn new(server: ServerCfg, repos: Vec<RepoInfo>) -> Self {
-        // A compromised server can name a repository on another origin: the
-        // session credentials never follow such a URL. Drop it at ingest.
-        let repos = repos
-            .into_iter()
-            .filter(|repo| server.same_origin(&repo.url))
-            .collect();
+        // A compromised server can name a repository on another origin, or give
+        // it a name that would escape the destination as a local path. Neither
+        // row is shown: the refresh path filters through the same function.
+        let repos = crate::config::acceptable_repos(&server, repos);
         Self {
             server,
             screen: Screen::Repos,
@@ -2182,7 +2180,7 @@ impl App {
         self.connecting += 1;
         self.connect_open = true;
         self.pending += 1;
-        self.status = format!("connecting to {}…", server.url);
+        self.status = format!("connecting to {}…", config::shown_url(&server.url));
         net::load_repos(
             self.tx.clone(),
             server,
@@ -2571,7 +2569,7 @@ impl App {
             .iter()
             .filter_map(|name| {
                 rows.iter()
-                    .find(|r| &r.name == name)
+                    .find(|r| &r.name == name && self.repo_allowed(r))
                     .map(|repo| Retry::Walk {
                         repo: repo.clone(),
                         rel: String::new(),
@@ -2598,10 +2596,17 @@ impl App {
         let repo_row = RepoRow::from(&repo);
         let root = repo_row.dir_url();
         let mut items = Vec::new();
+        let mut refused = 0usize;
         for rel in marks {
             let Some(row) = rows.iter().find(|r| r.rel == rel) else {
                 continue;
             };
+            // A server-chosen name becomes a local path below the destination:
+            // an unsafe one is refused here instead of escaping the anchor.
+            if ArtifactName::parse(&rel).is_err() {
+                refused += 1;
+                continue;
+            }
             match row.kind {
                 EntryKind::Dir => items.push(Retry::Walk {
                     repo: repo_row.clone(),
@@ -2620,6 +2625,9 @@ impl App {
                     });
                 }
             }
+        }
+        if refused > 0 {
+            self.status = format!("refused {refused} unsafe name(s) from the server");
         }
         self.start_queue(items);
     }
@@ -2805,9 +2813,27 @@ impl App {
     }
 
     /// The whole repository of one row into `{anchor}/{repo.name}`.
+    ///
+    /// The row may have arrived through a refresh, so the origin and the name
+    /// are checked here again: the destination is a local path and the walk
+    /// carries the session credentials.
     fn download_repo(&mut self, repo: &RepoRow) {
+        if !self.repo_allowed(repo) {
+            self.status =
+                "refused: the repository is on another origin or has an unsafe name".into();
+            return;
+        }
         let dst = self.anchor_base().join(&repo.name);
         self.begin_walk(repo.clone(), String::new(), dst, false);
+    }
+
+    /// Whether a repository row may be downloaded: one origin with the session,
+    /// and a name that is safe as a single directory name.
+    fn repo_allowed(&self, repo: &RepoRow) -> bool {
+        let Some(t) = self.tabs.get(self.tab) else {
+            return false;
+        };
+        t.server.same_origin(&repo.url) && crate::config::safe_dir_name(&repo.name)
     }
 
     /// One file with the direct get primitive, digest-checked against the
@@ -2826,12 +2852,39 @@ impl App {
             return;
         };
         let rel = self.full_rel(&path, &row.rel);
-        let url = format!("{}{}", t.here_url(), row.rel);
-        let out = if flat {
-            base.join(&row.name)
-        } else {
-            base.join(&rel)
+        // Every listing name that becomes a local path passes the grammar here:
+        // a server path with a percent-encoded `/` decodes into a name that
+        // `base.join` would follow straight out of the destination.
+        let Ok(rel_name) = ArtifactName::parse(&rel) else {
+            self.status = format!(
+                "refused: the server sent an unsafe name {}",
+                row.name.escape_debug()
+            );
+            return;
         };
+        let flat_name = if flat {
+            match ArtifactName::parse(&row.name) {
+                Ok(name) => Some(name),
+                Err(_) => {
+                    self.status = format!(
+                        "refused: the server sent an unsafe name {}",
+                        row.name.escape_debug()
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let url = format!("{}{}", t.here_url(), row.rel);
+        let out = match flat_name {
+            Some(name) => base.join(name.as_str()),
+            None => base.join(rel_name.as_str()),
+        };
+        if !out.starts_with(&base) {
+            self.status = "refused: the name escapes the destination".into();
+            return;
+        }
         let repo_row = RepoRow::from(&repo);
         self.transfer = Some(Transfer {
             repo_url: repo_row.dir_url(),
@@ -2946,9 +2999,11 @@ impl App {
         match res {
             Ok(repos) if slot < self.tabs.len() => {
                 // A refresh of an existing tab. The cursor returns to the row
-                // it sat on, by name.
+                // it sat on, by name. The same ingest filter applies: a refresh
+                // must not put a foreign-origin or unsafe-named row back.
                 let keep = self.tabs[slot].keep_cursor_name.take();
                 let t = &mut self.tabs[slot];
+                let repos = crate::config::acceptable_repos(&t.server, repos);
                 let count = repos.len();
                 t.repos = repos;
                 t.loading = false;
@@ -2967,7 +3022,10 @@ impl App {
                 if !self.servers.iter().any(|s| s.url == server.url) {
                     self.servers.push(server.clone());
                 }
-                self.status = format!("server {} connected, press s to open", server.url);
+                self.status = format!(
+                    "server {} connected, press s to open",
+                    config::shown_url(&server.url)
+                );
             }
             Ok(_repos) if self.tabs.iter().any(|t| t.server.url == server.url) => {
                 // A duplicate connect: focus the tab that is already open.
@@ -3009,7 +3067,7 @@ impl App {
                 });
                 let ctx = ErrCtx {
                     server: Some(if connect {
-                        server.url.clone()
+                        config::shown_url(&server.url)
                     } else {
                         server.name.clone()
                     }),
@@ -3671,6 +3729,87 @@ mod tests {
             !tab.enterable(&foreign, true),
             "a foreign repo is never enterable"
         );
+    }
+
+    #[test]
+    fn a_repo_name_that_escapes_the_destination_is_dropped() {
+        // The name becomes `{destination}/{name}` and the smoke run deletes it,
+        // so an absolute or dot-segment name must never reach a row.
+        for name in ["/home/user/.ssh", "..", "a/b"] {
+            let hostile = RepoInfo {
+                name: name.to_owned(),
+                format: "raw".to_owned(),
+                kind: "hosted".to_owned(),
+                url: "http://127.0.0.1:1/repository/x/".to_owned(),
+            };
+            let tab = tab_with(vec![repo("raw-main", "raw", "hosted"), hostile]);
+            assert_eq!(tab.repos.len(), 1, "{name} must not survive the ingest");
+        }
+    }
+
+    #[test]
+    fn a_refresh_does_not_reintroduce_a_hostile_repo() {
+        let (mut app, _rx) = app_with(
+            vec![tab_with(vec![repo("raw-main", "raw", "hosted")])],
+            false,
+        );
+        let foreign = RepoInfo {
+            name: "evil".to_owned(),
+            format: "raw".to_owned(),
+            kind: "hosted".to_owned(),
+            url: "http://evil.example/repository/evil/".to_owned(),
+        };
+        app.handle(Msg::Repos {
+            tab: 0,
+            server: server(),
+            connect: false,
+            res: Ok(vec![repo("raw-main", "raw", "hosted"), foreign]),
+        });
+        assert_eq!(
+            app.tabs[0].repos.len(),
+            1,
+            "a refresh filters exactly like the ingest"
+        );
+    }
+
+    #[test]
+    fn a_download_refuses_an_unsafe_listing_name() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![])], false);
+        let base = PathBuf::from("dl");
+        // A server path with `%2F` decodes into one name that carries a slash.
+        for name in [
+            "/home/user/.bashrc",
+            "../../etc/passwd",
+            "sub/../evil",
+            "..",
+        ] {
+            let row = Row {
+                name: name.to_owned(),
+                rel: name.to_owned(),
+                kind: EntryKind::File,
+                depth: 0,
+                expanded: false,
+                loading: false,
+            };
+            app.download_file(Vec::new(), &row, base.clone(), true);
+            assert!(app.transfer.is_none(), "{name} must never start a transfer");
+            assert!(app.status.starts_with("refused:"), "{name}: {}", app.status);
+        }
+    }
+
+    #[test]
+    fn download_repo_refuses_a_row_outside_the_session_origin() {
+        let (mut app, _rx) = app_with(vec![tab_with(vec![])], false);
+        let row = RepoRow {
+            name: "raw-main".into(),
+            format: "raw".into(),
+            kind: "hosted".into(),
+            url: "http://evil.example/repository/raw-main/".into(),
+        };
+        app.download_repo(&row);
+        assert!(app.transfer.is_none(), "no walk starts");
+        assert!(app.queue.is_empty(), "nothing queues");
+        assert!(app.status.starts_with("refused:"), "{}", app.status);
     }
 
     fn app_with(tabs: Vec<Tab>, all_formats: bool) -> (App, mpsc::UnboundedReceiver<Msg>) {
@@ -6308,7 +6447,7 @@ mod tests {
             res: Ok(vec![repo("raw", "raw", "hosted")]),
         });
         assert_eq!(app.tabs.len(), 1, "no tab opens after the cancel");
-        assert_eq!(app.status, "server http://x:2/ connected, press s to open");
+        assert_eq!(app.status, "server http://x:2 connected, press s to open");
         let saved = crate::config::load(&path).unwrap();
         assert!(saved.servers.is_empty(), "the config stays untouched");
         // The overlay knows the server, so `s` can still open it.

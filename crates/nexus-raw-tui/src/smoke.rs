@@ -33,8 +33,14 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
             .with_context(|| format!("server {}", server.name.escape_debug()))?;
         // Server-derived strings print escaped: a hostile name must not
         // drive the terminal.
-        println!("server {}", server.url.escape_debug());
-        for repo in &repos {
+        // The origin only: a password in the URL never reaches the output.
+        println!(
+            "server {}",
+            crate::config::shown_url(&server.url).escape_debug()
+        );
+        // The smoke run deletes `{root}/{repo.name}` before downloading, so the
+        // same ingest filter as the TUI applies: same origin, safe name.
+        for repo in crate::config::acceptable_repos(server, repos) {
             println!(
                 "  {:<12} {:<7} {}",
                 repo.name.escape_debug(),
@@ -87,7 +93,16 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     if names.is_empty() {
         bail!("no files under {sub_rel:?}");
     }
-    let dst = Path::new("nxr-tui-smoke").join(&repo.name);
+    let root = Path::new("nxr-tui-smoke");
+    let dst = root.join(&repo.name);
+    // Belt and braces behind the ingest filter: the destination is a directory
+    // under the smoke root, never the root itself and never outside it.
+    if dst == root || !dst.starts_with(root) {
+        bail!(
+            "refusing an unsafe repository name {name}",
+            name = repo.name.escape_debug()
+        );
+    }
     // A rerun downloads for real instead of skipping everything already present.
     let _ = std::fs::remove_dir_all(&dst);
     println!(

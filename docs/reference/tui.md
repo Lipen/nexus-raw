@@ -83,6 +83,9 @@ The session starts with `download.dir` from the config.
 A file lands as `{destination}/{name}`, a subtree as `{destination}/{name}/...`, a whole repository as `{destination}/{repo}/...`.
 Nothing is written outside the destination, and nothing is written before a dialog is confirmed.
 
+That boundary is enforced at the data, not at the key: a repository row survives only when its URL shares the session's scheme, host and port and its name is one ordinary directory segment, and a listing name that fails the artifact grammar is refused with `refused:` before a transfer starts.
+A server that names a repository `/home/user/.ssh`, puts a percent-encoded `/` into a file name or points a repository at another host therefore changes the list and the status line, never the filesystem.
+
 ## Put
 
 `p` on the tree uploads a local folder into the current position: the breadcrumb of the tree is the remote target, and to fill a nested folder you descend into it first.

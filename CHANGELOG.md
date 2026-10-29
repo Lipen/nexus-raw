@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- `nxr-tui` downloads keep every server-chosen name inside the destination.
+  A repository row survives only on the session origin and with a name that is one safe directory segment, so `--smoke` no longer deletes `{root}/{hostile name}` and a whole-repository download no longer lands in an absolute path.
+  A listing name that fails the artifact grammar (a percent-encoded `/` decodes into one) is refused before a transfer instead of being joined onto the destination.
+- The TUI origin check parses both URLs through the core's `normalize_base`, so a repository URL carrying userinfo, a query or a fragment shares no origin, and a refresh filters exactly like the first load.
+  The status line, the error modal and the smoke output print `scheme://host[:port]`, never a URL with a password in it.
+
 ### Fixed
 
 - A `405` to a PUT is the read-only refusal, the class a `DELETE` already had: exit `1`, never retried, and the hint names the group repository instead of asking the user to retry or to check their credentials.

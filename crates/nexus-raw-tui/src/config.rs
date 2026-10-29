@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use nexus_raw_core::service::RepoInfo;
 use nexus_raw_core::Error;
 use serde::{Deserialize, Serialize};
 
@@ -61,11 +62,16 @@ pub struct ServerCfg {
 
 impl ServerCfg {
     /// Whether `url` shares this server's origin.
-    /// A server-supplied repository URL on another host is never dialed with
-    /// the session credentials.
+    ///
+    /// A server-supplied repository URL on another host is never dialed with the
+    /// session credentials. A URL without a parseable origin (userinfo, a query
+    /// or a fragment in it) shares nothing: the comparison fails closed.
     #[must_use]
     pub fn same_origin(&self, url: &str) -> bool {
-        origin_of(&self.url) == origin_of(url)
+        match (origin_of(&self.url), origin_of(url)) {
+            (Some(server), Some(repo)) => server == repo,
+            _ => false,
+        }
     }
 
     /// A server from a bare URL: the label is the host.
@@ -79,18 +85,87 @@ impl ServerCfg {
     }
 }
 
-/// The scheme, host and port of a URL, lowercased, with the userinfo dropped.
-fn origin_of(url: &str) -> Option<String> {
-    let (scheme, rest) = url.split_once("://")?;
+/// The scheme, host and port of a URL, lowercased, without the userinfo.
+///
+/// Parsed through the core's `normalize_base`, which refuses a URL carrying
+/// userinfo, a query or a fragment: such a URL has no origin at all, so
+/// [`ServerCfg::same_origin`] denies it instead of comparing a clever string.
+/// A default port (`:80`, `:443`) is dropped, so `http://host:80/` and
+/// `http://host/` name one origin.
+#[must_use]
+pub fn origin_of(url: &str) -> Option<String> {
+    let base = nexus_raw_core::config::normalize_base(url).ok()?;
+    let (scheme, rest) = base.split_once("://")?;
+    let scheme = scheme.to_ascii_lowercase();
     let authority = rest.split('/').next()?;
-    let host = authority
-        .rsplit_once('@')
-        .map_or(authority, |(_, host)| host);
-    Some(format!(
-        "{}://{}",
-        scheme.to_ascii_lowercase(),
-        host.to_ascii_lowercase()
-    ))
+    let (host, port) = split_host_port(authority);
+    let host = host.to_ascii_lowercase();
+    let default = matches!(
+        (&scheme[..], port),
+        ("http", Some("80")) | ("https", Some("443"))
+    );
+    Some(match (port, default) {
+        (Some(port), false) => format!("{scheme}://{host}:{port}"),
+        _ => format!("{scheme}://{host}"),
+    })
+}
+
+/// Split `host[:port]` from an authority, keeping an IPv6 literal in one piece.
+fn split_host_port(authority: &str) -> (&str, Option<&str>) {
+    if let Some(close) = authority.rfind(']') {
+        let host = &authority[..=close];
+        return (host, authority[close + 1..].strip_prefix(':'));
+    }
+    match authority.rsplit_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (authority, None),
+    }
+}
+
+/// Whether a server-supplied repository name is safe as one local directory name.
+///
+/// The name becomes `{destination}/{name}`, and the smoke run deletes that
+/// directory before downloading: only one ordinary path component passes.
+/// An absolute name (`/home/user/.ssh`) would replace the destination and a
+/// `..` component would walk out of it, so both are refused here.
+/// The rule is containment, not the artifact grammar: a name with a space or
+/// a non-ASCII letter joins literally and stays inside the destination.
+#[must_use]
+pub fn safe_dir_name(name: &str) -> bool {
+    let path = std::path::Path::new(name);
+    !name.is_empty()
+        && name.len() <= 255
+        && !name.contains(['/', '\\', '\0'])
+        && !name.chars().any(char::is_control)
+        && !path.is_absolute()
+        && path.components().count() == 1
+        && matches!(
+            path.components().next(),
+            Some(std::path::Component::Normal(_))
+        )
+}
+
+/// The repositories this session may show and dial: same origin, safe name.
+///
+/// A compromised server can name a repository on another origin or a name that
+/// would escape the destination; both are dropped at ingest and again on every
+/// refresh, which is the only filter the download verbs rely on.
+#[must_use]
+pub fn acceptable_repos(server: &ServerCfg, repos: Vec<RepoInfo>) -> Vec<RepoInfo> {
+    repos
+        .into_iter()
+        .filter(|repo| server.same_origin(&repo.url) && safe_dir_name(&repo.name))
+        .collect()
+}
+
+/// The URL as the UI shows it: `scheme://host[:port]`, never the userinfo.
+///
+/// [`origin_of`] returns `None` for a URL the core refuses (userinfo, a query
+/// or a fragment), and the bare host is the last resort: a password typed into
+/// the URL never reaches the status line, the error modal or the smoke output.
+#[must_use]
+pub fn shown_url(url: &str) -> String {
+    origin_of(url).unwrap_or_else(|| host_of(url))
 }
 
 /// `http://127.0.0.1:8081/repository/raw-main/` → `127.0.0.1:8081`.
@@ -333,6 +408,79 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn same_origin_rejects_a_clever_url() {
+        let server = ServerCfg::from_base("http://127.0.0.1:8081/".to_owned());
+        // A userinfo, a query or a fragment can make a hostile URL compare
+        // equal by string; the parsed origin fails closed instead.
+        assert!(!server.same_origin("http://evil.example#@127.0.0.1:8081/repository/x/"));
+        assert!(!server.same_origin("http://evil.example?@127.0.0.1:8081/repository/x/"));
+        assert!(!server.same_origin("http://user:pass@127.0.0.1:8081/repository/x/"));
+        assert!(!server.same_origin("not a url"));
+    }
+
+    #[test]
+    fn a_default_port_is_one_origin() {
+        let plain = ServerCfg::from_base("http://host/".to_owned());
+        assert!(plain.same_origin("http://host:80/repository/x/"));
+        let secure = ServerCfg::from_base("https://host/".to_owned());
+        assert!(secure.same_origin("https://host:443/repository/x/"));
+        assert!(!secure.same_origin("https://host:8443/repository/x/"));
+        let literal = ServerCfg::from_base("http://[::1]:8081/".to_owned());
+        assert!(literal.same_origin("http://[::1]:8081/repository/x/"));
+        assert!(!literal.same_origin("http://[::1]:8082/repository/x/"));
+    }
+
+    #[test]
+    fn shown_url_never_carries_the_userinfo() {
+        assert_eq!(shown_url("http://host/repository/x/"), "http://host");
+        // A URL the core refuses (userinfo, query, fragment) falls back to the
+        // bare host: the password never reaches the screen.
+        assert_eq!(
+            shown_url("http://user:pass@host:8081/repository/x/"),
+            "host:8081"
+        );
+        assert_eq!(shown_url("http://host/repository/x/?q=1"), "host");
+    }
+
+    #[test]
+    fn safe_dir_name_takes_one_ordinary_component() {
+        assert!(safe_dir_name("raw-main"));
+        assert!(safe_dir_name("a.b_c-1"));
+        // Spaces and non-ASCII join literally and stay inside the destination.
+        assert!(safe_dir_name("a b"));
+        assert!(safe_dir_name("данные"));
+        // Absolute and dot components would escape the destination.
+        assert!(!safe_dir_name("/home/user/.ssh"));
+        assert!(!safe_dir_name(".."));
+        assert!(!safe_dir_name("."));
+        assert!(!safe_dir_name("a/b"));
+        assert!(!safe_dir_name("a\\b"));
+        assert!(!safe_dir_name("a\nb"));
+        assert!(!safe_dir_name(""));
+        assert!(!safe_dir_name(&"a".repeat(256)));
+    }
+
+    #[test]
+    fn acceptable_repos_drops_a_hostile_name() {
+        let server = ServerCfg::from_base("http://127.0.0.1:8081/".to_owned());
+        let ok = RepoInfo {
+            name: "raw-main".into(),
+            format: "raw".into(),
+            kind: "hosted".into(),
+            url: "http://127.0.0.1:8081/repository/raw-main/".into(),
+        };
+        let escaping = RepoInfo {
+            name: "/home/user/.ssh".into(),
+            ..ok.clone()
+        };
+        assert_eq!(acceptable_repos(&server, vec![ok]).len(), 1);
+        assert!(
+            acceptable_repos(&server, vec![escaping]).is_empty(),
+            "an unsafe name is dropped at ingest"
+        );
+    }
 
     #[test]
     fn the_template_parses_and_carries_one_preset() {
