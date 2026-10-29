@@ -34,6 +34,8 @@ pub struct Spec {
     pub foreign_marker: bool,
     /// Refuse every DELETE.
     pub read_only: bool,
+    /// A bare static host: every write answers 405 and the service plane answers 404.
+    pub static_host: bool,
     /// Redirect reads to this path with an empty 301.
     pub redirect: Option<String>,
     /// Reset the first request per path.
@@ -123,6 +125,12 @@ impl Spec {
         self
     }
 
+    /// Serve reads and refuse every write and every service endpoint: a bare static host.
+    pub fn with_static_host(mut self) -> Self {
+        self.static_host = true;
+        self
+    }
+
     /// Redirect every read to this path with an empty 301.
     pub fn with_redirect(mut self, location_path: &str) -> Self {
         self.redirect = Some(location_path.to_owned());
@@ -201,6 +209,7 @@ impl From<&Scenario> for Spec {
             Scenario::SearchLag { .. } => {}
             Scenario::DetailInHint => {}
             Scenario::IgnoreRange => spec.ignore_range = true,
+            Scenario::StaticHost => spec.static_host = true,
             Scenario::AuditLitter => {}
             Scenario::Atomic => {}
         }

@@ -3585,6 +3585,49 @@ fn rm_readonly_refuses_and_keeps_bytes() {
     assert!(!successful, "no DELETE may succeed");
 }
 
+/// A bare static host: reads land, a write is the read-only refusal (exit 1),
+/// and the search-backed listing refuses with cannot enumerate.
+#[test]
+fn static_host_reads_and_refuses_writes() {
+    let srv = server(Scenario::StaticHost);
+    srv.insert("1.14.0/a.zip", ALPHA);
+    srv.insert(
+        "1.14.0/a.zip.sha256",
+        marker_line("a.zip", ALPHA).as_bytes(),
+    );
+    let base = dir_url(&srv);
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 0, "reads work on a static host");
+    assert_eq!(read_file(dst.path(), "a.zip"), ALPHA);
+
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "z.bin", GAMMA);
+    let up = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    expect_exit(&up, 1, "a static host refuses writes as read-only");
+    let err = stderr(&up);
+    assert!(
+        err.contains("read-only"),
+        "the error names the refusal: {err}"
+    );
+
+    let repo = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    let ls = nxr(&["ls", &repo, "--assets"]);
+    expect_exit(&ls, 1, "the search API is absent");
+    assert!(
+        stderr(&ls).contains("cannot enumerate"),
+        "the listing refuses with the enumeration hint: {}",
+        stderr(&ls)
+    );
+}
+
 /// rm plans by default: the plan prints and the mock counts zero DELETEs.
 #[test]
 fn rm_plans_by_default_and_touches_no_bytes() {

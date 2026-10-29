@@ -21,6 +21,7 @@ import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import threading
 import time
 import unittest
@@ -290,6 +291,30 @@ class Conformance(unittest.TestCase):
             info = nx.head(mock.url("ghost.zip"))
             self.assertEqual(info, nxr.HeadInfo(404, None, None))
             self.assertEqual(len(nx.requests), 3, "misses must not retry")
+
+    def test_static_host_reads_and_refuses_writes(self):
+        """A bare static host: reads and markers work, every write is the read-only refusal, and there is no search API."""
+        seed = tempfile.TemporaryDirectory()
+        self.addCleanup(seed.cleanup)
+        # The seed path is the store key: `mock.url` serves `{VERSION}/{name}`.
+        version = pathlib.Path(seed.name, VERSION)
+        version.mkdir()
+        (version / "a.bin").write_bytes(CONTENT)
+        (version / "a.bin.sha256").write_bytes(nxr.format_marker("a.bin", hashlib.sha256(CONTENT).hexdigest()).encode())
+        with mock_server("static-host", "--seed-dir", seed.name) as mock:
+            nx = self.client()
+            url = mock.url("a.bin")
+            self.assertEqual(nx.get(url), CONTENT)
+            info = nx.head(url)
+            self.assertEqual(info.status, 200)
+            self.assertEqual(info.length, len(CONTENT))
+            with self.assertRaises(nxr.ReadOnlyError) as raised:
+                nx.put(mock.url("new.bin"), CONTENT)
+            self.assertEqual(raised.exception.status, 405)
+            self.assertEqual(raised.exception.exit_code, 1)
+            self.assertIn("group", raised.exception.hint)
+            with self.assertRaises(nxr.EnumerateError):
+                nx.ls(mock.base, "raw-main", VERSION)
 
     def test_atomic_channel(self):
         """A channel is a token file: set writes one line, get reads it back, an unset channel reads None."""

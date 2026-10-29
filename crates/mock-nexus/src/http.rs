@@ -208,6 +208,22 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         }
     }
 
+    // static-host: a bare file server, not a Nexus. Every write is refused with
+    // 405 and `Allow: GET,HEAD` before the store is touched, and the whole
+    // service plane is absent, the search API included.
+    if shared.spec.static_host {
+        if matches!(req.method.as_str(), "PUT" | "DELETE") {
+            crate::group::refuse_writes(shared, stream, req, path);
+            return;
+        }
+        if path.starts_with("service/rest/") {
+            log_request(shared, &req.method, path, Outcome::Status(404));
+            let resp = bodyless_for_head(&req.method, plain(404, b"not found\n", None));
+            let _ = server::write_response(stream, &resp);
+            return;
+        }
+    }
+
     // search-400: a repository-scoped search for an unknown repository is refused with 400, like a real Nexus.
     // The served names are the ones the seeded service document lists.
     // A search without a repository parameter is left alone.

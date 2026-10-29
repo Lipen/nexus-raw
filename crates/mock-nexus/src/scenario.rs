@@ -42,6 +42,7 @@ impl Scenario {
             Scenario::SearchLag { .. } => "search-lag",
             Scenario::DetailInHint => "detail-in-hint",
             Scenario::IgnoreRange => "ignore-range",
+            Scenario::StaticHost => "static-host",
             Scenario::AuditLitter => "audit-litter",
         }
     }
@@ -82,6 +83,7 @@ pub const SCENARIOS: &[&str] = &[
     "search-lag",
     "detail-in-hint",
     "ignore-range",
+    "static-host",
     // wave-150 tail
     "audit-litter",
 ];
@@ -227,4 +229,10 @@ pub enum Scenario {
     /// Ranged GETs are answered like plain GETs: `200` with the whole body, the proxy that strips `Range`.
     /// Every other request behaves like [`Scenario::Atomic`].
     IgnoreRange,
+    /// A bare static host, not a Nexus: `GET`/`HEAD` serve the stored bytes (ranges honored),
+    /// every write is refused with `405`, `Allow: GET,HEAD` and no body, and the whole
+    /// `/service/rest/` plane answers `404`, the search API included.
+    /// This is the profile `nxr down --names-from`, `get`, `head` and `verify` cover: a host
+    /// that serves files and accepts none.
+    StaticHost,
 }

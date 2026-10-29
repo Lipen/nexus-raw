@@ -233,6 +233,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
             location_path: flags.location.clone(),
         }),
         "readonly" => Some(Scenario::ReadOnly),
+        "static-host" => Some(Scenario::StaticHost),
         "no-service" => Some(Scenario::NoService),
         "search-400" => Some(Scenario::Search400),
         "service-status-empty" => Some(Scenario::ServiceStatusEmpty),

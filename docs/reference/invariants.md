@@ -318,6 +318,16 @@ Every other request behaves like `atomic`.
 
 **Pinned invariant:** A server that ignores `Range` is answered with a single-stream download: the client detects the full-body answer and degrades without an error.
 
+## `static-host`
+
+Bare static host.
+
+`GET` and `HEAD` serve the stored bytes, a single open `Range: bytes=N-` answered with `206` and `Content-Range`, an out-of-range start with `416`.
+Every write is refused with `405`, `Allow: GET,HEAD` and no body, before the store is touched.
+Every `/service/rest/` path answers `404`: the host serves files and has no Nexus management or search API.
+
+**Pinned invariant:** The read profile works on a host that is not Nexus: reads, ranges and resumes land, a write is the read-only refusal (exit 1), and the search-backed enumeration refuses with cannot enumerate instead of inventing names.
+
 ## `audit-litter`
 
 Integrity litter seeded.
