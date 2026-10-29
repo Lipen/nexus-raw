@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The mount leaves a listing name that is not one path component (a decoded `/`, a nul byte, a dot segment) out of `readdir`: `lookup` refuses such a name, so the row could never open.
 - The HEAD that opens a segmented `down` or `get` is a transfer request: a 5xx or 429 on it retries (and honors `Retry-After`), and a 401/403 takes the auth verdict, exactly like the range GETs that follow.
   `nxr head` keeps reporting any status: its HEAD is a result, not a failure.
 - A `405` to a PUT is the read-only refusal, the class a `DELETE` already had: exit `1`, never retried, and the hint names the group repository instead of asking the user to retry or to check their credentials.

@@ -274,6 +274,13 @@ impl NexusFs {
             .map_err(map_error)?;
         let mut out = Vec::with_capacity(entries.len());
         for entry in entries {
+            // The kernel resolves a child by one component. A server name with a
+            // `/` (a percent-encoded slash decodes into one), a nul byte or a dot
+            // segment can never be looked up, so it is left out instead of being
+            // shown as an unreachable row.
+            if !is_component(&entry.name) {
+                continue;
+            }
             let child = join(path, &entry.name);
             let kind = match entry.kind {
                 EntryKind::Dir => FileType::Directory,
@@ -565,9 +572,19 @@ fn parent_of(path: &str) -> &str {
     }
 }
 
+/// Whether a server-supplied name is one resolvable FUSE component.
+///
+/// `lookup` refuses a name that is empty, `.`, `..` or carries a `/`; a name
+/// with a nul byte cannot cross the protocol boundary either. Such a name has no
+/// address in the mount, so `readdir` leaves it out rather than showing a row
+/// that can never open.
+fn is_component(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\0')
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{encode_path, join, parent_of, repo_url, synthetic_ino, Node, State};
+    use super::{encode_path, is_component, join, parent_of, repo_url, synthetic_ino, Node, State};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -605,6 +622,18 @@ mod tests {
     fn join_keeps_one_slash() {
         assert_eq!(join("/", "a"), "/a");
         assert_eq!(join("/a", "b"), "/a/b");
+    }
+
+    #[test]
+    fn readdir_takes_one_component_per_name() {
+        assert!(is_component("file.bin"));
+        assert!(is_component("a b"));
+        assert!(!is_component(""));
+        assert!(!is_component("."));
+        assert!(!is_component(".."));
+        // A `%2F` in a server path decodes into a name carrying a slash.
+        assert!(!is_component("a/b"));
+        assert!(!is_component("a\0b"));
     }
 
     #[test]
