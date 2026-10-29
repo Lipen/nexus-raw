@@ -1428,7 +1428,18 @@ impl Nxr {
     ///
     /// Returns [`Error::Misuse`] when the base is not a directory URL and [`Error::Enumerate`] when the search endpoint is unavailable or unparseable.
     pub async fn ls_assets(&self) -> Result<Vec<ArtifactName>, Error> {
-        layout::ls::search_assets(&self.client, &self.base).await
+        Ok(self.ls_assets_counted().await?.0)
+    }
+
+    /// The flat asset names under the base, with the count of names the walk
+    /// skipped because they are outside the artifact grammar: a server can hold
+    /// such a name, and the caller names the count instead of losing it silently.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`Nxr::ls_assets`].
+    pub async fn ls_assets_counted(&self) -> Result<(Vec<ArtifactName>, usize), Error> {
+        layout::ls::search_assets_counted(&self.client, &self.base).await
     }
 
     /// Poll the search index until every given name is visible, or the budget runs out.

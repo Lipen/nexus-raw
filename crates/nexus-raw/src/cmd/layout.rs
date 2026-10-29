@@ -17,12 +17,23 @@ pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> 
 
 async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
     if assets {
-        let names = ctx.nxr.ls_assets().await?;
+        let (names, skipped) = ctx.nxr.ls_assets_counted().await?;
         for n in &names {
             print_line(
                 ctx.json,
                 &printable(n.as_str()),
                 &serde_json::json!({"name": n.to_string()}),
+            );
+        }
+        if skipped > 0 {
+            // A name outside the artifact grammar cannot be transferred by the
+            // protocol: naming the count keeps the undercount visible.
+            print_line(
+                ctx.json,
+                &format!(
+                    "{skipped} name(s) outside the artifact grammar hidden (nxr cannot transfer them)"
+                ),
+                &serde_json::json!({"event": "hidden", "count": skipped, "reason": "grammar"}),
             );
         }
     } else {
@@ -52,7 +63,7 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
             print_line(
                 ctx.json,
                 &format!("{hidden} marker objects hidden (fetch one by adding .sha256)"),
-                &serde_json::json!({"event": "hidden", "count": hidden}),
+                &serde_json::json!({"event": "hidden", "count": hidden, "reason": "marker"}),
             );
         }
     }

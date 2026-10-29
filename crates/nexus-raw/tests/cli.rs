@@ -818,6 +818,45 @@ fn get_segments_auth_refusal_is_the_auth_verdict() {
     assert!(!out.exists());
 }
 
+/// A name the server holds outside the artifact grammar is not transferable:
+/// `ls --assets` leaves it out and names the count, so the short listing is a
+/// fact.
+#[test]
+fn ls_assets_names_the_count_outside_the_grammar() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    srv.insert("1.14.0/a.bin", ALPHA);
+    srv.insert("1.14.0/sp file.bin", BETA);
+    // The scenario's index answers the store only after the first storage PUT.
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "z.bin", GAMMA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]),
+        0,
+        "seeding up arms the index",
+    );
+
+    let base = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    let out = nxr(&["ls", &base, "--assets"]);
+    expect_exit(&out, 0, "the listing still succeeds");
+    let text = stdout(&out);
+    assert!(text.contains("a.bin"), "{text}");
+    assert!(!text.contains("sp file.bin"), "{text}");
+    assert!(
+        text.contains("outside the artifact grammar"),
+        "the count is named: {text}"
+    );
+
+    let json = nxr(&["ls", &base, "--assets", "--json"]);
+    expect_exit(&json, 0, "the json listing");
+    let hidden = stdout(&json)
+        .lines()
+        .find(|l| l.contains("\"event\":\"hidden\""))
+        .expect("a hidden event")
+        .to_owned();
+    assert!(hidden.contains("\"reason\":\"grammar\""), "{hidden}");
+    assert!(hidden.contains("\"count\":1"), "{hidden}");
+}
+
 // ---- clone ----------------------------------------------------------------
 
 fn clone_repo_url(srv: &MockNexus) -> String {

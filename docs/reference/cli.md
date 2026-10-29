@@ -792,6 +792,7 @@ Leaf `.sha256` siblings are hidden: they are derived data the protocol generates
 The enumeration runs through the server search API (`/service/rest/v1/search/assets`), so a subtree the server has not indexed is invisible to `ls` even though its bytes are there.
 Probe availability by name with `head` or `get` instead.
 When the enumerator hides markers, `ls` names the count in a trailing line (`N marker objects hidden`), so a short listing is a fact, not a surprise.
+`--assets` names a different shortfall the same way: a name the server holds outside the artifact grammar cannot be transferred by the protocol, so it is left out and the count is reported (`N name(s) outside the artifact grammar hidden`).
 
 | Flag | Meaning |
 |:-----|:--------|
@@ -830,7 +831,7 @@ Treat both as conveniences only.
 | `3` | transport or auth failure |
 
 `--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file"}` from the tree, `{"name":"app.zip"}` from `--assets`.
-When the tree enumeration hides `.sha256` markers as derived data, a final line reports the count: `{"event":"hidden","count":1}`.
+When the enumeration hides rows as derived data or as untransferable, a final line reports the count with its reason: `{"event":"hidden","count":1,"reason":"marker"}` from the tree, `{"event":"hidden","count":1,"reason":"grammar"}` from `--assets`.
 
 ## nxr channel get
 

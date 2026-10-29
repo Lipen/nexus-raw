@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `ls --assets` names the names it leaves out: a server can hold a row outside the artifact grammar (a space, a percent-decoded slash), which the protocol cannot transfer, so the listing reports the count instead of dropping it silently.
+  The `hidden` NDJSON event now carries a `reason` (`marker` from the tree listing, `grammar` from `--assets`).
 - The mount leaves a listing name that is not one path component (a decoded `/`, a nul byte, a dot segment) out of `readdir`: `lookup` refuses such a name, so the row could never open.
 - The HEAD that opens a segmented `down` or `get` is a transfer request: a 5xx or 429 on it retries (and honors `Retry-After`), and a 401/403 takes the auth verdict, exactly like the range GETs that follow.
   `nxr head` keeps reporting any status: its HEAD is a result, not a failure.

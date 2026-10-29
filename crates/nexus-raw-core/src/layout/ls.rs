@@ -117,10 +117,28 @@ pub async fn search_assets(
     client: &NexusClient,
     dir_url: &str,
 ) -> Result<Vec<ArtifactName>, Error> {
+    Ok(search_assets_counted(client, dir_url).await?.0)
+}
+
+/// The same listing, with the number of names it left out.
+///
+/// A server can hold a name outside the artifact grammar (a space, a
+/// percent-decoded slash), and the search sees marker names too. Neither is an
+/// artifact this client can transfer: both are skipped, and the caller names the
+/// count, so a short listing stays a fact and not a silent surprise.
+///
+/// # Errors
+///
+/// The same as [`search_assets`].
+pub async fn search_assets_counted(
+    client: &NexusClient,
+    dir_url: &str,
+) -> Result<(Vec<ArtifactName>, usize), Error> {
     let parts = split_base(dir_url)?;
     let scope = directory_scope(&parts.group, &parts.version);
     let paths = paginate(client, dir_url, &parts.repo, scope.as_deref()).await?;
     let mut names = Vec::new();
+    let mut skipped = 0usize;
     for path in paths {
         let rel = drop_segments(&path, parts.group.len());
         let Some(rel) = rel.strip_prefix(&format!("{}/", parts.version)) else {
@@ -129,17 +147,22 @@ pub async fn search_assets(
         if rel.is_empty() {
             continue;
         }
-        // The search sees markers too, and a marker name carries the reserved
-        // suffix: it is not an artifact, so skip it instead of failing the
-        // whole listing on it.
+        // The search sees markers too: they are derived data, hidden by design
+        // like the tree listing hides them, so they are not counted as skipped.
+        if rel.ends_with(".sha256") {
+            continue;
+        }
+        // Any other name outside the grammar cannot be transferred: skip it and
+        // let the caller name the count.
         let Ok(name) = ArtifactName::parse(rel) else {
+            skipped += 1;
             continue;
         };
         names.push(name);
     }
     names.sort();
     names.dedup();
-    Ok(names)
+    Ok((names, skipped))
 }
 
 /// Every artifact name under a repository prefix, with the search-reported
