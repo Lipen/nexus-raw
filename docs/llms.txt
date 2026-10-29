@@ -87,6 +87,7 @@ Quirks that are not bugs:
 - [Keep the newest versions](https://lipen.github.io/nexus-raw/how-to/retention/): keep-N retention from ls, channels and rm, no guessing
 - [Compare two servers](https://lipen.github.io/nexus-raw/how-to/compare/): staging vs prod through mirror --dry-run, the plan is the delta
 - [Consume artifacts](https://lipen.github.io/nexus-raw/how-to/consume/): down, unpack, digest verification
+- [Read from a static host](https://lipen.github.io/nexus-raw/how-to/static-host/): the read profile on a host without Nexus: get, segments, names-from, verify, and the 405 refusal to expect
 - [Clone a repository](https://lipen.github.io/nexus-raw/how-to/clone/): a verified local copy, the update run, the fact cache and the seal
 - [Install with Homebrew](https://lipen.github.io/nexus-raw/how-to/brew/): the tap in this repository, upgrade and regeneration
 - [Use in CI](https://lipen.github.io/nexus-raw/how-to/ci/): credentials, caching, the retry contract

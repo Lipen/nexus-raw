@@ -165,6 +165,7 @@ As the last gate of a consumer CI job, `verify` costs no network (see [a consume
 ## Next steps
 
 - Publish the versions you consume: [publish a version](publish.md).
+- Serve from something that is not Nexus: [read from a static host](static-host.md).
 - The failure catalogue behind every refusal above: [when it breaks](troubleshoot.md).
 - Flags, credentials and URL rules in full: [CLI reference](../reference/cli.md).
 - What the part files and markers look like on the wire: [the wire protocol](../reference/protocol.md).

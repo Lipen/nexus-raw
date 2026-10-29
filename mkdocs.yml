@@ -50,6 +50,7 @@ nav:
       - Run the browser sandbox: how-to/wasm.md
       - Publish a version: how-to/publish.md
       - Consume artifacts: how-to/consume.md
+      - Read from a static host: how-to/static-host.md
       - Clone a repository: how-to/clone.md
       - Install with Homebrew: how-to/brew.md
       - Integrate it: how-to/integrate.md

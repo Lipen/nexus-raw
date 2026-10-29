@@ -78,7 +78,7 @@ curl --proxy
 docker --from --network --password-stdin --platform --rm --user
 scripts/install-skill.sh --agent --dir --link --list --project
 scripts/brew-formula.sh --check
-mock-nexus --chunk-delay-ms --chunk-size --flaky --port --print-scenarios
+mock-nexus --chunk-delay-ms --chunk-size --flaky --port --print-scenarios --seed-dir
 the wasm sandbox --allow-host --max-request-bytes --max-response-bytes --rate-limit --upstream"
 foreign_flags="$(printf '%s\n' "$foreign" | grep -oE -- '--[a-z0-9-]+' | sed 's/^--//' | sort -u)"
 
