@@ -440,8 +440,9 @@ class Nxr:
                     status=status,
                     hint=(
                         "the repository answered 405 to a write: a group repository is read-only "
-                        "(target a hosted member), and a hosted one needs the write role; "
-                        "that write changed nothing, so rerunning is safe"
+                        "(target a hosted member), a hosted one needs the write role, and a host "
+                        "without PUT support refuses the same way; that write changed nothing, "
+                        "so rerunning is safe"
                     ),
                 )
             raise HttpError(

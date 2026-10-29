@@ -133,7 +133,7 @@ impl Error {
             Error::Transport { .. } => Some("check the network: transfers are resumable, rerunning is safe".into()),
             Error::ReadOnly { status, .. } => Some(
                 format!(
-                    "the repository answered {status} to a write: a group repository is read-only (target a hosted member), and a hosted one needs the write role; that write changed nothing, so rerunning is safe"
+                    "the repository answered {status} to a write: a group repository is read-only (target a hosted member), a hosted one needs the write role, and a host without PUT support refuses the same way; that write changed nothing, so rerunning is safe"
                 ),
             ),
             Error::Http { status: 404, .. } => {
