@@ -25,6 +25,9 @@ nexus-raw-core = { path = "../nexus-raw-core", version = "0.24.1" }
 
 # `fuser` without the `libfuse` feature speaks the kernel protocol in pure Rust:
 # no build-time libfuse, but an unprivileged mount at runtime needs `fusermount3`.
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "0.18", default-features = false }
 libc = { workspace = true }

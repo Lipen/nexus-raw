@@ -22,6 +22,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `nxr-mount` refuses a URL outside `/repository/<name>/…` at startup with exit 2 and the listing's own message, instead of mounting a tree whose listings can never resolve.
+  The check runs before any request, so a wrong URL costs nothing.
 - The `--ls` and `ls --assets` URL-shape refusal names the alternative: a host without the search API takes `--name` or `--names-from`, and the message says so instead of leaving the user with a Nexus path rule.
 - The Node bindings refuse what the CLI refuses, instead of picking silently:
   `ls` together with `names` is misuse (it used to drop the names, so `rm` with both deleted the whole listing), `up` with a prefix selection that holds no artifacts is misuse (it used to resolve an empty summary), and `get` with `cont` and no `out` is misuse (it used to ignore the resume).

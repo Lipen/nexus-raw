@@ -318,6 +318,20 @@ pub(crate) async fn audit_tree(
     Ok(out)
 }
 
+/// The repository name a directory URL points inside.
+///
+/// A caller that serves a whole directory tree before its first listing (the
+/// mount) refuses a wrongly shaped URL at startup: a URL outside
+/// `/repository/<name>/...` can never be listed, and serving an empty tree would
+/// hide the reason.
+///
+/// # Errors
+///
+/// Returns [`Error::Misuse`] with the message every search-backed listing carries.
+pub fn repository_of(url: &str) -> Result<String, Error> {
+    split_prefix(url).map(|(repo, _)| repo)
+}
+
 struct BaseParts {
     repo: String,
     group: Vec<String>,
@@ -546,6 +560,29 @@ pub(crate) async fn search_paths(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repository_of_takes_the_shape_a_listing_needs() {
+        assert_eq!(
+            repository_of("http://h/repository/raw-main/").unwrap(),
+            "raw-main"
+        );
+        assert_eq!(
+            repository_of("http://h/repository/raw-main/1.0.0/").unwrap(),
+            "raw-main"
+        );
+        // Outside /repository/: no repository name to derive, so no listing.
+        for url in [
+            "http://h/repo/",
+            "http://h/",
+            "http://h/repository/",
+            "http://h/raw/main/",
+        ] {
+            let err = repository_of(url).unwrap_err();
+            assert_eq!(err.exit_code(), 2, "{url}");
+            assert!(matches!(err, Error::Misuse(_)), "{url}");
+        }
+    }
 
     /// An endpoint that never stops emitting continuation tokens hits the page cap and is refused, instead of scrolling forever.
     #[tokio::test]

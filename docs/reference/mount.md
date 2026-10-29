@@ -15,6 +15,7 @@ nxr-mount https://nexus.example/repository/raw /mnt/nexus
 ```
 
 The URL is the repository directory to mount.
+It must point inside `/repository/<name>/…`: a directory listing needs the repository name from the URL, so a URL outside that shape is refused at startup with exit 2 and the same message `ls` carries, instead of mounting a tree that lists nothing.
 Credentials come from `-u user:pass`, `NXR_AUTH` (base64) or `NXR_USERNAME` + `NXR_PASSWORD`, in that order, exactly like `nxr`.
 `--tls-insecure` skips certificate verification, `--ca-bundle FILE` adds a private CA (also `NXR_CA_BUNDLE`), and `--workers` caps parallel requests and FUSE dispatch threads.
 

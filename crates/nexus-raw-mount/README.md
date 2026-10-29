@@ -34,6 +34,7 @@ To build it from a checkout, run `cargo build -p nexus-raw-mount --release`.
 - Listings and attributes are cached for two seconds, so a rapid `ls -R` does not re-walk every directory.
 - `.sha256` markers are hidden from listings, exactly as `nxr ls` hides them.
 - Every name segment is percent-encoded when a URL is built, so foreign names with spaces, `?`, `#`, `%` or unicode resolve.
+- The URL must point inside `/repository/<name>/…`: the listing needs the repository name from the URL, so any other shape is refused at startup (exit 2) instead of mounting an empty tree.
 
 ## Limits
 

@@ -114,6 +114,10 @@ fn run(cli: Cli) -> Result<(), String> {
         auth,
     };
     cfg.validate().map_err(|e| e.to_string())?;
+    // A directory listing needs the repository name from the URL: a URL outside
+    // `/repository/<name>/...` can never list anything, so refuse it here
+    // instead of mounting a tree that stays empty.
+    nexus_raw_core::layout::ls::repository_of(&cli.url).map_err(|e| e.to_string())?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
