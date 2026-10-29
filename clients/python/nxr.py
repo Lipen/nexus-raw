@@ -30,6 +30,7 @@ __all__ = [
     "MisuseError",
     "Nxr",
     "NxrError",
+    "ReadOnlyError",
     "SearchRepoMissing",
     "TransportError",
     "UnsafeName",

@@ -849,6 +849,11 @@ class GroupWrites(unittest.TestCase):
     side), not a row the mock lists.
     """
 
+    def test_the_error_classes_are_exported(self):
+        """Every documented error class is importable with `from nxr import *`."""
+        for name in ("NxrError", "ReadOnlyError", "AuthError", "MisuseError", "UnsafeName"):
+            self.assertIn(name, nxr.__all__)
+
     def test_a_405_to_a_put_is_the_read_only_verdict(self):
         """A 405 to a PUT is the read-only refusal, not an auth or transport one.
 
