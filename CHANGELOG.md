@@ -19,12 +19,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   A listing name that fails the artifact grammar (a percent-encoded `/` decodes into one) is refused before a transfer instead of being joined onto the destination.
 - The TUI origin check parses both URLs through the core's `normalize_base`, so a repository URL carrying userinfo, a query or a fragment shares no origin, and a refresh filters exactly like the first load.
   The status line, the error modal and the smoke output print `scheme://host[:port]`, never a URL with a password in it.
+- `nxr-mount` normalizes the URL before the shape check and before any message can echo it: a `user:pass@` or a `?token=` URL is refused by the normalization, which never repeats the value, and the mount name is the normalized URL.
+- The browser's single-file download refuses a symlinked directory on the way to the target, the same `ensure_symlink_free` rule the directory transfer applies, so a planted `dst/app -> ~/.config` receives neither the artifact nor its marker.
 
 ### Fixed
 
 - A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
   The marker of the previous download is dropped before the next transfer: left in place it became the resume guard's expectation and refused a legitimately changed object.
-- The browser's single-file download refuses a symlinked directory on the way to the target, the same rule the directory transfer applies, and it accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.
+- The browser's single-file download accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.
 - A repository name ending in a dot or a space, or made only of them, is refused by the browser's name rule: on Windows such a name resolves to a different directory.
   The save-as dialog applies the same rule to a typed folder name.
   The marker write is one core helper (`sibling::write_marker`) now, shared with `down` and the clone seal.
