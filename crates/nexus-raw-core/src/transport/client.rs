@@ -477,6 +477,47 @@ impl NexusClient {
         .await
     }
 
+    /// HEAD for a transfer: every non-2xx answer is a failure the retry loop and
+    /// the status classifier own.
+    ///
+    /// [`head_info`] is the reporting primitive behind `nxr head`, where any
+    /// answer is a result. A transfer needs the other semantics: a 5xx or 429
+    /// retries (the `Retry-After` pause included), a 401/403 is the auth verdict,
+    /// and a storage 404 is the data verdict.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
+    pub async fn head_transfer(&self, url: &str) -> Result<HeadInfo, Error> {
+        self.with_retries(None, url, |this: &Self, url: &str| {
+            Box::pin(async move {
+                let resp = this
+                    .authorize(this.http.head(url))
+                    .send()
+                    .await
+                    .map_err(|e| this.wrap_send_err(url, e))?;
+                let status = resp.status();
+                if !status.is_success() {
+                    return Err(this.status_failure(url, resp).await);
+                }
+                Ok(HeadInfo {
+                    status: status.as_u16(),
+                    size: resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_LENGTH)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.parse::<u64>().ok()),
+                    content_type: resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_owned),
+                })
+            })
+        })
+        .await
+    }
+
     /// GET a small object (sibling, channel): None on 404.
     ///
     /// The response is capped at `SMALL_CAP`: these objects are KiB-scale by protocol, and an unbounded slurp would turn a runaway or hostile server into a memory event.

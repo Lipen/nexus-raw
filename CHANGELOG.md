@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The HEAD that opens a segmented `down` or `get` is a transfer request: a 5xx or 429 on it retries (and honors `Retry-After`), and a 401/403 takes the auth verdict, exactly like the range GETs that follow.
+  `nxr head` keeps reporting any status: its HEAD is a result, not a failure.
 - A `405` to a PUT is the read-only refusal, the class a `DELETE` already had: exit `1`, never retried, and the hint names the group repository instead of asking the user to retry or to check their credentials.
   A group repository refuses every write by design, and a host without PUT support answers the same way.
   `Error::ReadOnly` stays the same variant, its hint is now method-neutral.

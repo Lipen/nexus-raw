@@ -310,13 +310,9 @@ pub async fn get_segmented(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let info = client.head_info(url).await?;
-    if !(200..300).contains(&info.status) {
-        return Err(Error::Http {
-            status: info.status,
-            url: url.to_owned(),
-        });
-    }
+    // The HEAD is the first request of the transfer: a 5xx retries and a 401
+    // takes the auth verdict, exactly like the range GETs that follow.
+    let info = client.head_transfer(url).await?;
     let Some(total) = info.size else {
         return Err(Error::transport(
             url,

@@ -468,8 +468,8 @@ async fn download_segmented(
     let bytes_url = client.object_url(dir_url, name);
     let total = match size_hint {
         Some(total) => total,
-        None => match client.head_info(&bytes_url).await {
-            Ok(info) if (200..300).contains(&info.status) => match info.size {
+        None => match client.head_transfer(&bytes_url).await {
+            Ok(info) => match info.size {
                 Some(total) => total,
                 None => {
                     return single_stream(
@@ -478,15 +478,6 @@ async fn download_segmented(
                     .await;
                 }
             },
-            Ok(info) => {
-                return Err((
-                    name.clone(),
-                    Outcome::Failed(Error::Http {
-                        status: info.status,
-                        url: bytes_url,
-                    }),
-                ));
-            }
             Err(e) => return Err((name.clone(), Outcome::Failed(e))),
         },
     };

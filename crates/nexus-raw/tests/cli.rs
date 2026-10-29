@@ -757,6 +757,67 @@ fn down_segments_bounds_are_misuse() {
     assert!(stderr(&out).contains("segments"), "{}", stderr(&out));
 }
 
+/// The segmented GET's HEAD is a transfer request: a 503 on it rides the retry
+/// loop instead of failing the run after one attempt.
+#[test]
+fn get_segments_retries_a_flaky_head() {
+    let srv = server(Scenario::Flaky { first_failures: 1 });
+    let content: Vec<u8> = (0..40_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("1.14.0/big.bin", &content);
+    let dst = TempDir::new().unwrap();
+    let out = dst.path().join("big.bin");
+    let get = nxr(&[
+        "get",
+        &format!("{}1.14.0/big.bin", srv.base_url()),
+        "--segments",
+        "4",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    expect_exit(&get, 0, "the 503 on the HEAD retries");
+    assert_eq!(std::fs::read(&out).unwrap(), content);
+    let heads: Vec<_> = srv
+        .requests()
+        .into_iter()
+        .filter(|r| r.method == "HEAD")
+        .collect();
+    assert_eq!(heads.len(), 2, "one 503 and one retried HEAD: {heads:?}");
+    assert!(
+        matches!(heads[0].outcome, Outcome::Status(503)),
+        "{heads:?}"
+    );
+}
+
+/// A 401 on the segmented HEAD is the auth verdict, the class the range GETs
+/// take, not a generic HTTP status: exit 3 with the credentials hint.
+#[test]
+fn get_segments_auth_refusal_is_the_auth_verdict() {
+    let srv = server(Scenario::Auth401 {
+        user: "nexus".into(),
+        pass: "secret".into(),
+    });
+    srv.insert("file.bin", BETA);
+    let dst = TempDir::new().unwrap();
+    let out = dst.path().join("file.bin");
+    let get = nxr(&[
+        "--retry",
+        "1",
+        "get",
+        "--segments",
+        "2",
+        &format!("{}file.bin", root_url(&srv)),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    expect_exit(&get, 3, "a 401 is the auth class");
+    let err = stderr(&get);
+    assert!(
+        err.contains("pass -u"),
+        "the auth hint, not the path hint: {err}"
+    );
+    assert!(!out.exists());
+}
+
 // ---- clone ----------------------------------------------------------------
 
 fn clone_repo_url(srv: &MockNexus) -> String {
