@@ -2613,8 +2613,10 @@ impl App {
                 continue;
             };
             // A server-chosen path becomes a local path below the destination:
-            // an unsafe segment is refused here instead of escaping the anchor.
-            if !safe_rel(&rel) {
+            // an unsafe segment, or a name the filesystem cannot hold as one
+            // component (a decoded `/`), is refused here instead of escaping
+            // the anchor or truncating to the wrong object.
+            if !safe_rel(&rel) || !crate::config::safe_dir_name(&row.name) {
                 refused += 1;
                 continue;
             }
@@ -2884,10 +2886,11 @@ impl App {
             return;
         };
         let rel = self.full_rel(&path, &row.rel);
-        // Every segment that becomes a local path must be one safe component:
-        // a decoded `/` or a `..` in any of them would leave the destination,
-        // while spaces and unicode are ordinary names for the filesystem.
-        if !safe_rel(&rel) || (flat && !safe_rel(&row.name)) {
+        // The file's own name and every breadcrumb segment must be one safe
+        // component: a decoded `/` in a listing entry is not a name the
+        // filesystem can hold, and a `..` would leave the destination, while
+        // spaces and unicode are ordinary names for the filesystem.
+        if !crate::config::safe_dir_name(&row.name) || !safe_rel(&rel) {
             self.status = format!("refused: an unsafe path segment in {}", rel.escape_debug());
             return;
         }
@@ -3894,6 +3897,21 @@ mod tests {
         // A `..` breadcrumb is still refused before anything starts.
         app.transfer = None;
         app.download_file(vec!["..".into()], &row, PathBuf::from("dl"), false);
+        assert!(app.transfer.is_none());
+        assert!(app.status.starts_with("refused"), "{}", app.status);
+
+        // A listing entry whose name carries a decoded `/` is not one local
+        // component: refusing it beats downloading the truncated tail.
+        app.transfer = None;
+        let split = Row {
+            name: "a/b".into(),
+            rel: "a/b".into(),
+            kind: EntryKind::File,
+            depth: 0,
+            expanded: false,
+            loading: false,
+        };
+        app.download_file(Vec::new(), &split, PathBuf::from("dl"), false);
         assert!(app.transfer.is_none());
         assert!(app.status.starts_with("refused"), "{}", app.status);
     }
