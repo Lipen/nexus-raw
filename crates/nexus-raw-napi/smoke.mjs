@@ -8,7 +8,7 @@
 // `missing-remote` without any external network.
 import { createHash } from 'node:crypto'
 import http from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
@@ -90,6 +90,35 @@ try {
     (err) => err.exitCode === 2 && err.hint.includes('names must be relative paths'),
   )
 
+  // `ls` and `names` are two enumeration sources: the binding refuses the pair
+  // instead of letting the listing win over the names.
+  await assert.rejects(
+    nxr.rm('http://127.0.0.1:9/raw/', { names: ['a.txt'], ls: true }),
+    (err) => err.exitCode === 2 && err.message.includes('ls cannot be combined with names'),
+  )
+
+  // A resume needs an output file: `cont` without `out` is misuse, never a
+  // silent full download.
+  await assert.rejects(
+    nxr.get('http://127.0.0.1:9/raw/a.txt', { cont: true }),
+    (err) => err.exitCode === 2 && err.message.includes('continue resumes'),
+  )
+
+  // `state` and `noState` exclude each other, like the CLI's flag conflict.
+  await assert.rejects(
+    nxr.clone('http://127.0.0.1:9/raw/', dir, {
+      state: join(dir, 'state.json'),
+      noState: true,
+    }),
+    (err) => err.exitCode === 2 && err.message.includes('exclude each other'),
+  )
+
+  // A local sha of a path that does not exist is the misuse class, not I/O.
+  await assert.rejects(
+    nxr.sha(join(dir, 'missing.txt')),
+    (err) => err.exitCode === 2 && err.message.includes('no such local file'),
+  )
+
   // diff resolves the report read-only: against a loopback server that answers
   // 404 to everything, the locally complete name is missing-remote.
   // Explicit names keep the enumeration offline. The probes are the only traffic.
@@ -109,6 +138,33 @@ try {
     assert.equal(byPath.get('b.txt').state, 'missing-remote')
     assert.equal(byPath.get('a.txt').local.digest, hex)
     assert.equal(byPath.get('a.txt').local.size, 6)
+
+    // A 404 head carries no facts: the optional fields are absent, the shape
+    // the result types declare.
+    const gone = await nxr.head(`http://127.0.0.1:${absent.address().port}/raw/gone.bin`)
+    assert.equal(gone.status, 404)
+    assert.equal(gone.size, undefined)
+    assert.equal(gone.contentType, undefined)
+
+    // `prefixes` narrows the whole report, the local-only rows included.
+    mkdirSync(join(dir, 'sub'), { recursive: true })
+    writeFileSync(join(dir, 'sub', 'c.txt'), 'nested\n')
+    const wide = await nxr.diff(dir, `http://127.0.0.1:${absent.address().port}/raw/`, {
+      names: ['a.txt'],
+    })
+    assert.equal(wide.count, 3, 'the union holds the nested local-only name')
+    // The enumeration keeps a name under the prefix, and the report drops the
+    // local-only rows outside it.
+    const narrow = await nxr.diff(dir, `http://127.0.0.1:${absent.address().port}/raw/`, {
+      names: ['sub/c.txt'],
+      prefixes: ['sub/'],
+    })
+    assert.deepEqual(
+      narrow.entries.map((entry) => entry.path),
+      ['sub/c.txt'],
+      'the prefix filters both sides',
+    )
+    rmSync(join(dir, 'sub'), { recursive: true, force: true })
   } finally {
     absent.close()
     absent.closeAllConnections()

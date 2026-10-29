@@ -131,7 +131,8 @@ impl From<&nexus_raw_core::Action> for NxrPlanAction {
 }
 
 /// The content facts one side holds for a name, the CLI `diff --json` side shape.
-/// `null` means the fact is unknown on this side, never that it differs.
+/// An absent field means the fact is unknown on this side, never that it differs:
+/// the napi bridge omits a `None` instead of sending `null`.
 #[napi(object)]
 pub struct NxrDeltaSide {
     /// The sha256 digest, when the side carries one.

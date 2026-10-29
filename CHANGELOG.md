@@ -32,7 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A `diff` with `prefixes` filters the whole report in the core, so a local-only name outside the prefixes no longer reports as `missing-remote`.
   The CLI and the Node bindings share the rule, and the CLI's own filter is gone.
 - A byte body staged by the Node `put` carries the artifact's own name, so its progress events name the upload instead of a temp file.
-- The Node result types declare the fields that cross the boundary as `null` (`sha256`, `contentType`, `size`, `from`, `digest`, the delta sides) as `| null`, matching what the runtime returns.
+- The Node result types mark an unknown fact as optional (`sha256?`, `contentType?`, `size?`, `from?`, `digest?`, the delta sides): the bridge omits a `None` instead of sending `null`, and the delta-side docs claimed `null` before.
   The Node `diff` examples in the README and the quickstart pass the enumeration source the call needs.
 - The Python reference client classifies a 405 to a PUT as `ReadOnlyError` (exit 1, the hint names the group repository), matching the core.
 - `ls --assets` names the names it leaves out: a server can hold a row outside the artifact grammar (a space, a percent-decoded slash), which the protocol cannot transfer, so the listing reports the count instead of dropping it silently.

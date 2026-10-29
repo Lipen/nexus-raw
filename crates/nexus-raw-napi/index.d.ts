@@ -107,8 +107,8 @@ export interface NxrSummary {
 export interface NxrPlanAction {
   action: 'skip' | 'upload' | 'download'
   name: string
-  /** Byte size when the action transfers bytes, `null` otherwise. */
-  size: number | null
+  /** Byte size when the action transfers bytes. Absent otherwise. */
+  size?: number
 }
 
 /** The plan a dry run resolves to. */
@@ -128,8 +128,8 @@ export interface NxrGetOpts extends NxrCommonOpts {
 export interface NxrGetResult {
   /** Final size in bytes (stdout mode: bytes written). */
   size: number
-  /** The digest when a file was produced (stdout streaming does not hash). */
-  sha256: string | null
+  /** The digest when a file was produced (stdout streaming does not hash). Absent otherwise. */
+  sha256?: string
   /** The offset the transfer resumed from (0 for a fresh download). */
   resumedFrom: number
 }
@@ -141,15 +141,15 @@ export interface NxrPutOpts extends NxrCommonOpts {
 
 export interface NxrPutResult {
   size: number
-  /** The uploaded digest when the sha-sibling was requested. */
-  sha256: string | null
+  /** The uploaded digest when the sha-sibling was requested. Absent otherwise. */
+  sha256?: string
 }
 
 export interface NxrHeadResult {
   status: number
-  /** `Content-Length` when the answer carried one. */
-  size: number | null
-  contentType: string | null
+  /** `Content-Length` when the answer carried one. Absent otherwise. */
+  size?: number
+  contentType?: string
 }
 
 export interface NxrUpOpts extends NxrCommonOpts {
@@ -191,8 +191,8 @@ export interface NxrCloneOpts extends NxrCommonOpts {
 export interface NxrClonePlanAction {
   action: 'download' | 'skip' | 'seal'
   name: string
-  /** Byte size when the action knows it, `null` otherwise. */
-  size: number | null
+  /** Byte size when the action knows it. Absent otherwise. */
+  size?: number
 }
 
 export interface NxrDiffOpts extends NxrCommonOpts {
@@ -218,8 +218,8 @@ export interface NxrRmPlanAction {
   /** `rm` when the remote copy exists and would be deleted, `missing` when it is already absent. */
   action: 'rm' | 'missing'
   name: string
-  /** Byte size when the remote copy exists, `null` otherwise. */
-  size: number | null
+  /** Byte size when the remote copy exists. Absent otherwise. */
+  size?: number
 }
 
 /** The plan `rm` resolves to by default. */
@@ -227,12 +227,12 @@ export interface NxrRmPlan {
   actions: NxrRmPlanAction[]
 }
 
-/** The content facts one side holds for a name. `null` means the fact is unknown, never that it differs. */
+/** The content facts one side holds for a name. An absent field means the fact is unknown, never that it differs. */
 export interface NxrDeltaSide {
   /** The sha256 digest, when the side carries one. */
-  digest: string | null
+  digest?: string
   /** Byte size, when the side reports one. */
-  size: number | null
+  size?: number
 }
 
 /** One delta entry, shaped like the CLI `diff --json` lines. */
@@ -240,16 +240,16 @@ export interface NxrDeltaEntry {
   /** `same`, `missing-local`, `missing-remote` or `diverged`. */
   state: 'same' | 'missing-local' | 'missing-remote' | 'diverged'
   path: string
-  /** The shared digest when the state is `same`, `null` otherwise. */
-  digest: string | null
+  /** The shared digest when the state is `same`. Absent otherwise. */
+  digest?: string
   /** The local-side facts when the state is `missing-remote` or `diverged`. */
-  local: NxrDeltaSide | null
+  local?: NxrDeltaSide
   /** The storage-side facts when the state is `missing-local` or `diverged`. */
-  remote: NxrDeltaSide | null
-  /** The sizes are known on both sides and differ, `diverged` only. */
-  size: boolean | null
-  /** The digests are known on both sides and differ, `diverged` only. */
-  sha: boolean | null
+  remote?: NxrDeltaSide
+  /** The sizes are known on both sides and differ, `diverged` only. Absent otherwise. */
+  size?: boolean
+  /** The digests are known on both sides and differ, `diverged` only. Absent otherwise. */
+  sha?: boolean
 }
 
 /**
@@ -286,10 +286,10 @@ export interface NxrVerifyOpts extends NxrCommonOpts {
 export interface NxrChannelSetResult {
   /** False when the forward-only guard kept the current token. */
   written: boolean
-  /** The previous token when one was readable, `null` otherwise. */
-  from: string | null
-  /** The kept token when the write was skipped, `null` otherwise. */
-  current: string | null
+  /** The previous token when one was readable. Absent otherwise. */
+  from?: string
+  /** The kept token when the write was skipped. Absent otherwise. */
+  current?: string
 }
 
 /** GET a URL to a file or the process stdout. */
