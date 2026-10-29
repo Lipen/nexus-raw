@@ -40,6 +40,7 @@ PUT https://nexus.example.com/repository/raw-main/1.4.0/bom/linux-x86_64.json.sh
 A group URL is a read-only aggregation over several hosted repositories: a read is dispatched to the members in order and the first member answering `2xx` serves the object.
 A member's `404` (or any other non-2xx answer, or a broken connection) falls through to the next member, and when nobody answers `2xx` the group answers a plain `404`.
 Writes never reach a member: `PUT` and `DELETE` (like every method but `GET`/`HEAD`) are refused with `405`, an `Allow: GET,HEAD` header and no body, so publication targets hosted members only.
+A client reads that `405` as the read-only refusal: exit `1`, a hint naming the group, and no member contacted.
 The dispatch mirrors the real Nexus group handler: the method switch at `GroupHandler.java:103-112` and the first-2xx member walk (`getFirst`) at `GroupHandler.java:124-166` of `nexus-public`.
 The search API is a separate subsystem in real Nexus (it reads the metadata database, not the group dispatch), so group search is not modeled.
 
@@ -190,6 +191,10 @@ Upload:
 Marker-after-bytes is what makes `Markerless` mean "under-uploaded": a client never trusts a marker whose bytes are absent, and a crash between steps 2 and 3 is recoverable by design.
 A local sibling that does not match its bytes stops the run at step 1.
 The file is never touched and nothing is uploaded.
+
+A PUT answered `405` is the read-only refusal, the same class a `DELETE` gets: exit `1`, never retried, and the hint names the group repository.
+A group refuses every write by design, and a host that serves files without accepting them answers the same way.
+A `403` to a PUT stays the auth verdict: an account without the write role, or a repository in read-only mode.
 
 Download mirrors the order locally:
 

@@ -177,7 +177,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | bytes (and marker, when asked) stored |
-| `1` | local I/O: the input file is missing or unreadable |
+| `1` | local I/O: the input file is missing or unreadable, or the write refused (405: a group repository, or a host without PUT) |
 | `2` | misuse: a non-http URL |
 | `3` | auth failure, 5xx after retries, unexpected status |
 
@@ -345,7 +345,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, remote converged |
-| `1` | data refusal: `mismatch`, `incomplete`. local I/O failures |
+| `1` | data refusal: `mismatch`, `incomplete`, or the write refused (405: a group repository, or a host without PUT). local I/O failures |
 | `2` | misuse: not a directory, empty directory, unsafe name, a symlink or other non-regular entry, an empty `--prefix` selection, a `--claim-first` name outside the directory or the prefixes |
 | `3` | transport or auth failure: the `failed:` list names what did not land |
 
@@ -607,7 +607,7 @@ The staging directory carries a lock: a second concurrent `mirror` for the same 
 | Exit | When |
 |:----:|:-----|
 | `0` | plan executed, the destination holds every enumerated name |
-| `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`). local I/O around the staging directory |
+| `1` | data refusal: `cannot enumerate`, a diverging complete copy at the destination (`mismatch`), the destination refusing the write (405: a group repository). local I/O around the staging directory |
 | `2` | misuse: an unsafe `--name`, a second `mirror` already running for this pair |
 | `3` | transport or auth failure, on either side |
 
@@ -671,7 +671,7 @@ $ nxr rm https://nexus.example.com/repository/raw-main/1.14.0/ --ls --yes
 uploaded 0, downloaded 0, skipped 0
 failed: a.zip
 error: read-only: https://nexus.example.com/repository/raw-main/1.14.0/a.zip.sha256: HTTP 403
-hint: the repository answered 403 to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed
+hint: the repository answered 403 to a write: a group repository is read-only (target a hosted member), and a hosted one needs the write role; that write changed nothing, so rerunning is safe
 $ echo $?
 1
 ```
@@ -734,7 +734,7 @@ rm a.zip
 | Exit | When |
 |:----:|:-----|
 | `0` | the pour converged and the delete finished, or the plans printed without `--yes` |
-| `1` | data refusal: `cannot enumerate`, the delete phase refused on a read-only source |
+| `1` | data refusal: `cannot enumerate`, a refused write in either phase (405 to a group, 403/405 to a delete) |
 | `2` | misuse: a bad URL, name or prefix |
 | `3` | transport or auth failure of either phase |
 

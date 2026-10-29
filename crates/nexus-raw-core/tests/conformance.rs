@@ -1644,7 +1644,11 @@ async fn mirror_failure_reports_the_structured_failure() {
         .mirror(&dst, Enumeration::Names(names(&["a.zip"])))
         .await
         .unwrap_err();
-    assert_eq!(err.exit_code(), 3, "a refused PUT is an HTTP error: {err}");
+    assert_eq!(
+        err.exit_code(),
+        1,
+        "a refused PUT is a read-only verdict: {err}"
+    );
     let events = collect_events(&mut rx);
     let summary = summary_of(&events).expect("the failed mirror emits its summary");
     assert_eq!(summary.failed, vec!["a.zip"]);
@@ -1652,7 +1656,7 @@ async fn mirror_failure_reports_the_structured_failure() {
         summary.failures,
         vec![Failure {
             name: "a.zip".into(),
-            code: 3,
+            code: 1,
         }]
     );
 }
@@ -2310,7 +2314,11 @@ async fn up_claim_failure_reports_the_structured_failure() {
         .up(local.path(), None, true, Some(claim))
         .await
         .unwrap_err();
-    assert_eq!(err.exit_code(), 3, "a refused PUT is an HTTP error: {err}");
+    assert_eq!(
+        err.exit_code(),
+        1,
+        "a refused PUT is the read-only verdict: {err}"
+    );
     let events = collect_events(&mut rx);
     let summary = summary_of(&events).expect("the refused claim emits its summary");
     assert_eq!(summary.uploaded, 0);
@@ -2319,7 +2327,7 @@ async fn up_claim_failure_reports_the_structured_failure() {
         summary.failures,
         vec![Failure {
             name: "version.json".into(),
-            code: 3,
+            code: 1,
         }]
     );
 }
@@ -2613,7 +2621,8 @@ async fn down_through_group_skips_a_failing_member_without_a_client_retry() {
 }
 
 /// The group refuses uploads before any member is contacted: the PUT answers 405.
-/// The client maps the 405 to `Error::Http`, whose verdict is exit 3.
+/// The client maps it to `Error::ReadOnly`, whose verdict is exit 1: a group is read-only,
+/// exactly like the 405 a DELETE gets.
 /// Only 5xx are retryable, so the refusal fails fast.
 #[tokio::test]
 async fn up_against_a_group_refuses_with_405() {
@@ -2627,17 +2636,22 @@ async fn up_against_a_group_refuses_with_405() {
 
     let err = nxr.up(local.path(), None, true, None).await.unwrap_err();
     assert!(
-        matches!(&err, Error::Http { status: 405, .. }),
+        matches!(&err, Error::ReadOnly { status: 405, .. }),
         "got {err:?}"
     );
     assert_eq!(
         err.exit_code(),
-        3,
-        "a refused PUT is the HTTP verdict: {err}"
+        1,
+        "a refused write is a data verdict: {err}"
     );
     assert!(
         err.to_string().contains("405"),
         "the status stays visible: {err}"
+    );
+    let hint = err.hint().expect("a hint is required");
+    assert!(
+        hint.contains("group"),
+        "the hint names the group repository: {hint}"
     );
 
     // The refusal is the group's own: no member saw a write, and nothing landed anywhere.

@@ -126,7 +126,10 @@ pub async fn execute(
                 if first_error.is_none()
                     && matches!(
                         e,
-                        Error::Auth { .. } | Error::Transport { .. } | Error::Http { .. }
+                        Error::Auth { .. }
+                            | Error::Transport { .. }
+                            | Error::Http { .. }
+                            | Error::ReadOnly { .. }
                     )
                 {
                     first_error = Some(e);
@@ -137,8 +140,9 @@ pub async fn execute(
     }
     summary.failed = failed;
     client.progress().summary(&summary);
-    // Transport-level failures surface as their own error (exit 3).
-    // The failed names stay visible in the summary.
+    // A failure that is not a per-name data verdict surfaces as its own error:
+    // auth and transport are exit 3, a refused write (a group repository, a host
+    // without PUT) is exit 1. The failed names stay visible in the summary.
     if let Some(e) = first_error {
         return Err(e);
     }

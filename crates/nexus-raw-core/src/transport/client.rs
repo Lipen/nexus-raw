@@ -327,6 +327,45 @@ impl NexusClient {
         }
     }
 
+    /// A non-success answer to a storage PUT.
+    ///
+    /// A 405 is the protocol's read-only answer to a write: a group repository
+    /// refuses every write with it, and so does a host without PUT support.
+    /// It is a data verdict (exit 1) and is never retried, exactly like the 405
+    /// a DELETE gets. A 403 keeps the auth verdict a read gets: the common cause
+    /// is an account without the write role (errors.md: anonymous write attempt).
+    async fn put_failure(&self, url: &str, resp: reqwest::Response) -> AttemptFailure {
+        self.refusal_or_status(url, resp, &[405]).await
+    }
+
+    /// A non-success answer to a storage DELETE: 403/405 is the read-only repository.
+    ///
+    /// A refused deletion is a data verdict (exit 1), never the credentials one, and
+    /// a 405 covers the group repository that refuses every write.
+    async fn delete_failure(&self, url: &str, resp: reqwest::Response) -> AttemptFailure {
+        self.refusal_or_status(url, resp, &[403, 405]).await
+    }
+
+    /// The shared tail of the write classes: a listed status is [`Error::ReadOnly`],
+    /// anything else is the generic status verdict.
+    async fn refusal_or_status(
+        &self,
+        url: &str,
+        resp: reqwest::Response,
+        refused: &[u16],
+    ) -> AttemptFailure {
+        let status = resp.status().as_u16();
+        if refused.contains(&status) {
+            let detail = Self::body_detail(resp).await;
+            return AttemptFailure::stop(Error::ReadOnly {
+                url: url.to_owned(),
+                status,
+                detail,
+            });
+        }
+        self.status_failure(url, resp).await
+    }
+
     /// A non-success status: 5xx and 429 are retryable, and any retryable
     /// status honors the `Retry-After` pause the server asked for (a Nexus
     /// restart or a proxy overload answers `503 Retry-After: 30`).
@@ -590,6 +629,8 @@ impl NexusClient {
 
     /// PUT a small object whole.
     ///
+    /// A 405 is the read-only answer to a write: [`Error::ReadOnly`] (exit 1), never retried.
+    ///
     /// # Errors
     ///
     /// Returns transport, auth or HTTP errors after the retry loop is exhausted.
@@ -603,7 +644,7 @@ impl NexusClient {
                 if status.is_success() {
                     return Ok(());
                 }
-                Err(this.status_failure(url, resp).await)
+                Err(this.put_failure(url, resp).await)
             })
         })
         .await
@@ -648,19 +689,10 @@ impl NexusClient {
             Box::pin(async move {
                 let req = this.authorize(this.http.delete(url));
                 let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
-                let status = resp.status();
-                match status.as_u16() {
+                match resp.status().as_u16() {
                     s if (200..300).contains(&s) => Ok(DeleteOutcome::Deleted),
                     404 => Ok(DeleteOutcome::Missing),
-                    s @ (403 | 405) => {
-                        let detail = Self::body_detail(resp).await;
-                        Err(AttemptFailure::stop(Error::ReadOnly {
-                            url: url.to_owned(),
-                            status: s,
-                            detail,
-                        }))
-                    }
-                    _ => Err(this.status_failure(url, resp).await),
+                    _ => Err(this.delete_failure(url, resp).await),
                 }
             })
         })
@@ -1315,7 +1347,7 @@ impl NexusClient {
                             &hasher.finalize(),
                         )))
                     }
-                    _ => Err(this.status_failure(url, resp).await),
+                    _ => Err(this.put_failure(url, resp).await),
                 }
             })
         })

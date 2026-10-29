@@ -85,6 +85,7 @@ The mock also follows the protocol in its own answers: a status answer that can 
 Group repositories are a separate deployment kind, not a scenario: `MockNexus::start_group` builds one over two or more running members.
 The group forwards reads to the members in order and relays the first `2xx`, so every scenario in the table above keeps applying behind a group.
 Writes are refused by the group itself with `405` and `Allow: GET,HEAD`, in the wire shape of the real Nexus group handler.
+The client reads that `405` as the read-only refusal (exit `1`, the hint names the group), on PUT and DELETE alike: `up_against_a_group_refuses_with_405` and `rm_against_a_group_refuses_as_read_only`.
 The dispatch is faithful to the real `GroupHandler.java` (method switch at lines 103-112, the first-2xx member walk at 124-166).
 Group search is not modeled: the search API reads the metadata database rather than the group dispatch.
 

@@ -50,7 +50,7 @@ pub enum Error {
     /// A real Nexus refuses an unknown repository with 400 before any storage is touched.
     #[error("http 400: {url}: the search refused the repository")]
     SearchRepoMissing { url: String },
-    /// The repository refuses the deletion: a read-only deployment answers 403/405 to DELETE (§5.4).
+    /// The server refuses a write: 405 to a PUT (a group repository, or a host without PUT support) and 403/405 to a DELETE (§5.2, §5.4).
     /// `detail` is the first line of the server's error body, when the response carried one (spec §5).
     #[error("read-only: {url}: HTTP {status}")]
     ReadOnly {
@@ -133,7 +133,7 @@ impl Error {
             Error::Transport { .. } => Some("check the network: transfers are resumable, rerunning is safe".into()),
             Error::ReadOnly { status, .. } => Some(
                 format!(
-                    "the repository answered {status} to DELETE: it is read-only or the credentials lack write access, so rerunning is safe and nothing was removed"
+                    "the repository answered {status} to a write: a group repository is read-only (target a hosted member), and a hosted one needs the write role; that write changed nothing, so rerunning is safe"
                 ),
             ),
             Error::Http { status: 404, .. } => {

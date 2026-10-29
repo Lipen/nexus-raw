@@ -4237,6 +4237,41 @@ fn mv_refused_delete_leaves_a_duplicate() {
     assert_eq!(member.store_get("1.14.0/a.zip").unwrap(), ALPHA);
 }
 
+/// A group refuses every write with 405: `up` exits 1 with the read-only hint
+/// naming the group, and no member ever sees a write.
+#[test]
+fn up_to_a_group_refuses_as_read_only() {
+    let member = server(Scenario::Atomic);
+    let group = MockNexus::start_group(&[&member, &server(Scenario::Atomic)]).unwrap();
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+
+    let up = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&group)]);
+    expect_exit(
+        &up,
+        1,
+        "a refused write is the read-only verdict, not the transport class",
+    );
+    let err = stderr(&up);
+    assert!(
+        err.contains("read-only"),
+        "the error names the refusal: {err}"
+    );
+    assert!(
+        err.contains("group"),
+        "the hint names the group repository: {err}"
+    );
+    assert!(
+        !err.contains("pass -u"),
+        "a refused write must not send the user to credentials: {err}"
+    );
+    assert!(
+        member.requests().iter().all(|r| r.method != "PUT"),
+        "a group write must not reach a member: {:?}",
+        member.requests()
+    );
+}
+
 // ---- service repos ---------------------------------------------------------
 
 /// `service repos` prints one `name format kind url` line per repository.

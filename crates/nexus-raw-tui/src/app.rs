@@ -3533,7 +3533,7 @@ pub fn cause_of(e: &Error) -> String {
             url.escape_debug()
         ),
         Error::ReadOnly { url, status, .. } => format!(
-            "the repository '{}' answered HTTP {status} to a deletion, it is read-only",
+            "the repository '{}' answered HTTP {status} to a write, it is read-only (a group repository refuses writes)",
             url.escape_debug()
         ),
         Error::Misuse(_) => "the request is malformed and cannot be retried".to_owned(),
