@@ -451,7 +451,10 @@ async fn deep_probes(
             "warning: search-dead (404: the search endpoint is absent; diff --via search refuses there, --fallback saves it)".to_owned(),
             None,
         )),
-        Err(nexus_raw_core::Error::SearchRepoMissing { .. }) => out.push((
+        // A ghost repository: the index answers 400, and listing cannot work there.
+        // `get_small` maps a 400 to the generic HTTP error, so the class is the
+        // status, not `SearchRepoMissing` (which only the walk layer raises).
+        Err(nexus_raw_core::Error::Http { status: 400, .. }) => out.push((
             "deep:search",
             true,
             "warning: search-dead (400: the repository is unknown to the index; diff --via search refuses there, --fallback saves it)".to_owned(),

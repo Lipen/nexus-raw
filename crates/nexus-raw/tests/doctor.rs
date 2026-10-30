@@ -97,6 +97,57 @@ fn deep_on_ignore_range_warns_range_stripped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A ghost repository on a search-400 server: the index cannot list it, which is
+/// the search-dead warning, never a failed check.
+#[test]
+fn deep_on_a_ghost_repository_warns_search_dead() {
+    let srv = MockNexus::start(Scenario::Search400).expect("mock nexus starts");
+    let url = format!("{}repository/raw-ghost/1.0.0/", srv.base_url());
+    let out = nxr(&["doctor", &url, "--deep"]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a refused listing is advice: {}",
+        stdout(&out)
+    );
+    let s = stdout(&out);
+    assert!(
+        s.contains("[ warn ] deep:search: warning: search-dead (400"),
+        "the 400 warn is named: {s}"
+    );
+}
+
+/// The search endpoint answers 404: the verdict is the absent-endpoint warning,
+/// distinct from an index that answers an empty page.
+#[test]
+fn deep_on_an_absent_search_endpoint_warns_404() {
+    let srv = MockNexus::start(Scenario::AssetsAbsent).expect("mock nexus starts");
+    let a = deep_args(&srv);
+    let out = nxr(&[a[0].as_str(), &a[1], &a[2], &a[3]]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    let s = stdout(&out);
+    assert!(
+        s.contains("search-dead (404"),
+        "the absent endpoint is named: {s}"
+    );
+    assert!(!s.contains("empty page"), "404 is not an empty page: {s}");
+}
+
+/// An index that answers with an empty page is alive: the probe says so.
+#[test]
+fn deep_on_an_empty_index_answers() {
+    // No write yet: the lagging index serves the empty page.
+    let srv = MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).expect("mock nexus starts");
+    let a = deep_args(&srv);
+    let out = nxr(&[a[0].as_str(), &a[1], &a[2], &a[3]]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    let s = stdout(&out);
+    assert!(
+        s.contains("the search index answers"),
+        "an empty page is still an answer: {s}"
+    );
+}
+
 /// A host with no service plane: the deep probes name the 404 of the missing
 /// endpoint instead of calling it empty, count the warns, and still exit 0.
 #[test]
