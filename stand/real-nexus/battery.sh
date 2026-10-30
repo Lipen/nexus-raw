@@ -358,6 +358,39 @@ else
     no "the cleared pointer reads unset"
 fi
 
+# --- cross-repository transfers -------------------------------------------
+
+# A second real repository: mirror pours the names into it, mv moves one name
+# and deletes it at the source, markers travel with the bytes.
+URL2="$BASE/repository/stand2"
+mkdir -p "$WORK/mirror-src"
+printf 'mirror me\n' > "$WORK/mirror-src/one.txt"
+printf 'mirror me too\n' > "$WORK/mirror-src/two.txt"
+expect_ok "the mirror source uploads" "$NXR" up "$WORK/mirror-src" "$URL/mirror-src/"
+expect_ok "mirror pours the names into the second repository" "$NXR" mirror "$URL/mirror-src/" "$URL2/mirror-dst/" --name one.txt --name two.txt
+if "$NXR" head "$URL2/mirror-dst/one.txt" 2> /dev/null | grep -q 'head: 200' &&
+    "$NXR" head "$URL2/mirror-dst/two.txt" 2> /dev/null | grep -q 'head: 200' &&
+    "$NXR" get "$URL/mirror-src/one.txt.sha256" -o "$WORK/m-src.sha256" 2> /dev/null &&
+    "$NXR" get "$URL2/mirror-dst/one.txt.sha256" -o "$WORK/m-dst.sha256" 2> /dev/null &&
+    cmp -s "$WORK/m-src.sha256" "$WORK/m-dst.sha256"; then
+    ok "the mirrored bytes and marker match the source"
+else
+    no "the mirrored bytes and marker match the source"
+fi
+expect_ok "mv moves one name to the second repository" "$NXR" mv "$URL/mirror-src/" "$URL2/mirror-dst/" --name one.txt --yes
+if "$NXR" head "$URL/mirror-src/one.txt" 2> /dev/null | grep -q 'head: 404' &&
+    "$NXR" head "$URL/mirror-src/one.txt.sha256" 2> /dev/null | grep -q 'head: 404' &&
+    "$NXR" head "$URL2/mirror-dst/one.txt" 2> /dev/null | grep -q 'head: 200'; then
+    ok "the move kept the destination copy and deleted the source pair"
+else
+    no "the move kept the destination copy and deleted the source pair"
+fi
+if "$NXR" head "$URL/mirror-src/two.txt" 2> /dev/null | grep -q 'head: 200'; then
+    ok "the move left the unnamed sibling alone"
+else
+    no "the move left the unnamed sibling alone"
+fi
+
 # --- summary ----------------------------------------------------------------
 
 if [ "$fail" -eq 0 ]; then

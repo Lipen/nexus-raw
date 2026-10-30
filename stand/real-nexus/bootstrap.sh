@@ -41,23 +41,27 @@ ACCEPTED=$(printf '%s' "$DISCLAIMER" | sed 's/"accepted"[[:space:]]*:[[:space:]]
 curl -sf -u "admin:$PASS" -H 'Content-Type: application/json' \
     -X POST "$BASE/service/rest/v1/system/eula" -d "$ACCEPTED" > /dev/null
 
-# The repository is created once; later runs of the stand reuse it. Checking
-# first keeps the POST a pure creation instead of guessing what a 400 meant.
-code=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:$PASS" \
-    "$BASE/service/rest/v1/repositories/stand")
-if [ "$code" = 404 ]; then
+# The repositories are created once; later runs of the stand reuse them.
+# Checking first keeps the POST a pure creation instead of guessing what a 400
+# meant. `stand` is the battery's main repository, `stand2` the mirror target:
+# cross-repository transfers are a real-server behavior, not a mock-only one.
+for repo in stand stand2; do
     code=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:$PASS" \
-        -H 'Content-Type: application/json' \
-        -X POST "$BASE/service/rest/v1/repositories/raw/hosted" \
-        -d '{"name":"stand","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":false,"writePolicy":"ALLOW"}}')
-    if [ "$code" != 201 ]; then
-        ui_fail "repository creation failed with HTTP $code"
+        "$BASE/service/rest/v1/repositories/$repo")
+    if [ "$code" = 404 ]; then
+        code=$(curl -s -o /dev/null -w '%{http_code}' -u "admin:$PASS" \
+            -H 'Content-Type: application/json' \
+            -X POST "$BASE/service/rest/v1/repositories/raw/hosted" \
+            -d "{\"name\":\"$repo\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":false,\"writePolicy\":\"ALLOW\"}}")
+        if [ "$code" != 201 ]; then
+            ui_fail "repository creation of $repo failed with HTTP $code"
+            exit 1
+        fi
+    elif [ "$code" != 200 ]; then
+        ui_fail "repository check of $repo failed with HTTP $code"
         exit 1
     fi
-elif [ "$code" != 200 ]; then
-    ui_fail "repository check failed with HTTP $code"
-    exit 1
-fi
+done
 
 # The battery drives the server as admin: the anonymous machinery differs
 # across nexus versions (realm ids drift), credentials do not. The file is
