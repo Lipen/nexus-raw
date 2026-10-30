@@ -6256,3 +6256,54 @@ fn up_wait_index_timeout_is_a_warning_not_a_failure() {
     assert_eq!(wait["total"], 1);
     assert_eq!(wait["timeout"], true, "the budget expired");
 }
+
+// ---- pipelines ------------------------------------------------------------
+
+/// A consumer that closes the pipe (`nxr --json up ... | head -1`) must end the
+/// run silently, the way curl and rg do: the Rust runtime ignores SIGPIPE, so
+/// without the default disposition every later write panics on a worker thread.
+#[cfg(unix)]
+#[test]
+fn a_consumer_that_closes_the_pipe_ends_the_run_silently() {
+    use std::io::{BufRead, BufReader, Read as _};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Atomic);
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    for i in 0..200 {
+        std::fs::write(src.join(format!("f{i}.bin")), ALPHA).unwrap();
+    }
+    let mut child = Command::new(NXR)
+        .args(["--json", "up"])
+        .arg(&src)
+        .arg(dir_url(&srv))
+        .args(["--workers", "1"])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    reader.read_line(&mut first).unwrap();
+    drop(reader);
+    let mut err = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    let status = child.wait().unwrap();
+
+    assert!(!first.is_empty(), "the first event arrives");
+    assert_eq!(status.code(), None, "the run ends by signal: {err}");
+    assert!(
+        !err.contains("panicked"),
+        "no panic text on the closed pipe: {err}"
+    );
+}

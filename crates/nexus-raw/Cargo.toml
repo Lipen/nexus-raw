@@ -57,6 +57,11 @@ serde_json = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true }
 
+# SIGPIPE back to its default: the Rust runtime ignores it, so a consumer that
+# closes the pipe (`nxr ... | head`) turns every later write into a panic instead.
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
 # The CLI drives a multi-thread runtime; that scheduler is native-only (wasm has no threads).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

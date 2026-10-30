@@ -3,6 +3,8 @@
 Every failure names its kind, the object and both sides of a disagreement.
 Every error also prints one `hint:` line on stderr telling you what to check next.
 The taxonomy has sixteen variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
+One exit lies outside the matrix: a consumer that closes the pipe (`nxr --json up ... | head -1`) ends the run by `SIGPIPE`, which the shell reports as 141, the way curl and rg behave.
+Nothing is printed there, because nobody is reading.
 
 ## The taxonomy
 
