@@ -10,6 +10,10 @@ That narrowness is the point: every byte on the wire is either contract or failu
 The full table with per-scenario wire behavior and the pinned invariant lives in [invariants](invariants.md), generated from the same Rust constant the `--print-scenarios` output prints.
 It covers: transport failures (`partial-put`, `cut-body`, `drop-connection`, `freeze-upload`), framing lies (`sizeless`, `foreign-marker`, `markerless`), pacing (`slow`, `flaky`, `retry-after-503`, `rate-limit` with `Retry-After`), server edges (`redirect`, `readonly`, `no-service`, `search-400`), service-API shapes (status, repositories, EULA, assets pagination), client-ergonomics (`detail-in-hint`, `ignore-range`), and integrity litter for `nxr audit` (`audit-litter`).
 
+Search is served only by the scenarios that model it: `search-lag` (store-backed, one item per stored object, pages of ten), `assets-pagination`, `assets-prefix-q`, `audit-litter` (the litter page) and `search-400` (the failure shape).
+Every other scenario 404s `/service/rest/v1/search/assets`, so `clone`, the TUI and the mount refuse with `cannot enumerate` against them.
+To clone a tree you uploaded yourself, run `mock-nexus search-lag --lag-ms 0`: it reports exactly the store, markers included.
+
 ## Run the binary
 
 ```bash
