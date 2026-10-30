@@ -312,6 +312,40 @@ else
     ok "the listing never surfaces the loose match's copy"
 fi
 
+# --- deletion and the service plane ----------------------------------------
+
+# The management API of the real server: a live status and the repository list.
+if "$NXR" service status "$BASE/" 2> /dev/null | grep -qi alive; then
+    ok "service status reports a live server"
+else
+    no "service status reports a live server"
+fi
+if "$NXR" service repos "$BASE/" 2> /dev/null | grep -q 'stand'; then
+    ok "service repos lists the stand repository"
+else
+    no "service repos lists the stand repository"
+fi
+
+# rm deletes exactly the named objects on a real server, marker first, and a
+# rerun sees only 404s and still exits 0.
+expect_ok "rm removes the named object" "$NXR" rm "$URL/2.0.0/" --name nested/sub.bin --yes
+if "$NXR" head "$URL/2.0.0/nested/sub.bin" 2> /dev/null | grep -q 'head: 404' &&
+    "$NXR" head "$URL/2.0.0/nested/sub.bin.sha256" 2> /dev/null | grep -q 'head: 404'; then
+    ok "the bytes and the marker are gone"
+else
+    no "the bytes and the marker are gone"
+fi
+expect_ok "an rm rerun is idempotent" "$NXR" rm "$URL/2.0.0/" --name nested/sub.bin --yes
+
+# point clears a pointer file: the channel reads unset afterwards.
+expect_ok "a throwaway channel takes a token" "$NXR" channel set "$URL/throwaway" 1.0.0
+expect_ok "point clears the pointer" "$NXR" point "$URL/throwaway"
+if [ "$("$NXR" channel get "$URL/throwaway" 2> /dev/null)" = "unset" ]; then
+    ok "the cleared pointer reads unset"
+else
+    no "the cleared pointer reads unset"
+fi
+
 # --- summary ----------------------------------------------------------------
 
 if [ "$fail" -eq 0 ]; then
