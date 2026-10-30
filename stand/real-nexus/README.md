@@ -27,8 +27,9 @@ The pinned image is pulled on first use.
   real index, `down --segments`, `up --prefix` keeping the selected subtree's
   path, `get --range`, `up --if-changed` on a converged tree, `rm` with its
   idempotent rerun, `point` clearing a channel, the management API
-  (`service status`, `service repos`), and cross-repository `mirror` and `mv`
-  against a second repository (`stand2`, created by the bootstrap).
+  (`service status`, `service repos`, `service repo`, `service assets`), and
+  cross-repository `mirror` and `mv` against a second repository (`stand2`,
+  created by the bootstrap).
 - With the mock: auth-401, flaky 5xx, dropped connections - scenarios a real
   server cannot be asked to produce on demand.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429

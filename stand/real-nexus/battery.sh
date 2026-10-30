@@ -337,6 +337,16 @@ if "$NXR" service repos "$BASE/" 2> /dev/null | grep -q 'stand'; then
 else
     no "service repos lists the stand repository"
 fi
+if "$NXR" service repo "$URL/" 2> /dev/null | grep -q '^stand raw hosted'; then
+    ok "service repo resolves the repository behind the URL"
+else
+    no "service repo resolves the repository behind the URL"
+fi
+if "$NXR" service assets "$URL/" 2> /dev/null | grep -q 'hello.txt'; then
+    ok "service assets lists the repository through the search API"
+else
+    no "service assets lists the repository through the search API"
+fi
 
 # rm deletes exactly the named objects on a real server, marker first, and a
 # rerun sees only 404s and still exits 0.
