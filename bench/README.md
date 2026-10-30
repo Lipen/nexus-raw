@@ -74,6 +74,7 @@ cd bench && NXR_BIN=../target/release/nxr cargo bench --bench cli
 ```
 
 The benches write their trees and download targets under `bench/target/bench-trees/`, so a run leaves no trace in the repository, and criterion writes under `bench/target/criterion/`.
+A hand `cargo bench` measures into that live tree and never saves a baseline: only `just bench-report <tag>` pins `CRITERION_HOME` and stores the record the compare step reads.
 Both die with `cargo clean`, which is why a run worth keeping becomes a report.
 
 ## What the clock covers
