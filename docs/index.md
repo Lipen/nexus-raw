@@ -83,7 +83,7 @@ The following properties hold for every command rather than depending on a flag:
 
 - With markers enabled, an artifact is complete only when its bytes and a `<name>.sha256` marker are both on the server.
   `up` writes the markers by default and `--no-sha` turns them off, `down` checks the downloaded stream against them, and `verify` checks the pair offline.
-- A complete artifact whose digest differs from the local copy is reported and not overwritten.
+- A complete artifact whose digest differs from the local copy is reported and not overwritten, unless the explicit `up --if-changed` names that refusal to relax.
 - A repeated command transfers only what is missing, and an interrupted download continues from a hidden part file with one `Range` request.
 - Exit codes separate the failure classes: `0` success, `1` data, `2` misuse, `3` transport.
   Every error carries a `hint:` line naming the next check.

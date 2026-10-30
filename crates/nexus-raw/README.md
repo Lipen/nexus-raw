@@ -8,7 +8,7 @@ The URL is an argument, credentials come from the call or from the environment, 
 - Names are arbitrary relative paths, and the tool imposes no repository layout.
 - A directory transfer compares the local tree with the server before copying and moves only the difference.
   An interrupted transfer resumes.
-- A divergent complete artifact is refused, never overwritten.
+- A divergent complete artifact is refused, never overwritten, unless the explicit `up --if-changed` opts out for that pair.
 - Exit codes: `0` ok, `1` data, `2` misuse, `3` transport.
   Every error carries a `hint:` line.
 

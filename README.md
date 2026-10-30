@@ -34,7 +34,7 @@ The directory commands add the parts that a shell script around `curl` otherwise
 | skip files already on the server | a custom listing comparison | symmetric diff on every run |
 | a completion marker per artifact | a second request piped to `sha256sum -c` | `<name>.sha256` markers checked during the transfer |
 | resume after an interruption | `curl -C -` per URL, without a digest check | hidden part files, `Range` resume, digest re-checked |
-| protection against overwriting | none | a complete object with a different digest is rejected |
+| protection against overwriting | none | a complete object with a different digest is rejected (the explicit `--if-changed` opts out) |
 | separation of failure classes | one exit code | 1 data, 2 misuse, 3 transport, plus a `hint:` line |
 
 These are defaults, not requirements.
@@ -191,7 +191,7 @@ An invocation needs the URL, the local files and the markers stored next to the 
   A repeated command continues it with one `Range` request.
 
 No command reads a manifest or assumes a directory convention.
-A complete artifact whose local digest differs from the server marker is reported and not overwritten.
+A complete artifact whose local digest differs from the server marker is reported and not overwritten, unless the explicit `up --if-changed` names that refusal to relax.
 
 ## Common commands
 

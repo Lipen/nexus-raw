@@ -7,7 +7,7 @@ The `nxr` binary, the `nxr-tui` browser, the `nxr-mount` FUSE view and the Node 
 
 - Completion is bytes plus a `<name>.sha256` marker in `sha256sum -c` format.
 - Both directions run the same symmetric diff, so a repeat call finishes an interrupted transfer instead of starting over.
-- A divergent complete artifact is refused, never overwritten.
+- A divergent complete artifact is refused, never overwritten, unless the explicit `up_if_changed` opts out for that pair.
 - Every error carries `exit_code()` (`0` ok, `1` data, `2` misuse, `3` transport) and a `hint()` line.
 - Credentials never appear in events, errors or logs.
 
