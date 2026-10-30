@@ -4423,15 +4423,17 @@ mod tests {
     /// Only the size is known: the digest probe runs, and it is the only one.
     #[tokio::test]
     async fn the_card_probes_only_the_missing_fact() {
-        let (mut app, mut rx) = app_with(
-            vec![tree_tab(vec![Entry {
-                name: "a.bin".into(),
-                kind: EntryKind::File,
-                size: Some(6),
-                digest: None,
-            }])],
-            false,
-        );
+        let mut tab = tree_tab(vec![Entry {
+            name: "a.bin".into(),
+            kind: EntryKind::File,
+            size: Some(6),
+            digest: None,
+        }]);
+        // An invalid base fails the probe at once: the test observes its
+        // message without waiting out the retry backoff, on every platform.
+        tab.repos[0].url = "not a url".into();
+        tab.repo = tab.repos.first().cloned();
+        let (mut app, mut rx) = app_with(vec![tab], false);
         app.handle(Msg::Key(key(KeyCode::Enter)));
         let Mode::Card(Card::File(card)) = app.mode.clone() else {
             panic!("the card opens on enter");
