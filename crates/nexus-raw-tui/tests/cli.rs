@@ -5,6 +5,17 @@ use std::process::Command;
 
 use mock_nexus::{MockNexus, Scenario};
 
+/// The TUI binary with the credential environment cleared: a developer's
+/// exported `NXR_*` values must not decide a test (half a pair is a misuse
+/// before any request, and CI never has them).
+fn tui() -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_nxr-tui"));
+    cmd.env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD");
+    cmd
+}
+
 /// The alternate screen enters with this escape sequence.
 /// Fail-fast means the process never prints it.
 const ALT_SCREEN: &str = "\x1b[?1049h";
@@ -39,10 +50,7 @@ fn seed_tree(mock: &MockNexus) {
 #[test]
 fn a_dead_url_fails_before_any_screen() {
     // Port 1 on loopback: nothing listens, the connection is refused at once.
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
-        .arg("http://127.0.0.1:1/")
-        .output()
-        .unwrap();
+    let out = tui().arg("http://127.0.0.1:1/").output().unwrap();
     assert_eq!(out.status.code(), Some(3), "transport exit code");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("error:"), "stderr was: {stderr}");
@@ -56,10 +64,7 @@ fn a_dead_url_fails_before_any_screen() {
 
 #[test]
 fn a_malformed_url_is_misuse() {
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
-        .arg("not a url")
-        .output()
-        .unwrap();
+    let out = tui().arg("not a url").output().unwrap();
     assert_eq!(out.status.code(), Some(2), "misuse exit code");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("error:"), "stderr was: {stderr}");
@@ -68,7 +73,7 @@ fn a_malformed_url_is_misuse() {
 
 #[test]
 fn a_bad_user_value_is_misuse_without_echoing_it() {
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .args(["-u", "nosplit", "http://127.0.0.1:1/"])
         .output()
         .unwrap();
@@ -87,10 +92,7 @@ fn no_servers_anywhere_is_misuse_with_guidance() {
     // No config in the isolated XDG dir and no positional URL: exit 2 with
     // a message that names both ways out.
     let tmp = tempfile::tempdir().unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
-        .env("XDG_CONFIG_HOME", tmp.path())
-        .output()
-        .unwrap();
+    let out = tui().env("XDG_CONFIG_HOME", tmp.path()).output().unwrap();
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("no servers"), "stderr was: {stderr}");
@@ -99,10 +101,7 @@ fn no_servers_anywhere_is_misuse_with_guidance() {
 
 #[test]
 fn help_names_the_keys_and_the_config() {
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
-        .arg("--help")
-        .output()
-        .unwrap();
+    let out = tui().arg("--help").output().unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     for needle in [
@@ -119,10 +118,7 @@ fn help_names_the_keys_and_the_config() {
 
 #[test]
 fn version_prints_the_workspace_version() {
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
-        .arg("--version")
-        .output()
-        .unwrap();
+    let out = tui().arg("--version").output().unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(
@@ -134,7 +130,7 @@ fn version_prints_the_workspace_version() {
 #[test]
 fn init_config_writes_the_template_into_xdg() {
     let tmp = tempfile::tempdir().unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .env("XDG_CONFIG_HOME", tmp.path())
         .arg("--init-config")
         .output()
@@ -149,7 +145,7 @@ fn init_config_writes_the_template_into_xdg() {
     assert!(text.contains("[[server]]"), "{text}");
     assert!(text.contains("all_formats"), "{text}");
     // A second run refuses to overwrite.
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .env("XDG_CONFIG_HOME", tmp.path())
         .arg("--init-config")
         .output()
@@ -172,7 +168,7 @@ fn smoke_walks_and_downloads_against_a_live_mock() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
 
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .args(["--smoke", &mock.base_url()])
         .current_dir(&work)
         .output()
@@ -223,7 +219,7 @@ fn smoke_names_an_empty_listing() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
 
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .args(["--smoke", &mock.base_url()])
         .current_dir(&work)
         .output()
@@ -260,7 +256,7 @@ fn a_config_preset_drives_the_smoke_run() {
     std::fs::create_dir_all(&work).unwrap();
 
     // No positional URL: the config preset opens.
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .args(["--smoke"])
         .env("XDG_CONFIG_HOME", tmp.path())
         .current_dir(&work)
@@ -276,7 +272,7 @@ fn a_config_preset_drives_the_smoke_run() {
     assert!(work.join("nxr-tui-smoke/raw-main").is_dir(), "{stdout}");
 
     // An unknown preset name is a misuse error naming the known ones.
-    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+    let out = tui()
         .args(["--smoke", "--server", "nope"])
         .env("XDG_CONFIG_HOME", tmp.path())
         .output()
