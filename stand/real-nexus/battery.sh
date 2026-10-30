@@ -153,14 +153,25 @@ done
 if [ "$seen" = 1 ]; then ok "ls --assets lists the objects of a version"; else no "ls --assets lists the objects of a version"; fi
 
 # The tree listing carries the search-reported facts: the real index answers a
-# file's size and digest without a HEAD. One listing, captured once, so a
-# diagnostic sees exactly the bytes the check judged.
-"$NXR" ls "$VER" --json > "$WORK/ls.json" 2> /dev/null
-if grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"size":2000000' &&
-    grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"sha256":"'; then
+# file's size and digest without a HEAD. The index lags, so the listing is polled
+# like the checks above, and one captured run is kept (and printed) when it
+# fails: a diagnostic sees exactly the bytes the check judged.
+seen=0
+for _ in 1 2 3 4 5 6; do
+    if "$NXR" ls "$VER" --json > "$WORK/ls.json" 2> /dev/null &&
+        grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"size":2000000' &&
+        grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"sha256":"'; then
+        seen=1
+        break
+    fi
+    sleep 2
+done
+if [ "$seen" = 1 ]; then
     ok "the tree listing carries the real index facts"
 else
     no "the tree listing carries the real index facts"
+    cp "$WORK/ls.json" "${STAND_ENV:-/tmp/nxr-stand.env}.ls.json" 2> /dev/null || :
+    cat "$WORK/ls.json" >&2 2> /dev/null || :
 fi
 
 # 18-19. Missing objects: head answers, get fails.
