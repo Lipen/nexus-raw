@@ -170,6 +170,46 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
     );
 }
 
+/// Every public method of the `Nxr` facade is named in the API reference: a new
+/// method cannot land undocumented, and a rename cannot leave a stale row alone.
+#[test]
+fn the_api_reference_names_every_facade_method() {
+    let root = repo_root();
+    let source = std::fs::read_to_string(root.join("crates/nexus-raw-core/src/nxr.rs"))
+        .expect("nxr.rs reads");
+    let start = source.find("impl Nxr {").expect("the Nxr impl block");
+    let block = &source[start..];
+    let end = block.find("\n}\n").expect("the impl block closes");
+    let mutations: Vec<String> = block[..end]
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim_start();
+            let rest = line
+                .strip_prefix("pub async fn ")
+                .or_else(|| line.strip_prefix("pub fn "))?;
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            (!name.is_empty()).then_some(name)
+        })
+        .collect();
+    assert!(
+        mutations.len() >= 30,
+        "the parser found {} methods: it regressed",
+        mutations.len()
+    );
+    let doc = std::fs::read_to_string(root.join("docs/reference/api.md")).expect("api.md reads");
+    let missing: Vec<&String> = mutations
+        .iter()
+        .filter(|m| !doc.contains(&format!("`{m}(")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/reference/api.md does not name these facade methods: {missing:?}"
+    );
+}
+
 /// `docs/reference/cli.md` carries a section per command and per `service` subcommand.
 #[test]
 fn the_cli_reference_covers_every_command() {

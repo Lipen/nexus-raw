@@ -93,8 +93,13 @@ Every method mirrors a CLI command one-to-one.
 | Method | Returns | Mirrors | Contract |
 |:--------|:--------|:--------|:---------|
 | `get(url, out, cont)` | `GetOutcome` | `nxr get` | stream a URL to a file or stdout, resume through `<out>.part` |
+| `new(cfg, events)` | `Nxr` | - | build the facade from a `Config` and an event channel |
+| `base()` | `&str` | - | the normalized base URL of this invocation |
+| `last_run_limit()` | `(usize, usize)` | - | the adaptive worker limit of the last directory transfer: the current value and the lowest it reached |
 | `get_range(url, spec)` | `RangeOutcome` | `nxr get --range` | one `START-END`/`START-` span: HEAD for the open form, a past-the-end start is misuse |
+| `read_range(url, start, len)` | `Option<Vec<u8>>` | the mount read path | one in-memory byte span, and `None` means the object is absent |
 | `put(url, src, sha)` | `(u64, Option<Digest>)` | `nxr put` | PUT a file, optionally with its sha-sibling |
+| `put_bytes(url, body, sha)` | `(u64, Option<Digest>)` | `nxr put --stdin` | the same PUT from memory: bytes first, the marker after, the name checked before the first request |
 | `head(url)` | `HeadInfo` | `nxr head` | status and metadata: 404 is a normal result, not an error |
 | `sha(src)` | `Digest` | `nxr sha` | stream a `ShaSource::File` or `ShaSource::Url` through sha256 |
 | `scan(dir)` | `Vec<ArtifactName>` | the `up` input set | the plain-mode local listing `up` starts from |
@@ -104,7 +109,11 @@ Every method mirrors a CLI command one-to-one.
 | `delta(dir, enum_src)` | `Vec<Delta>` | `nxr diff` | the local-against-storage report: `Same`, `MissingLocal`, `MissingRemote`, `Diverged` (size and/or sha), nothing written |
 | `up(dir, names, gen_markers, claim)` | `Summary` | `nxr up` | verified upload: bytes, then the marker of the same name |
 | `up_if_changed(dir, names, gen_markers, claim)` | `Summary` | `nxr up --if-changed` | the same upload with the skip rule: only a verified remote digest skips, divergence re-PUTs |
+| `up_if_changed_plan(dir, names, gen_markers, claim)` | `Vec<Action>` | `nxr up --if-changed --plan` | the plan the if-changed upload would run, nothing written |
+| `wait_search_visible(names, timeout_secs)` | `usize` | `nxr up --wait-index` | poll the search index until the names surface, returning the count seen, and an expired budget is the caller's warning |
 | `delta_search(dir, prefixes)` | `Vec<Delta>` | `nxr diff --via search --ls` | the delta report built from the search index in O(pages) requests, a digestless asset never reads `Same` |
+| `audit(bytes_mode, sample)` | `AuditRun` | `nxr audit` | the structural integrity report over the search tree, markers included. `bytes_mode` verifies bytes, and `sample` limits the byte pass |
+| `audit_filtered(bytes_mode, sample, filter)` | `AuditRun` | `nxr audit --prefix/--name` | the same report narrowed before any request: unselected markers are never fetched |
 | `get_segmented(url, out, segments)` | `GetOutcome` | `nxr get --segments N` | `N` concurrent byte-range spans assembled positionally, verified and renamed atomically, degraded to the single stream when `Range` is ignored |
 | `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `down_with_segments(dir, enum_src, fresh, segments)` | `Summary` | `nxr down --segments N` | the same download with each artifact split into `N` concurrent Range spans |
@@ -116,11 +125,18 @@ Every method mirrors a CLI command one-to-one.
 | `rm_plan(enum_src)` | `Vec<RmAction>` | `rm` without `--yes` | `Remove`/`Missing` per name by remote existence, nothing deleted |
 | `enumerate(enum_src)` | `Vec<ArtifactName>` | - | resolve any enumeration source to its deduplicated names |
 | `service_repos()` | `Vec<RepoInfo>` | `nxr service repos` | server metadata through the service REST API, not storage protocol |
+| `service_status()` | `StatusReport` | `nxr service status` | liveness and writability of the server behind the base |
+| `service_repo(detail)` | `RepoReport` | `nxr service repo [--detail]` | the repository behind the base. `detail` adds the admin-only settings. |
+| `service_assets(q, prefix)` | `(Vec<AssetEntry>, AssetsSummary)` | `nxr service assets` | every asset of the repository through the search API, any format, narrowed by `q` and prefixes |
+| `service_eula()` | `Option<EulaStatus>` | `nxr service eula` | the EULA gate state, `None` when the server has no gate |
+| `service_eula_accept()` | `EulaOutcome` | `nxr service eula --accept` | accept the presented disclaimer (nx-admin) and open the gate |
 | `point_clear(url)` | `ClearOutcome` | `nxr point` | DELETE the pointer: `Cleared` or `Absent` |
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
 | `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden. A file entry carries the search-reported `size` and `digest` when the index has them |
+| `ls_entries_counted()` | `(Vec<Entry>, usize)` | `nxr ls --json` | the same tree with the count of the hidden marker rows |
+| `ls_at(url)` | `Vec<Entry>` | `nxr ls` on any directory URL | the tree of an arbitrary directory URL, not only the facade base |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 | `ls_assets_counted()` | `(Vec<ArtifactName>, usize)` | `nxr ls --assets` | the same listing with the count of rows left out because they are outside the artifact grammar |
 
