@@ -10,6 +10,7 @@ Read access works for any user the server answers.
 
 | Intent | Command | Success looks like | Exit |
 |:--|:--|:--|:--|
+| which repositories exist? | `nxr service repos <url>` | `name format type url` per line | 0 |
 | is the server alive? | `nxr service status <url>` | `alive` / `alive, writable` | 0 |
 | what repository is this? | `nxr service repo <url>` | `name format type url` | 0 |
 | what is where (any format)? | `nxr service assets <repo-url>` | NDJSON lines `asset` + `summary` | 0 |
