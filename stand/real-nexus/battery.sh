@@ -193,6 +193,46 @@ else
 fi
 expect_ok "verify passes offline on the mirror" "$NXR" verify "$WORK/dst"
 
+# --- the remaining paths against the real server ---------------------------
+
+# The search-side delta reads the real index (sizes and checksums per asset)
+# once it catches up: the mirrored copy and the storage agree on every name.
+seen=0
+for _ in 1 2 3 4 5 6; do
+    if "$NXR" diff "$WORK/orig" "$VER" --via search --ls > "$WORK/diff-search.txt" 2> /dev/null; then
+        seen=1
+        break
+    fi
+    sleep 2
+done
+if [ "$seen" = 1 ] && ! grep -qE '^(missing|diverged)' "$WORK/diff-search.txt"; then
+    ok "diff --via search reads the real index as equal"
+else
+    no "diff --via search reads the real index as equal"
+fi
+
+# The segmented read against a real 206 answer: four spans, one byte-equal file.
+expect_ok "get --segments reassembles the real partial-content answer" bash -c "\"$NXR\" get '$VER/big.bin' -o '$WORK/seg-big.bin' --segments 4 && cmp -s '$WORK/orig/big.bin' '$WORK/seg-big.bin'"
+
+# The put primitive: bytes plus the marker of the same name in one call.
+printf 'put bytes\n' > "$WORK/put.bin"
+expect_ok "put writes one object with its marker" "$NXR" put "$VER/put.bin" -f "$WORK/put.bin" --sha
+expect_ok "get returns the put bytes" bash -c "\"$NXR\" get '$VER/put.bin' -o '$WORK/put-got.bin' && cmp -s '$WORK/put.bin' '$WORK/put-got.bin'"
+
+# clone the version through the search API, then re-run with --verify: the
+# second run re-hashes the local tree and downloads nothing, and the clone
+# verifies offline.
+expect_ok "clone mirrors the version" "$NXR" clone "$VER" "$WORK/clone" --workers 4
+expect_ok "clone --verify re-hashes and skips" bash -c "\"$NXR\" clone '$VER' '$WORK/clone' --verify > '$WORK/clone2.txt' && grep -q 'downloaded 0' '$WORK/clone2.txt'"
+expect_ok "verify passes on the clone" "$NXR" verify "$WORK/clone"
+
+# audit --bytes hashes every object against its marker on a real index.
+expect_ok "audit --bytes finds no bitrot" "$NXR" audit "$VER" --bytes
+
+# doctor --deep runs its probes (version, range, content-length, search, repo
+# type, eula) against the real server and reports no failure.
+expect_ok "doctor --deep passes on the real server" "$NXR" doctor "$VER" --deep
+
 # 24-28. A directory listing asks the search API with `q=<directory>/` and keeps the prefix
 # filter client-side (the rule the protocol page names). The seeded fixture is the manual
 # measurement in miniature: the listing must equal the repository-wide walk restricted to

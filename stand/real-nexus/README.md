@@ -20,7 +20,10 @@ The pinned image is pulled on first use.
 - Covered: claim-first ordering, markers in the sha256sum format, resume
   (206/416), divergence refusal, channels, the search-backed listing (the
   directory listing included: a seeded directory's `q` answer must equal the
-  full walk restricted to it), dry runs, down by name, offline verify.
+  full walk restricted to it), dry runs, down by name, offline verify, the
+  segmented read against a real 206 answer, the `put` primitive, `clone` with
+  its fact cache and `clone --verify`, `diff --via search` against the real
+  index, `audit --bytes` and `doctor --deep`.
 - With the mock: auth-401, flaky 5xx, dropped connections - scenarios a real
   server cannot be asked to produce on demand.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429
