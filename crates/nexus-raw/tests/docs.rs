@@ -507,15 +507,16 @@ fn the_cli_reference_tables_name_real_flags() {
         if let Some(rest) = line.strip_prefix("## nxr ") {
             current = rest.split_whitespace().take(2).map(str::to_owned).collect();
         } else if let Some(cell) = line.strip_prefix("| `") {
+            // The cell may pair a short flag with the long one (`-q, --quiet`):
+            // the long spelling is the one `--help` carries.
             if let Some(flag) = cell
                 .split('`')
                 .next()
-                .and_then(|c| c.split_whitespace().next())
+                .into_iter()
+                .flat_map(|c| c.split([' ', ',', '|']))
+                .find(|t| t.starts_with("--") && t.len() > 2)
             {
-                let flag = flag.trim_end_matches(',');
-                if flag.starts_with("--") {
-                    rows.push((flag.to_owned(), current.clone()));
-                }
+                rows.push((flag.to_owned(), current.clone()));
             }
         }
     }
