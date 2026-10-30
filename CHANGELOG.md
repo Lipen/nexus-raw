@@ -57,6 +57,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Node result types mark an unknown fact as optional (`sha256?`, `contentType?`, `size?`, `from?`, `digest?`, the delta sides): the bridge omits a `None` instead of sending `null`, and the delta-side docs claimed `null` before.
   The Node `diff` examples in the README and the quickstart pass the enumeration source the call needs.
 - The Python reference client classifies a 405 to a PUT as `ReadOnlyError` (exit 1, the hint names the group repository), matching the core, and exports the class in `__all__` like every other documented error.
+- A stdout consumer that went away (`nxr --json up ... | head -1`) ends the run with 141, the shell's code for `SIGPIPE`, instead of panicking on a worker thread.
+  A console that cannot take the bytes, a full disk included, fails with 1 and names the write error, and a `get` stream into a closed stdout reports the same 141 instead of blaming the filesystem.
+- A destination that is a file is named as such: `down` and `clone` refuse it with `the destination exists and is not a directory`, instead of a bare `File exists` from the directory creation.
+- Alias files are parsed strictly: an unknown key is misuse that names the alias and the key, so a typo such as `usernmae` no longer degrades into an anonymous request.
+  `nxr get -o -` is misuse too, and the message points at stdout: naming `-` used to create a file called `-`.
+- `nxr doctor` says in its settings line that the probes run once, matching the probe client that never retries.
 - `ls --assets` names the names it leaves out: a server can hold a row outside the artifact grammar (a space, a percent-decoded slash), which the protocol cannot transfer, so the listing reports the count instead of dropping it silently.
   The `hidden` NDJSON event now carries a `reason` (`marker` from the tree listing, `grammar` from `--assets`).
 - The mount leaves a listing name that is not one path component (a decoded `/`, a nul byte, a dot segment) out of `readdir`: `lookup` refuses such a name, so the row could never open.
