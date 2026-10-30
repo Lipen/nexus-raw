@@ -37,8 +37,7 @@ hint: check the command line arguments
 
 ## Exit codes are the API
 
-Exit `0` continues, `1` is a data problem (a retry fails identically), `2` is a broken job definition, `3` is transport trouble (the same command is expected to succeed on a later run).
-A pipeline that closes nxr's stdout early (`nxr --json up ... | head -1`) ends nxr with 141, the shell's code for `SIGPIPE`, and that is a truncated stream, not a data error: read the whole stream in a job and keep `head` out of the pipeline.
+Exit `0` continues, `1` is a data problem (a retry fails identically), `2` is a broken job definition, `3` is transport trouble (the same command is expected to succeed on a later run), and `141` means the job truncated the stream itself (`nxr --json up ... | head -1`), which the [reference](../reference/errors.md) explains.
 The cause-and-fix table: [exit codes](troubleshoot.md#exit-codes-cause-and-fix).
 The full taxonomy: [errors and exit codes](../reference/errors.md).
 
