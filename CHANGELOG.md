@@ -29,7 +29,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - A stray `.part` in a scanned tree names its repair: the reserved-suffix refusal says the file is staging from an interrupted transfer and to finish or delete it, instead of the bare suffix rule.
-- `nxr doctor --deep` names a missing service plane instead of calling an absent endpoint empty: a 404 from the status, search, repositories or eula probe reads `absent (404)`, and a deep warning carries the `[ warn ]` marker, the `"warn":true` field and the summary count like every other warning.
+- `nxr doctor --deep` names a missing service plane instead of calling an absent endpoint empty: the status, repositories and eula probes read `absent (404)`, the search probe reads `search-dead (404: the search endpoint is absent; …)`, and a deep warning carries the `[ warn ]` marker, the `"warn":true` field and the summary count like every other warning.
   A search endpoint that answers 400 (the repository is unknown to the index) is the `search-dead` warning too, so doctor exits 0 on advice it can give and never fails a run over a listing that cannot work.
 - The `search-lag` mock serves the digest of the stored marker, so `diff --via search` against the mock compares real facts: the page used to print zeros, so every uploaded name reported as `diverged (sha)` and the audit flagged every asset as `diverged_fact`.
   A marker row reports no digest instead of a placeholder.
