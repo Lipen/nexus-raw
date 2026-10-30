@@ -226,6 +226,9 @@ fn the_site_nav_lists_every_page() {
 /// The machine-readable index links every docs page and nothing else: a page
 /// added without its `llms.txt` entry stays invisible to the agents that read
 /// the index, and a removed page leaves a dead entry behind.
+/// `scripts/llms-check.sh` pins the file's structure and the nav-to-index
+/// direction. This test adds the filesystem-to-index direction and the
+/// dead-link sweep (no shell check resolves an entry to a page).
 #[test]
 fn the_llms_index_covers_the_docs_pages() {
     let root = repo_root();
