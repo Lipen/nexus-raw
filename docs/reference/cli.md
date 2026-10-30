@@ -1150,6 +1150,7 @@ Settings are validated, not just echoed: workers outside `1..=64`, `--retry 0` o
 With a URL: one `HEAD` probe for reachability.
 Any status below 500 passes, except 401 and 403: the server rejected the credentials, the probe fails, and the detail is the probe line itself (`HEAD <URL> → HTTP 401: any non-5xx means the server is reachable`).
 A 5xx or a connection failure fails the probe as transport.
+Every probe honors `--connect-timeout-secs` and `--stall-secs`, and a doctor run retries nothing: against a host that accepts and never answers, the defaults spend one stall window per probe, so `--stall-secs 2` turns a minute-scale diagnosis into seconds.
 
 Missing credentials are a warning, not a failure: the run reports `none found` and still exits 0, because anonymous requests are a legitimate setup against a read-open repository.
 
