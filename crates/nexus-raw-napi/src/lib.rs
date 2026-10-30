@@ -18,6 +18,8 @@ mod opts;
 mod primitives;
 mod pump;
 mod result;
+#[cfg(test)]
+mod testenv;
 mod transfer;
 
 pub use layout::*;

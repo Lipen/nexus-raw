@@ -584,8 +584,15 @@ mod tests {
         (srv, local)
     }
 
+    // The guard must cover the environment for the whole call, awaits
+    // included: `build_config` reads it on the way in. The guard is a std
+    // mutex held on this single-threaded test runtime, so no task waits on it
+    // from the same thread.
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn diff_reports_the_four_states() {
+        let _env = crate::testenv::ENV_LOCK.lock().expect("env lock");
+        let _clean = crate::testenv::CleanEnv::new();
         let (srv, local) = seed_four_states();
         let url = format!("{}1.14.0/", srv.base_url());
         let report = diff(

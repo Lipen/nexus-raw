@@ -111,37 +111,7 @@ pub fn is_url_target(target: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// build_config reads the process env for credentials: tests that touch it hold this lock so parallel tests never see each other's variables.
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// Removes the credential variables for its lifetime and restores them on
-    /// drop, under the env lock: a developer's exported `NXR_AUTH` must not
-    /// decide a test that asserts the defaults.
-    struct CleanEnv {
-        saved: Vec<(&'static str, Option<String>)>,
-    }
-
-    impl CleanEnv {
-        fn new() -> Self {
-            const VARS: [&str; 4] = ["NXR_AUTH", "NXR_USERNAME", "NXR_PASSWORD", "NXR_CONFIG"];
-            let saved = VARS.iter().map(|v| (*v, std::env::var(v).ok())).collect();
-            for v in VARS {
-                std::env::remove_var(v);
-            }
-            Self { saved }
-        }
-    }
-
-    impl Drop for CleanEnv {
-        fn drop(&mut self) {
-            for (key, value) in &self.saved {
-                match value {
-                    Some(value) => std::env::set_var(key, value),
-                    None => std::env::remove_var(key),
-                }
-            }
-        }
-    }
+    use crate::testenv::{CleanEnv, ENV_LOCK};
 
     #[test]
     fn defaults_match_the_cli() {
