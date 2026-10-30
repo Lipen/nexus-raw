@@ -1497,6 +1497,33 @@ fn get_continue_refuses_a_symlinked_part() {
     assert!(!target.exists(), "no output is renamed from a symlink");
 }
 
+/// A segmented download on a server that ignores `Range` degrades to the single
+/// stream and still lands the object whole.
+#[test]
+fn down_segments_falls_back_when_range_is_ignored() {
+    let srv = server(Scenario::IgnoreRange);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.bin", ALPHA);
+    let base = dir_url(&srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&[
+        "down",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.bin",
+        "--segments",
+        "4",
+    ]);
+    expect_exit(&out, 0, "the segmented down falls back to one stream");
+    assert_eq!(read_file(dst.path(), "a.bin"), ALPHA);
+}
+
 /// A server that answers the ranged resume with the whole body must not append
 /// that body after the part: the client restarts and lands the object whole.
 #[test]
