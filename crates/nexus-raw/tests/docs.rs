@@ -177,23 +177,34 @@ fn the_api_reference_names_every_facade_method() {
     let root = repo_root();
     let source = std::fs::read_to_string(root.join("crates/nexus-raw-core/src/nxr.rs"))
         .expect("nxr.rs reads");
-    let start = source.find("impl Nxr {").expect("the Nxr impl block");
-    let block = &source[start..];
-    let end = block.find("\n}\n").expect("the impl block closes");
-    let mutations: Vec<String> = block[..end]
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim_start();
-            let rest = line
-                .strip_prefix("pub async fn ")
-                .or_else(|| line.strip_prefix("pub fn "))?;
+    // Line endings differ by checkout (CRLF on a Windows runner), so the block
+    // is delimited by whole lines, not by a byte pattern.
+    let mut mutations: Vec<String> = Vec::new();
+    let mut inside = false;
+    for line in source.lines() {
+        let line = line.trim_end();
+        if line == "impl Nxr {" {
+            inside = true;
+            continue;
+        }
+        if inside && line == "}" {
+            break;
+        }
+        if !inside {
+            continue;
+        }
+        let line = line.trim_start();
+        let rest = line
+            .strip_prefix("pub async fn ")
+            .or_else(|| line.strip_prefix("pub fn "));
+        if let Some(rest) = rest {
             let name: String = rest
                 .chars()
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
                 .collect();
-            (!name.is_empty()).then_some(name)
-        })
-        .collect();
+            mutations.push(name);
+        }
+    }
     assert!(
         mutations.len() >= 30,
         "the parser found {} methods: it regressed",
