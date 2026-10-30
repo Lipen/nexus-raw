@@ -297,6 +297,8 @@ The search index lags behind writes.
 
 The first storage PUT arms a catch-up deadline (6000 ms).
 `GET /service/rest/v1/search/assets` answers the empty page until the deadline passes, then a store-backed listing.
+Each asset carries the size of its stored bytes and, when a marker sits beside the bytes, the marker's digest.
+A marker row reports no digest.
 
 **Pinned invariant:** up --wait-index holds the run until the uploaded names surface in the search answer and reports the wait.
 The expired budget is a warning line, never a failed exit.

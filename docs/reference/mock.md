@@ -91,5 +91,7 @@ Then the behavior itself: the wire arms live in `http.rs` (pipeline gates) and `
 ## search-lag
 
 The search index lags behind writes: the first storage PUT arms a catch-up deadline (6000 ms), and `GET /service/rest/v1/search/assets` answers the empty page until it passes, then a store-backed listing.
+The store-backed items carry the size of the stored bytes and, when the writer left a marker, the marker's digest.
+A marker row itself reports no digest, and the page never invents a placeholder.
 The scenario models a real server's eventual search visibility, and pins the `up --wait-index` contract: the wait ends with every uploaded name reported visible, and an expired budget is a warning line, never a failed exit.
 Storage reads and writes behave like `atomic`.

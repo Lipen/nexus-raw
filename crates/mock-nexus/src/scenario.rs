@@ -219,7 +219,10 @@ pub enum Scenario {
     /// The search index lags behind writes: for `lag_ms` after the first PUT of a run,
     /// `/service/rest/v1/search/assets` serves the empty page.
     /// Afterwards it serves the
-    /// store-backed answer like [`Scenario::Atomic`].
+    /// store-backed answer like [`Scenario::Atomic`]: each asset carries the size of
+    /// its stored bytes and, when a marker sits beside the bytes, the marker's digest.
+    /// A marker row reports no digest.
+    /// The page never invents a placeholder.
     /// The first PUT starts the clock.
     /// Storage behavior is [`Scenario::Atomic`].
     SearchLag { lag_ms: u64 },

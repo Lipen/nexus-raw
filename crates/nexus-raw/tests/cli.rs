@@ -5255,6 +5255,33 @@ fn via_search_matches_plain_diff_and_needs_one_listing() {
     );
 }
 
+/// The store-backed search page carries the uploaded marker's digest, so the
+/// index a lagging server eventually serves is enough for `diff --via search`
+/// to return the same verdict the probes would: equal names, no false divergence.
+#[test]
+fn via_search_reads_the_store_backed_facts() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let local = tempfile::TempDir::new().unwrap();
+    write_file(local.path(), "a.zip", ALPHA);
+    write_file(local.path(), "b.zip", BETA);
+    let base = repo_dir_url(&srv);
+    expect_exit(
+        &nxr(&["up", local.path().to_str().unwrap(), &base]),
+        0,
+        "the upload arms the index and stores the markers",
+    );
+    let out = nxr(&[
+        "diff",
+        local.path().to_str().unwrap(),
+        &base,
+        "--via",
+        "search",
+        "--ls",
+    ]);
+    expect_exit(&out, 0, "the store-backed facts are equal");
+    assert_eq!(stdout(&out), "same a.zip\nsame b.zip\n");
+}
+
 /// `--prefix` filters the search-side delta too, a local-only name included:
 /// the remote side is narrowed by the search facts, the local scan is not.
 #[test]

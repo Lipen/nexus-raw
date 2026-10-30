@@ -348,7 +348,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         // repo-relative paths, the shape the search API reports.
                         // `q` narrows the list with the same loose match the generated pages model.
                         let q = query_param(&req.target, "q").map(percent_decode);
-                        let keys: Vec<(String, usize)> = lock(&shared.store)
+                        let store = lock(&shared.store);
+                        let keys: Vec<(String, usize, Option<String>)> = store
                             .iter()
                             .filter_map(|(k, bytes)| {
                                 // The repository collection is a service document
@@ -366,15 +367,30 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                                 } else {
                                     k.clone()
                                 };
-                                Some((path, bytes.len()))
+                                // The store keeps a marker beside the bytes when the
+                                // writer left one; its body is the artifact digest, the
+                                // fact a real search answer carries. A marker row's own
+                                // digest is not stored, so its item omits the field
+                                // rather than inventing one.
+                                let digest = if k.ends_with(".sha256") {
+                                    None
+                                } else {
+                                    store
+                                        .get(&format!("{k}.sha256"))
+                                        .and_then(|marker| marker_digest(marker))
+                                };
+                                Some((path, bytes.len(), digest))
                             })
-                            .filter(|(path, _)| q.as_deref().is_none_or(|q| q_matches(q, path)))
+                            .filter(|(path, _, _)| q.as_deref().is_none_or(|q| q_matches(q, path)))
                             .collect();
                         let items: Vec<String> = keys
                             .iter()
-                            .map(|(k, size)| {
+                            .map(|(k, size, digest)| {
+                                let checksum = digest.as_ref().map_or_else(String::new, |d| {
+                                    format!(r#","checksum":{{"sha256":"{d}"}}"#)
+                                });
                                 format!(
-                                    "{{\"downloadUrl\":\"/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"fileSize\":{size},\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
+                                    r#"{{"downloadUrl":"/{k}","path":"/{k}","id":"raw-main:{k}","repository":"raw-main","format":"raw","fileSize":{size}{checksum}}}"#
                                 )
                             })
                             .collect();
@@ -608,4 +624,12 @@ fn auth_decision(header: Option<&str>, expected_b64: &str) -> bool {
         return false;
     };
     scheme.eq_ignore_ascii_case("basic") && token.trim() == expected_b64
+}
+
+/// The digest line of a stored marker: `<64 hex>  <name>\n`.
+/// The first token is the artifact digest; anything else is not a marker and yields `None`.
+fn marker_digest(bytes: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let first = text.split_whitespace().next()?;
+    (first.len() == 64 && first.bytes().all(|b| b.is_ascii_hexdigit())).then(|| first.to_owned())
 }

@@ -254,6 +254,61 @@ fn search_lag_page_reports_the_stored_size() {
     );
 }
 
+/// search-lag: the store-backed page carries the artifact digest from the stored
+/// marker, and a marker row reports no digest rather than a placeholder.
+#[test]
+fn search_lag_page_reports_the_marker_digest() {
+    let server = MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).unwrap();
+    let digest = "ab".repeat(32);
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/repository/raw-main/1.0.0/a.bin",
+        b"PAYLOAD",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+    let marker = format!("{digest}  a.bin\n");
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/repository/raw-main/1.0.0/a.bin.sha256",
+        marker.as_bytes(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/search/assets?repository=raw-main",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    let text = String::from_utf8_lossy(&body);
+    assert!(
+        text.contains(&format!(
+            r#""fileSize":7,"checksum":{{"sha256":"{digest}"}}"#
+        )),
+        "the page echoes the stored digest: {text}"
+    );
+    assert!(
+        text.contains(&format!(
+            r#""path":"/1.0.0/a.bin.sha256","id":"raw-main:1.0.0/a.bin.sha256","repository":"raw-main","format":"raw","fileSize":{}"#,
+            marker.len()
+        )),
+        "the marker row is listed without invented facts: {text}"
+    );
+    assert!(
+        !text.contains("0000000000000000000000000000000000000000000000000000000000000000"),
+        "no placeholder digest: {text}"
+    );
+}
+
 /// static-host: reads and ranges, every write refused with 405 and `Allow`, no service plane.
 #[test]
 fn static_host_serves_reads_and_refuses_writes() {

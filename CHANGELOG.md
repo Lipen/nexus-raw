@@ -27,6 +27,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The `search-lag` mock serves the digest of the stored marker, so `diff --via search` against the mock compares real facts: the page used to print zeros, and every uploaded name reported as `diverged (sha)`.
+  A marker row reports no digest instead of a placeholder.
 - The search facts the client reads carry a size on a real Nexus: the pinned 3.96.3 serves the field as `fileSize`, and `diff --via search`, `service assets` and the new `ls --json` size read `size`, which no real answer carries, so the size was always absent.
   The flat `size` form stays as a fallback for a proxy that rewrites the document.
 - A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
