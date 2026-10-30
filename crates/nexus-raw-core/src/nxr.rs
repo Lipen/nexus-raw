@@ -869,7 +869,7 @@ impl Nxr {
     /// The plan is [`sync::classify_if_changed`](crate::sync): the only skip is a complete
     /// local copy whose digest equals the remote marker's digest, everything divergent
     /// re-PUTs, and a broken local or remote object refuses the run exactly like the plain `up`:
-    /// the flag relaxes the divergence rule, never the never-overwrite rule.
+    /// the flag relaxes exactly the complete-pair divergence refusal (protocol §5.2), and nothing else.
     ///
     /// # Errors
     ///

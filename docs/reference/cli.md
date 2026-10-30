@@ -264,7 +264,7 @@ Repeated names transfer again, identical ones are skipped, and an interrupted `u
 | Flag | Meaning |
 |:-----|:--------|
 | `--no-sha` | skip marker generation and marker uploads, bytes only |
-| `--if-changed` | skip names whose remote marker digest equals the local copy, re-upload the changed rest (a missing or foreign remote marker re-uploads the name) |
+| `--if-changed` | skip names whose remote marker digest equals the local copy, re-upload the changed rest (a missing or wrong-digest remote marker re-uploads the name, and an unparseable remote marker still refuses, like the plain `up`) |
 | `--plan` | print the plan without transferring anything (the `--dry-run` spelling works as an alias) |
 | `--prefix <PREFIX>` | publish only the names under this whole-segment prefix (`bom/`), repeatable. The relative path is kept, so `a/x` lands as `a/x`. The selected subtrees are scanned. Entries outside them are never read |
 | `--claim-first <NAME>` | upload this one name first and alone, before any other name starts |
