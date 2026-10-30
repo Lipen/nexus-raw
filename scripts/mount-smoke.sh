@@ -27,6 +27,10 @@ case "${1:-}" in
     ;;
 esac
 
+# The mock needs no credentials: a developer's half-exported NXR_* pair is a
+# misuse before the first request, so the smoke scrubs the credential variables.
+unset NXR_AUTH NXR_USERNAME NXR_PASSWORD NXR_CA_BUNDLE
+
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=ui.sh
 . "$script_dir/ui.sh"
