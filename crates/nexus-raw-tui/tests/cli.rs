@@ -162,6 +162,45 @@ fn init_config_writes_the_template_into_xdg() {
     );
 }
 
+/// The template the binary writes loads back through the same binary's loader:
+/// a TOML syntax error or an invalid value in the writer would break every
+/// generated config. (Unknown keys are ignored by the loader, so this does not
+/// claim to catch a writer-side key the parser lacks.)
+#[test]
+fn the_init_template_loads_back() {
+    let cfg_home = tempfile::tempdir().unwrap();
+    let init = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+        .env("XDG_CONFIG_HOME", cfg_home.path())
+        .arg("--init-config")
+        .output()
+        .unwrap();
+    assert!(
+        init.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    let mock = MockNexus::start(Scenario::Atomic).unwrap();
+    seed_tree(&mock);
+    let work = std::env::temp_dir().join(format!("nxr-tui-template-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+        .env("XDG_CONFIG_HOME", cfg_home.path())
+        .current_dir(&work)
+        .args(["--smoke", &mock.base_url()])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "the generated template must load: stdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout.contains("smoke ok"), "{stdout}");
+    let _ = std::fs::remove_dir_all(&work);
+}
+
 #[test]
 fn smoke_walks_and_downloads_against_a_live_mock() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
