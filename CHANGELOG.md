@@ -31,6 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The flat `size` form stays as a fallback for a proxy that rewrites the document.
 - A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
   The marker of the previous download is dropped before the next transfer: left in place it became the resume guard's expectation and refused a legitimately changed object.
+- The browser's card download builds its URL from the repository root and the name's own path: a card opened on a row inside an expanded folder used to fetch the tab root plus the bare name, a different object.
 - The browser's single-file download accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.
 - A repository name ending in a dot or a space, or made only of them, is refused by the browser's name rule: on Windows such a name resolves to a different directory.
   The save-as dialog applies the same rule to a typed folder name.

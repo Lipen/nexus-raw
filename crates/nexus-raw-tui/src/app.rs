@@ -2912,7 +2912,12 @@ impl App {
             self.status = format!("refused: an unsafe path segment in {}", rel.escape_debug());
             return;
         }
-        let url = format!("{}{}", t.here_url(), row.rel);
+        // The URL is the repository root plus the name's path from it. The tab
+        // position is already inside `rel` (`full_rel` prepends it), so
+        // `here_url` would double it, and a card opened on a row of an expanded
+        // folder would drop the folder.
+        let repo_row = RepoRow::from(&repo);
+        let url = format!("{}{}", repo_row.dir_url(), rel);
         let out = if flat {
             base.join(&row.name)
         } else {
@@ -2922,7 +2927,6 @@ impl App {
             self.status = "refused: the name escapes the destination".into();
             return;
         }
-        let repo_row = RepoRow::from(&repo);
         self.transfer = Some(Transfer {
             repo_url: repo_row.dir_url(),
             server: Some(host_of(&repo_row.url)),
@@ -4408,7 +4412,41 @@ mod tests {
         assert_eq!(card.size, SizeState::Known(body.len() as u64));
         assert_eq!(card.sha, ShaState::Hex(digest.as_str().to_owned()));
         assert_eq!(app.pending, 0, "known facts spawn no probe");
+        // A spawned probe runs only when the test yields: without this, try_recv
+        // would pass even if both were queued.
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
         assert!(rx.try_recv().is_err(), "no request is queued");
+    }
+
+    /// Only the size is known: the digest probe runs, and it is the only one.
+    #[tokio::test]
+    async fn the_card_probes_only_the_missing_fact() {
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![Entry {
+                name: "a.bin".into(),
+                kind: EntryKind::File,
+                size: Some(6),
+                digest: None,
+            }])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card opens on enter");
+        };
+        assert_eq!(card.size, SizeState::Known(6));
+        assert_eq!(card.sha, ShaState::Pending);
+        assert_eq!(app.pending, 1, "exactly one probe is outstanding");
+        let msg = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("the sibling probe answers")
+            .expect("a message");
+        assert!(
+            matches!(msg, Msg::Sibling { .. }),
+            "the digest is the missing fact: {msg:?}"
+        );
     }
 
     #[tokio::test]
@@ -6565,6 +6603,31 @@ mod tests {
         assert_eq!(app.tabs.len(), 1, "the detached result opens no tab");
         let saved = crate::config::load(&path).unwrap();
         assert!(saved.servers.is_empty(), "the config stays untouched");
+    }
+
+    /// A card opened on a row inside an expanded folder downloads from the
+    /// folder's URL, not from the tab root: the name's path is in the card.
+    #[tokio::test]
+    async fn the_card_downloads_the_expanded_row_url() {
+        let (mut app, _rx) = app_with(vec![tree_tab(vec![entry("a", EntryKind::Dir)])], false);
+        let repo = RepoRow::from(&app.tabs[0].repos[0]);
+        let card = Card::File(Box::new(FileCard {
+            tab: 0,
+            gen: app.tabs[0].gen,
+            name: "c.txt".into(),
+            rel: "a/c.txt".into(),
+            url: format!("{}a/c.txt", repo.dir_url()),
+            repo,
+            size: SizeState::Pending,
+            sha: ShaState::Pending,
+        }));
+        app.card_download(card);
+        let download = app.transfer.expect("the card download starts");
+        let Retry::Get { url, out, .. } = download.retry.expect("the get retry") else {
+            panic!("the card download retries as a get");
+        };
+        assert!(url.ends_with("/a/c.txt"), "{url}");
+        assert!(out.ends_with("a/c.txt"), "{out:?}");
     }
 
     #[tokio::test]
