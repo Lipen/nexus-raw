@@ -153,9 +153,11 @@ done
 if [ "$seen" = 1 ]; then ok "ls --assets lists the objects of a version"; else no "ls --assets lists the objects of a version"; fi
 
 # The tree listing carries the search-reported facts: the real index answers a
-# file's size and digest without a HEAD.
-if "$NXR" ls "$VER" --json 2> /dev/null | grep '"entry":"big.bin"' | grep -q '"size":2000000' &&
-    "$NXR" ls "$VER" --json 2> /dev/null | grep '"entry":"big.bin"' | grep -q '"sha256":"'; then
+# file's size and digest without a HEAD. One listing, captured once, so a
+# diagnostic sees exactly the bytes the check judged.
+"$NXR" ls "$VER" --json > "$WORK/ls.json" 2> /dev/null
+if grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"size":2000000' &&
+    grep '"entry":"big.bin"' "$WORK/ls.json" | grep -q '"sha256":"'; then
     ok "the tree listing carries the real index facts"
 else
     no "the tree listing carries the real index facts"
