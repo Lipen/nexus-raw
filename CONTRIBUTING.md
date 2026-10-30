@@ -14,6 +14,7 @@ just demo         # a real session against the mock server and stub payloads
 
 `just` is optional: each recipe wraps `cargo`, `uvx`, or a repository script, and the recipe is the exact command the gate runs.
 The gate checks the wasm target once, so a fresh checkout needs `rustup target add wasm32-unknown-unknown`.
+`cargo deny` fetches the RustSec advisory database with git on its first run: it needs the network and a working git transport (https, or ssh with your agent), not just the crate registry.
 
 The conformance suites drive both `nexus-raw-core` and the `nxr` binary against `mock-nexus`, the failure-injection server in `crates/mock-nexus`.
 Its scenario list is the contract: a scenario added for one client lands with the test that exercises it.
