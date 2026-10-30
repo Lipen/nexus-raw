@@ -3003,6 +3003,31 @@ fn ndjson_events_parse_and_summarize() {
 
 // ---- golden ndjson --------------------------------------------------------
 
+/// The `ls --json` shape is golden: the hidden count of the listed directory, a
+/// folder row, and a file row carrying the search facts.
+#[test]
+fn golden_ndjson_ls_holds() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    std::fs::create_dir_all(src.path().join("sub")).unwrap();
+    write_file(&src.path().join("sub"), "b.bin", BETA);
+    let repo = clone_repo_url(&srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &repo]),
+        0,
+        "seeding the ls fixture",
+    );
+
+    let ls = nxr(&["--json", "ls", &repo]);
+    expect_exit(&ls, 0, "golden ls");
+    assert_eq!(
+        stdout(&ls),
+        golden("ls.ndjson"),
+        "the ls ndjson changed: update tests/golden/ls.ndjson deliberately"
+    );
+}
+
 /// The --json surface is a contract, pinned byte-exact by fixtures in tests/golden/.
 /// One artifact per run keeps chunk events deterministic.
 /// No URL reaches these outputs, so the bytes carry no ports.
@@ -3272,6 +3297,7 @@ fn golden(name: &str) -> String {
         "failures.ndjson" => include_str!("golden/failures.ndjson"),
         "rm.ndjson" => include_str!("golden/rm.ndjson"),
         "audit.ndjson" => include_str!("golden/audit.ndjson"),
+        "ls.ndjson" => include_str!("golden/ls.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
     }
     .replace("\r\n", "\n")

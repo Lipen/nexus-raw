@@ -837,6 +837,8 @@ Treat both as conveniences only.
 A file row carries the size and sha256 the search answer reported, when it did, so a consumer can plan without a HEAD per name.
 A folder row carries neither: a raw folder has no size of its own.
 An index or proxy that reports no facts leaves the fields out rather than inventing them.
+The count is the hidden rows of the listed directory, not of the whole subtree below it.
+
 When the enumeration hides rows as derived data or as untransferable, a final line reports the count with its reason: `{"event":"hidden","count":1,"reason":"marker"}` from the tree, `{"event":"hidden","count":1,"reason":"grammar"}` from `--assets`.
 
 ## nxr channel get
