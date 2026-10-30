@@ -3129,6 +3129,30 @@ fn ndjson_events_parse_and_summarize() {
 
 // ---- golden ndjson --------------------------------------------------------
 
+/// The `mv --json` composition is golden: the pour's events and summary, then
+/// the delete's events and summary, one stream.
+#[test]
+fn golden_ndjson_mv_holds() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let from = format!("{}1.0.0/", clone_repo_url(&srv));
+    let to = format!("{}2.0.0/", clone_repo_url(&srv));
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &from]),
+        0,
+        "seeding the mv fixture",
+    );
+
+    let out = nxr(&["--json", "mv", &from, &to, "--ls", "--yes"]);
+    expect_exit(&out, 0, "golden mv");
+    assert_eq!(
+        stdout(&out),
+        golden("mv.ndjson"),
+        "the mv ndjson changed: update tests/golden/mv.ndjson deliberately"
+    );
+}
+
 /// The `clone --plan --json` shape is golden: one line per name with the plan
 /// and, for a transfer, the size.
 #[test]
@@ -3457,6 +3481,7 @@ fn golden(name: &str) -> String {
         "audit.ndjson" => include_str!("golden/audit.ndjson"),
         "ls.ndjson" => include_str!("golden/ls.ndjson"),
         "clone-plan.ndjson" => include_str!("golden/clone-plan.ndjson"),
+        "mv.ndjson" => include_str!("golden/mv.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
     }
     .replace("\r\n", "\n")
