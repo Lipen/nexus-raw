@@ -8,6 +8,10 @@ A behavior pinned against the mock is therefore pinned against a single contract
 The server depends only on the standard library and `serde_json`.
 It handles one request per connection and closes every connection, so there is no keep-alive, no chunked encoding and no async runtime.
 
+Search is served only by the scenarios that model it: `search-lag` (store-backed, one item per stored object) plus the synthetic pages of `assets-pagination`, `assets-prefix-q` and `audit-litter`, and the failure shape of `search-400`.
+Every other scenario answers `/service/rest/v1/search/assets` with 404, so `nxr clone` and the search-driven surfaces refuse with `cannot enumerate` against them.
+To clone a tree you uploaded yourself, run `mock-nexus search-lag --lag-ms 0`.
+
 ## Quick starts
 
 As a library in a Rust test:
