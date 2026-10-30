@@ -346,6 +346,9 @@ pub(crate) fn read_names_file(path: &str) -> Result<Vec<String>, Error> {
         std::fs::read_to_string(path)
             .map_err(|e| Error::Misuse(format!("cannot read --names-from {path}: {e}")))?
     };
+    // A Windows editor stamps a UTF-8 BOM on the first line: it is not part of
+    // the name, and dropping it keeps an exported list usable as written.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     let mut out = Vec::new();
     for (n, line) in text.lines().enumerate() {
         let name = line.trim();
@@ -389,6 +392,12 @@ pub(crate) fn enumeration_source(
     }
     if !all.is_empty() {
         return Ok(Enumeration::Names(parse_names(&all)?));
+    }
+    if !names_from.is_empty() {
+        return Err(Error::Misuse(format!(
+            "--names-from {} carried no names: the file is empty or holds blank lines only",
+            names_from.join(", ")
+        )));
     }
     Err(Error::Enumerate {
         url: base.to_owned(),

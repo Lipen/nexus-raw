@@ -1309,11 +1309,11 @@ fn down_names_from_empty_refuses() {
         "--names-from",
         list_path.to_str().unwrap(),
     ]);
-    expect_exit(&down, 1, "empty names file refuses");
+    expect_exit(&down, 2, "an empty names file is misuse");
     let err = stderr(&down);
     assert!(
-        err.contains("no --name/--names-from/--ls given"),
-        "the refusal names all three sources: {err}"
+        err.contains("carried no names"),
+        "the refusal names the file, not a missing source: {err}"
     );
 }
 
@@ -1442,6 +1442,26 @@ fn a_full_stdout_is_reported_not_swallowed() {
         err.contains("cannot write to stdout"),
         "the write failure is named: {err}"
     );
+}
+
+/// A names file stamped with a UTF-8 BOM (a Windows editor) reads as written.
+#[test]
+fn a_names_file_with_a_bom_reads_as_written() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let dir = TempDir::new().unwrap();
+    let list = dir.path().join("names.txt");
+    std::fs::write(&list, "\u{feff}a.bin\n").unwrap();
+    let dst = dir.path().join("out");
+    let down = nxr(&[
+        "down",
+        &root_url(&srv),
+        dst.to_str().unwrap(),
+        "--names-from",
+        list.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 0, "the BOM is not part of the name");
+    assert!(dst.join("a.bin").is_file(), "the name landed");
 }
 
 /// A destination that is a file is a naming mistake, named as such, not a bare
