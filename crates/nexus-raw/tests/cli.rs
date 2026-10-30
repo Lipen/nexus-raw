@@ -1094,6 +1094,35 @@ fn down_names_from_file() {
     assert_eq!(read_file(dst.path(), "b.bin"), BETA);
 }
 
+/// The transfer URL may be the repository root: a flat repository with no
+/// version directories uploads and downloads by name.
+#[test]
+fn up_and_down_work_at_the_repository_root() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "flat.bin", ALPHA);
+    let root = format!("{}repository/raw-main/", srv.base_url());
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &root]),
+        0,
+        "up at the repository root",
+    );
+
+    let list = TempDir::new().unwrap();
+    let list_path = list.path().join("names.txt");
+    std::fs::write(&list_path, "flat.bin\n").unwrap();
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &root,
+        dst.path().to_str().unwrap(),
+        "--names-from",
+        list_path.to_str().unwrap(),
+    ]);
+    expect_exit(&down, 0, "down at the repository root");
+    assert_eq!(read_file(dst.path(), "flat.bin"), ALPHA);
+}
+
 /// `--names-from -` reads the name list from stdin.
 #[test]
 fn down_names_from_stdin() {
