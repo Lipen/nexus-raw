@@ -358,6 +358,16 @@ if "$NXR" service assets "$URL/" 2> /dev/null | grep -q 'hello.txt'; then
 else
     no "service assets lists the repository through the search API"
 fi
+if "$NXR" service eula "$BASE/" 2> /dev/null | grep -q '^accepted:'; then
+    ok "service eula reads the EULA gate"
+else
+    no "service eula reads the EULA gate"
+fi
+if "$NXR" service repo --detail "$URL/" 2> /dev/null | grep -q '"name": *"stand"'; then
+    ok "service repo --detail reads the admin settings"
+else
+    no "service repo --detail reads the admin settings"
+fi
 
 # rm deletes exactly the named objects on a real server, marker first, and a
 # rerun sees only 404s and still exits 0.
