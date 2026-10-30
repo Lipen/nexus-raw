@@ -227,8 +227,11 @@ fn the_site_nav_lists_every_page() {
 /// added without its `llms.txt` entry stays invisible to the agents that read
 /// the index, and a removed page leaves a dead entry behind.
 /// `scripts/llms-check.sh` pins the file's structure and the nav-to-index
-/// direction. This test adds the filesystem-to-index direction and the
-/// dead-link sweep (no shell check resolves an entry to a page).
+/// direction, and this test's forward check is transitively implied once the
+/// nav test holds. It stays because the shell gate runs in `just check-docs`
+/// and the docs workflow, not in `just check`: the forward check is what the
+/// local gate has, and the dead-link sweep (no shell check resolves an entry
+/// to a page) exists nowhere else.
 #[test]
 fn the_llms_index_covers_the_docs_pages() {
     let root = repo_root();
