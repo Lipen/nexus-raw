@@ -221,6 +221,57 @@ fn the_api_reference_names_every_facade_method() {
     );
 }
 
+/// Every `Error` variant is named in the error reference: a new class cannot land
+/// without the page that tells the user what it means and what to check next.
+#[test]
+fn the_error_reference_names_every_error_variant() {
+    let root = repo_root();
+    let source = std::fs::read_to_string(root.join("crates/nexus-raw-core/src/error.rs"))
+        .expect("error.rs reads");
+    let start = source.find("pub enum Error {").expect("the Error enum");
+    let mut variants = Vec::new();
+    let mut inside = false;
+    for line in source[start..].lines() {
+        let line = line.trim_end();
+        if line == "pub enum Error {" {
+            inside = true;
+            continue;
+        }
+        if inside && line == "}" {
+            break;
+        }
+        if !inside {
+            continue;
+        }
+        let line = line.trim_start();
+        if !line.starts_with(|c: char| c.is_ascii_uppercase()) {
+            continue;
+        }
+        let name: String = line
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        if !name.is_empty() {
+            variants.push(name);
+        }
+    }
+    assert!(
+        variants.len() >= 15,
+        "the parser found {} variants: it regressed",
+        variants.len()
+    );
+    let doc =
+        std::fs::read_to_string(root.join("docs/reference/errors.md")).expect("errors.md reads");
+    let missing: Vec<&String> = variants
+        .iter()
+        .filter(|v| !doc.contains(&format!("`{v}")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/reference/errors.md does not name these error variants: {missing:?}"
+    );
+}
+
 /// `docs/reference/cli.md` carries a section per command and per `service` subcommand.
 #[test]
 fn the_cli_reference_covers_every_command() {
