@@ -140,11 +140,13 @@ fn run_pass_cmd(alias: &str, cmd: &str) -> Result<String, Error> {
         .map_err(|e| misuse(format!("alias `{alias}`: pass_cmd failed to run: {e}")))?;
     if !out.status.success() {
         let body = String::from_utf8_lossy(&out.stderr);
-        let first = body.lines().next().unwrap_or("").to_owned();
-        return Err(misuse(format!(
-            "alias `{alias}`: pass_cmd exited {}: {first}",
-            out.status.code().unwrap_or(-1)
-        )));
+        let first = body.lines().next().unwrap_or("").trim();
+        let code = out.status.code().unwrap_or(-1);
+        return Err(misuse(if first.is_empty() {
+            format!("alias `{alias}`: pass_cmd exited {code}")
+        } else {
+            format!("alias `{alias}`: pass_cmd exited {code}: {first}")
+        }));
     }
     let pass = String::from_utf8_lossy(&out.stdout);
     let pass = pass.trim_end_matches(['\r', '\n']);
@@ -394,6 +396,14 @@ url = "https://anon.example.com"
         );
         assert!(e.contains("cannot read"), "{e}");
         assert!(e.contains("only read when -R"), "{e}");
+    }
+
+    #[test]
+    fn a_silent_pass_cmd_failure_has_no_trailing_colon() {
+        let (_d, p) = write("[alias.corp]\nurl = \"x\"\nuser = \"u\"\npass_cmd = \"exit 3\"\n");
+        let a = Aliases::load(&p).unwrap();
+        let e = format!("{}", a.get("corp").unwrap().creds("corp").unwrap_err());
+        assert!(e.ends_with("pass_cmd exited 3"), "{e}");
     }
 
     #[test]
