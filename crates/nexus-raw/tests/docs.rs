@@ -170,6 +170,60 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
     );
 }
 
+/// The machine-readable index links every docs page and nothing else: a page
+/// added without its `llms.txt` entry stays invisible to the agents that read
+/// the index, and a removed page leaves a dead entry behind.
+#[test]
+fn the_llms_index_covers_the_docs_pages() {
+    let root = repo_root();
+    let mut files = Vec::new();
+    markdown_files(&root.join("docs"), &mut files);
+    let pages: Vec<String> = files
+        .iter()
+        .filter_map(|p| p.strip_prefix(root.join("docs")).ok())
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .filter(|p| p != "index.md")
+        .collect();
+    assert!(pages.len() >= 25, "the walk found {} pages", pages.len());
+    let index = std::fs::read_to_string(root.join("docs/llms.txt")).expect("llms.txt reads");
+    let mut linked: Vec<String> = Vec::new();
+    let mut rest = index.as_str();
+    const PREFIX: &str = "https://lipen.github.io/nexus-raw/";
+    while let Some(at) = rest.find(PREFIX) {
+        let tail = &rest[at + PREFIX.len()..];
+        let end = tail
+            .find(|c: char| {
+                !(c.is_ascii_alphanumeric() || c == '/' || c == '-' || c == '_' || c == '.')
+            })
+            .unwrap_or(tail.len());
+        linked.push(tail[..end].trim_end_matches('/').to_owned());
+        rest = &tail[end..];
+    }
+    let missing: Vec<&String> = pages
+        .iter()
+        .filter(|p| {
+            let stem = p.trim_end_matches(".md");
+            !linked.iter().any(|l| l == stem)
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/llms.txt does not link these pages: {missing:?}"
+    );
+    let dead: Vec<&String> = linked
+        .iter()
+        .filter(|l| !l.is_empty())
+        .filter(|l| {
+            !root.join("docs").join(format!("{l}.md")).is_file()
+                && !root.join("docs").join(l).join("index.md").is_file()
+        })
+        .collect();
+    assert!(
+        dead.is_empty(),
+        "docs/llms.txt links pages that do not exist: {dead:?}"
+    );
+}
+
 /// Every `bash` block in the docs parses: a recipe a reader copies must be a
 /// valid script, and a broken fence or a stray quote is caught here.
 /// Unix only: the parse needs a `bash` binary, and the suite skips the check
