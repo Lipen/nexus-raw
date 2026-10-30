@@ -22,7 +22,13 @@ pub(crate) fn out_fmt(args: std::fmt::Arguments<'_>) {
     let written = stdout
         .write_fmt(args)
         .and_then(|()| stdout.write_all(b"\n"));
-    if written.is_err() {
+    if let Err(err) = written {
+        if err.kind() == std::io::ErrorKind::BrokenPipe {
+            // The reader is gone (`nxr --json up ... | head -1`): end the run
+            // the way a POSIX tool does when SIGPIPE fires, instead of
+            // panicking or uploading silently to nobody.
+            std::process::exit(141);
+        }
         OUT_CLOSED.store(true, Ordering::Relaxed);
     }
 }

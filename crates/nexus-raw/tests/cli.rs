@@ -6258,8 +6258,8 @@ fn up_wait_index_timeout_is_a_warning_not_a_failure() {
 // ---- pipelines ------------------------------------------------------------
 
 /// A consumer that closes the pipe (`nxr --json up ... | head -1`) must not
-/// panic on a worker thread: the output stops, the transfer finishes, and the
-/// exit code stays the operation's own.
+/// panic on a worker thread: the run ends with the SIGPIPE exit code, the way
+/// curl and rg behave in a pipeline.
 #[cfg(unix)]
 #[test]
 fn a_consumer_that_closes_the_pipe_ends_the_run_silently() {
@@ -6299,7 +6299,11 @@ fn a_consumer_that_closes_the_pipe_ends_the_run_silently() {
     let status = child.wait().unwrap();
 
     assert!(!first.is_empty(), "the first event arrives");
-    assert!(status.success(), "the run keeps its own exit code: {err}");
+    assert_eq!(
+        status.code(),
+        Some(141),
+        "a closed pipe ends the run like SIGPIPE: {err}"
+    );
     assert!(
         !err.contains("panicked"),
         "no panic text on the closed pipe: {err}"
