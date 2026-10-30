@@ -1347,8 +1347,7 @@ impl Nxr {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn mirror(&self, dst: &Nxr, enum_src: Enumeration) -> Result<Summary, Error> {
         let actions = self.mirror_plan(dst, enum_src).await?;
-        // No implicit claim: no name is special, the enumeration order stands.
-        let claim = None::<ArtifactName>;
+        // No claim: no name is special, the enumeration order stands.
         let staging = mirror::staging_dir(&self.base, &dst.base);
         secure_staging(&staging)?;
         // Two concurrent mirrors of one pair would interleave the same part files:
@@ -1369,7 +1368,6 @@ impl Nxr {
                 self.base.clone(),
                 dst.base.clone(),
                 actions,
-                claim,
                 aimd,
             )
             .await

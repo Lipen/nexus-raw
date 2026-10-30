@@ -160,7 +160,7 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
     }
 }
 
-/// Run the plan: claim first and alone, then the rest under the worker semaphore.
+/// Run the plan under the worker semaphore.
 ///
 /// Per-name failures land in `Summary.failed`.
 /// A diverging digest refuses the run as [`Error::Mismatch`].
@@ -169,7 +169,7 @@ fn src_size(status: &RemoteStatus) -> Option<u64> {
 /// # Errors
 ///
 /// Returns [`Error::Mismatch`] on a source/destination digest divergence, [`Error::Misuse`] if a task panicked, and the first transport/auth/HTTP failure of the run.
-// Two clients, two endpoints, staging, the plan, the claim and the worker budget are
+// Two clients, two endpoints, staging, the plan and the worker budget are
 // genuinely distinct pieces: a parameter struct would only rename this list.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn execute(
@@ -179,56 +179,13 @@ pub(crate) async fn execute(
     src_url: String,
     dst_url: String,
     actions: Vec<MirrorAction>,
-    claim: Option<ArtifactName>,
     workers: Arc<WorkerLimit>,
 ) -> Result<Summary, Error> {
     let mut set = tokio::task::JoinSet::new();
-    let mut claim_action: Option<MirrorAction> = None;
-    let mut rest: Vec<MirrorAction> = Vec::new();
-    for action in actions {
-        let is_claim = claim
-            .as_ref()
-            .is_some_and(|c| matches!(&action, MirrorAction::Copy { name, .. } if name == c));
-        if is_claim {
-            claim_action = Some(action);
-        } else {
-            rest.push(action);
-        }
-    }
     let mut summary = Summary::default();
     let mut mismatched: Vec<String> = Vec::new();
     let mut first_error: Option<Error> = None;
-    if let Some(action) = claim_action {
-        // Inline, not spawned: the claim must finish before anything else starts.
-        // A failed claim aborts the run so the destination never gains bytes behind a version document that did not arrive.
-        match copy_one(&client, &dst_client, &staging, &src_url, &dst_url, &action).await {
-            Ok(Some(_)) => summary.uploaded += 1,
-            Ok(None) => summary.skipped += 1,
-            Err((name, Outcome::Failed(e))) => {
-                summary.failed = vec![name.to_string()];
-                summary.failures = vec![Failure {
-                    name: name.to_string(),
-                    code: e.exit_code(),
-                }];
-                log::error!("mirror claim failed: {e}");
-                client.progress().summary(&summary);
-                return Err(e);
-            }
-            Err((name, Outcome::Mismatch(detail))) => {
-                summary.failed = vec![name.to_string()];
-                summary.failures = vec![Failure {
-                    name: name.to_string(),
-                    code: DATA_EXIT,
-                }];
-                client.progress().summary(&summary);
-                return Err(Error::Mismatch {
-                    name: format!("{name}: {detail}"),
-                    detail: REFUSAL_DETAIL.to_owned(),
-                });
-            }
-        }
-    }
-    for action in rest {
+    for action in actions {
         match action {
             MirrorAction::Skip { name, .. } => {
                 summary.skipped += 1;
