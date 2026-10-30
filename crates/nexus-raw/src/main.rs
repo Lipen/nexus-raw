@@ -237,7 +237,7 @@ pub(crate) enum Cmd {
         /// The target directory.
         #[arg(value_name = "DIR")]
         dst: PathBuf,
-        /// Where to keep the local fact cache (default: <DIR>/.nxr-state.json).
+        /// Where to keep the local fact cache (default: DIR/.nxr-state.json).
         #[arg(long, value_name = "FILE", conflicts_with = "no_state")]
         state: Option<PathBuf>,
         /// Do not read or write the local fact cache: hash every local file.

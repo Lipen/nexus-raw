@@ -480,7 +480,7 @@ impl NexusClient {
     /// HEAD for a transfer: every non-2xx answer is a failure the retry loop and
     /// the status classifier own.
     ///
-    /// [`head_info`] is the reporting primitive behind `nxr head`, where any
+    /// [`Self::head_info`] is the reporting primitive behind `nxr head`, where any
     /// answer is a result. A transfer needs the other semantics: a 5xx or 429
     /// retries (the `Retry-After` pause included), a 401/403 is the auth verdict,
     /// and a storage 404 is the data verdict.

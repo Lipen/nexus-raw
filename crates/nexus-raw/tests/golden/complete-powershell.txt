@@ -208,7 +208,7 @@ Register-ArgumentCompleter -Native -CommandName 'nxr' -ScriptBlock {
             break
         }
         'nxr;clone' {
-            [CompletionResult]::new('--state', '--state', [CompletionResultType]::ParameterName, 'Where to keep the local fact cache (default: <DIR>/.nxr-state.json)')
+            [CompletionResult]::new('--state', '--state', [CompletionResultType]::ParameterName, 'Where to keep the local fact cache (default: DIR/.nxr-state.json)')
             [CompletionResult]::new('--prefix', '--prefix', [CompletionResultType]::ParameterName, 'Keep only names under this whole-segment prefix (repeatable)')
             [CompletionResult]::new('-u', '-u', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')
             [CompletionResult]::new('--user', '--user', [CompletionResultType]::ParameterName, 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD')

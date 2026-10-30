@@ -25,7 +25,7 @@ pub struct Tls {
 )]
 pub struct Args {
     /// Server root URLs, e.g. http://127.0.0.1:8081/
-    /// With none given, every [[server]] preset of the config opens.
+    /// With none given, every server preset of the config opens.
     pub bases: Vec<String>,
 
     /// Open the named server preset from the config file (repeatable)

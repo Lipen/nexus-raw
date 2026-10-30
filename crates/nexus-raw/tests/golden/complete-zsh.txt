@@ -204,7 +204,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (clone)
 _arguments "${_arguments_options[@]}" : \
-'(--no-state)--state=[Where to keep the local fact cache (default\: <DIR>/.nxr-state.json)]:FILE:_files' \
+'(--no-state)--state=[Where to keep the local fact cache (default\: DIR/.nxr-state.json)]:FILE:_files' \
 '*--prefix=[Keep only names under this whole-segment prefix (repeatable)]:PREFIX:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \

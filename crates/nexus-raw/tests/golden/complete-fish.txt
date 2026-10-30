@@ -150,7 +150,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand down" -l json -d 'Emit one NDJSO
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s q -l quiet -d 'Print the summary line, plus any failures'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s v -l verbose -d 'Print more detail: transfer starts and plan names'
 complete -c nxr -n "__fish_nxr_using_subcommand down" -s h -l help -d 'Print help'
-complete -c nxr -n "__fish_nxr_using_subcommand clone" -l state -d 'Where to keep the local fact cache (default: <DIR>/.nxr-state.json)' -r -F
+complete -c nxr -n "__fish_nxr_using_subcommand clone" -l state -d 'Where to keep the local fact cache (default: DIR/.nxr-state.json)' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -l prefix -d 'Keep only names under this whole-segment prefix (repeatable)' -r
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand clone" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
