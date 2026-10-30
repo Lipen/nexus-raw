@@ -1,5 +1,6 @@
 //! The L1 commands: up, down and mirror.
 
+use crate::render::outln;
 use std::path::Path;
 
 use nexus_raw_core::config::split_file_url;
@@ -612,7 +613,7 @@ async fn run_mv(
     let names = src.enumerate(enum_src).await?;
     if !yes {
         if !json {
-            println!("will move:");
+            outln!("will move:");
         }
         for a in src
             .mirror_plan(dst, Enumeration::Names(names.clone()))
@@ -622,7 +623,7 @@ async fn run_mv(
             crate::cmd::print_line(json, &line, &json_shape);
         }
         if !json {
-            println!("will delete:");
+            outln!("will delete:");
         }
         for a in src.rm_plan(Enumeration::Names(names)).await? {
             crate::cmd::print_line(json, &rm_plan_line(&a), &rm_action_json(&a));
@@ -764,11 +765,11 @@ pub(crate) async fn audit(
         );
     } else {
         for f in &findings {
-            println!("{} {}: {}", f.class.as_str(), f.name.as_str(), f.detail);
+            outln!("{} {}: {}", f.class.as_str(), f.name.as_str(), f.detail);
         }
         for (n, c) in &byte_findings {
             if let nexus_raw_core::sync::audit::ByteCheck::Mismatch { marker, actual } = c {
-                println!("byte_mismatch {n}: marker says {marker}, bytes hash to {actual}");
+                outln!("byte_mismatch {n}: marker says {marker}, bytes hash to {actual}");
             }
         }
         let facts_note = if run.verdict.facts_available {
@@ -776,7 +777,7 @@ pub(crate) async fn audit(
         } else {
             ", facts: unavailable".to_owned()
         };
-        println!(
+        outln!(
             "audited {}, findings: {}{}, bytes checked {}",
             run.audited,
             findings.len() + byte_findings.len(),

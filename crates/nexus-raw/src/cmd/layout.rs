@@ -1,5 +1,6 @@
 //! The L2 commands: ls, channel, verify.
 
+use crate::render::outln;
 use std::path::Path;
 
 use nexus_raw_core::{Error, Summary};
@@ -162,7 +163,7 @@ pub(crate) async fn verify(cli: &Cli, dir: &Path) -> Result<(), Error> {
     // that path surfaces through the error rendering, the line here is the clean verdict.
     let summary = result?;
     if !cli.json {
-        println!("verify: {} ok, FAILED: none", summary.skipped);
+        outln!("verify: {} ok, FAILED: none", summary.skipped);
     }
     Ok(())
 }

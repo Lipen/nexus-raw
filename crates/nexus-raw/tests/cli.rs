@@ -2067,16 +2067,14 @@ fn unsafe_name_is_misuse_exit_2() {
 /// a dead base (connection refused) is a transport error: exit 3.
 #[test]
 fn dead_base_exit_3() {
-    // A bound-then-dropped listener: the port is closed for certain.
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
-
+    // Port 1, not a bound-then-dropped ephemeral port: another test's mock can
+    // take the freed port and answer 404 before the request arrives, so the
+    // freed-port trick is a race. The kernel never hands out 1 as ephemeral.
     let out = TempDir::new().unwrap();
     let target = out.path().join("x.bin");
     let get = nxr(&[
         "get",
-        &format!("http://127.0.0.1:{port}/x.bin"),
+        "http://127.0.0.1:1/x.bin",
         "-o",
         target.to_str().unwrap(),
         "--retry",
@@ -6259,9 +6257,9 @@ fn up_wait_index_timeout_is_a_warning_not_a_failure() {
 
 // ---- pipelines ------------------------------------------------------------
 
-/// A consumer that closes the pipe (`nxr --json up ... | head -1`) must end the
-/// run silently, the way curl and rg do: the Rust runtime ignores SIGPIPE, so
-/// without the default disposition every later write panics on a worker thread.
+/// A consumer that closes the pipe (`nxr --json up ... | head -1`) must not
+/// panic on a worker thread: the output stops, the transfer finishes, and the
+/// exit code stays the operation's own.
 #[cfg(unix)]
 #[test]
 fn a_consumer_that_closes_the_pipe_ends_the_run_silently() {
@@ -6301,7 +6299,7 @@ fn a_consumer_that_closes_the_pipe_ends_the_run_silently() {
     let status = child.wait().unwrap();
 
     assert!(!first.is_empty(), "the first event arrives");
-    assert_eq!(status.code(), None, "the run ends by signal: {err}");
+    assert!(status.success(), "the run keeps its own exit code: {err}");
     assert!(
         !err.contains("panicked"),
         "no panic text on the closed pipe: {err}"

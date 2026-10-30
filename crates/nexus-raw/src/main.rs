@@ -7,6 +7,7 @@ mod alias;
 mod cmd;
 mod render;
 
+use crate::render::outln;
 use clap::{Parser, Subcommand};
 
 use std::path::PathBuf;
@@ -518,15 +519,6 @@ pub(crate) enum ChannelOp {
 }
 
 fn main() -> std::process::ExitCode {
-    // The Rust runtime ignores SIGPIPE, so a consumer that closes the pipe
-    // (`nxr --json up ... | head -1`) turns every later write into a panic on
-    // a worker thread. The default disposition ends the run silently, the way
-    // curl and rg behave in a pipeline.
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-    }
-
     // Windows gives the main thread 1 MB and the deep async frames of the
     // transfer paths overflow it: the run continues on a thread with an
     // explicit budget, so every platform gets the same generous stack.
@@ -560,7 +552,7 @@ fn run_main() -> std::process::ExitCode {
                 .to_owned();
             let hint = "check the command shape: nxr --help, or nxr <command> --help";
             if json {
-                println!(
+                outln!(
                     "{}",
                     serde_json::json!({
                         "event": "error",
@@ -580,7 +572,7 @@ fn run_main() -> std::process::ExitCode {
         if cli.json {
             // The NDJSON channel carries the failure alone: scripts parse this
             // line, and a plaintext echo on stderr would leak into their logs.
-            println!(
+            outln!(
                 "{}",
                 serde_json::json!({
                     "event": "error",
@@ -607,7 +599,7 @@ fn run_main() -> std::process::ExitCode {
             if cli.json {
                 // The NDJSON channel carries the failure alone: scripts parse
                 // this line, they do not scrape stderr.
-                println!(
+                outln!(
                     "{}",
                     serde_json::json!({
                         "event": "error",

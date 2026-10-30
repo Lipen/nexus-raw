@@ -1,5 +1,6 @@
 //! `nxr doctor`: credentials, TLS and reachability, without printing secrets (§5.4).
 
+use crate::render::outln;
 use nexus_raw_core::{config::normalize_base, creds, Error};
 
 use crate::Cli;
@@ -251,10 +252,10 @@ pub(crate) async fn run(
             if warns.contains(name) {
                 line["warn"] = serde_json::Value::Bool(true);
             }
-            println!("{line}");
+            outln!("{line}");
         }
     } else {
-        println!("doctor:");
+        outln!("doctor:");
         for (name, ok, detail, next) in &report {
             let mark = if !ok {
                 " FAIL "
@@ -269,15 +270,15 @@ pub(crate) async fn run(
                     transport_failures += 1;
                 }
             }
-            println!("  [{mark}] {name}: {detail}");
+            outln!("  [{mark}] {name}: {detail}");
             if let Some(n) = next {
-                println!("        next: {n}");
+                outln!("        next: {n}");
             }
         }
         if failures == 0 && warns.is_empty() {
-            println!("  all checks passed");
+            outln!("  all checks passed");
         } else if failures == 0 {
-            println!("  all checks passed with {} warning(s)", warns.len());
+            outln!("  all checks passed with {} warning(s)", warns.len());
         }
     }
     if failures == 0 {

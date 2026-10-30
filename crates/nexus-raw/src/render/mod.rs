@@ -2,10 +2,38 @@
 
 mod json;
 
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use nexus_raw_core::{Dir, Event};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+/// A closed stdout is a normal pipeline (`nxr --json up ... | head -1`), not an
+/// error: once the reader is gone, later lines are dropped and the run finishes
+/// with its real exit code.
+static OUT_CLOSED: AtomicBool = AtomicBool::new(false);
+
+/// Write one line, or stop writing when nobody reads.
+pub(crate) fn out_fmt(args: std::fmt::Arguments<'_>) {
+    if OUT_CLOSED.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut stdout = std::io::stdout().lock();
+    let written = stdout
+        .write_fmt(args)
+        .and_then(|()| stdout.write_all(b"\n"));
+    if written.is_err() {
+        OUT_CLOSED.store(true, Ordering::Relaxed);
+    }
+}
+
+/// `println!` for the console streams: same shape, no panic on a closed pipe.
+macro_rules! outln {
+    ($($arg:tt)*) => {
+        $crate::render::out_fmt(format_args!($($arg)*))
+    };
+}
+pub(crate) use outln;
 
 /// How the event stream is rendered.
 #[derive(Debug, Clone, Copy)]
@@ -220,7 +248,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             if quiet {
                 return;
             }
-            println!(
+            outln!(
                 "plan: {} to upload, {} to download, {} up to date",
                 paint.bold(&upload.len().to_string()),
                 paint.bold(&download.len().to_string()),
@@ -229,13 +257,13 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             prog.files_total = upload.len() + download.len() + skip.len();
             if verbose {
                 for name in upload {
-                    println!("{} {name}", paint.dim("↑"));
+                    outln!("{} {name}", paint.dim("↑"));
                 }
                 for name in download {
-                    println!("{} {name}", paint.dim("↓"));
+                    outln!("{} {name}", paint.dim("↓"));
                 }
                 for name in skip {
-                    println!("{} {name}", paint.dim("○"));
+                    outln!("{} {name}", paint.dim("○"));
                 }
             }
         }
@@ -246,7 +274,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                     Dir::Down => "↓",
                 };
                 let size = (*total).map_or_else(|| "?".to_owned(), human_bytes);
-                println!("{} {name} {}", paint.dim(arrow), paint.dim(&size));
+                outln!("{} {name} {}", paint.dim(arrow), paint.dim(&size));
             }
         }
         Event::ArtifactBytes {
@@ -273,7 +301,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                 (false, Dir::Up) => format!("↑ {name} ok"),
                 (false, Dir::Down) => format!("↓ {name} ok"),
             };
-            println!(
+            outln!(
                 "{}",
                 if *skipped {
                     paint.yellow(&text)
@@ -288,7 +316,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             reason,
         } => {
             if !quiet {
-                println!(
+                outln!(
                     "{}",
                     paint.yellow(&format!("↻ {name}: retry {attempt} ({reason})"))
                 );
@@ -296,20 +324,20 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
         }
         Event::Removing { name } => {
             if verbose && !quiet {
-                println!("{} {name}", paint.dim("×"));
+                outln!("{} {name}", paint.dim("×"));
             }
         }
         Event::Removed { name } => {
             if quiet {
                 return;
             }
-            println!("{}", paint.yellow(&format!("× {name} removed")));
+            outln!("{}", paint.yellow(&format!("× {name} removed")));
         }
         Event::Missing { name } => {
             if quiet {
                 return;
             }
-            println!("{}", paint.yellow(&format!("○ {name} missing")));
+            outln!("{}", paint.yellow(&format!("○ {name} missing")));
         }
         // Warnings are not chatter: they name rows the run had to leave out,
         // so they go to stderr and survive `--quiet` like a failure does.
@@ -326,7 +354,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
             if s.sealed > 0 {
                 text.push_str(&format!(", sealed {}", s.sealed));
             }
-            println!(
+            outln!(
                 "{}",
                 if s.failed.is_empty() {
                     paint.green(&text)
@@ -335,7 +363,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                 }
             );
             if !s.failed.is_empty() {
-                println!("{}", paint.red(&format!("failed: {}", s.failed.join(", "))));
+                outln!("{}", paint.red(&format!("failed: {}", s.failed.join(", "))));
             }
         }
     }

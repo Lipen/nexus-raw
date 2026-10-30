@@ -6,6 +6,7 @@ mod layout;
 mod primitives;
 mod transfer;
 
+use crate::render::outln;
 use std::time::Duration;
 
 use nexus_raw_core::{creds, ArtifactName, Config, Enumeration, Error, Event, Nxr};
@@ -404,8 +405,8 @@ pub(crate) fn printable(value: &str) -> String {
 /// One JSON line for the simple (non-event) results.
 pub(crate) fn print_line(json: bool, human: &str, value: &serde_json::Value) {
     if json {
-        println!("{value}");
+        outln!("{value}");
     } else {
-        println!("{human}");
+        outln!("{human}");
     }
 }
