@@ -1100,7 +1100,13 @@ fn clone_seals_a_markerless_local_copy() {
     );
     std::fs::remove_file(dst.path().join("a.zip.sha256")).unwrap();
 
-    let out = nxr(&["--json", "clone", "--no-state", &base, dst.path().to_str().unwrap()]);
+    let out = nxr(&[
+        "--json",
+        "clone",
+        "--no-state",
+        &base,
+        dst.path().to_str().unwrap(),
+    ]);
     expect_exit(&out, 0, "the sealing rerun");
     assert!(
         dst.path().join("a.zip.sha256").is_file(),
@@ -1109,8 +1115,14 @@ fn clone_seals_a_markerless_local_copy() {
     let text = stdout(&out);
     // The run's plan event is the transfer projection: a seal is not a
     // transfer, so the name rides `skip` there and the summary counts it.
-    assert!(text.contains(r#""skip":["a.zip"]"#), "the projection names it: {text}");
-    assert!(text.contains(r#""sealed":1"#), "the summary counts it: {text}");
+    assert!(
+        text.contains(r#""skip":["a.zip"]"#),
+        "the projection names it: {text}"
+    );
+    assert!(
+        text.contains(r#""sealed":1"#),
+        "the summary counts it: {text}"
+    );
 }
 
 /// `clone --json` carries the additive `sealed` count in the summary.
