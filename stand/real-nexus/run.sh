@@ -37,6 +37,9 @@ cargo build --locked -p nexus-raw
 ui_ok "nxr built in $((SECONDS - start))s"
 
 ui_phase "boot" "nexus3 (the first run pulls the image, ~700 MB)"
+# A container left behind by a killed run would serve its old store, and the
+# next battery would meet diverged bytes: start from nothing, always.
+compose down -v > /dev/null 2>&1 || :
 compose up -d
 ui_ok "nexus3 container started"
 

@@ -23,7 +23,9 @@ The pinned image is pulled on first use.
   full walk restricted to it), dry runs, down by name, offline verify, the
   segmented read against a real 206 answer, the `put` primitive, `clone` with
   its fact cache and `clone --verify`, `diff --via search` against the real
-  index, `audit --bytes` and `doctor --deep`.
+  index, `audit --bytes`, `doctor --deep`, `up --wait-index` waiting for the
+  real index, `down --segments`, and `up --prefix` keeping the selected
+  subtree's path.
 - With the mock: auth-401, flaky 5xx, dropped connections - scenarios a real
   server cannot be asked to produce on demand.
 - Not covered anywhere yet: TLS against a real CA (needs the lab), 429

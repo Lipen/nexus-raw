@@ -222,6 +222,22 @@ expect_ok "get returns the put bytes" bash -c "\"$NXR\" get '$VER/put.bin' -o '$
 # clone the version through the search API, then re-run with --verify: the
 # second run re-hashes the local tree and downloads nothing, and the clone
 # verifies offline.
+# The index lags the writes, and a name the first clone missed would arrive in
+# the second run as a download: wait for the last uploaded name first, so both
+# runs enumerate the same set.
+seen=0
+for _ in 1 2 3 4 5 6; do
+    if "$NXR" ls "$VER" --assets 2> /dev/null | grep -q 'put.bin'; then
+        seen=1
+        break
+    fi
+    sleep 2
+done
+if [ "$seen" = 1 ]; then
+    ok "the index catches up before the clone"
+else
+    no "the index catches up before the clone"
+fi
 expect_ok "clone mirrors the version" "$NXR" clone "$VER" "$WORK/clone" --workers 4
 expect_ok "clone --verify re-hashes and skips" bash -c "\"$NXR\" clone '$VER' '$WORK/clone' --verify > '$WORK/clone2.txt' && grep -q 'downloaded 0' '$WORK/clone2.txt'"
 expect_ok "verify passes on the clone" "$NXR" verify "$WORK/clone"
@@ -232,6 +248,24 @@ expect_ok "audit --bytes finds no bitrot" "$NXR" audit "$VER" --bytes
 # doctor --deep runs its probes (version, range, content-length, search, repo
 # type, eula) against the real server and reports no failure.
 expect_ok "doctor --deep passes on the real server" "$NXR" doctor "$VER" --deep
+
+# A new name goes up and the index poll sees it: --wait-index holds the run
+# until the real search API answers with every uploaded name.
+printf 'wait for me\n' > "$WORK/src/waited.bin"
+expect_ok "up --wait-index waits for the real index" bash -c "\"$NXR\" up '$WORK/src' '$VER' --wait-index --json > '$WORK/wait.jsonl' && grep -q '\"timeout\":false' '$WORK/wait.jsonl'"
+
+# The segmented download against the same real 206 answer.
+expect_ok "down --segments reassembles a real 206 answer" bash -c "\"$NXR\" down '$VER' '$WORK/seg-down' --name big.bin --segments 4 && cmp -s '$WORK/orig/big.bin' '$WORK/seg-down/big.bin'"
+
+# --prefix scans only the selected subtree and keeps its relative path: the
+# nested file lands, the sibling at the root does not.
+expect_ok "up --prefix publishes the selected subtree" "$NXR" up "$WORK/orig" "$URL/2.0.0/" --prefix nested/
+if "$NXR" head "$URL/2.0.0/nested/sub.bin" 2> /dev/null | grep -q 'head: 200' &&
+    "$NXR" head "$URL/2.0.0/hello.txt" 2> /dev/null | grep -q 'head: 404'; then
+    ok "the prefix kept its path and left the rest out"
+else
+    no "the prefix kept its path and left the rest out"
+fi
 
 # 24-28. A directory listing asks the search API with `q=<directory>/` and keeps the prefix
 # filter client-side (the rule the protocol page names). The seeded fixture is the manual
