@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `nxr ls` carries the search facts it already fetched: a file row in `--json` gains `size` and `sha256` when the index reports them, and `Nxr::ls_entries` / the Node `lsEntries` expose the same fields.
   A consumer plans a selective download without a HEAD per name, and a folder row carries neither (a raw folder has no size of its own).
+- The browser's file card takes the size and digest the listing carried: they show at once, and the HEAD and the `.sha256` GET run only for a fact the listing lacks.
 - A `static-host` mock scenario pins the bare file-server profile: reads and ranges work, every write is the read-only refusal (405, exit 1), and the whole service plane answers 404, the search API included.
   The core, the CLI and the Python client test it, so the read profile off Nexus stops being a manual nginx probe.
 - A `warning` event, rendered as a `warning:` line on stderr and as `{"event":"warning","text":...}` under `--json`, names the rows an enumeration left out because they are outside the artifact grammar: `down --ls`, `clone`, `diff --via search` and the list command share it, so a transfer no longer loses such a name silently.

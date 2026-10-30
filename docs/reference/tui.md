@@ -71,7 +71,9 @@ The overlay works against a refusing server the same way the CLI does: the error
 ## The file card
 
 `enter` on a file opens a card, never a download.
-The card shows the name, the path from the repository root, the full URL, the size from a HEAD request and the sha256 from the `.sha256` marker when the server has one.
+The card shows the name, the path from the repository root, the full URL, the size and the sha256.
+The listing already carries both when the search index holds them, so they show at once and cost no request.
+A fact the listing lacks is probed in the background: a HEAD for the size, a `.sha256` GET for the digest.
 Inside the card: `s` downloads the file into the destination folder, `o` picks another destination and returns to the card, `c` copies the URL, `esc`/`enter`/`q` close.
 The download is a direct `get` with the digest verified against the marker: no enumeration is involved.
 The file then gets the marker the browser computed, named relative to the destination exactly as `down` names it, so the downloaded tree passes `nxr verify` offline.

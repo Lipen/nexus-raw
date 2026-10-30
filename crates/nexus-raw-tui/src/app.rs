@@ -48,7 +48,7 @@ fn text_char(key: &KeyEvent) -> Option<char> {
     }
 }
 use nexus_raw_core::service::RepoInfo;
-use nexus_raw_core::{ArtifactName, Dir, Entry, EntryKind, Error, HeadInfo, Summary};
+use nexus_raw_core::{ArtifactName, Digest, Dir, Entry, EntryKind, Error, HeadInfo, Summary};
 use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use tokio::sync::mpsc;
@@ -143,6 +143,10 @@ pub struct Row {
     pub expanded: bool,
     /// Whether this folder's children are loading.
     pub loading: bool,
+    /// The search-reported size, when the listing carried it.
+    pub size: Option<u64>,
+    /// The search-reported digest, when the listing carried it.
+    pub digest: Option<Digest>,
 }
 
 impl Tab {
@@ -215,6 +219,8 @@ impl Tab {
                 depth,
                 expanded,
                 loading,
+                size: entry.size,
+                digest: entry.digest.clone(),
             };
             let expand_into = expanded;
             out.push(row);
@@ -2113,6 +2119,10 @@ impl App {
             format!("{}/{}", path.join("/"), row.rel)
         };
         let url = format!("{}{}", t.here_url(), row.rel);
+        // The listing may already carry the facts (the search answer does): a
+        // known size and digest show at once and cost no request. A missing
+        // fact keeps the background probe, the old behavior.
+        let (size, digest) = (row.size, row.digest.clone());
         let card = FileCard {
             tab: self.tab,
             gen: t.gen,
@@ -2120,21 +2130,28 @@ impl App {
             rel: rel.clone(),
             url: url.clone(),
             repo: RepoRow::from(&repo),
-            size: SizeState::Pending,
-            sha: ShaState::Pending,
+            size: size.map_or(SizeState::Pending, SizeState::Known),
+            sha: digest
+                .as_ref()
+                .map_or(ShaState::Pending, |d| ShaState::Hex(d.as_str().to_owned())),
         };
         self.mode = Mode::Card(Card::File(Box::new(card)));
-        self.pending += 2;
+        let pending = u8::from(size.is_none()) + u8::from(digest.is_none());
+        self.pending += usize::from(pending);
         let (tab, gen, session) = (self.tab, t.gen, self.session.clone());
-        net::head_size(
-            self.tx.clone(),
-            tab,
-            gen,
-            rel.clone(),
-            url.clone(),
-            session.clone(),
-        );
-        net::fetch_sibling(self.tx.clone(), tab, gen, rel, url, session);
+        if size.is_none() {
+            net::head_size(
+                self.tx.clone(),
+                tab,
+                gen,
+                rel.clone(),
+                url.clone(),
+                session.clone(),
+            );
+        }
+        if digest.is_none() {
+            net::fetch_sibling(self.tx.clone(), tab, gen, rel, url, session);
+        }
     }
 
     fn open_servers_overlay(&mut self) {
@@ -2840,6 +2857,8 @@ impl App {
             depth: 0,
             expanded: false,
             loading: false,
+            size: None,
+            digest: None,
         };
         self.mode = Mode::Card(Card::File(card));
         self.download_file(path, &row, self.destination.clone(), false);
@@ -3811,6 +3830,8 @@ mod tests {
                 depth: 0,
                 expanded: false,
                 loading: false,
+                size: None,
+                digest: None,
             };
             app.download_file(Vec::new(), &row, base.clone(), true);
             assert!(app.transfer.is_none(), "{name} must never start a transfer");
@@ -3878,6 +3899,8 @@ mod tests {
             depth: 0,
             expanded: false,
             loading: false,
+            size: None,
+            digest: None,
         };
         // Spaces and unicode are ordinary filesystem names: the protocol's
         // artifact grammar is not the rule for a local directory.
@@ -3909,6 +3932,8 @@ mod tests {
             depth: 0,
             expanded: false,
             loading: false,
+            size: None,
+            digest: None,
         };
         app.download_file(Vec::new(), &split, PathBuf::from("dl"), false);
         assert!(app.transfer.is_none());
@@ -3962,6 +3987,16 @@ mod tests {
         tab.screen = Screen::Tree;
         tab.entries = entries;
         tab
+    }
+
+    /// An entry with the search facts the listing carries.
+    fn entry_with(name: &str, kind: EntryKind, size: u64, digest: &Digest) -> Entry {
+        Entry {
+            name: name.to_owned(),
+            kind,
+            size: Some(size),
+            digest: Some(digest.clone()),
+        }
     }
 
     fn entry(name: &str, kind: EntryKind) -> Entry {
@@ -4350,6 +4385,30 @@ mod tests {
             panic!("the card stays open");
         };
         assert_eq!(card.sha, ShaState::Absent);
+    }
+
+    /// The listing's facts fill the card at once: no HEAD, no sibling GET.
+    #[tokio::test]
+    async fn the_card_takes_the_listing_facts() {
+        let body = b"hello\n";
+        let digest = Digest::of_bytes(body);
+        let (mut app, mut rx) = app_with(
+            vec![tree_tab(vec![entry_with(
+                "a.bin",
+                EntryKind::File,
+                body.len() as u64,
+                &digest,
+            )])],
+            false,
+        );
+        app.handle(Msg::Key(key(KeyCode::Enter)));
+        let Mode::Card(Card::File(card)) = app.mode.clone() else {
+            panic!("the card opens on enter");
+        };
+        assert_eq!(card.size, SizeState::Known(body.len() as u64));
+        assert_eq!(card.sha, ShaState::Hex(digest.as_str().to_owned()));
+        assert_eq!(app.pending, 0, "known facts spawn no probe");
+        assert!(rx.try_recv().is_err(), "no request is queued");
     }
 
     #[tokio::test]
