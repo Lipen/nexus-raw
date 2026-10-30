@@ -32,6 +32,27 @@ fn stdout(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+/// search-lag: the audit's cross-check reads the store-backed facts, so an
+/// uploaded tree with its markers is clean instead of a wall of `diverged_fact`.
+#[test]
+fn store_backed_facts_keep_a_clean_tree_clean() {
+    let srv = MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).expect("mock nexus starts");
+    let src = tempfile::TempDir::new().unwrap();
+    std::fs::write(src.path().join("a.bin"), b"PAYLOAD").unwrap();
+    let base = repo_url(&srv);
+    let up = nxr(&["up", src.path().to_str().unwrap(), &base]);
+    assert_eq!(
+        up.status.code(),
+        Some(0),
+        "the upload seeds the index: {}",
+        String::from_utf8_lossy(&up.stderr)
+    );
+    let out = nxr(&["audit", &base]);
+    let s = stdout(&out);
+    assert_eq!(out.status.code(), Some(0), "a clean store is clean: {s}");
+    assert!(s.contains("findings: 0"), "zero findings: {s}");
+}
+
 #[test]
 fn structural_mode_reports_every_litter_class() {
     let srv = MockNexus::start(Scenario::AuditLitter).expect("mock nexus starts");
