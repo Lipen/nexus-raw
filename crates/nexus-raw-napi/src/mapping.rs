@@ -114,9 +114,39 @@ mod tests {
     /// build_config reads the process env for credentials: tests that touch it hold this lock so parallel tests never see each other's variables.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// Removes the credential variables for its lifetime and restores them on
+    /// drop, under the env lock: a developer's exported `NXR_AUTH` must not
+    /// decide a test that asserts the defaults.
+    struct CleanEnv {
+        saved: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl CleanEnv {
+        fn new() -> Self {
+            const VARS: [&str; 4] = ["NXR_AUTH", "NXR_USERNAME", "NXR_PASSWORD", "NXR_CONFIG"];
+            let saved = VARS.iter().map(|v| (*v, std::env::var(v).ok())).collect();
+            for v in VARS {
+                std::env::remove_var(v);
+            }
+            Self { saved }
+        }
+    }
+
+    impl Drop for CleanEnv {
+        fn drop(&mut self) {
+            for (key, value) in &self.saved {
+                match value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
     #[test]
     fn defaults_match_the_cli() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         let cfg = build_config("http://host/repo/", &CommonOpts::default()).unwrap();
         assert_eq!(cfg.workers, 8);
         assert_eq!(cfg.retry_attempts, 4);
@@ -129,6 +159,7 @@ mod tests {
     #[test]
     fn explicit_opts_override_defaults() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         let common = CommonOpts {
             workers: Some(16),
             retry: Some(1),
@@ -149,6 +180,7 @@ mod tests {
     #[test]
     fn ca_bundle_maps_to_the_config() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         let common = CommonOpts {
             ca_bundle: Some("ca.pem".into()),
             ..Default::default()
@@ -163,6 +195,7 @@ mod tests {
     #[test]
     fn explicit_auth_wins_over_env() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         std::env::set_var("NXR_AUTH", "envB64");
         let common = CommonOpts {
             auth_user: Some("user".into()),
@@ -171,23 +204,22 @@ mod tests {
         };
         let cfg = build_config("http://host/", &common).unwrap();
         assert_eq!(cfg.auth.as_deref(), Some("Basic dXNlcjpwYXNz"));
-        std::env::remove_var("NXR_AUTH");
     }
 
     #[test]
     fn env_fallback_applies_without_explicit_auth() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         std::env::set_var("NXR_USERNAME", "user");
         std::env::set_var("NXR_PASSWORD", "pass");
         let cfg = build_config("http://host/", &CommonOpts::default()).unwrap();
         assert_eq!(cfg.auth.as_deref(), Some("Basic dXNlcjpwYXNz"));
-        std::env::remove_var("NXR_USERNAME");
-        std::env::remove_var("NXR_PASSWORD");
     }
 
     #[test]
     fn half_auth_is_misuse() {
         let _env = ENV_LOCK.lock().unwrap();
+        let _clean = CleanEnv::new();
         let common = CommonOpts {
             auth_user: Some("user".into()),
             auth_pass: None,
