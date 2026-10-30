@@ -348,10 +348,9 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         // repo-relative paths, the shape the search API reports.
                         // `q` narrows the list with the same loose match the generated pages model.
                         let q = query_param(&req.target, "q").map(percent_decode);
-                        let keys: Vec<String> = lock(&shared.store)
-                            .keys()
-                            .cloned()
-                            .filter_map(|k| {
+                        let keys: Vec<(String, usize)> = lock(&shared.store)
+                            .iter()
+                            .filter_map(|(k, bytes)| {
                                 // The repository collection is a service document
                                 // the store happens to carry, not an asset the
                                 // search sees.
@@ -360,24 +359,20 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                                 }
                                 // Strip the `repository/<repo>/` prefix the store keys
                                 // carry when it is there. A root-style store key passes as is.
-                                if let Some(rest) = k.strip_prefix("repository/") {
-                                    return Some(
-                                        rest.split_once('/')
-                                            .map_or(rest, |(_, rel)| rel)
-                                            .to_owned(),
-                                    );
-                                }
-                                Some(k)
+                                // The size comes from the stored bytes, so the page
+                                // reports a fact the way the real answer does.
+                                let path = if let Some(rest) = k.strip_prefix("repository/") {
+                                    rest.split_once('/').map_or(rest, |(_, rel)| rel).to_owned()
+                                } else {
+                                    k.clone()
+                                };
+                                Some((path, bytes.len()))
                             })
-                            .filter(|k| q.as_deref().is_none_or(|q| q_matches(q, k)))
+                            .filter(|(path, _)| q.as_deref().is_none_or(|q| q_matches(q, path)))
                             .collect();
                         let items: Vec<String> = keys
                             .iter()
-                            .map(|k| {
-                                // The real answer carries the size as `fileSize`.
-                                let size = lock(&shared.store)
-                                    .get(k)
-                                    .map_or(0, std::vec::Vec::len);
+                            .map(|(k, size)| {
                                 format!(
                                     "{{\"downloadUrl\":\"/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"fileSize\":{size},\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
                                 )

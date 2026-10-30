@@ -222,6 +222,38 @@ fn readonly_refuses_every_delete() {
     assert_eq!(body, b"PAYLOAD");
 }
 
+/// search-lag: the store-backed page reports the size of the stored bytes, the
+/// field the real answer carries.
+#[test]
+fn search_lag_page_reports_the_stored_size() {
+    let server = MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).unwrap();
+    // One PUT arms the catch-up deadline and stores the object.
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/repository/raw-main/1.0.0/a.bin",
+        b"PAYLOAD",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+
+    let (status, _, body) = exchange(
+        server.addr(),
+        "GET",
+        "/service/rest/v1/search/assets?repository=raw-main",
+        b"",
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 200);
+    let text = String::from_utf8_lossy(&body);
+    assert!(
+        text.contains(r#""fileSize":7"#),
+        "the page reports the stored size: {text}"
+    );
+}
+
 /// static-host: reads and ranges, every write refused with 405 and `Allow`, no service plane.
 #[test]
 fn static_host_serves_reads_and_refuses_writes() {
