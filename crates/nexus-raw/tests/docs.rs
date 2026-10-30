@@ -170,6 +170,63 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
     );
 }
 
+/// Every `bash` block in the docs parses: a recipe a reader copies must be a
+/// valid script, and a broken fence or a stray quote is caught here.
+/// Unix only: the parse needs a `bash` binary, and the suite skips the check
+/// where one is absent.
+#[cfg(unix)]
+#[test]
+fn every_bash_block_in_the_docs_parses() {
+    let root = repo_root();
+    let mut files = Vec::new();
+    markdown_files(&root, &mut files);
+    let mut checked = 0usize;
+    let mut failures = Vec::new();
+    for file in &files {
+        let text = std::fs::read_to_string(file).expect("doc reads");
+        let mut rest = text.as_str();
+        while let Some(start) = rest.find("```bash\n") {
+            let block = &rest[start + "```bash\n".len()..];
+            let Some(end) = block.find("```") else { break };
+            let script = &block[..end];
+            let out = std::process::Command::new("bash")
+                .arg("-n")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+            let Ok(mut child) = out else {
+                // No bash here: nothing to check.
+                return;
+            };
+            {
+                use std::io::Write as _;
+                let mut stdin = child.stdin.take().expect("stdin");
+                stdin.write_all(script.as_bytes()).expect("write the block");
+            }
+            let parsed = child.wait_with_output().expect("bash -n runs");
+            if !parsed.status.success() {
+                failures.push(format!(
+                    "{}: {}",
+                    file.strip_prefix(&root).unwrap_or(file).display(),
+                    String::from_utf8_lossy(&parsed.stderr).trim()
+                ));
+            }
+            checked += 1;
+            rest = &block[end + 3..];
+        }
+    }
+    assert!(
+        checked >= 20,
+        "the parser found {checked} bash blocks: it regressed"
+    );
+    assert!(
+        failures.is_empty(),
+        "broken bash blocks:\n{}",
+        failures.join("\n")
+    );
+}
+
 /// Every public method of the `Nxr` facade is named in the API reference: a new
 /// method cannot land undocumented, and a rename cannot leave a stale row alone.
 #[test]

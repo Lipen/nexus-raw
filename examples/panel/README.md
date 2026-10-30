@@ -119,8 +119,9 @@ Extra arguments pass through to `server.mjs`, for example `just panel --port 900
 `just panel` already runs this stand.
 By hand, in a second terminal, serve the mock and seed it.
 
+From the repository root:
+
 ```bash
-cd <repo root>
 cargo build -p mock-nexus -p nexus-raw
 target/debug/mock-nexus atomic --port 8099
 ```
