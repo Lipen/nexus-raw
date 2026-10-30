@@ -25,9 +25,12 @@ esac
 [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage_err
 version="$1"
 remote="${2:-origin}"
-case "$version" in
-  ''|*[!0-9A-Za-z._-]*) usage_err ;;
-esac
+# The version is X.Y.Z, the same shape release.sh and the Justfile recipe take:
+# a leading `v` or a typo would otherwise check a tag nobody means (`vv0.24.1`).
+if ! printf '%s\n' "$version" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then
+  echo "check-release-tag: $version is not X.Y.Z" >&2
+  exit 2
+fi
 tag="v$version"
 
 rc=0
