@@ -397,6 +397,16 @@ url = "https://anon.example.com"
     }
 
     #[test]
+    fn a_remote_table_is_named_as_the_wrong_guess() {
+        let (_d, p) = write("[remote.corp]\nurl = \"x\"\n");
+        let e = format!("{}", Aliases::load(&p).unwrap_err());
+        assert!(
+            e.contains("unknown top-level key `remote`") && e.contains("[alias.<name>]"),
+            "{e}"
+        );
+    }
+
+    #[test]
     fn unknown_key_names_the_alias_and_the_key() {
         let (_d, p) = write("[alias.corp]\nurl = \"x\"\nusernmae = \"u\"\n");
         let e = format!("{}", Aliases::load(&p).unwrap_err());
