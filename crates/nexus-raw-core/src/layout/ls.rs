@@ -101,7 +101,20 @@ pub async fn search_entries_counted(
                 hidden += 1;
                 continue;
             }
-            files.insert(first.clone(), (asset.size, asset.sha256));
+            // Two served paths that decode to one name (a raw `a b.zip` and a
+            // `a%20b.zip`) collide here: the row may carry one object's facts or
+            // none, never the other object's. A collision drops the facts, which
+            // is honest, and a later duplicate cannot resurrect them.
+            let facts = (asset.size, asset.sha256);
+            match files.get(first) {
+                Some(existing) if existing != &facts => {
+                    files.insert(first.clone(), (None, None));
+                }
+                Some(_) => {}
+                None => {
+                    files.insert(first.clone(), facts);
+                }
+            }
         } else {
             dirs.insert(first.clone());
         }

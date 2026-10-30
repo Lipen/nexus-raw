@@ -5036,6 +5036,34 @@ fn ls_scopes_the_search_to_the_directory() {
     );
 }
 
+/// Two served paths that decode to one name give the row no facts at all: one
+/// object's size on the other object's name would be a lie.
+#[test]
+fn ls_json_drops_the_facts_of_a_decoded_collision() {
+    let srv = server(Scenario::Atomic);
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/a b.zip","fileSize":10,"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/a%20b.zip","fileSize":20,"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        hex_digest(ALPHA),
+        hex_digest(BETA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+
+    let out = nxr(&["--json", "ls", &repo_dir_url(&srv)]);
+    expect_exit(&out, 0, "the listing");
+    let lines = ndjson(&out);
+    let rows: Vec<_> = lines.iter().filter(|l| l["kind"] == "file").collect();
+    assert_eq!(rows.len(), 1, "one decoded name, one row: {lines:?}");
+    assert_eq!(rows[0]["entry"], "a b.zip");
+    assert!(
+        rows[0].get("size").is_none() && rows[0].get("sha256").is_none(),
+        "a collision carries no facts: {}",
+        rows[0]
+    );
+}
+
 /// The generated search pages carry the real `fileSize` field, and a file row
 /// reaches `ls --json` with the size and the digest the index reported.
 #[test]
