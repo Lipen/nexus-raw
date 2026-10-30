@@ -63,7 +63,7 @@ impl ArtifactName {
         }
         if name.ends_with(PART_SUFFIX) {
             return Err(err(
-                "reserved suffix .part (local download staging collision)",
+                "reserved suffix .part (staging name: finish or delete the interrupted transfer's part file)",
             ));
         }
         for seg in name.split('/') {

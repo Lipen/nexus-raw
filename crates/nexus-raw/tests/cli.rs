@@ -1795,6 +1795,21 @@ fn verify_accepts_then_rejects_tampering() {
     expect_exit(&bad, 1, "verify of tampered bytes");
 }
 
+/// A stray part file names its repair: it is staging from an interrupted
+/// transfer, and the refusal says to finish or delete it, not just the suffix rule.
+#[test]
+fn verify_on_a_stray_part_names_the_repair() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("b.bin.part"), b"PART").unwrap();
+    let out = nxr(&["verify", dir.path().to_str().unwrap()]);
+    expect_exit(&out, 2, "a reserved local name is misuse");
+    assert!(
+        stderr(&out).contains("finish or delete the interrupted transfer's part file"),
+        "the repair is named: {}",
+        stderr(&out)
+    );
+}
+
 // ---- exit-code matrix -----------------------------------------------------
 
 /// Auth401: anonymous is exit 3, correct -u credentials exit 0.
