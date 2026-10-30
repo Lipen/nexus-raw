@@ -488,7 +488,7 @@ $ echo $?
 0
 ```
 
-The `--json` plan lines carry `{"plan":"download|skip|seal","name":…}`. The summary gains `"sealed"`, the count of markers written without a transfer.
+The `--json` lines of `--plan` carry `{"plan":"download|skip|seal","name":…}`, and a real run's plan event is the transfer projection (`download`/`skip`/`upload`), where a sealed name rides `skip`. The summary gains `"sealed"`, the count of markers written without a transfer.
 
 | Exit | When |
 |:----:|:-----|

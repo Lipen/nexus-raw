@@ -1078,6 +1078,41 @@ fn clone_plan_writes_nothing() {
     );
 }
 
+/// A local copy whose bytes match the remote but whose marker is gone gets the
+/// marker sealed back, with no transfer.
+#[test]
+fn clone_seals_a_markerless_local_copy() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    expect_exit(
+        &nxr(&["clone", &base, dst.path().to_str().unwrap()]),
+        0,
+        "the first clone",
+    );
+    std::fs::remove_file(dst.path().join("a.zip.sha256")).unwrap();
+
+    let out = nxr(&["--json", "clone", "--no-state", &base, dst.path().to_str().unwrap()]);
+    expect_exit(&out, 0, "the sealing rerun");
+    assert!(
+        dst.path().join("a.zip.sha256").is_file(),
+        "the marker is written back"
+    );
+    let text = stdout(&out);
+    // The run's plan event is the transfer projection: a seal is not a
+    // transfer, so the name rides `skip` there and the summary counts it.
+    assert!(text.contains(r#""skip":["a.zip"]"#), "the projection names it: {text}");
+    assert!(text.contains(r#""sealed":1"#), "the summary counts it: {text}");
+}
+
 /// `clone --json` carries the additive `sealed` count in the summary.
 #[test]
 fn clone_json_summary_carries_sealed() {
