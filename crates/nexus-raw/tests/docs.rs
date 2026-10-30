@@ -1,9 +1,10 @@
 //! The documentation surface against the CLI it documents.
 //!
-//! Every command line the docs show must name flags the binary accepts, and
-//! `docs/reference/cli.md` must carry a section per command (and per `service`
-//! subcommand). A flag renamed in clap therefore breaks this test instead of
-//! leaving a command that no longer parses in the docs.
+//! Every `nxr …` command line in every markdown file of the repository (the docs
+//! site, the crate and example READMEs, the root READMEs) must name flags the
+//! binary accepts, and `docs/reference/cli.md` must carry a section per command
+//! (and per `service` subcommand). A flag renamed in clap therefore breaks this
+//! test instead of leaving a command that no longer parses in the docs.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -73,10 +74,18 @@ fn commands_of(help: &str) -> BTreeSet<String> {
     out
 }
 
+/// Every markdown file of the repository, minus the build and private trees.
 fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).expect("docs dir reads") {
+    for entry in std::fs::read_dir(dir).expect("dir reads") {
         let path = entry.expect("dir entry").path();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         if path.is_dir() {
+            if matches!(name, "target" | ".git" | ".dev" | "node_modules" | "pkg") {
+                continue;
+            }
             markdown_files(&path, out);
         } else if path.extension().is_some_and(|e| e == "md") {
             out.push(path);
@@ -92,16 +101,11 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
     let globals = flags_in(&root_help);
     let top = commands_of(&root_help);
     let mut files = Vec::new();
-    markdown_files(&root.join("docs"), &mut files);
-    for name in ["README.md", "README.ru.md"] {
-        let p = root.join(name);
-        if p.is_file() {
-            files.push(p);
-        }
-    }
+    markdown_files(&root, &mut files);
     let mut failures = Vec::new();
-    for file in files {
-        let text = std::fs::read_to_string(&file).expect("doc reads");
+    let mut checked = 0usize;
+    for file in &files {
+        let text = std::fs::read_to_string(file).expect("doc reads");
         for (n, line) in text.lines().enumerate() {
             let trimmed = line.trim_start_matches(|c: char| c == '$' || c.is_whitespace());
             let Some(rest) = trimmed.strip_prefix("nxr ") else {
@@ -118,6 +122,7 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
             let Some(cmd) = tokens.iter().find(|t| top.contains(**t)) else {
                 continue;
             };
+            checked += 1;
             let mut path = vec![(*cmd).to_owned()];
             if *cmd == "service" || *cmd == "channel" {
                 let sub = tokens
@@ -144,7 +149,7 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
                 if !known.contains(&flag) {
                     failures.push(format!(
                         "{}:{}: nxr {} does not accept {flag}",
-                        file.strip_prefix(&root).unwrap_or(&file).display(),
+                        file.strip_prefix(&root).unwrap_or(file).display(),
                         n + 1,
                         path.join(" ")
                     ));
@@ -152,6 +157,12 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
             }
         }
     }
+    // A walk or a parser that silently matches nothing would pass forever.
+    assert!(
+        files.len() >= 40 && checked >= 100,
+        "the audit covered {} files and {checked} command lines: the walk or the parser regressed",
+        files.len()
+    );
     assert!(
         failures.is_empty(),
         "documented flags drift from the CLI:\n{}",
