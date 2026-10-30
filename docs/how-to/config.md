@@ -7,6 +7,7 @@ The file is read **only** when the invocation names an alias with `-R/--remote`:
 
 `$XDG_CONFIG_HOME/nxr/config.toml`, then `~/.config/nxr/config.toml`.
 `NXR_CONFIG` names the file explicitly (a CI layout, a second server set).
+Parsing is strict: an unknown key is a misuse that names the alias and the key, so a typo such as `usernmae` cannot silently degrade into an anonymous request.
 
 ```toml
 # ~/.config/nxr/config.toml
