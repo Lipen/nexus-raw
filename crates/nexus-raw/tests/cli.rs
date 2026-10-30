@@ -3129,6 +3129,38 @@ fn ndjson_events_parse_and_summarize() {
 
 // ---- golden ndjson --------------------------------------------------------
 
+/// The `clone --plan --json` shape is golden: one line per name with the plan
+/// and, for a transfer, the size.
+#[test]
+fn golden_ndjson_clone_plan_holds() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let repo = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    std::fs::create_dir_all(src.path().join("sub")).unwrap();
+    write_file(&src.path().join("sub"), "b.bin", BETA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &repo]),
+        0,
+        "seeding the clone plan fixture",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let out = nxr(&[
+        "--json",
+        "clone",
+        "--plan",
+        &repo,
+        dst.path().to_str().unwrap(),
+    ]);
+    expect_exit(&out, 0, "golden clone plan");
+    assert_eq!(
+        stdout(&out),
+        golden("clone-plan.ndjson"),
+        "the clone plan ndjson changed: update tests/golden/clone-plan.ndjson deliberately"
+    );
+}
+
 /// The `ls --json` shape is golden: the hidden count of the listed directory, a
 /// folder row, and a file row carrying the search facts.
 #[test]
@@ -3424,6 +3456,7 @@ fn golden(name: &str) -> String {
         "rm.ndjson" => include_str!("golden/rm.ndjson"),
         "audit.ndjson" => include_str!("golden/audit.ndjson"),
         "ls.ndjson" => include_str!("golden/ls.ndjson"),
+        "clone-plan.ndjson" => include_str!("golden/clone-plan.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
     }
     .replace("\r\n", "\n")
