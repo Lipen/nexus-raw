@@ -980,6 +980,55 @@ fn clone_copies_a_repository_and_skips_on_the_second_run() {
     );
 }
 
+/// `clone --state FILE` keeps the cache where it is named, `--no-state` writes
+/// none, and the pair together is misuse.
+#[test]
+fn clone_state_flags_choose_the_cache() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let base = clone_repo_url(&srv);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &base]),
+        0,
+        "seeding up",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let cache = dst.path().join("cache.json");
+    let out = nxr(&[
+        "clone",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--state",
+        cache.to_str().unwrap(),
+    ]);
+    expect_exit(&out, 0, "clone --state");
+    assert!(cache.is_file(), "the cache lands at the named path");
+    assert!(
+        !dst.path().join(".nxr-state.json").exists(),
+        "the default cache is not written beside it"
+    );
+
+    let bare = TempDir::new().unwrap();
+    let out = nxr(&["clone", &base, bare.path().to_str().unwrap(), "--no-state"]);
+    expect_exit(&out, 0, "clone --no-state");
+    assert!(
+        !bare.path().join(".nxr-state.json").exists(),
+        "no cache with --no-state"
+    );
+
+    let both = nxr(&[
+        "clone",
+        &base,
+        dst.path().to_str().unwrap(),
+        "--state",
+        cache.to_str().unwrap(),
+        "--no-state",
+    ]);
+    expect_exit(&both, 2, "the pair is misuse");
+}
+
 /// `clone` creates a missing destination, the way `down` does: a fresh path is
 /// the normal case, and the part files must not fail on it.
 #[test]
