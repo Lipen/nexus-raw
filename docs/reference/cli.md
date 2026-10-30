@@ -1058,6 +1058,8 @@ raw-main raw hosted https://nexus.example.com/repository/raw-main
 The collection is the one your credentials see: a repository hidden from your account resolves as a data error, never guessed.
 The collection itself is trimmed on 3.79 (`size`, empty `attributes` even for an admin): that is everything the endpoint gives without admin rights.
 
+`--json` prints one object: the entry (`name`, `format`, `type`, `url`), and under `--detail` the settings document under the same object's `detail` key.
+
 `--detail` additionally fetches the full settings through the admin-only single-repository endpoint:
 
 ```console

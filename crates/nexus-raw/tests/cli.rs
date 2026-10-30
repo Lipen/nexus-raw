@@ -4890,6 +4890,34 @@ fn service_eula_accept_refusal_is_an_auth_error() {
     assert!(stderr(&out).contains("hint:"), "got: {}", stderr(&out));
 }
 
+/// `service repo --detail` reads the admin-only settings through one GET and
+/// prints them under the summary line, the shape `cli.md` documents.
+#[test]
+fn service_repo_detail_prints_the_admin_settings() {
+    let srv = server(Scenario::RepoDetailAdmin {
+        user: "admin".into(),
+        pass: "pw".into(),
+    });
+    let url = format!("{}repository/raw-main/", srv.base_url());
+    let out = nxr(&["service", "repo", &url, "--detail", "-u", "admin:pw"]);
+    expect_exit(&out, 0, "the admin detail");
+    let text = stdout(&out);
+    assert!(text.contains("(full settings follow)"), "{text}");
+    assert!(text.contains("blobStoreName"), "the settings print: {text}");
+    assert!(!text.contains("pw"), "credentials never print: {text}");
+
+    let json = nxr(&[
+        "--json", "service", "repo", &url, "--detail", "-u", "admin:pw",
+    ]);
+    expect_exit(&json, 0, "the json detail");
+    let value: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("one object");
+    assert_eq!(value["name"], "raw-main");
+    assert_eq!(
+        value["detail"]["storage"]["blobStoreName"], "default",
+        "the settings ride the same object: {value}"
+    );
+}
+
 /// `service eula` on a server without the gate reports gate:false and exits zero.
 #[test]
 fn service_eula_without_a_gate_is_a_noop() {
