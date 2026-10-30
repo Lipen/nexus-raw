@@ -49,11 +49,16 @@ async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
                     );
                 }
                 nexus_raw_core::EntryKind::File => {
-                    print_line(
-                        ctx.json,
-                        &printable(&e.name),
-                        &serde_json::json!({"entry": e.name, "kind": "file"}),
-                    );
+                    // The search answer already carried the facts: a consumer
+                    // plans without a HEAD per name.
+                    let mut json = serde_json::json!({"entry": e.name, "kind": "file"});
+                    if let Some(size) = e.size {
+                        json["size"] = serde_json::json!(size);
+                    }
+                    if let Some(digest) = &e.digest {
+                        json["sha256"] = serde_json::json!(digest.as_str());
+                    }
+                    print_line(ctx.json, &printable(&e.name), &json);
                 }
             }
         }

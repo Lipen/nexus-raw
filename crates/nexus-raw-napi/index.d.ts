@@ -419,6 +419,10 @@ export interface NxrLsEntry {
   name: string
   /** `"dir"` when the child has a subtree below it, `"file"` when it is a leaf. */
   kind: string
+  /** The artifact's size in bytes, when the search answer carried it. Absent for folders and unknown facts. */
+  size?: number
+  /** The artifact's sha256, when the search answer carried it. Absent for folders and unknown facts. */
+  sha256?: string
 }
 
 /** The immediate children of a raw directory URL, at any tree depth: folders first, then files. */

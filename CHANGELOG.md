@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- `nxr ls` carries the search facts it already fetched: a file row in `--json` gains `size` and `sha256` when the index reports them, and `Nxr::ls_entries` / the Node `lsEntries` expose the same fields.
+  A consumer plans a selective download without a HEAD per name, and a folder row carries neither (a raw folder has no size of its own).
 - A `static-host` mock scenario pins the bare file-server profile: reads and ranges work, every write is the read-only refusal (405, exit 1), and the whole service plane answers 404, the search API included.
   The core, the CLI and the Python client test it, so the read profile off Nexus stops being a manual nginx probe.
 - A `warning` event, rendered as a `warning:` line on stderr and as `{"event":"warning","text":...}` under `--json`, names the rows an enumeration left out because they are outside the artifact grammar: `down --ls`, `clone`, `diff --via search` and the list command share it, so a transfer no longer loses such a name silently.
@@ -24,6 +26,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The search facts the client reads carry a size on a real Nexus: the pinned 3.96.3 serves the field as `fileSize`, and `diff --via search`, `service assets` and the new `ls --json` size read `size`, which no real answer carries, so the size was always absent.
+  The flat `size` form stays as a fallback for a proxy that rewrites the document.
 - A single-file download in `nxr-tui` writes the `.sha256` marker it computed, so a tree the browser filled passes `nxr verify` offline, exactly like a `down` tree.
   The marker of the previous download is dropped before the next transfer: left in place it became the resume guard's expectation and refused a legitimately changed object.
 - The browser's single-file download accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.

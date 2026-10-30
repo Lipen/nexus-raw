@@ -818,6 +818,52 @@ fn get_segments_auth_refusal_is_the_auth_verdict() {
     assert!(!out.exists());
 }
 
+/// The tree listing carries the search facts it already fetched: a file row
+/// names its size and sha256, a folder row has neither, and markers stay hidden.
+#[test]
+fn ls_json_carries_the_search_facts() {
+    let srv = server(Scenario::Atomic);
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/app.zip","fileSize":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/bom/x.json","fileSize":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/app.zip.sha256","fileSize":100,"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        ALPHA.len(),
+        hex_digest(ALPHA),
+        BETA.len(),
+        hex_digest(BETA),
+        hex_digest(ALPHA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+
+    let out = nxr(&["--json", "ls", &repo_dir_url(&srv)]);
+    expect_exit(&out, 0, "the listing");
+    let lines = ndjson(&out);
+    let file = lines
+        .iter()
+        .find(|l| l["entry"] == "app.zip")
+        .expect("the file row");
+    assert_eq!(file["kind"], "file");
+    assert_eq!(file["size"], ALPHA.len());
+    assert_eq!(file["sha256"], hex_digest(ALPHA));
+
+    let dir = lines
+        .iter()
+        .find(|l| l["entry"] == "bom")
+        .expect("the dir row");
+    assert_eq!(dir["kind"], "dir");
+    assert!(dir.get("size").is_none(), "a folder has no size: {dir}");
+    assert!(dir.get("sha256").is_none(), "a folder has no digest: {dir}");
+
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l["entry"].as_str().is_some_and(|n| n.ends_with(".sha256"))),
+        "markers stay hidden: {lines:?}"
+    );
+}
+
 /// A name the server holds outside the artifact grammar is not transferable:
 /// `ls --assets` leaves it out and names the count, so the short listing is a
 /// fact.
@@ -5058,8 +5104,8 @@ fn seed_via_search_fixture(srv: &MockNexus) -> (String, tempfile::TempDir) {
     // sizes, the shape a real Nexus serves. Paths are repository-absolute.
     let page = format!(
         r#"{{"continuationToken":null,"items":[
-            {{"path":"1.14.0/a.zip","size":{},"checksum":{{"sha256":"{}"}}}},
-            {{"path":"1.14.0/b.zip","size":{},"checksum":{{"sha256":"{}"}}}}
+            {{"path":"1.14.0/a.zip","fileSize":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/b.zip","fileSize":{},"checksum":{{"sha256":"{}"}}}}
         ]}}"#,
         ALPHA.len(),
         hex_digest(ALPHA),
@@ -5167,7 +5213,7 @@ fn via_search_prefix_filters_local_only_names() {
     write_file(local.path(), "notes.txt", GAMMA);
     let page = format!(
         r#"{{"continuationToken":null,"items":[
-            {{"path":"1.14.0/sub/a.zip","size":{},"checksum":{{"sha256":"{}"}}}}
+            {{"path":"1.14.0/sub/a.zip","fileSize":{},"checksum":{{"sha256":"{}"}}}}
         ]}}"#,
         ALPHA.len(),
         hex_digest(ALPHA),
@@ -5217,8 +5263,8 @@ fn via_search_digestless_entry_is_not_same() {
     // b.zip loses its checksum line: nothing to verify against anymore.
     let page = format!(
         r#"{{"continuationToken":null,"items":[
-            {{"path":"1.14.0/a.zip","size":{},"checksum":{{"sha256":"{}"}}}},
-            {{"path":"1.14.0/b.zip","size":{}}}
+            {{"path":"1.14.0/a.zip","fileSize":{},"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/b.zip","fileSize":{}}}
         ]}}"#,
         ALPHA.len(),
         hex_digest(ALPHA),

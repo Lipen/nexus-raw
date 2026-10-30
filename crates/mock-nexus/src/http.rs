@@ -374,8 +374,12 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         let items: Vec<String> = keys
                             .iter()
                             .map(|k| {
+                                // The real answer carries the size as `fileSize`.
+                                let size = lock(&shared.store)
+                                    .get(k)
+                                    .map_or(0, std::vec::Vec::len);
                                 format!(
-                                    "{{\"downloadUrl\":\"/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
+                                    "{{\"downloadUrl\":\"/{k}\",\"path\":\"/{k}\",\"id\":\"raw-main:{k}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"fileSize\":{size},\"checksum\":{{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}}}}"
                                 )
                             })
                             .collect();

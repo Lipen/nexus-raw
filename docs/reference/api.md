@@ -120,7 +120,7 @@ Every method mirrors a CLI command one-to-one.
 | `verify(dir, names)` | `Summary` | `nxr verify` | offline bytes+marker+digest check, emits only the summary |
 | `channel_get(url)` | `Option<String>` | `nxr channel get` | `None` on 404 |
 | `channel_set(url, token, if_forward)` | `ChannelOutcome` | `nxr channel set` | `Written { from }` or `Skipped { current }` |
-| `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden |
+| `ls_entries()` | `Vec<Entry>` | `nxr ls` | the raw tree, any depth: folders first then files, markers hidden. A file entry carries the search-reported `size` and `digest` when the index has them |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 | `ls_assets_counted()` | `(Vec<ArtifactName>, usize)` | `nxr ls --assets` | the same listing with the count of rows left out because they are outside the artifact grammar |
 

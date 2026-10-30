@@ -151,6 +151,10 @@ pub struct NxrLsEntry {
     pub name: String,
     /// `"dir"` when the child has a subtree below it, `"file"` when it is a leaf.
     pub kind: String,
+    /// The artifact's size in bytes, when the search answer carried it. Absent for folders and unknown facts.
+    pub size: Option<f64>,
+    /// The artifact's sha256, when the search answer carried it. Absent for folders and unknown facts.
+    pub sha256: Option<String>,
 }
 
 /// The immediate children of a raw directory URL, at any tree depth: folders first, then files.
@@ -188,6 +192,8 @@ pub async fn ls_entries(url: String, opts: Option<NxrCommonOpts>) -> Result<Vec<
                 nexus_raw_core::EntryKind::Dir => "dir".to_owned(),
                 nexus_raw_core::EntryKind::File => "file".to_owned(),
             },
+            size: e.size.map(|s| s as f64),
+            sha256: e.digest.map(|d| d.as_str().to_owned()),
         })
         .collect())
 }

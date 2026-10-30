@@ -831,7 +831,10 @@ Treat both as conveniences only.
 | `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/...` |
 | `3` | transport or auth failure |
 
-`--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file"}` from the tree, `{"name":"app.zip"}` from `--assets`.
+`--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file","size":45,"sha256":"a8a2…"}` from the tree, `{"name":"app.zip"}` from `--assets`.
+A file row carries the size and sha256 the search answer reported, when it did, so a consumer can plan without a HEAD per name.
+A folder row carries neither: a raw folder has no size of its own.
+An index or proxy that reports no facts leaves the fields out rather than inventing them.
 When the enumeration hides rows as derived data or as untransferable, a final line reports the count with its reason: `{"event":"hidden","count":1,"reason":"marker"}` from the tree, `{"event":"hidden","count":1,"reason":"grammar"}` from `--assets`.
 
 ## nxr channel get

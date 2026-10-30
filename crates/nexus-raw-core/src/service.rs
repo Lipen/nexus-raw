@@ -287,7 +287,10 @@ pub(crate) async fn assets(
                 entries.push(AssetEntry {
                     path: path.to_owned(),
                     url,
-                    size: item.get("size").and_then(|s| s.as_u64()),
+                    size: item
+                        .get("fileSize")
+                        .or_else(|| item.get("size"))
+                        .and_then(|s| s.as_u64()),
                     sha256: item
                         .get("checksum")
                         .and_then(|c| c.get("sha256"))

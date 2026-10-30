@@ -337,6 +337,8 @@ The search API walks `/service/rest/v1/search/assets` with continuation tokens.
 It exists on common Nexus 3 releases but is not guaranteed, and on some releases its filters match Maven coordinates rather than raw paths.
 Treat `--ls` output as a hint only.
 
+Each search item carries the path and, when the index holds them, the digest (`checksum.sha256`) and the size (`fileSize`), so a client reads the facts instead of a HEAD per name.
+The size key is `fileSize` on the pinned 3.96.3, never `size`, and the client accepts the flat `size` form only as a fallback for a proxy that rewrites the document.
 A directory listing (`ls`, `ls --assets`, and the `down --ls` enumeration at a version directory) asks the same endpoint with `q=<percent-encoded directory path>/`.
 `q` is a page cutter, never the answer: the server matches it loosely (a case-sensitive path substring, measured against the pinned 3.96.3), so the pages may carry a superset (a copy of the directory under another parent, or a name-continuing sibling when the trailing slash is missing), and the client-side whole-segment prefix filter turns that superset into exactly the directory's names.
 The property that a directory query never drops a name is versioned, not verified at run time: the search answer carries no count to compare against.

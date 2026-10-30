@@ -3968,6 +3968,8 @@ mod tests {
         Entry {
             name: name.to_owned(),
             kind,
+            size: None,
+            digest: None,
         }
     }
 

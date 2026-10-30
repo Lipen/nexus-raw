@@ -26,6 +26,12 @@ pub struct Entry {
     pub name: String,
     /// Whether the child has a subtree below it.
     pub kind: EntryKind,
+    /// The artifact's size in bytes, when the search answer carried it.
+    /// A folder has no size of its own.
+    pub size: Option<u64>,
+    /// The artifact's sha256, when the search answer carried it.
+    /// A folder has no digest of its own.
+    pub digest: Option<Digest>,
 }
 
 /// Whether an entry is a folder or a leaf file.
@@ -65,12 +71,18 @@ pub async fn search_entries_counted(
     dir_url: &str,
 ) -> Result<(Vec<Entry>, usize), Error> {
     let (repo, prefix) = split_prefix(dir_url)?;
-    let paths = paginate(client, dir_url, &repo, scope_path(&prefix).as_deref()).await?;
+    // The search answer carries the per-asset facts, and they cost nothing here:
+    // the walk already parsed them. A folder row keeps none, a file row keeps
+    // what the server reported (an old or proxy-fronted index may report
+    // neither, so both stay optional).
+    let assets = walk(client, dir_url, &repo, scope_path(&prefix).as_deref()).await?;
     let mut dirs = std::collections::BTreeSet::new();
-    let mut files = std::collections::BTreeSet::new();
+    let mut files: std::collections::BTreeMap<String, (Option<u64>, Option<Digest>)> =
+        std::collections::BTreeMap::new();
     let mut hidden = 0usize;
-    for path in paths {
-        let segs: Vec<String> = path
+    for asset in assets {
+        let segs: Vec<String> = asset
+            .path
             .split('/')
             .filter(|s| !s.is_empty())
             .map(percent_decode)
@@ -89,7 +101,7 @@ pub async fn search_entries_counted(
                 hidden += 1;
                 continue;
             }
-            files.insert(first.clone());
+            files.insert(first.clone(), (asset.size, asset.sha256));
         } else {
             dirs.insert(first.clone());
         }
@@ -99,10 +111,14 @@ pub async fn search_entries_counted(
         .map(|name| Entry {
             name,
             kind: EntryKind::Dir,
+            size: None,
+            digest: None,
         })
-        .chain(files.into_iter().map(|name| Entry {
+        .chain(files.into_iter().map(|(name, (size, digest))| Entry {
             name,
             kind: EntryKind::File,
+            size,
+            digest,
         }))
         .collect();
     Ok((entries, hidden))
@@ -526,7 +542,13 @@ async fn walk(
                         .and_then(|c| c.get("sha256"))
                         .and_then(|s| s.as_str())
                         .and_then(|s| Digest::from_hex(s).ok()),
-                    size: item.get("size").and_then(|s| s.as_u64()),
+                    // The real search answer carries the size as `fileSize`
+                    // (measured against the pinned 3.96.3). `size` is kept as a
+                    // fallback for a proxy or a fixture that reports the flat form.
+                    size: item
+                        .get("fileSize")
+                        .or_else(|| item.get("size"))
+                        .and_then(|s| s.as_u64()),
                 });
             }
         }
