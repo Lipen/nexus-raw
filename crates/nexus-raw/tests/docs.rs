@@ -170,6 +170,57 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
     );
 }
 
+/// The site navigation names every docs page: a page missing from `nav:` is
+/// reachable by URL but invisible in the menu, and a nav entry without a file
+/// is a dead link the build tolerates.
+#[test]
+fn the_site_nav_lists_every_page() {
+    let root = repo_root();
+    let yaml = std::fs::read_to_string(root.join("mkdocs.yml")).expect("mkdocs.yml reads");
+    let nav = yaml
+        .split_once("\nnav:\n")
+        .expect("the nav block")
+        .1
+        .split("\nextra_")
+        .next()
+        .expect("the nav block ends");
+    let mut listed: Vec<String> = Vec::new();
+    for line in nav.lines() {
+        let Some(at) = line.find(".md") else { continue };
+        let path = &line[..at + 3];
+        let path = path
+            .rsplit_once(": ")
+            .map_or(path, |(_, p)| p)
+            .trim_start()
+            .trim_start_matches("- ")
+            .trim_matches('"')
+            .to_owned();
+        listed.push(path);
+    }
+    assert!(
+        listed.len() >= 25,
+        "the parser found {} entries",
+        listed.len()
+    );
+    let mut files = Vec::new();
+    markdown_files(&root.join("docs"), &mut files);
+    let pages: Vec<String> = files
+        .iter()
+        .filter_map(|p| p.strip_prefix(root.join("docs")).ok())
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect();
+    let missing: Vec<&String> = pages.iter().filter(|p| !listed.contains(p)).collect();
+    assert!(
+        missing.is_empty(),
+        "mkdocs.yml nav does not list these pages: {missing:?}"
+    );
+    let dead: Vec<&String> = listed.iter().filter(|l| !pages.contains(l)).collect();
+    assert!(
+        dead.is_empty(),
+        "mkdocs.yml nav names pages that do not exist: {dead:?}"
+    );
+}
+
 /// The machine-readable index links every docs page and nothing else: a page
 /// added without its `llms.txt` entry stays invisible to the agents that read
 /// the index, and a removed page leaves a dead entry behind.
