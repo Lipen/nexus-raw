@@ -254,6 +254,18 @@ expect_ok "doctor --deep passes on the real server" "$NXR" doctor "$VER" --deep
 printf 'wait for me\n' > "$WORK/src/waited.bin"
 expect_ok "up --wait-index waits for the real index" bash -c "\"$NXR\" up '$WORK/src' '$VER' --wait-index --json > '$WORK/wait.jsonl' && grep -q '\"timeout\":false' '$WORK/wait.jsonl'"
 
+# The one-span read against the real server: the returned bytes equal the
+# source prefix.
+expect_ok "get --range reads one span" bash -c "\"$NXR\" get '$VER/big.bin' --range 0-99 -o '$WORK/span.bin' && head -c 100 '$WORK/orig/big.bin' | cmp -s - '$WORK/span.bin'"
+
+# --if-changed on a converged tree skips everything: every remote marker
+# already matches the local copy.
+if out=$("$NXR" up "$WORK/src" "$VER" --if-changed -q 2> /dev/null) && printf '%s' "$out" | grep -q 'uploaded 0'; then
+    ok "up --if-changed skips a converged tree"
+else
+    no "up --if-changed skips a converged tree"
+fi
+
 # The segmented download against the same real 206 answer.
 expect_ok "down --segments reassembles a real 206 answer" bash -c "\"$NXR\" down '$VER' '$WORK/seg-down' --name big.bin --segments 4 && cmp -s '$WORK/orig/big.bin' '$WORK/seg-down/big.bin'"
 
