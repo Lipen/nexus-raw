@@ -941,7 +941,7 @@ $ echo $?
 1
 ```
 
-`--json` prints the `summary` event with the counts, where the verified names land in `skipped`, and on a failure one `error` object per bad name after it:
+`--json` prints the `summary` event, where `skipped` counts the complete names (a broken name lowers it) and `failed`/`failures` list the rest, then one `error` object carrying the incomplete hint:
 
 ```json
 {"downloaded":0,"event":"summary","failed":["a.bin"],"failures":[{"code":1,"name":"a.bin"}],"kind":"transfer","removed":0,"sealed":0,"skipped":0,"uploaded":0}
