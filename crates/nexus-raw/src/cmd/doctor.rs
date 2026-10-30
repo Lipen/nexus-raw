@@ -204,7 +204,16 @@ pub(crate) async fn run(
                         report.push(("probe", ok, detail, next));
                         if deep {
                             match deep_probes(cli, &client, &base, probe_name).await {
-                                Ok(lines) => report.extend(lines),
+                                Ok(lines) => {
+                                    for (name, ok, detail, next) in lines {
+                                        // A deep verdict that warns gets the same
+                                        // marker and count as every other warning.
+                                        if detail.starts_with("warning: ") {
+                                            warns.insert(name);
+                                        }
+                                        report.push((name, ok, detail, next));
+                                    }
+                                }
                                 Err(e) => report.push(("deep", false, e.to_string(), None)),
                             }
                         }
@@ -355,7 +364,7 @@ async fn deep_probes(
         Ok(None) => out.push((
             "deep:version",
             true,
-            "status endpoint empty".to_owned(),
+            "the status endpoint is absent (404: the service plane is missing)".to_owned(),
             None,
         )),
         Err(_) => out.push((
@@ -435,17 +444,17 @@ async fn deep_probes(
     let search_url = format!("{origin}/service/rest/v1/search/assets?repository={repo}");
     match client.get_small(&search_url).await {
         Ok(Some(_)) => out.push(("deep:search", true, "the search index answers".to_owned(), None)),
-        Ok(None) => out.push(("deep:search", true, "empty page".to_owned(), None)),
+        // `get_small` maps a 404 to `None`: the endpoint is absent, not empty.
+        Ok(None) => out.push((
+            "deep:search",
+            true,
+            "warning: search-dead (404: the search endpoint is absent; diff --via search refuses there, --fallback saves it)".to_owned(),
+            None,
+        )),
         Err(nexus_raw_core::Error::SearchRepoMissing { .. }) => out.push((
             "deep:search",
             true,
             "warning: search-dead (400: the repository is unknown to the index; diff --via search refuses there, --fallback saves it)".to_owned(),
-            None,
-        )),
-        Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
-            "deep:search",
-            true,
-            "warning: search-dead (404: the search endpoint is absent; diff --via search refuses there, --fallback saves it)".to_owned(),
             None,
         )),
         Err(e) => out.push(("deep:search", false, e.to_string(), None)),
@@ -494,7 +503,7 @@ async fn deep_probes(
         Ok(None) => out.push((
             "deep:repo-type",
             true,
-            "skipped: the service listing is empty".to_owned(),
+            "skipped: the service plane is absent (404: the repositories document lives under /service/rest/v1/repositories)".to_owned(),
             None,
         )),
         Err(_) => out.push((
@@ -530,8 +539,7 @@ async fn deep_probes(
                 )),
             }
         }
-        Ok(None) => out.push(("deep:eula", true, "skipped: empty answer".to_owned(), None)),
-        Err(nexus_raw_core::Error::Enumerate { .. }) => out.push((
+        Ok(None) => out.push((
             "deep:eula",
             true,
             "skipped: the endpoint is absent (404: no EULA gate on this server)".to_owned(),

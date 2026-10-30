@@ -278,15 +278,19 @@ Verified against Nexus Community Edition 3.79.1-04: the same shapes ride the moc
 Without `--deep` doctor checks the invocation (credentials, TLS, settings, one reachability probe).
 With `--deep` it adds read-only probes of the server itself, each independent: one probe refusing never stops the others.
 
+The base checks (credentials, tls, settings, proxy, probe) run with or without `--deep`.
+`--deep` adds one `deep:` line per probe:
+
 | Probe | What it checks | Verdicts |
 |:------|:---------------|:---------|
-| auth | a GET of the repository root (or the probe target) with your credentials | `ok`, or 401/403 named as a credential verdict |
-| range | HEAD for the size, then GET `Range: bytes=0-0` | `206` ok, `200` is `range-stripped` (warn: `--segments` degrades), a refusal is named |
-| content-length | the HEAD answer | present, or absent (warn: resume and `--segments` are limited) |
-| search | one page of the search API for the repository | `ok`, or `search-dead` on 400/404 (warn: `diff --via search` refuses there, `--fallback` saves it) |
-| repo-type | the service REST API, read-only | `hosted`, `group` or `proxy`, with the group members in order for a group |
-| tls | the existing checks, plus how `--tls-insecure` is reflected | as always |
-| version | `GET /service/rest/v1/status` when alive | the version string, diagnostic only, no gate |
+| `deep:version` | `GET /service/rest/v1/status` | the version string when the document carries one, `status endpoint answered` when the body is empty (3.96 answers an empty body), `absent (404)` without the service plane |
+| `deep:content-length` | the HEAD answer | present, or absent (warn: resume and `--segments` are limited) |
+| `deep:range` | HEAD for the size, then GET `Range: bytes=0-0` | `206` ok, `200` is `range-stripped` (warn: `--segments` degrades), a refusal is named |
+| `deep:search` | one page of the search API for the repository | `ok`, or `search-dead` on 400/404 (warn: `diff --via search` refuses there, `--fallback` saves it) |
+| `deep:repo-type` | the repositories document, read-only | `hosted, format raw`, `group` with the members in order, `proxy`, and a 404 is `skipped: the service plane is absent` |
+| `deep:eula` | `GET /service/rest/v1/system/eula` | `accepted`, the `not accepted` warn with the `nxr service eula --accept` next line, or `skipped: no EULA gate` on a 404 |
+
+A warning check carries the `[ warn ]` marker and the `"warn":true` field under `--json`, and the summary counts it: `all checks passed with 2 warning(s)`.
 
 Every probe with a target (range, content-length) needs an object to probe.
 An empty repository is a normal case, not an error: doctor before the first `up` is exactly when you want it.

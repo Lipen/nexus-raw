@@ -27,6 +27,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `nxr doctor --deep` names a missing service plane instead of calling an absent endpoint empty: a 404 from the status, search, repositories or eula probe reads `absent (404)`, and a deep warning carries the `[ warn ]` marker, the `"warn":true` field and the summary count like every other warning.
 - The `search-lag` mock serves the digest of the stored marker, so `diff --via search` against the mock compares real facts: the page used to print zeros, so every uploaded name reported as `diverged (sha)` and the audit flagged every asset as `diverged_fact`.
   A marker row reports no digest instead of a placeholder.
 - The search facts the client reads carry a size on a real Nexus: the pinned 3.96.3 serves the field as `fileSize`, and `diff --via search`, `service assets` and the new `ls --json` size read `size`, which no real answer carries, so the size was always absent.

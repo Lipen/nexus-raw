@@ -97,6 +97,35 @@ fn deep_on_ignore_range_warns_range_stripped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A host with no service plane: the deep probes name the 404 of the missing
+/// endpoint instead of calling it empty, count the warns, and still exit 0.
+#[test]
+fn deep_on_a_static_host_names_the_absent_service_plane() {
+    let srv = MockNexus::start(Scenario::StaticHost).expect("mock nexus starts");
+    let url = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["doctor", &url, "--deep"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    let s = stdout(&out);
+    for needle in [
+        "deep:version: the status endpoint is absent (404",
+        "deep:search: warning: search-dead (404",
+        "deep:repo-type: skipped: the service plane is absent (404",
+        "deep:eula: skipped: the endpoint is absent (404: no EULA gate on this server)",
+        // The anonymous run warns about the missing credentials too.
+        "all checks passed with 2 warning(s)",
+    ] {
+        assert!(s.contains(needle), "the probe reports {needle:?}: {s}");
+    }
+    assert!(
+        s.contains("[ warn ] credentials:"),
+        "the anonymous credentials check is a warn: {s}"
+    );
+    assert!(
+        !s.contains("empty page"),
+        "an absent endpoint is not an empty page: {s}"
+    );
+}
+
 #[test]
 fn deep_on_status_down_keeps_going() {
     let srv = MockNexus::start(Scenario::ServiceStatusDown).expect("mock nexus starts");

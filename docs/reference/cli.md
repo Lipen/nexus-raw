@@ -1142,7 +1142,7 @@ Missing credentials are a warning, not a failure: the run reports `none found` a
 
 | Flag | Meaning |
 |:-----|:--------|
-| `--deep` | add read-only probes of the server itself: auth, range, content-length, search, repo-type, tls, version |
+| `--deep` | add read-only probes of the server itself: version, content-length, range, search, repo-type, eula |
 | `--probe-name <NAME>` | the object the targeted probes (range, content-length) examine. Without it, one is found by a single listing of the repository root |
 
 `--deep` requires a URL: without one it is misuse (exit 2), because every deep probe talks to a server.
@@ -1169,21 +1169,23 @@ $ echo $?
 3
 ```
 
-With `--deep` the report grows one line per server probe, and warns still exit 0:
+With `--deep` the report grows one line per server probe, each named `deep:…`, and warns still exit 0:
 
 ```console
-$ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/raw-main/ --deep
+$ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/raw-main/1.4.0/ --deep
 doctor:
   [  ok  ] credentials: resolved from NXR_AUTH
   [  ok  ] tls: verification is ON
   [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
-  [  ok  ] auth: repository answers your credentials
-  [ WARN ] range: range-stripped: a ranged GET answered 200 with the whole body, --segments degrades to single-stream
-  [  ok  ] content-length: present (45 bytes)
-  [ WARN ] search: search-dead: HTTP 400, diff --via search refuses here, --fallback degrades explicitly
-  [  ok  ] repo-type: hosted
-  [  ok  ] version: 3.84.0-01
-  2 warning(s), all checks passed
+  [  ok  ] proxy: no proxy in the environment
+  [  ok  ] probe: status endpoint answered: the server is reachable
+  [  ok  ] deep:version: status endpoint answered
+  [  ok  ] deep:content-length: present (45)
+  [ warn ] deep:range: warning: range-stripped (200 to a ranged GET: --segments degrades to the single stream)
+  [ warn ] deep:search: warning: search-dead (400: the repository is unknown to the index; diff --via search refuses there, --fallback saves it)
+  [  ok  ] deep:repo-type: hosted, format raw
+  [  ok  ] deep:eula: accepted (writes are not gated)
+  all checks passed with 2 warning(s)
 $ echo $?
 0
 ```
