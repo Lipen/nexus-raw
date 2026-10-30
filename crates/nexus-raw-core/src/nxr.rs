@@ -998,6 +998,7 @@ impl Nxr {
                 )));
             }
         }
+        ensure_destination(dir)?;
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| Error::io(dir, e))?;
@@ -1077,6 +1078,7 @@ impl Nxr {
         // A fresh destination is created, like `down` does: the part files land
         // under it, and a missing directory would fail as a raw I/O error named
         // after a staging file.
+        ensure_destination(dir)?;
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| Error::io(dir, e))?;
@@ -1679,6 +1681,28 @@ fn secure_staging(path: &Path) -> Result<(), Error> {
     #[cfg(not(unix))]
     {
         std::fs::create_dir_all(path).map_err(|e| Error::io(path, e))
+    }
+}
+
+/// A destination is a directory or absent: a file at that path is a naming
+/// mistake, and `create_dir_all` would answer it with a bare "File exists".
+fn ensure_destination(dir: &std::path::Path) -> Result<(), Error> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        match std::fs::metadata(dir) {
+            Ok(meta) if !meta.is_dir() => Err(Error::misuse(format!(
+                "the destination exists and is not a directory: {}",
+                dir.display()
+            ))),
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Error::io(dir, e)),
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = dir;
+        Ok(())
     }
 }
 
