@@ -19,7 +19,7 @@ cargo run -p mock-nexus -- atomic --port 8080
 
 `--print-scenarios` prints the table as a JSON array, the same list the Python suite checks against.
 
-Preset knobs ride the flags: `--partial-bytes N`, `--cut-after N --fake-length`, `--chunk-delay-ms N --chunk-size N`, `--flaky K`, `--rate-429s N --retry-after-secs N`, `--location PATH`, `--auth user:pass`.
+Preset knobs ride the flags: `--partial-bytes N`, `--cut-after N --fake-length`, `--chunk-delay-ms N --chunk-size N`, `--flaky K`, `--lag-ms N` (the `search-lag` catch-up window, 6000 ms unless named), `--rate-429s N --retry-after-secs N`, `--location PATH`, `--auth user:pass`.
 
 ### `--seed-dir DIR`
 
