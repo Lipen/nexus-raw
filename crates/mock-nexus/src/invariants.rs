@@ -308,7 +308,7 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         id: "search-lag",
         name: "The search index lags behind writes.",
         behavior: &[
-            "The first storage PUT arms a catch-up deadline (6000 ms).",
+            "The first storage PUT arms a catch-up deadline (6000 ms, the binary's `--lag-ms`).",
             "`GET /service/rest/v1/search/assets` answers the empty page until the deadline passes, then a store-backed listing.",
             "Each asset carries the size of its stored bytes and, when a marker sits beside the bytes, the marker's digest.",
             "A marker row reports no digest.",
