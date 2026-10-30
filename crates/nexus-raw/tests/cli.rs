@@ -1408,6 +1408,42 @@ fn get_to_a_closed_stdout_ends_with_141() {
     );
 }
 
+/// A console that cannot take the bytes (a full disk) is a failure, not a shrug.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_full_stdout_is_reported_not_swallowed() {
+    use std::io::Read as _;
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Atomic);
+    srv.insert("latest", b"1.0.0\n");
+    let url = format!("{}latest", root_url(&srv));
+    let full = std::fs::File::create("/dev/full").expect("the kernel provides /dev/full");
+    let mut child = Command::new(NXR)
+        .args(["channel", "get", &url])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::from(full))
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut err = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    let status = child.wait().unwrap();
+
+    assert_eq!(status.code(), Some(1), "a full stdout fails the run: {err}");
+    assert!(
+        err.contains("cannot write to stdout"),
+        "the write failure is named: {err}"
+    );
+}
+
 /// `-q` keeps the summary line and drops the per-event output.
 #[test]
 fn quiet_prints_only_the_summary_line() {

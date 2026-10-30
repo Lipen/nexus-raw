@@ -6,6 +6,7 @@ The taxonomy has sixteen variants and four exit codes, and the mapping between t
 A consumer that closes the pipe (`nxr --json up ... | head -1`) ends the run with 141, the shell's code for `SIGPIPE`, the way curl and rg behave.
 The same holds for a `get` stream whose stdout went away: no disk error is reported, because the sink was a pipe, not a file.
 Nothing is printed there, because nobody is reading, and an upload that lost its console stops instead of continuing in the background.
+Every other write failure on the console, a full disk included, fails the run with 1 and names the error on stderr.
 
 ## The taxonomy
 

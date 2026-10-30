@@ -3,33 +3,26 @@
 mod json;
 
 use std::io::{IsTerminal, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use nexus_raw_core::{Dir, Event};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-/// A closed stdout is a normal pipeline (`nxr --json up ... | head -1`), not an
-/// error: once the reader is gone, later lines are dropped and the run finishes
-/// with its real exit code.
-static OUT_CLOSED: AtomicBool = AtomicBool::new(false);
-
-/// Write one line, or stop writing when nobody reads.
+/// Write one line of console output.
+///
+/// A reader that went away (`nxr --json up ... | head -1`) ends the run the way
+/// a POSIX tool does when SIGPIPE fires: quietly, with 141.
+/// Any other write failure is a real one, a full disk included, and says so.
 pub(crate) fn out_fmt(args: std::fmt::Arguments<'_>) {
-    if OUT_CLOSED.load(Ordering::Relaxed) {
-        return;
-    }
     let mut stdout = std::io::stdout().lock();
     let written = stdout
         .write_fmt(args)
         .and_then(|()| stdout.write_all(b"\n"));
     if let Err(err) = written {
         if err.kind() == std::io::ErrorKind::BrokenPipe {
-            // The reader is gone (`nxr --json up ... | head -1`): end the run
-            // the way a POSIX tool does when SIGPIPE fires, instead of
-            // panicking or uploading silently to nobody.
             std::process::exit(141);
         }
-        OUT_CLOSED.store(true, Ordering::Relaxed);
+        eprintln!("nxr: cannot write to stdout: {err}");
+        std::process::exit(1);
     }
 }
 
