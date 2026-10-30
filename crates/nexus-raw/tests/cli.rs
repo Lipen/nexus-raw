@@ -1497,6 +1497,38 @@ fn get_continue_refuses_a_symlinked_part() {
     assert!(!target.exists(), "no output is renamed from a symlink");
 }
 
+/// A server that answers the ranged resume with the whole body must not append
+/// that body after the part: the client restarts and lands the object whole.
+#[test]
+fn get_continue_restarts_when_the_server_ignores_range() {
+    let srv = server(Scenario::IgnoreRange);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.bin", ALPHA);
+    let dir = format!("{}repository/raw-main/", srv.base_url());
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir]),
+        0,
+        "publishing seeds the marker the resume is checked against",
+    );
+
+    let out = TempDir::new().unwrap();
+    std::fs::write(out.path().join("a.bin.part"), b"PART").unwrap();
+    let target = out.path().join("a.bin");
+    let got = nxr(&[
+        "get",
+        "--continue",
+        &format!("{dir}a.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "the single-stream fallback still lands the object");
+    assert_eq!(
+        read_file(out.path(), "a.bin"),
+        ALPHA,
+        "the whole body replaced the stale prefix instead of following it"
+    );
+}
+
 /// A stale part of the same length is not trusted: the resumed content is hashed
 /// against the server's `.sha256` and a divergence is refused, never renamed.
 #[test]
