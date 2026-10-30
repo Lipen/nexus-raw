@@ -1456,7 +1456,11 @@ fn a_file_destination_is_misuse() {
     let dst = dst.to_str().unwrap();
 
     let down = nxr(&["down", &root_url(&srv), dst, "--name", "a.bin"]);
-    expect_exit(&down, 2, "a file destination is misuse");
+    expect_exit(
+        &down,
+        2,
+        &format!("a file destination is misuse: {}", stderr(&down)),
+    );
     assert!(
         stderr(&down).contains("exists and is not a directory"),
         "{}",
