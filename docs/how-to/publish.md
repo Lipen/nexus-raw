@@ -255,6 +255,7 @@ $ nxr channel get https://nexus.example.com/repository/raw-main/latest
 ```
 
 The `kept` line is what stops a late CI job on an older branch from rolling `latest` back.
+A prerelease suffix compares as text, so `1.0.0-rc10` is not forward of `1.0.0-rc9`: zero-pad the number or force the set without `--if-forward`.
 Drop `--if-forward` only when you mean to force the token.
 
 ## A nightly pattern

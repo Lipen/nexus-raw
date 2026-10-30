@@ -131,5 +131,8 @@ mod tests {
         assert!(version_ge("1.0.0", "1.0.0-rc1"));
         assert!(!version_ge("1.0.0-rc1", "1.0.0"));
         assert!(version_ge("2.0", "1.99.99"));
+        // The suffix is text: a two-digit prerelease number sorts before a one-digit one.
+        assert!(version_ge("1.0.0-rc2", "1.0.0-rc1"));
+        assert!(!version_ge("1.0.0-rc10", "1.0.0-rc9"));
     }
 }

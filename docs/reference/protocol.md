@@ -112,6 +112,8 @@ The token must be exactly one non-empty line with no CR.
 | `1.10.0` vs `1.9.9` | forward: segments compare numerically |
 | `1.4.0` vs `1.14.0` | backward: `4 < 14` numerically |
 | `1.0.0` vs `1.0.0-rc1` | forward: a release beats its own prerelease |
+| `1.0.0-rc2` vs `1.0.0-rc1` | forward: the suffix compares lexicographically |
+| `1.0.0-rc10` vs `1.0.0-rc9` | backward: text order, so `rc10` sorts before `rc9`, and only a forced set (no `--if-forward`) moves it |
 
 The channel ref is the only mutable state besides version directories, and writes are plain PUTs.
 
