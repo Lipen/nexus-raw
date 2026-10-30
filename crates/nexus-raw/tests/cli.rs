@@ -1419,6 +1419,43 @@ fn get_continue_refuses_a_symlinked_part() {
     assert!(!target.exists(), "no output is renamed from a symlink");
 }
 
+/// A stale part of the same length is not trusted: the resumed content is hashed
+/// against the server's `.sha256` and a divergence is refused, never renamed.
+#[test]
+fn get_continue_refuses_a_diverged_part() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "obj.bin", b"PAYLOAD");
+    let dir = format!("{}repository/raw-main/", srv.base_url());
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir]),
+        0,
+        "publishing seeds the marker the resume is checked against",
+    );
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let part = out.path().join("obj.bin.part");
+    // Same length as the object, different bytes: only the digest can tell.
+    std::fs::write(&part, b"WRONG12").unwrap();
+    let url = format!("{dir}obj.bin");
+    let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&got, 1, "a diverged resume is a data verdict");
+    assert!(
+        stderr(&got).contains("resumed content diverges"),
+        "the divergence is named: {}",
+        stderr(&got)
+    );
+    assert!(
+        !target.exists(),
+        "a diverged resume is never renamed into place"
+    );
+    assert!(
+        !part.exists(),
+        "the poisoned part is removed, so a rerun starts clean"
+    );
+}
+
 /// A part longer than the object answers 416: the client must prove it holds
 /// the whole object before finalizing, and restart from zero when it does not.
 #[test]

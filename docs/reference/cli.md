@@ -87,7 +87,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | Flag | Meaning |
 |:-----|:--------|
 | `-o, --out <FILE>` | output file. stdout when omitted |
-| `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request |
+| `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. The assembled bytes are hashed against the local or server-side `.sha256` sibling before the rename, and a divergence is refused (exit 1) with the part removed |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 | `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. The span goes to `-o` or stdout. Conflicts with `--continue` and `--segments` |
 
@@ -111,6 +111,8 @@ get: 45 bytes → app.zip (resumed from 20)
 $ echo $?
 0
 ```
+
+The resumed content is not trusted blindly: `--continue` hashes the assembled bytes and compares them with the `.sha256` sibling, so a stale part from a different object is refused with a `mismatch` instead of being renamed, and the part is removed so a rerun starts clean.
 
 `--segments 4` fetches the object through 4 concurrent byte-range requests.
 The HEAD gives the size, the spans stream into a staging area beside the output, the assembled file verifies against the `.sha256` sibling when one exists and is renamed only when whole.
