@@ -23,6 +23,7 @@ Preset knobs ride the flags: `--partial-bytes N`, `--cut-after N --fake-length`,
 
 ### `--seed-dir DIR`
 
+The key is the path as served, so a tree meant for a repository URL carries the prefix in the seed directory (`DIR/repository/raw-main/1.0.0/a.bin`), and a tree without it is served at the server root (`http://host/1.0.0/a.bin`), invisible to `/repository/raw-main/…` requests.
 Every file under `DIR` becomes an object at its relative path, recursively, before the first request:
 
 ```bash

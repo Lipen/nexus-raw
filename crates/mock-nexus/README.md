@@ -36,6 +36,8 @@ cargo run -p mock-nexus -- atomic --seed-dir ./fixture --config rate-limit.json
 The `atomic` scenario is the correct server: PUT, GET, HEAD, `Range` resume, `404` on unknown paths.
 `mock-nexus --print-scenarios` names all of them.
 
+The key is the path as served: a tree meant for a repository URL carries the prefix in the seed directory (`fixture/repository/raw-main/1.0.0/a.bin`), while the same file without it is served at `http://host/1.0.0/a.bin` and stays invisible to `/repository/raw-main/…` requests.
+
 ## Presets and composition
 
 A table of named scenarios covers what a correct client must survive: transport cuts, framing lies, pacing, auth gates, service-API shapes, integrity litter.
