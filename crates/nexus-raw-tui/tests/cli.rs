@@ -213,6 +213,30 @@ fn smoke_walks_and_downloads_against_a_live_mock() {
     let _ = std::fs::remove_dir_all(&work);
 }
 
+/// An empty repository listing has two causes, and the smoke names both instead
+/// of reporting the symptom (`no files under ""`) it would hit at the download.
+#[test]
+fn smoke_names_an_empty_listing() {
+    // A lagging index with no write yet: the page is empty by design.
+    let mock = MockNexus::start(Scenario::SearchLag { lag_ms: 0 }).unwrap();
+    let work = std::env::temp_dir().join(format!("nxr-tui-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_nxr-tui"))
+        .args(["--smoke", &mock.base_url()])
+        .current_dir(&work)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "an empty listing is a failure");
+    assert!(
+        stderr.contains("search index has not caught up"),
+        "the cause is named: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&work);
+}
+
 #[test]
 fn a_config_preset_drives_the_smoke_run() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();

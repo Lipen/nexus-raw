@@ -67,6 +67,13 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
     let root = listing(&repo_url, "", &session).await?;
     println!("tree of {}:", repo.name.escape_debug());
     print_entries("", &root);
+    if root.is_empty() {
+        // An empty answer has two distinct causes, and the download would only
+        // report the symptom (`no files under ""`).
+        bail!(
+            "the repository listing is empty: an empty repository lists nothing, and a server whose search index has not caught up (the mock's `search-lag` before its deadline) answers the empty page"
+        );
+    }
     let mut dir_rel = String::new();
     for level in 1..=2 {
         let Some(name) = listing(&repo_url, &dir_rel, &session)

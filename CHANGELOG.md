@@ -35,6 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The marker of the previous download is dropped before the next transfer: left in place it became the resume guard's expectation and refused a legitimately changed object.
 - The browser's card download builds its URL from the repository root and the name's own path: a card opened on a row inside an expanded folder used to fetch the tab root plus the bare name, a different object.
 - The browser's single-file download accepts a folder name with a space or unicode while still refusing a segment with a decoded `/`, `..` or a control byte.
+- The TUI smoke names an empty repository listing by its cause, an empty repository or a search index still catching up, instead of the download's `no files under ""`.
 - A repository name ending in a dot or a space, or made only of them, is refused by the browser's name rule: on Windows such a name resolves to a different directory.
   The save-as dialog applies the same rule to a typed folder name.
   The marker write is one core helper (`sibling::write_marker`) now, shared with `down` and the clone seal.
