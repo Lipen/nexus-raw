@@ -154,7 +154,7 @@ $ nxr -u deployer:pw doctor https://nexus.example.com/repository/raw-main/1.4.0/
 doctor:
   [  ok  ] credentials: resolved from -u flag
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] probe: HEAD https://nexus.example.com/repository/raw-main/1.4.0/manifest.json → HTTP 200
   all checks passed
 ```

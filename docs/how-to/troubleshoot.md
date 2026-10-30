@@ -217,7 +217,7 @@ $ nxr --tls-insecure -u deployer:pw doctor http://127.0.0.1:8734/1.4.0/manifest.
 doctor:
   [  ok  ] credentials: resolved from -u flag
   [ FAIL ] tls: verification is OFF (--tls-insecure); fine for a local mock, dangerous beyond it
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] probe: HEAD http://127.0.0.1:8734/1.4.0/manifest.json → HTTP 200
 error: misuse: 1 check(s) failed
 hint: check the command line arguments
@@ -301,7 +301,7 @@ $ nxr doctor https://nexus.example.com/repository/raw-main/ --deep
 doctor:
   [  ok  ] credentials: resolved from NXR_AUTH
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] auth: repository answers your credentials
   [  ok  ] range: 206 partial answer
   [  ok  ] content-length: present (45 bytes)

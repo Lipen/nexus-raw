@@ -45,7 +45,7 @@ nxr doctor https://nexus.example.com/repository/raw-main/1.4.0/
 doctor:
   [  ok  ] credentials: resolved from NXR_USERNAME + NXR_PASSWORD
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] proxy: no proxy in the environment
   [  ok  ] probe: HEAD https://nexus.example.com/repository/raw-main/1.4.0/ → HTTP 404
   all checks passed

@@ -43,7 +43,7 @@ $ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/
 doctor:
   [  ok  ] credentials: resolved from NXR_AUTH
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] probe: HEAD https://nexus.example.com/repository/raw-main/1.4.0/ → HTTP 404
   all checks passed
 $ echo $?
@@ -1175,7 +1175,7 @@ $ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/
 doctor:
   [  ok  ] credentials: resolved from NXR_AUTH
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [ FAIL ] probe: transport: https://nexus.example.com/repository/raw-main/: error sending request for url (https://nexus.example.com/repository/raw-main/)
 error: transport: https://nexus.example.com/repository/raw-main/: 1 check(s) failed
 hint: check the network: transfers are resumable, rerunning is safe
@@ -1190,7 +1190,7 @@ $ env NXR_AUTH=Y2ktYm90OnRva2Vu nxr doctor https://nexus.example.com/repository/
 doctor:
   [  ok  ] credentials: resolved from NXR_AUTH
   [  ok  ] tls: verification is ON
-  [  ok  ] settings: workers 8, retry 4, stall 30s, connect 15s
+  [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] proxy: no proxy in the environment
   [  ok  ] probe: status endpoint answered: the server is reachable
   [  ok  ] deep:version: status endpoint answered

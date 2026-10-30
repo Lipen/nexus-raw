@@ -89,7 +89,7 @@ pub(crate) async fn run(
             && cli.connect_timeout_secs >= 1
             && cli.stall_secs >= 1,
         format!(
-            "workers {}, retry {}, stall {}s, connect {}s",
+            "workers {}, retry {} (probes run once), stall {}s, connect {}s",
             cli.workers, cli.retry, cli.stall_secs, cli.connect_timeout_secs
         ),
         None,
