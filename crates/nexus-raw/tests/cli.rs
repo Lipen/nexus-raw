@@ -1353,6 +1353,61 @@ fn get_continue_without_output_is_misuse() {
     assert!(stderr(&out).contains("--continue"), "{}", stderr(&out));
 }
 
+/// `-o -` is not stdout: naming it creates a file called `-`, a trap, so it is misuse.
+#[test]
+fn get_naming_stdout_as_a_file_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let out = nxr(&["get", &url, "-o", "-"]);
+    expect_exit(&out, 2, "a file named - is misuse");
+    assert!(
+        stderr(&out).contains("stdout is the default"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+/// A `get` stream into a closed stdout ends like SIGPIPE, not as a disk error.
+#[cfg(unix)]
+#[test]
+fn get_to_a_closed_stdout_ends_with_141() {
+    use std::io::Read as _;
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let mut child = Command::new(NXR)
+        .args(["get", &url])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    drop(child.stdout.take());
+    let mut err = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    let status = child.wait().unwrap();
+
+    assert_eq!(
+        status.code(),
+        Some(141),
+        "a closed sink ends like SIGPIPE: {err}"
+    );
+    assert!(
+        err.is_empty(),
+        "no disk-error blame on a closed pipe: {err}"
+    );
+}
+
 /// `-q` keeps the summary line and drops the per-event output.
 #[test]
 fn quiet_prints_only_the_summary_line() {

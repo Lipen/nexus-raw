@@ -596,6 +596,13 @@ fn run_main() -> std::process::ExitCode {
     match runtime.block_on(cmd::dispatch(&cli)) {
         Ok(code) => std::process::ExitCode::from(code),
         Err(e) => {
+            // A console sink that went away is the closed-pipe end (`nxr get URL | head -c 1`),
+            // not a filesystem problem: end like SIGPIPE, quietly, instead of blaming the disk.
+            if let nexus_raw_core::Error::Io { path, .. } = &e {
+                if path == "stdout" || path == "-" {
+                    std::process::exit(141);
+                }
+            }
             if cli.json {
                 // The NDJSON channel carries the failure alone: scripts parse
                 // this line, they do not scrape stderr.

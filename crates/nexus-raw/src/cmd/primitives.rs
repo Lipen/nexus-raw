@@ -15,6 +15,12 @@ pub(crate) async fn get(
     segments: Option<usize>,
     range: Option<&str>,
 ) -> Result<(), Error> {
+    if out.is_some_and(|p| p == Path::new("-")) {
+        return Err(Error::Misuse(
+            "stdout is the default: omit -o for the stream, -o names a real file (a file called - is a trap)"
+                .to_owned(),
+        ));
+    }
     if out.is_none() && cli.json {
         return Err(Error::Misuse(
             "--json with stdout body would corrupt the artifact: pass -o FILE, or drop --json"
