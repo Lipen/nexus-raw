@@ -221,6 +221,55 @@ fn the_api_reference_names_every_facade_method() {
     );
 }
 
+/// Every `Event` variant is named in the API reference's event table: a new
+/// event cannot land without its `--json` shape documented.
+#[test]
+fn the_api_reference_names_every_event_variant() {
+    let root = repo_root();
+    let source = std::fs::read_to_string(root.join("crates/nexus-raw-core/src/events.rs"))
+        .expect("events.rs reads");
+    let start = source.find("pub enum Event {").expect("the Event enum");
+    let mut variants = Vec::new();
+    let mut inside = false;
+    for line in source[start..].lines() {
+        let line = line.trim_end();
+        if line == "pub enum Event {" {
+            inside = true;
+            continue;
+        }
+        if inside && line == "}" {
+            break;
+        }
+        if !inside {
+            continue;
+        }
+        let line = line.trim_start();
+        if !line.starts_with(|c: char| c.is_ascii_uppercase()) {
+            continue;
+        }
+        let name: String = line
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        variants.push(name);
+    }
+    assert!(
+        variants.len() >= 9,
+        "the parser found {} events: it regressed",
+        variants.len()
+    );
+    let doc = std::fs::read_to_string(root.join("docs/reference/api.md")).expect("api.md reads");
+    // A row of the event table, not a prose mention: the table is the contract.
+    let missing: Vec<&String> = variants
+        .iter()
+        .filter(|v| !doc.contains(&format!("| `{v} ")) && !doc.contains(&format!("| `{v}(")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/reference/api.md has no event-table row for: {missing:?}"
+    );
+}
+
 /// Every `Error` variant is named in the error reference: a new class cannot land
 /// without the page that tells the user what it means and what to check next.
 #[test]
@@ -262,13 +311,14 @@ fn the_error_reference_names_every_error_variant() {
     );
     let doc =
         std::fs::read_to_string(root.join("docs/reference/errors.md")).expect("errors.md reads");
+    // A row of the variant table, not a captured transcript.
     let missing: Vec<&String> = variants
         .iter()
-        .filter(|v| !doc.contains(&format!("`{v}")))
+        .filter(|v| !doc.contains(&format!("| `{v} ")) && !doc.contains(&format!("| `{v}(")))
         .collect();
     assert!(
         missing.is_empty(),
-        "docs/reference/errors.md does not name these error variants: {missing:?}"
+        "docs/reference/errors.md has no row for: {missing:?}"
     );
 }
 
