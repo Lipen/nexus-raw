@@ -21,7 +21,7 @@ The agent minimum:
 - Long URLs: `-R <alias>` names a remote from `~/.config/nxr/config.toml` (`nxr -R releases ls 1.4.0/`).
   The file is read only when the flag names an alias, nothing is picked up implicitly.
 - Listing needs an enumeration source: repeatable `--name`, `--names-from FILE`, or `--ls` (search API).
-- Commands `service status|repo|assets|eula`: `eula --accept` needs nx-admin.
+- Commands `service repos|status|repo|assets|eula`: `eula --accept` needs nx-admin.
 - A ready-made agent skill lives in the repo at `skills/nxr/SKILL.md`, with `references/recipes.md` and `references/quirks.md`.
   Install it with `scripts/install-skill.sh`.
 
@@ -29,6 +29,7 @@ Intent to command:
 
 | Intent | Command |
 |:--|:--|
+| which repositories exist? | `nxr service repos <url>` |
 | server alive? | `nxr service status <url>` |
 | what repo is this URL? | `nxr service repo <url>` |
 | what is inside (any format)? | `nxr service assets <repo-url>` |
@@ -62,9 +63,8 @@ Quirks that are not bugs:
 - `ls` names the count of hidden markers in a trailing line (`N marker objects hidden`).
   A silent undercount became a visible one.
 - `/-/` in paths is the npm-protocol segment, not part of the nxr protocol.
-- A raw repository holds arbitrary foreign names (spaces, parens, unicode).
-  `ls`/`down`/`diff` tolerate them.
-  The `[A-Za-z0-9._-]` alphabet constrains only what nxr itself writes.
+- A raw repository can hold foreign names (spaces, parens, unicode).
+  The tree `ls` shows them, and any enumeration that feeds a transfer hides them and names the count (a `warning` event): the `[A-Za-z0-9._-]` alphabet is what nxr can transfer, not a server-side rule.
 - npm repositories: inspect via `nxr service assets`.
   Fetch packages with an npm client.
 - `-o` must be a real path: nxr writes a sibling `<name>.part` and renames it after the transfer (the resume scheme).
