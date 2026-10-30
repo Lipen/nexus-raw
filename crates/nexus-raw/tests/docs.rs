@@ -177,6 +177,8 @@ fn documented_command_lines_use_flags_the_cli_accepts() {
 fn the_site_nav_lists_every_page() {
     let root = repo_root();
     let yaml = std::fs::read_to_string(root.join("mkdocs.yml")).expect("mkdocs.yml reads");
+    // A windows checkout hands the file over with CRLF; the block markers are LF.
+    let yaml = yaml.replace("\r\n", "\n");
     let nav = yaml
         .split_once("\nnav:\n")
         .expect("the nav block")
@@ -288,7 +290,10 @@ fn every_bash_block_in_the_docs_parses() {
     let mut checked = 0usize;
     let mut failures = Vec::new();
     for file in &files {
-        let text = std::fs::read_to_string(file).expect("doc reads");
+        let text = std::fs::read_to_string(file)
+            .expect("doc reads")
+            // A windows checkout hands the file over with CRLF; the fences are LF.
+            .replace("\r\n", "\n");
         let mut rest = text.as_str();
         while let Some(start) = rest.find("```bash\n") {
             let block = &rest[start + "```bash\n".len()..];
