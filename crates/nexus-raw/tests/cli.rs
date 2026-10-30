@@ -1100,6 +1100,26 @@ fn clone_seals_a_markerless_local_copy() {
     );
     std::fs::remove_file(dst.path().join("a.zip.sha256")).unwrap();
 
+    // `--plan` names the seal explicitly and writes nothing.
+    let plan = nxr(&[
+        "--json",
+        "clone",
+        "--plan",
+        "--no-state",
+        &base,
+        dst.path().to_str().unwrap(),
+    ]);
+    expect_exit(&plan, 0, "the sealing plan");
+    assert!(
+        stdout(&plan).contains(r#"{"name":"a.zip","plan":"seal"}"#),
+        "the plan line is the seal: {}",
+        stdout(&plan)
+    );
+    assert!(
+        !dst.path().join("a.zip.sha256").exists(),
+        "--plan writes nothing"
+    );
+
     let out = nxr(&[
         "--json",
         "clone",
