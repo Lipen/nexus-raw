@@ -6,7 +6,7 @@
 //! (and per `service` subcommand). A flag renamed in clap therefore breaks this
 //! test instead of leaving a command that no longer parses in the docs.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -492,6 +492,47 @@ fn the_error_reference_names_every_error_variant() {
     assert!(
         missing.is_empty(),
         "docs/reference/errors.md has no row for: {missing:?}"
+    );
+}
+
+/// Every flag row of the `cli.md` tables exists in that section's help: a flag
+/// removed from clap must not leave a row promising it.
+#[test]
+fn the_cli_reference_tables_name_real_flags() {
+    let root = repo_root();
+    let text = std::fs::read_to_string(root.join("docs/reference/cli.md")).expect("cli.md reads");
+    let mut current: Vec<String> = Vec::new();
+    let mut rows: Vec<(String, Vec<String>)> = Vec::new();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("## nxr ") {
+            current = rest.split_whitespace().take(2).map(str::to_owned).collect();
+        } else if let Some(cell) = line.strip_prefix("| `") {
+            if let Some(flag) = cell
+                .split('`')
+                .next()
+                .and_then(|c| c.split_whitespace().next())
+            {
+                let flag = flag.trim_end_matches(',');
+                if flag.starts_with("--") {
+                    rows.push((flag.to_owned(), current.clone()));
+                }
+            }
+        }
+    }
+    assert!(!rows.is_empty(), "the cli tables carry flag rows");
+    let mut cache: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
+    let mut stale = Vec::new();
+    for (flag, path) in rows {
+        let flags = cache
+            .entry(path.clone())
+            .or_insert_with(|| flags_in(&help_of(&path)));
+        if !flags.contains(&flag) {
+            stale.push(format!("{} {flag}", path.join(" ")));
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "docs/reference/cli.md rows name flags the binary does not accept: {stale:?}"
     );
 }
 
