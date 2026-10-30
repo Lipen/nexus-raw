@@ -28,7 +28,10 @@ The command surface, one line each, all details in the [CLI reference](../refere
 | `rm` | delete an enumerated version, marker first, 404 is success |
 | `mv` | `mirror` plus the delete: nothing is removed until the pour converges |
 | `point` | delete one pointer file, idempotently |
-| `service repos` | list the server's repositories with format and writability |
+| `clone` | a verified repository-wide copy with the local fact cache, resumable and sealed |
+| `audit` | the structural integrity report over the search tree, `--bytes` for silent bitrot |
+| `service repos` | list the server's repositories with their format and type (writability is `service status`) |
+| `service status`, `service repo`, `service assets`, `service eula` | liveness and writability, the repository behind a URL (with `--detail`), every asset of any format, the write gate |
 | `doctor` | credentials, TLS and reachability, without printing secrets |
 
 Scripts gate on the exit codes, not on output text: `0` continues, `1` is a data problem, `2` is a broken invocation, `3` is transport trouble.
