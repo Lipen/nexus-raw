@@ -72,8 +72,12 @@ pub(super) fn q_matches(q: &str, path: &str) -> bool {
 /// One search row, the shape `/search/assets` reports.
 fn search_item(base: &str, path: &str, seed: usize) -> String {
     let sha = format!("{seed:064x}");
+    // The size is synthetic like the digest: the generated corpus has no bytes
+    // behind it. The field name is the real one (`fileSize`, measured against
+    // the pinned 3.96.3), so a parser that reads the wrong key fails here too.
+    let size = 1000 + (seed % 500);
     format!(
-        "{{\"downloadUrl\":\"{base}/repository/raw-main{path}\",\"path\":\"{path}\",\"id\":\"raw-main:{seed:06}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
+        "{{\"downloadUrl\":\"{base}/repository/raw-main{path}\",\"path\":\"{path}\",\"id\":\"raw-main:{seed:06}\",\"repository\":\"raw-main\",\"format\":\"raw\",\"fileSize\":{size},\"checksum\":{{\"sha256\":\"{sha}\"}},\"lastModified\":\"2026-10-09T12:00:00.000+00:00\"}}"
     )
 }
 

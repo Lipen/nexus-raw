@@ -5036,6 +5036,32 @@ fn ls_scopes_the_search_to_the_directory() {
     );
 }
 
+/// The generated search pages carry the real `fileSize` field, and a file row
+/// reaches `ls --json` with the size and the digest the index reported.
+#[test]
+fn ls_json_reads_the_generated_file_size() {
+    let srv = server(Scenario::AssetsPrefixQ);
+    let out = nxr(&[
+        "--json",
+        "ls",
+        &format!("{}repository/raw-main/v1.1.0-dir/", srv.base_url()),
+    ]);
+    expect_exit(&out, 0, "the scoped listing");
+    let lines = ndjson(&out);
+    let file = lines
+        .iter()
+        .find(|l| l["kind"] == "file")
+        .expect("a file row");
+    assert!(
+        file["size"].as_u64().is_some_and(|s| s >= 1000),
+        "the size reaches the row: {file}"
+    );
+    assert!(
+        file["sha256"].as_str().is_some_and(|s| s.len() == 64),
+        "the digest reaches the row: {file}"
+    );
+}
+
 /// The server's `q` is loose (a path substring), the client's `--prefix` is exact: a value
 /// without the trailing slash drags the name-continuing sibling in, the measured
 /// `bench/flat` against `bench/flat2` case, and the whole-segment prefix drops it again.
