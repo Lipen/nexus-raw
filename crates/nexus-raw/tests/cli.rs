@@ -1444,6 +1444,34 @@ fn a_full_stdout_is_reported_not_swallowed() {
     );
 }
 
+/// A destination that is a file is a naming mistake, named as such, not a bare
+/// "File exists" from `create_dir_all`.
+#[test]
+fn a_file_destination_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let dir = TempDir::new().unwrap();
+    let dst = dir.path().join("taken");
+    std::fs::write(&dst, b"not a directory").unwrap();
+    let dst = dst.to_str().unwrap();
+
+    let down = nxr(&["down", &root_url(&srv), dst, "--name", "a.bin"]);
+    expect_exit(&down, 2, "a file destination is misuse");
+    assert!(
+        stderr(&down).contains("exists and is not a directory"),
+        "{}",
+        stderr(&down)
+    );
+
+    let clone = nxr(&["clone", &root_url(&srv), dst]);
+    expect_exit(&clone, 2, "a file destination is misuse for clone too");
+    assert!(
+        stderr(&clone).contains("exists and is not a directory"),
+        "{}",
+        stderr(&clone)
+    );
+}
+
 /// `-q` keeps the summary line and drops the per-event output.
 #[test]
 fn quiet_prints_only_the_summary_line() {
