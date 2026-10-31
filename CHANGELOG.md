@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The published-consumer gate in `scripts/verify-published.sh` waits for the platform package to be visible before it installs the shipped copy.
   npm treats an optional dependency the registry has not replicated yet as satisfied by absence, so a release that verified seconds after the publish failed at the addon load with `Cannot find module './nexus-raw.linux-x64-gnu.node'`, and the tag step never ran.
+- The release act's recovery dispatch names the commit that set the version, not whatever `master` holds: the workflow tags the tree it ran on, so a fix that landed on top of a failed publish used to become the tagged tree while the artifacts came from the bump.
+  A throwaway branch carries the bump for that dispatch and is deleted when the act ends.
 
 ## [0.25.0] - 2026-10-31
 

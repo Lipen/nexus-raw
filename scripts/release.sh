@@ -268,15 +268,33 @@ else
   git push origin master
   sha="$(git rev-parse origin/master)"
 fi
-# The dispatch API takes a branch, not a raw SHA: master is the ref, and
-# the gate validates whatever HEAD it gets.
+# The dispatch API takes a branch, not a raw SHA, so a dispatch needs a ref
+# that points at the bump commit. When the bump is master's tip, master is
+# that ref. A recovery dispatch after a fix landed on top gets a throwaway
+# branch at the bump instead: the tag then lands on the tree the artifacts
+# came from, and the fix stays a commit after the tag where it belongs.
 # A push that lands after the bump would make the workflow run on someone
 # else's tree, so check the ref again immediately before each dispatch.
 git fetch origin master
-if [ "$(git rev-parse origin/master)" != "$sha" ]; then
+if [ "$(git rev-parse origin/master)" != "$sha" ] && [ -z "${recovered:-}" ]; then
   echo "release $v: master moved after the bump, nothing was dispatched" >&2
   exit 1
 fi
+ref=master
+if [ "$(git rev-parse origin/master)" != "$sha" ]; then
+  ref="release-dispatch-$v"
+  git push -q origin "$sha:refs/heads/$ref"
+  trap 'git push -q origin --delete '"$ref"' >/dev/null 2>&1 || :' EXIT
+  echo "dispatching on $ref, a throwaway branch at the bump commit $sha"
+fi
+
+# The guard each dispatch re-runs: a branch ref is pinned to the bump by
+# construction, while master has to still point at it.
+still_pinned() {
+  [ "$ref" != master ] && return 0
+  git fetch origin master
+  [ "$(git rev-parse origin/master)" = "$sha" ]
+}
 
 # ---- the rehearsal ------------------------------------------------------
 # The same workflow on the same commit with `dry-run=true`: the gate, every
@@ -284,7 +302,7 @@ fi
 # created. A workflow that cannot run fails here, while the version number
 # is still unspent.
 echo "rehearsing the release on $sha"
-gh workflow run release.yml --ref master -F dry-run=true
+gh workflow run release.yml --ref "$ref" -F dry-run=true
 find_run "$sha" "" || { echo "release: the rehearsal run did not appear" >&2; exit 1; }
 rehearsal="$run"
 echo "the rehearsal appeared: https://github.com/Lipen/nexus-raw/actions/runs/$rehearsal"
@@ -297,14 +315,13 @@ fi
 
 # ---- the release --------------------------------------------------------
 # The rehearsal took long enough for a hotfix to land: dispatch only while
-# master still points at the bump commit.
-git fetch origin master
-if [ "$(git rev-parse origin/master)" != "$sha" ]; then
+# the ref still points at the bump commit.
+if ! still_pinned; then
   echo "release $v: master moved during the rehearsal, nothing was dispatched" >&2
   exit 1
 fi
 echo "dispatching the release on $sha"
-gh workflow run release.yml --ref master
+gh workflow run release.yml --ref "$ref"
 find_run "$sha" "$rehearsal" || { echo "release: the dispatched run did not appear" >&2; exit 1; }
 echo "the run appeared: https://github.com/Lipen/nexus-raw/actions/runs/$run"
 settle "$run"
