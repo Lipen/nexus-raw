@@ -277,11 +277,13 @@ else
   git push origin master
   sha="$(git rev-parse origin/master)"
 fi
-# The dispatch API takes a branch, not a raw SHA, so a dispatch needs a ref
-# that points at the bump commit. When the bump is master's tip, master is
-# that ref. A recovery dispatch after a fix landed on top gets a throwaway
-# branch at the bump instead: the tag then lands on the tree the artifacts
-# came from, and the fix stays a commit after the tag where it belongs.
+# The dispatch API takes a branch or a tag: a raw SHA answers
+# `422 No ref found for: <sha>`, so a dispatch needs a ref that points at the
+# bump commit.
+# When the bump is master's tip, master is that ref.
+# A recovery dispatch after a fix landed on top gets a throwaway branch at
+# the bump instead: the tag then lands on the tree the artifacts came from,
+# and the fix stays a commit after the tag where it belongs.
 # A push that lands after the bump would make the workflow run on someone
 # else's tree, so check the ref again immediately before each dispatch.
 git fetch origin master
