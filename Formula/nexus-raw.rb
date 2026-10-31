@@ -8,26 +8,26 @@
 class NexusRaw < Formula
   desc "Verified, resumable directory transfers for Sonatype Nexus raw"
   homepage "https://github.com/Lipen/nexus-raw"
-  version "0.24.1"
+  version "0.25.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/Lipen/nexus-raw/releases/download/v#{version}/nxr-darwin-arm64.tar.gz"
-      sha256 "3c9f209c640a06e1326f337d3c9e749b858801544ad6e6c25e7b572196cceabd"
+      sha256 "4aba31a70bc1ad6a4a5dc69f90aa1070ee4926cf85ff765bdcabe83f9969c616"
     else
       url "https://github.com/Lipen/nexus-raw/releases/download/v#{version}/nxr-darwin-x64.tar.gz"
-      sha256 "889b18927fc37b5bb18cf761f8424781f38762b826e8fe3a558c48cbfa206399"
+      sha256 "69839fefed820c61f66542fbd2e3f7a41bb9f9f4810e0f057853c0701bea1eb6"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
       url "https://github.com/Lipen/nexus-raw/releases/download/v#{version}/nxr-linux-aarch64.tar.gz"
-      sha256 "6b08802f7dd1501d04f619d31bd6efcada7bd3c44d7e01add32053519b0377bb"
+      sha256 "e7396aa7d90cf91d2a0a69fbb4567ba1e937146e5bcd8c07f67be6845502850a"
     else
       url "https://github.com/Lipen/nexus-raw/releases/download/v#{version}/nxr-linux-x64.tar.gz"
-      sha256 "350f6842c5349b2f1a0a4050461e4f2d6e1690856e91f33ffacf4d38daa20e04"
+      sha256 "b2efeaa8b9ceefc4fe23d9e106d3b681acd984de014c83eb4d430b3e74ac2567"
     end
   end
 
