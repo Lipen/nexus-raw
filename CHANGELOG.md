@@ -5,7 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The published-consumer gate in `scripts/verify-published.sh` waits for the platform package to be visible before it installs the shipped copy.
+  npm treats an optional dependency the registry has not replicated yet as satisfied by absence, so a release that verified seconds after the publish failed at the addon load with `Cannot find module './nexus-raw.linux-x64-gnu.node'`, and the tag step never ran.
 
 ## [0.25.0] - 2026-10-31
 
