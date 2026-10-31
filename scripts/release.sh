@@ -262,7 +262,16 @@ if git diff --cached --quiet; then
     exit 1
   fi
   echo "release $v: the version is already set and pushed, dispatching it again"
-  sha="$(git rev-parse origin/master)"
+  # The workflow tags the tree it ran on, so the dispatch must name the bump
+  # commit: a fix that landed on top of a failed publish belongs to master,
+  # not to this release, and tagging it would describe artifacts that were
+  # built from the bump.
+  sha="$(git log origin/master --format=%H -S "version = \"$v\"" -- Cargo.toml | head -1)"
+  if [ -z "$sha" ]; then
+    echo "release $v: no commit on origin/master sets the version to $v" >&2
+    exit 1
+  fi
+  recovered=1
 else
   git commit -m "chore: bump the workspace to $v"
   git push origin master
