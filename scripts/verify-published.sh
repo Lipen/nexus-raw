@@ -41,6 +41,45 @@ if [ -z "$mock" ]; then
 fi
 [ -x "$mock" ] || { echo "verify-published: no mock server at $mock, build it first" >&2; exit 1; }
 
+# npm resolves the optional platform package best-effort: a package the
+# registry has not replicated yet is skipped without a word, and the addon
+# then cannot load its `.node` binary. A release run installs seconds after
+# the publish, so wait for the platform package to be visible first.
+platform_pkg() {
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "$os/$arch" in
+    Linux/x86_64) echo "linux-x64-gnu" ;;
+    Linux/aarch64|Linux/arm64) echo "linux-arm64-gnu" ;;
+    Darwin/x86_64) echo "darwin-x64" ;;
+    Darwin/arm64) echo "darwin-arm64" ;;
+    *) echo "" ;;
+  esac
+}
+
+wait_visible() {
+  pkg="$1"
+  attempt=1
+  limit="${VERIFY_WAIT_ATTEMPTS:-24}"
+  pause="${VERIFY_WAIT_SECONDS:-5}"
+  while [ "$attempt" -le "$limit" ]; do
+    if npm view "$pkg@$version" version >/dev/null 2>&1; then
+      return 0
+    fi
+    if [ "$attempt" -eq "$limit" ]; then
+      echo "verify-published: $pkg@$version is not visible after $limit polls" >&2
+      return 1
+    fi
+    sleep "$pause"
+    attempt=$((attempt + 1))
+  done
+}
+
+triple="$(platform_pkg)"
+if [ -n "$triple" ]; then
+  wait_visible "@nexus-raw/nxr-$triple" || :
+fi
+
 cd "$tmp"
 echo '{"name":"published-example","private":true}' > package.json
 npm install --no-package-lock --no-save --no-audit --no-fund "@nexus-raw/nxr@$version"
