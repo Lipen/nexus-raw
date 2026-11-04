@@ -18,13 +18,18 @@ pub(crate) async fn ls(cli: &Cli, url: &str, assets: bool) -> Result<(), Error> 
 
 async fn run_ls(ctx: &Ctx, assets: bool) -> Result<(), Error> {
     if assets {
-        let (names, skipped) = ctx.nxr.ls_assets_counted().await?;
-        for n in &names {
-            print_line(
-                ctx.json,
-                &printable(n.as_str()),
-                &serde_json::json!({"name": n.to_string()}),
-            );
+        let (entries, skipped) = ctx.nxr.ls_assets_facts().await?;
+        for (name, digest, size) in &entries {
+            // The listing already carried the facts: a consumer that plans a
+            // selective transfer reads them without a HEAD per name.
+            let mut json = serde_json::json!({"name": name.to_string()});
+            if let Some(size) = size {
+                json["size"] = serde_json::json!(size);
+            }
+            if let Some(digest) = digest {
+                json["sha256"] = serde_json::json!(digest.as_str());
+            }
+            print_line(ctx.json, &printable(name.as_str()), &json);
         }
         if skipped > 0 {
             // A name outside the artifact grammar cannot be transferred by the

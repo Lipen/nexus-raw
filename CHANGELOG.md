@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `nxr ls --assets --json` rows carry the search facts the listing already fetched: `size` and `sha256` appear when the index reports them, so a script that selects by size or compares a digest reads one listing instead of a HEAD per name.
+  The human output stays the names, and a fact the index omits stays absent.
+  The library exposes the same walk as `Nxr::ls_assets_facts`, and the Node `lsAssets` keeps its `string[]` contract.
+
 ### Fixed
 
 - The published-consumer gate in `scripts/verify-published.sh` waits for the platform package to be visible before it installs the shipped copy.

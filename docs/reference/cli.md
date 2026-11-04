@@ -836,8 +836,9 @@ Treat both as conveniences only.
 | `2` | misuse: a non-http URL, or a URL outside `/repository/<name>/...` |
 | `3` | transport or auth failure |
 
-`--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file","size":45,"sha256":"a8a2…"}` from the tree, `{"name":"app.zip"}` from `--assets`.
+`--json` prints one object per line: `{"entry":"app","kind":"dir"}` and `{"entry":"release-notes.txt","kind":"file","size":45,"sha256":"a8a2…"}` from the tree, `{"name":"app.zip","sha256":"a8a2…","size":45}` from `--assets`.
 A file row carries the size and sha256 the search answer reported, when it did, so a consumer can plan without a HEAD per name.
+A flat `--assets` row carries the same facts, so a script that selects by size or compares against its own index reads one listing.
 A folder row carries neither: a raw folder has no size of its own.
 An index or proxy that reports no facts leaves the fields out rather than inventing them.
 The count is the hidden rows of the listed directory, not of the whole subtree below it.

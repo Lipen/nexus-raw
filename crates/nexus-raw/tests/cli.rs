@@ -3351,6 +3351,33 @@ fn golden_ndjson_ls_holds() {
     );
 }
 
+/// The `ls --assets --json` shape is golden: a row carries the name and the
+/// search facts the listing already fetched, so a selective transfer needs no
+/// HEAD per name.
+#[test]
+fn golden_ndjson_ls_assets_holds() {
+    let srv = server(Scenario::SearchLag { lag_ms: 0 });
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.bin", ALPHA);
+    write_file(src.path(), "b.bin", BETA);
+    // The flat form lists a version directory: the search needs the version
+    // scope, and a repository root is a misuse.
+    let version = format!("{}1.0.0/", clone_repo_url(&srv));
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &version]),
+        0,
+        "seeding the flat ls fixture",
+    );
+
+    let ls = nxr(&["--json", "ls", &version, "--assets"]);
+    expect_exit(&ls, 0, "golden flat ls");
+    assert_eq!(
+        stdout(&ls),
+        golden("ls-assets.ndjson"),
+        "the flat ls ndjson changed: update tests/golden/ls-assets.ndjson deliberately"
+    );
+}
+
 /// The --json surface is a contract, pinned byte-exact by fixtures in tests/golden/.
 /// One artifact per run keeps chunk events deterministic.
 /// No URL reaches these outputs, so the bytes carry no ports.
@@ -3621,6 +3648,7 @@ fn golden(name: &str) -> String {
         "rm.ndjson" => include_str!("golden/rm.ndjson"),
         "audit.ndjson" => include_str!("golden/audit.ndjson"),
         "ls.ndjson" => include_str!("golden/ls.ndjson"),
+        "ls-assets.ndjson" => include_str!("golden/ls-assets.ndjson"),
         "clone-plan.ndjson" => include_str!("golden/clone-plan.ndjson"),
         "mv.ndjson" => include_str!("golden/mv.ndjson"),
         _ => unreachable!("the golden table and the fixture name drift together"),
@@ -5196,6 +5224,33 @@ fn ls_assets_lists_flat_names_and_refuses_a_repository_root() {
 
     let root = nxr(&["ls", &srv.base_url(), "--assets"]);
     expect_exit(&root, 2, "a repository root cannot be an assets base");
+}
+
+/// A page that repeats a row describes one object: the facts survive the
+/// deduplication instead of being dropped as ambiguous.
+#[test]
+fn ls_assets_keeps_facts_when_the_page_repeats_a_row() {
+    let srv = server(Scenario::Atomic);
+    let row = serde_json::json!({
+        "path": "/1.0.0/a.bin",
+        "fileSize": 3,
+        "checksum": {"sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
+    });
+    let page = serde_json::json!({"items": [row.clone(), row]});
+    srv.insert("service/rest/v1/search/assets", page.to_string().as_bytes());
+    let version = format!("{}repository/raw-main/1.0.0/", srv.base_url());
+    let out = nxr(&["--json", "ls", &version, "--assets"]);
+    expect_exit(&out, 0, "the repeated row lists once");
+    let rows: Vec<serde_json::Value> = stdout(&out)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 1, "one object, one row: {rows:?}");
+    assert_eq!(rows[0]["size"], 3, "the size survives: {rows:?}");
+    assert_eq!(
+        rows[0]["sha256"], "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "the digest survives: {rows:?}"
+    );
 }
 
 /// `service assets` walks the search pages: one --json object with every asset.

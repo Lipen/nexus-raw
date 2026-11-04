@@ -1500,6 +1500,23 @@ impl Nxr {
         layout::ls::search_assets_counted(&self.client, &self.base).await
     }
 
+    /// The flat asset names under the base, with the search-reported facts per
+    /// name: the digest and size the index holds, so a selective transfer is
+    /// planned from one listing instead of a HEAD per name.
+    ///
+    /// A fact the index does not report stays absent.
+    /// Two paths that decode into one name carry no facts: the survivor's
+    /// provenance is unknown.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`Nxr::ls_assets`].
+    pub async fn ls_assets_facts(
+        &self,
+    ) -> Result<(Vec<(ArtifactName, Option<Digest>, Option<u64>)>, usize), Error> {
+        layout::ls::search_asset_entries(&self.client, &self.base).await
+    }
+
     /// Poll the search index until every given name is visible, or the budget runs out.
     ///
     /// The search index on a real server lags behind completed writes by seconds.

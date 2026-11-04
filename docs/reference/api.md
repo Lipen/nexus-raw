@@ -139,6 +139,7 @@ Every method mirrors a CLI command one-to-one.
 | `ls_at(url)` | `Vec<Entry>` | `nxr ls` on any directory URL | the tree of an arbitrary directory URL, not only the facade base |
 | `ls_assets()` | `Vec<ArtifactName>` | `nxr ls --assets` | search-API traversal, experimental |
 | `ls_assets_counted()` | `(Vec<ArtifactName>, usize)` | `nxr ls --assets` | the same listing with the count of rows left out because they are outside the artifact grammar |
+| `ls_assets_facts()` | `(Vec<(ArtifactName, Option<Digest>, Option<u64>)>, usize)` | `nxr ls --assets --json` | the same listing carrying the search-reported digest and size per name, so a selective transfer needs no HEAD |
 
 One parameter deserves its one-liner:
 
