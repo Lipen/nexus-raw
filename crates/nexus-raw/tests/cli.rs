@@ -5253,6 +5253,54 @@ fn ls_assets_keeps_facts_when_the_page_repeats_a_row() {
     );
 }
 
+/// Two served paths that decode into one name carry no facts: the listing
+/// cannot say which object the size and the digest belong to.
+#[test]
+fn ls_assets_drops_the_facts_of_a_decoded_collision() {
+    let srv = server(Scenario::Atomic);
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/a-b.zip","fileSize":10,"checksum":{{"sha256":"{}"}}}},
+            {{"path":"1.14.0/a%2Db.zip","fileSize":20,"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        hex_digest(ALPHA),
+        hex_digest(BETA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+    let version = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    let out = nxr(&["--json", "ls", &version, "--assets"]);
+    expect_exit(&out, 0, "the flat listing");
+    let rows = ndjson(&out);
+    assert_eq!(rows.len(), 1, "one decoded name, one row: {rows:?}");
+    assert_eq!(rows[0]["name"], "a-b.zip");
+    assert!(
+        rows[0].get("size").is_none() && rows[0].get("sha256").is_none(),
+        "a collision carries no facts: {}",
+        rows[0]
+    );
+}
+
+/// A percent-encoded path is decoded before the grammar check, the rule the
+/// entry listing applies, so an escaped spelling of a valid name lists.
+#[test]
+fn ls_assets_decodes_a_percent_encoded_name() {
+    let srv = server(Scenario::Atomic);
+    let page = format!(
+        r#"{{"continuationToken":null,"items":[
+            {{"path":"1.14.0/a%2Db.zip","fileSize":10,"checksum":{{"sha256":"{}"}}}}
+        ]}}"#,
+        hex_digest(ALPHA),
+    );
+    srv.insert("service/rest/v1/search/assets", page.as_bytes());
+    let version = format!("{}repository/raw-main/1.14.0/", srv.base_url());
+    let out = nxr(&["--json", "ls", &version, "--assets"]);
+    expect_exit(&out, 0, "the escaped name lists");
+    let rows = ndjson(&out);
+    assert_eq!(rows.len(), 1, "one row: {rows:?}");
+    assert_eq!(rows[0]["name"], "a-b.zip", "the decoded name: {rows:?}");
+    assert_eq!(rows[0]["size"], 10, "the fact travels: {rows:?}");
+}
+
 /// `service assets` walks the search pages: one --json object with every asset.
 #[test]
 fn service_assets_walks_the_search_pages() {
