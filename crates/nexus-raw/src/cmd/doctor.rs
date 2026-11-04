@@ -245,7 +245,12 @@ pub(crate) async fn run(
                     transport_failures += 1;
                 }
             }
-            let mut line = serde_json::json!({"check": name, "ok": ok, "detail": detail});
+            let mut line = serde_json::json!({
+                "check": name,
+                "ok": ok,
+                "code": check_code(name, *ok, detail, warns.contains("credentials"), probe_auth_rejected),
+                "detail": detail,
+            });
             if let Some(n) = next {
                 line["next"] = serde_json::Value::String((*n).to_owned());
             }
@@ -327,6 +332,67 @@ fn dead_progress() -> nexus_raw_core::Progress {
 /// A `false` that names a warn (through the report's warn set upstream) is
 /// advice, never a failure.
 type DeepLine = (&'static str, bool, String, Option<&'static str>);
+
+/// The verdict class of a check: a script gates on `code` instead of matching
+/// `detail`, which is prose written for a human.
+///
+/// The classes are the ones the report already distinguishes:
+/// `ok`, `failed` (a check that did not pass), `skipped` (no target or no
+/// endpoint to judge), `anonymous` (no credentials found, a warning),
+/// `insecure` (`--tls-insecure`), `plaintext` (Basic credentials over http),
+/// `auth-rejected` (the probe answered 401/403), `absent` (the status endpoint
+/// answers 404), `search-dead` (404 or 400 from the search endpoint),
+/// `range-stripped` (200 to a ranged GET), `content-length-absent` (no
+/// `Content-Length`), and `eula-not-accepted` (writes are gated).
+///
+/// The human render does not carry them: `detail` is unchanged, and this is an
+/// additive `--json` field.
+fn check_code(
+    name: &str,
+    ok: bool,
+    detail: &str,
+    anonymous: bool,
+    auth_rejected: bool,
+) -> &'static str {
+    if name == "probe" && auth_rejected {
+        return "auth-rejected";
+    }
+    if name == "credentials" && anonymous {
+        return "anonymous";
+    }
+    if name == "plaintext" {
+        return "plaintext";
+    }
+    if name == "tls" && !ok {
+        return "insecure";
+    }
+    if detail.starts_with("skipped:") {
+        return "skipped";
+    }
+    if name == "deep:version" && detail.starts_with("the status endpoint is absent") {
+        return "absent";
+    }
+    if detail.starts_with("warning: search-dead") {
+        return "search-dead";
+    }
+    if detail.starts_with("warning: range-stripped") {
+        return "range-stripped";
+    }
+    if detail.starts_with("warning: absent (") {
+        return "content-length-absent";
+    }
+    if detail.starts_with("warning: not accepted (") {
+        return "eula-not-accepted";
+    }
+    if detail.starts_with("warning: ") {
+        return "warning";
+    }
+    if ok {
+        "ok"
+    } else {
+        "failed"
+    }
+}
 
 /// The read-only `--deep` probes of the server's actual behavior.
 ///

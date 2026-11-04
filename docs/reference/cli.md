@@ -1213,8 +1213,12 @@ The report prints one line per check.
 `--json` replaces the human report with one object per check on stdout, plus one `probe` object per server probe under `--deep`:
 
 ```json
-{"check":"credentials","detail":"resolved from NXR_AUTH","ok":true}
+{"check":"credentials","code":"ok","detail":"resolved from NXR_AUTH","ok":true}
 ```
+
+`code` is the verdict class, stable for scripts: a CI job gates on it instead of matching the prose in `detail`.
+The classes are `ok`, `failed`, `skipped`, `anonymous`, `insecure`, `plaintext`, `auth-rejected`, `absent`, `search-dead`, `range-stripped`, `content-length-absent` and `eula-not-accepted`.
+A deep warn keeps both: `{"check":"deep:search","code":"search-dead","detail":"warning: search-dead (400: …)","ok":true,"warn":true}`.
 
 | Exit | When |
 |:----:|:-----|

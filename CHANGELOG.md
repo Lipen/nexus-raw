@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- `nxr doctor --json` carries a `code` field on every check: the verdict class (`ok`, `failed`, `skipped`, `anonymous`, `insecure`, `plaintext`, `auth-rejected`, `absent`, `search-dead`, `range-stripped`, `content-length-absent`, `eula-not-accepted`), so a CI job gates on a class instead of matching the prose in `detail`.
+  `detail`, the human report and the exit codes are unchanged.
 - `nxr ls --assets --json` rows carry the search facts the listing already fetched: `size` and `sha256` appear when the index reports them, so a script that selects by size or compares a digest reads one listing instead of a HEAD per name.
   The human output stays the names, and a fact the index omits stays absent.
   A served path is percent-decoded before the grammar check, the rule the entry listing already applied, so an escaped spelling of a valid name lists instead of being counted as untransferable.
