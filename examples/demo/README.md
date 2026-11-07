@@ -16,7 +16,8 @@ The payloads in `dist/1.4.0/` are generated on every run, deterministically, so 
 
 | Beat | What it proves |
 | :-- | :-- |
-| `up --claim-first manifest.json` | the session's published list file lands first, an ordinary artifact the session publishes for its consumers |
+| `up --claim-first app-1.4.0.zip` | the session's published list file lands first, an ordinary artifact the session publishes for its consumers |
+| a rebuilt artifact | the second `up` refuses to overwrite a release that already landed (exit 1) |
 | `channel set --if-forward` | a version gets a name, and the pointer only moves forward |
 | `down --workers 1` | exactly the enumerated names, one at a time, so you can watch each land |
 | `verify` | digests check offline, no network |
@@ -24,6 +25,8 @@ The payloads in `dist/1.4.0/` are generated on every run, deterministically, so 
 | the same file deleted | the re-run fetches exactly what is missing |
 
 The trailing phases swap the server underneath the same commands: `flaky` answers the first request per path with `503` and the run recovers on its own, `auth-401` turns wrong credentials into exit 3.
+
+The landing animation records the first beats of the same session: the publish, the rebuild and the refusal that follows.
 
 ## Poking at it
 
@@ -35,7 +38,7 @@ just nxr -- up --help
 ```
 
 Without `--port` the server takes an ephemeral port and the keep banner prints the URL to use.
-`NXR_DEMO_SCOPE=core` stops after verify, the four beats the landing animation shows.
+`NXR_DEMO_SCOPE=core` stops after the refusal and its repair, the beats the landing animation shows.
 `NXR_DEMO_KEEP=1` (or `--port` with it) keeps the last mock alive.
 
 ## Recording the landing animation

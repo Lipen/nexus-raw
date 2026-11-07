@@ -61,20 +61,19 @@ Release archives are published for Linux x64 and arm64, macOS Intel and Apple si
 
 <figure class="nxr-term" data-cast="assets/cast/session.json" markdown>
 
-<img src="assets/img/session.svg" alt="An animated transcript of a real session against the mock server: publish, name, fetch, verify.">
+<img src="assets/img/session.svg" alt="An animated transcript of a real session against the mock server: publish a directory, rebuild one artifact, and the publish refuses to overwrite the release that already landed.">
 
 </figure>
 
-The recording runs four commands:
+The recording shows one idea, the guarantee a shell loop around `curl` does not have:
 
 1. **Publish**: `nxr up` uploads a directory in parallel, generates the missing `.sha256` markers, and skips files that are already present.
-2. **Name**: `nxr channel set --if-forward` writes the token file `latest`, and the guard rejects a move to an older token.
-3. **Fetch**: `nxr down` downloads the listed files, hashes each stream and checks it against the server marker before the file gets its final name.
-4. **Verify**: `nxr verify` checks every digest offline.
+2. **Rebuild**: one artifact changes locally and its stale marker is dropped, so the local bytes and the local marker agree again.
+3. **Refuse**: the same `nxr up` compares the two sides, prints both digests and exits 1 instead of overwriting the release.
 
-The recording uses a release directory and a `latest` channel, both conventions of the caller.
+The recording uses a release directory, a convention of the caller.
 The output is real: the binary built from this repository, running against its [mock server](explanation/conformance.md).
-`just demo` replays the session locally and also shows an edited artifact, the refusal to overwrite it, a flaky server and a server that requires credentials.
+`just demo` replays the session locally and continues with a version named by a channel, the offline verify, a diverged download and its repair, a flaky server and a server that requires credentials.
 The full demo: [run it](how-to/demo.md).
 
 ## Guarantees

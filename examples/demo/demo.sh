@@ -11,7 +11,7 @@
 # The only stub is the payload directory, generated deterministically, so digests and transcripts stay stable between runs.
 #
 # Environment:
-#   NXR_DEMO_SCOPE=core    stop after verify: the four beats the landing animation shows
+#   NXR_DEMO_SCOPE=core    stop after the refusal and its repair: the beats the landing animation shows
 #   NXR_DEMO_CAST=<file>   record the session: every command and output line with its arrival time, bucketed to 50 ms (`just demo-cast` writes the docs landing animation)
 #   NXR_DEMO_KEEP=1        leave the last mock server running and print its URL
 
@@ -206,49 +206,60 @@ start_mock "$SCENARIO" "$@"
 REPO="${MOCK_URL%/}"
 
 ui_phase "publish" "a version directory"
-run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first app-1.4.0.zip --workers 1
+# The full session publishes its list file first; the recorded hero shows the result rather than the ordering trick.
+if [ "$SCOPE" = "full" ]; then
+  run "$NXR" up "$DIST/" "$REPO/$VERSION/" --claim-first app-1.4.0.zip --workers 1
+else
+  run "$NXR" up "$DIST/" "$REPO/$VERSION/" --workers 1
+fi
 say ""
 
-ui_phase "name" "consumers never hard-code a version"
-say "# give the version a name, so consumers never hard-code it"
-run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
-# A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
-# The recorded hero skips the read-back and names the version it just set.
+# The hero's beat: the version already landed, and a rebuild with different bytes must not overwrite it.
+# The local marker is regenerated from the new bytes, so the local pair is consistent and only the two sides differ.
+say "# a rebuild with different bytes, into the version that already landed"
+say "\$ printf 'rebuilt\\n' >> dist/1.4.0/app-1.4.0.zip"
+printf 'rebuilt\n' >> "$DIST/app-1.4.0.zip"
+say "\$ rm -f dist/1.4.0/app-1.4.0.zip.sha256"
+rm -f "$DIST/app-1.4.0.zip.sha256"
+say ""
+say "# the publish refuses to overwrite a release that is already there"
+run_expecting_failure "$NXR" up "$DIST/" "$REPO/$VERSION/" --workers 1
+
+VERSION_AT_CHANNEL="$VERSION"
 if [ "$SCOPE" = "full" ]; then
+  say ""
+  ui_phase "name" "consumers never hard-code a version"
+  say "# give the version a name, so consumers never hard-code it"
+  run "$NXR" channel set "$REPO/latest" "$VERSION" --if-forward
+  # A real `channel get`, not a `V=$(...)` pseudo-prompt: the shell prints nothing for an assignment, and a command with no output reads as one that did nothing.
   say ""
   say "# read the pointer back"
   run "$NXR" channel get "$REPO/latest"
   VERSION_AT_CHANNEL="$("$NXR" channel get "$REPO/latest")"
-else
-  VERSION_AT_CHANNEL="$VERSION"
-fi
-say ""
 
-ui_phase "consume" "exactly that version"
-say "# fetch that version back, digests checked on the way in"
-run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
-say ""
+  say ""
+  ui_phase "consume" "exactly that version"
+  run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
 
-ui_phase "verify" "offline, no network"
-say "# check every digest offline, no network"
-run "$NXR" verify "$VENDOR/"
+  say ""
+  ui_phase "verify" "offline, no network"
+  say "# check every digest offline, no network"
+  run "$NXR" verify "$VENDOR/"
 
-if [ "$SCOPE" = "full" ]; then
-say ""
-say "# someone edits a downloaded artifact: bytes and marker disagree"
-say "\$ printf 'edited by hand\\n' >> vendor/1.4.0/app-1.4.0.zip"
-printf 'edited by hand\n' >> "$VENDOR/app-1.4.0.zip"
-run_expecting_failure "$NXR" verify "$VENDOR/"
-say ""
-say "# the command that fetched it refuses to overwrite a diverged file"
-run_expecting_failure "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
-say ""
-say "# delete the bad copy; a re-run fetches exactly what is missing"
-say "\$ rm -f vendor/1.4.0/app-1.4.0.zip vendor/1.4.0/app-1.4.0.zip.sha256"
-rm -f "$VENDOR/app-1.4.0.zip" "$VENDOR/app-1.4.0.zip.sha256"
-run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
-run "$NXR" verify "$VENDOR/"
-say ""
+  say ""
+  say "# someone edits a downloaded artifact: bytes and marker disagree"
+  say "\$ printf 'edited by hand\\n' >> vendor/1.4.0/app-1.4.0.zip"
+  printf 'edited by hand\n' >> "$VENDOR/app-1.4.0.zip"
+  say ""
+  say "# the command that fetched it refuses to overwrite a diverged file"
+  run_expecting_failure "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
+
+  say ""
+  say "# delete the bad copy; a re-run fetches exactly what is missing"
+  say "\$ rm -f vendor/1.4.0/app-1.4.0.zip vendor/1.4.0/app-1.4.0.zip.sha256"
+  rm -f "$VENDOR/app-1.4.0.zip" "$VENDOR/app-1.4.0.zip.sha256"
+  run "$NXR" down "$REPO/$VERSION_AT_CHANNEL/" "$VENDOR/" --names-from "$DIST/names.txt" --workers 1
+  run "$NXR" verify "$VENDOR/"
 fi
 
 if [ "$SCOPE" = "full" ]; then

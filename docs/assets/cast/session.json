@@ -1,30 +1,23 @@
-{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.24.0","title":"nxr 0.24.0 · against mock-nexus (slow)","clear":17100,"cycle":17550,"lines":[
-[0, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --claim-first app-1.4.0.zip --workers 1"],
-[100, "plan: 4 to upload, 0 to download, 0 up to date"],
-[100, "↑ app-1.4.0.zip ok"],
-[100, "↑ bom/linux-x86_64.json ok"],
-[100, "↑ names.txt ok"],
+{"v":1,"scenario":"slow","version":"1.4.0","tool":"nxr 0.25.0","title":"nxr 0.25.0 · against mock-nexus (slow)","clear":15510,"cycle":15960,"lines":[
+[50, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --workers 1"],
+[50, "plan: 4 to upload, 0 to download, 0 up to date"],
+[50, "↑ app-1.4.0.zip ok"],
+[50, "↑ bom/linux-x86_64.json ok"],
+[50, "↑ names.txt ok"],
 [100, "↑ pinned.xml ok"],
 [100, "uploaded 4, downloaded 0, skipped 0"],
 [100, ""],
-[100, "# give the version a name, so consumers never hard-code it"],
-[100, "$ nxr channel set http://127.0.0.1:8734/latest 1.4.0 --if-forward"],
-[150, "channel: set http://127.0.0.1:8734/latest → 1.4.0"],
-[150, ""],
-[150, "# fetch that version back, digests checked on the way in"],
-[200, "$ nxr down http://127.0.0.1:8734/1.4.0/ vendor/1.4.0/ --names-from dist/1.4.0/names.txt --workers 1"],
-[250, "plan: 0 to upload, 3 to download, 0 up to date"],
-[700, "↓ app-1.4.0.zip ok"],
-[750, "↓ bom/linux-x86_64.json ok"],
-[750, "↓ pinned.xml ok"],
-[750, "uploaded 0, downloaded 3, skipped 0"],
-[750, ""],
-[750, "# check every digest offline, no network"],
-[750, "$ nxr verify vendor/1.4.0/"],
-[800, "uploaded 0, downloaded 0, skipped 3"],
-[800, "verify: 3 ok, FAILED: none"]
+[100, "# a rebuild with different bytes, into the version that already landed"],
+[100, "$ printf 'rebuilt\\n' >> dist/1.4.0/app-1.4.0.zip"],
+[100, "$ rm -f dist/1.4.0/app-1.4.0.zip.sha256"],
+[100, ""],
+[100, "# the publish refuses to overwrite a release that is already there"],
+[100, "$ nxr up dist/1.4.0/ http://127.0.0.1:8734/1.4.0/ --workers 1"],
+[100, "error: mismatch: app-1.4.0.zip: complete on both sides with different digests: local 13191eb11004b9d0061b163e514219dfc86cc71910e46ac526eb78ab3e903068, remote 405e28e8bcf3d4a6a1098029dacc54c7ba14d9b08ecf2b3e15c377c0b896636a"],
+[100, "hint: the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object"],
+[100, "(exit 1)"]
 ],"at":[
-500, 1445, 1875, 2255, 2635, 3015, 3395, 3775, 4225, 4715, 5540, 5985, 6435, 6915, 7910, 8340, 8720, 9100, 9480, 9860, 10310, 10710, 11340, 11720
+500, 1305, 1735, 2115, 2495, 2875, 3255, 3635, 4085, 4635, 5375, 6070, 6520, 7050, 7855, 9255, 10130
 ],"kinds":[
-"cmd", "note", "ok", "ok", "ok", "ok", "", "", "comment", "cmd", "note", "", "comment", "cmd", "note", "ok", "ok", "ok", "", "", "comment", "cmd", "", "note"
+"cmd", "note", "ok", "ok", "ok", "ok", "", "", "comment", "cmd", "cmd", "", "comment", "cmd", "err", "hint", ""
 ]}
