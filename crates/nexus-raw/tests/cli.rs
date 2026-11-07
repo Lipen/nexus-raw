@@ -3220,6 +3220,43 @@ fn foreign_marker_down_refuses() {
     );
 }
 
+/// marker-crlf: the marker parses only by a loose rule, so the name is Broken and the download refuses with exit 1.
+#[test]
+fn crlf_marker_down_refuses() {
+    let srv = server(Scenario::MarkerCrlf);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "a.zip", ALPHA);
+    let up = nxr(&["up", src.path().to_str().unwrap(), &dir_url(&srv)]);
+    expect_exit(
+        &up,
+        0,
+        "the upload lands, the server rewrites the marker it stored",
+    );
+
+    let dst = TempDir::new().unwrap();
+    let down = nxr(&[
+        "down",
+        &dir_url(&srv),
+        dst.path().to_str().unwrap(),
+        "--name",
+        "a.zip",
+    ]);
+    expect_exit(&down, 1, "an unparseable marker is a data refusal");
+    let stderr = String::from_utf8_lossy(&down.stderr);
+    assert!(
+        stderr.contains("CRLF"),
+        "the refusal names the parse rule that rejected the marker: {stderr}"
+    );
+    assert!(
+        !dst.path().join("a.zip").exists(),
+        "the refused download must not land"
+    );
+    assert!(
+        !dst.path().join("a.zip.part").exists(),
+        "the part is dropped on a refusal"
+    );
+}
+
 // ---- NDJSON ---------------------------------------------------------------
 
 /// --json on up and down: stdout is pure NDJSON with plan, artifact and a final summary carrying the counters.

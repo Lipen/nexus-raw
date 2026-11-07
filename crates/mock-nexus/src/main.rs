@@ -119,6 +119,9 @@ fn main() {
         if value["foreign_marker"].as_bool() == Some(true) {
             spec = spec.with_foreign_marker();
         }
+        if value["marker_crlf"].as_bool() == Some(true) {
+            spec = spec.with_marker_crlf();
+        }
         if let (Some(bytes), Some(fake)) = (
             value["cut_body"]["after_bytes"].as_u64(),
             value["cut_body"]["fake_length"].as_bool(),
@@ -215,6 +218,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         }),
         "foreign-marker" => Some(Scenario::ForeignMarker),
         "markerless" => Some(Scenario::Markerless),
+        "marker-crlf" => Some(Scenario::MarkerCrlf),
         "auth-401" => Some(Scenario::Auth401 {
             user: flags.user.clone(),
             pass: flags.pass.clone(),

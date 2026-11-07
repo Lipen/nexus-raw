@@ -1422,6 +1422,36 @@ async fn down_digest_mismatch_refuses_and_drops_part() {
 }
 
 #[tokio::test]
+async fn crlf_marker_is_an_unparseable_sibling_and_refuses() {
+    let mock = MockNexus::start(Scenario::MarkerCrlf).unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "a.zip", CONTENT);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+
+    // The digest in the stored marker is the real one, so only the line ending separates
+    // this object from a complete one: the strict parse is what refuses it.
+    let dst = TempDir::new().unwrap();
+    let err = nxr
+        .down(dst.path(), Enumeration::Names(names(&["a.zip"])), true)
+        .await
+        .unwrap_err();
+    let text = format!("{err:?}");
+    assert!(matches!(err, Error::Mismatch { .. }), "got {text}");
+    assert!(
+        text.contains("CRLF"),
+        "the refusal names the parse rule that rejected the marker: {text}"
+    );
+    assert!(!dst.path().join("a.zip").exists());
+    assert!(!dst.path().join("a.zip.sha256").exists());
+
+    // A marker that does not parse is never overwritten, even when its digest matches the local bytes.
+    let err = nxr.up(src.path(), None, true, None).await.unwrap_err();
+    assert!(matches!(err, Error::Mismatch { .. }), "got {err:?}");
+}
+
+#[tokio::test]
 async fn down_missing_name_is_data_error() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();

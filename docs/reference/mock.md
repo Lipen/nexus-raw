@@ -8,7 +8,7 @@ That narrowness is the point: every byte on the wire is either contract or failu
 ## The scenario table
 
 The full table with per-scenario wire behavior and the pinned invariant lives in [invariants](invariants.md), generated from the same Rust constant the `--print-scenarios` output prints.
-It covers: transport failures (`partial-put`, `cut-body`, `drop-connection`, `freeze-upload`), framing lies (`sizeless`, `foreign-marker`, `markerless`), pacing (`slow`, `flaky`, `retry-after-503`, `rate-limit` with `Retry-After`), server edges (`redirect`, `readonly`, `no-service`, `search-400`), service-API shapes (status, repositories, EULA, assets pagination), client-ergonomics (`detail-in-hint`, `ignore-range`), and integrity litter for `nxr audit` (`audit-litter`).
+It covers: transport failures (`partial-put`, `cut-body`, `drop-connection`, `freeze-upload`), framing lies (`sizeless`, `foreign-marker`, `markerless`, `marker-crlf`), pacing (`slow`, `flaky`, `retry-after-503`, `rate-limit` with `Retry-After`), server edges (`redirect`, `readonly`, `no-service`, `search-400`), service-API shapes (status, repositories, EULA, assets pagination), client-ergonomics (`detail-in-hint`, `ignore-range`), and integrity litter for `nxr audit` (`audit-litter`).
 
 Search is served only by the scenarios that model it: `search-lag` (store-backed, one item per stored object, pages of ten), `assets-pagination`, `assets-prefix-q`, `audit-litter` (the litter page) and `search-400` (the failure shape).
 Every other scenario 404s `/service/rest/v1/search/assets`, so `clone`, the TUI and the mount refuse with `cannot enumerate` against them.
@@ -46,7 +46,7 @@ A JSON manifest layers behavior on top of the preset scenario:
 }
 ```
 
-Known keys: `auth.user` / `auth.pass`, `flaky.first`, `rate.first` + `rate.retry_after_secs`, `sizeless`, `ignore_range`, `read_only`, `markerless`, `foreign_marker`, `cut_body.after_bytes` + `cut_body.fake_length`, `partial_put.first_attempt_bytes`, `slow.chunk_delay_ms` + `slow.chunk_size`, `redirect.location_path`.
+Known keys: `auth.user` / `auth.pass`, `flaky.first`, `rate.first` + `rate.retry_after_secs`, `sizeless`, `ignore_range`, `read_only`, `markerless`, `foreign_marker`, `marker_crlf`, `cut_body.after_bytes` + `cut_body.fake_length`, `partial_put.first_attempt_bytes`, `slow.chunk_delay_ms` + `slow.chunk_size`, `redirect.location_path`.
 The manifest owns the knobs: preset flags for the same knobs are ignored when `--config` is present.
 
 ## Use the library

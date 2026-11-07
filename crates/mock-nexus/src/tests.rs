@@ -543,6 +543,36 @@ fn markerless_loses_marker_keeps_bytes() {
 }
 
 #[test]
+fn marker_crlf_rewrites_the_line_ending() {
+    let server = MockNexus::start(Scenario::MarkerCrlf).unwrap();
+
+    let marker = format!("{}  sample.zip\n", "c".repeat(64));
+    let (status, _, _) = exchange(
+        server.addr(),
+        "PUT",
+        "/1.14.0/sample.zip.sha256",
+        marker.as_bytes(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(
+        server.store_get("1.14.0/sample.zip.sha256").unwrap(),
+        format!("{}  sample.zip\r\n", "c".repeat(64)).into_bytes(),
+        "the digest and the name survive, the line ending is foreign"
+    );
+
+    let (status, _, _) =
+        exchange(server.addr(), "PUT", "/1.14.0/sample.zip", b"BYTES", &[]).unwrap();
+    assert_eq!(status, 201);
+    assert_eq!(
+        server.store_get("1.14.0/sample.zip").as_deref(),
+        Some(b"BYTES".as_slice()),
+        "only markers are rewritten"
+    );
+}
+
+#[test]
 fn doc_drift_synthesizes_between_enable_and_disable() {
     let server = MockNexus::start(Scenario::DocDrift).unwrap();
     let stored = br#"{"schema_version":1,"version":"1.14.0","artifacts":["real.zip"]}"#;

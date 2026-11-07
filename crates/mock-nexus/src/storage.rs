@@ -62,6 +62,19 @@ pub(super) fn zero_digest(marker: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Rewrite every line ending of a marker to CRLF, the shape a tool with a Windows editor leaves behind.
+/// The digest and the name survive, so the object diverges only in how the line reads.
+pub(super) fn crlf_marker(marker: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(marker.len() + 1);
+    for &byte in marker {
+        if byte == b'\n' {
+            out.push(b'\r');
+        }
+        out.push(byte);
+    }
+    out
+}
+
 /// Apply marker mutations for `.sha256` PUTs.
 /// `None` means "acknowledge with 201 but store nothing" (markerless).
 pub(super) fn transform_put(shared: &Shared, path: &str, body: &[u8]) -> Option<Vec<u8>> {
@@ -73,6 +86,9 @@ pub(super) fn transform_put(shared: &Shared, path: &str, body: &[u8]) -> Option<
     }
     if shared.spec.foreign_marker {
         return Some(zero_digest(body));
+    }
+    if shared.spec.marker_crlf {
+        return Some(crlf_marker(body));
     }
     Some(body.to_vec())
 }

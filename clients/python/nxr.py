@@ -26,6 +26,7 @@ __all__ = [
     "EnumerateError",
     "HeadInfo",
     "HttpError",
+    "MarkerFormat",
     "MarkerMissing",
     "MisuseError",
     "Nxr",
@@ -125,6 +126,14 @@ class DigestMismatch(NxrError):
 
 class MarkerMissing(NxrError):
     """Bytes exist without a sha-sibling: the remote object is present but unverifiable."""
+
+
+class MarkerFormat(NxrError, ValueError):
+    """The sha-sibling does not parse: the remote object is `Broken`, refused rather than completed.
+
+    A `ValueError` too, because that is what `parse_marker` raises for a foreign line,
+    so a caller that catches either class keeps working.
+    """
 
 
 class EnumerateError(NxrError):
@@ -246,7 +255,13 @@ class Nxr:
                     hint="publish the sha256 sibling, so the object is verifiable",
                 ) from None
             raise
-        digest, _ = parse_marker(marker)
+        try:
+            digest, _ = parse_marker(marker)
+        except ValueError as err:
+            raise MarkerFormat(
+                f"unreadable: {url}: {sibling_url} does not parse: {err}",
+                hint="the remote marker is unreadable: refuse, never overwrite, republish the pair",
+            ) from None
         actual = hashlib.sha256(payload).hexdigest()
         if actual != digest:
             raise DigestMismatch(

@@ -32,6 +32,8 @@ pub struct Spec {
     pub markerless: bool,
     /// Replace marker digests with zeros.
     pub foreign_marker: bool,
+    /// Rewrite stored markers with CRLF line endings.
+    pub marker_crlf: bool,
     /// Refuse every DELETE.
     pub read_only: bool,
     /// A bare static host: every write answers 405 and the service plane answers 404.
@@ -119,6 +121,12 @@ impl Spec {
         self
     }
 
+    /// Rewrite every stored marker with CRLF line endings.
+    pub fn with_marker_crlf(mut self) -> Self {
+        self.marker_crlf = true;
+        self
+    }
+
     /// Refuse every DELETE with 403.
     pub fn with_read_only(mut self) -> Self {
         self.read_only = true;
@@ -175,6 +183,7 @@ impl From<&Scenario> for Spec {
             }
             Scenario::ForeignMarker => spec.foreign_marker = true,
             Scenario::Markerless => spec.markerless = true,
+            Scenario::MarkerCrlf => spec.marker_crlf = true,
             Scenario::Auth401 { user, pass } => {
                 spec.auth_b64 = Some(crate::base64::encode(format!("{user}:{pass}").as_bytes()))
             }

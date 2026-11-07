@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The `marker-crlf` mock scenario stores `.sha256` markers with CRLF line endings: the digest and the name survive, so the object diverges only in how the line reads.
+  The strict parse refuses it, and the core, the CLI and the Python client pin that refusal: the name is `Broken`, `down` refuses it and `up` never overwrites the marker, even when its digest matches the local bytes.
+  The Python client raises the new `MarkerFormat` (an `NxrError` and a `ValueError`, so either catcher works) instead of a bare `ValueError` escaping from `parse_marker`.
+
 - `nxr doctor --json` carries a `code` field on every check: the verdict class (`ok`, `failed`, `skipped`, `anonymous`, `insecure`, `plaintext`, `auth-rejected`, `absent`, `search-dead`, `range-stripped`, `content-length-absent`, `eula-not-accepted`), so a CI job gates on a class instead of matching the prose in `detail`.
   `detail`, the human report and the exit codes are unchanged.
 - `nxr ls --assets --json` rows carry the search facts the listing already fetched: `size` and `sha256` appear when the index reports them, so a script that selects by size or compares a digest reads one listing instead of a HEAD per name.

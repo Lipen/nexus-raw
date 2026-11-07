@@ -562,6 +562,23 @@ class Conformance(unittest.TestCase):
                 nx.get(path)
             self.assertEqual(nx.sha(path), digest, "the bytes themselves are intact")
 
+    def test_marker_crlf(self):
+        """A marker with CRLF line endings never parses: get refuses instead of calling the object complete."""
+        with mock_server("marker-crlf") as mock:
+            nx = self.client()
+            path = mock.url("a.zip")
+            digest = nx.put(path, CONTENT)
+            self.assertEqual(
+                raw_get(f"{path}.sha256"),
+                nxr.format_marker("a.zip", digest).encode().replace(b"\n", b"\r\n"),
+                "the scenario must have rewritten the line ending",
+            )
+            with self.assertRaises(nxr.MarkerFormat) as raised:
+                nx.get(path)
+            self.assertIn("CRLF", str(raised.exception))
+            self.assertIsInstance(raised.exception, ValueError, "a ValueError catcher keeps working")
+            self.assertEqual(nx.sha(path), digest, "the bytes themselves are intact")
+
     def test_markerless(self):
         """A markerless remote is present but unverifiable: get refuses and names the missing sibling."""
         with mock_server("markerless") as mock:

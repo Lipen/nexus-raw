@@ -94,6 +94,15 @@ Non-marker bytes are stored normally.
 
 **Pinned invariant:** Marker symmetry survives a markerless server: `up` re-uploads the markers and `down` writes the marker it computed from the received bytes.
 
+## `marker-crlf`
+
+Markers carry CRLF line endings.
+
+`.sha256` markers are stored with every line ending rewritten to CRLF.
+The digest and the name survive, so the object diverges only in how the line reads.
+
+**Pinned invariant:** A marker the strict parse refuses is `Broken`: a transfer refuses the name instead of treating it as complete, and the bytes stay honest.
+
 ## `auth-401`
 
 Basic auth challenge (401).

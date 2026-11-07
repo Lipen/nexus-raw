@@ -17,6 +17,7 @@ impl Scenario {
             Scenario::Slow { .. } => "slow",
             Scenario::ForeignMarker => "foreign-marker",
             Scenario::Markerless => "markerless",
+            Scenario::MarkerCrlf => "marker-crlf",
             Scenario::Auth401 { .. } => "auth-401",
             Scenario::Auth403 { .. } => "auth-403",
             Scenario::DocDrift => "doc-drift",
@@ -58,6 +59,7 @@ pub const SCENARIOS: &[&str] = &[
     "slow",
     "foreign-marker",
     "markerless",
+    "marker-crlf",
     "auth-401",
     "auth-403",
     "doc-drift",
@@ -127,6 +129,9 @@ pub enum Scenario {
     /// `.sha256` markers are acknowledged (201 Created) but never stored.
     /// Non-marker bytes are stored normally.
     Markerless,
+    /// Stored `.sha256` markers keep their digest but carry CRLF line endings.
+    /// The strict parse refuses them, so the object is `Broken` by an unreadable marker rather than by a divergent digest.
+    MarkerCrlf,
     /// Every request requires `Authorization: Basic base64(user:pass)`.
     /// Otherwise 401 with `WWW-Authenticate: Basic realm="nexus"`.
     /// Valid credentials behave like [`Scenario::Atomic`].
