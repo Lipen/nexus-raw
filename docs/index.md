@@ -16,7 +16,7 @@ The repository layout is chosen by the caller, and the CLI is one static binary 
 brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
 brew install lipen/nexus-raw/nexus-raw
 cargo binstall nexus-raw                  # a prebuilt static archive
-npm install @nexus-raw/nxr                # the Node package, `nxr` included
+npm install -g @nexus-raw/nxr             # the Node package, `nxr` included
 ```
 
 Release archives are published for Linux x64 and arm64, macOS Intel and Apple silicon, and Windows x64, together with a distroless container image.

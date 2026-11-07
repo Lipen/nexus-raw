@@ -2,7 +2,7 @@
 
 One anchor page: agent intent -> command -> expected result.
 Every command below exists.
-Install: `cargo install nexus-raw` (or `npm install @nexus-raw/nxr` when the environment is Node).
+Install: `cargo install nexus-raw` (or `npm install -g @nexus-raw/nxr` when the environment is Node).
 `service eula --accept` needs nx-admin on the server.
 Read access works for any user the server answers.
 

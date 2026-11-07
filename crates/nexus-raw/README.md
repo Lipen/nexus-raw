@@ -25,7 +25,7 @@ Homebrew on macOS and Linux, or npm with the `nxr` command included:
 brew tap lipen/nexus-raw https://github.com/Lipen/nexus-raw
 brew install lipen/nexus-raw/nexus-raw
 
-npm install @nexus-raw/nxr
+npm install -g @nexus-raw/nxr
 ```
 
 Prebuilt archives for Linux x64 and arm64, macOS Intel and Apple silicon, and Windows x64 are on [GitHub Releases](https://github.com/Lipen/nexus-raw/releases/latest), with a `SHA256SUMS` next to them.

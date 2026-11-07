@@ -5,7 +5,7 @@ Node bindings for [nexus-raw](https://github.com/Lipen/nexus-raw): the `nxr` tra
 Each command is one function, the URL is an argument, and there is no config file: credentials come from the call or from the environment.
 Transfers follow the same rules as the CLI: an artifact carries a `<name>.sha256` marker, every run starts with a symmetric diff, and a complete artifact with a different digest is rejected instead of overwritten.
 
-The package also installs the `nxr` command, so one install serves `require()` and the shell.
+The package also ships the `nxr` command, and `npm install -g @nexus-raw/nxr` puts it on `PATH`.
 
 ## Install
 
