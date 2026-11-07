@@ -15,6 +15,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Two served paths that decode into one name carry no facts when they disagree, the rule the entry listing applies.
   The library exposes the same walk as `Nxr::ls_assets_facts`, and the Node `lsAssets` keeps its `string[]` contract.
 
+### Changed
+
+- A terminal gets the calm view of a transfer: the plan, the live progress line and the summary, instead of one `↑ name ok` line per artifact.
+  A few thousand files no longer bury the progress under their own output.
+  A piped or redirected stdout keeps every name byte for byte, so logs and scripts that parse them are unchanged, and `-v` brings the names back on a terminal.
+  A redirected stderr alone keeps them too, since the live line has nowhere to draw.
+
 ### Fixed
 
 - The published-consumer gate in `scripts/verify-published.sh` waits for the platform package to be visible before it installs the shipped copy.

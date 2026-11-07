@@ -81,13 +81,34 @@ impl Session {
 async fn run(mut rx: UnboundedReceiver<Event>, mode: Mode) {
     let mut progress = Progress::default();
     let paint = Paint::new(human_colors());
+    let calm = calm_view(
+        std::io::stdout().is_terminal(),
+        std::io::stderr().is_terminal(),
+    );
     while let Some(ev) = rx.recv().await {
         match mode {
-            Mode::Human { quiet, verbose } => human(&ev, quiet, verbose, &mut progress, &paint),
+            Mode::Human { quiet, verbose } => {
+                human(&ev, quiet, verbose, calm, &mut progress, &paint);
+            }
             Mode::Json => json::line(&ev),
         }
     }
     progress.clear();
+}
+
+/// Whether the terminal gets the calm view: one progress line and a summary, no line per artifact.
+///
+/// Both streams must be terminals.
+/// The progress line is drawn on stderr, so a redirected stderr would leave the transfer silent, and a redirected stdout is a log that wants every name.
+fn calm_view(stdout_tty: bool, stderr_tty: bool) -> bool {
+    stdout_tty && stderr_tty
+}
+
+/// Whether an artifact's completion earns its own line.
+///
+/// `-v` asks for the names back, and a piped or redirected stdout keeps them by default.
+fn artifact_lines(verbose: bool, calm: bool) -> bool {
+    verbose || !calm
 }
 
 /// ANSI painting of the human lines.
@@ -231,9 +252,9 @@ impl Progress {
 /// Human console rendering.
 ///
 /// `-q` keeps the summary line and the failure lines.
-/// `-v` adds transfer starts and plan names.
-/// Live byte progress draws one in-place stderr line when stderr is a terminal.
-fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Paint) {
+/// `-v` adds transfer starts, plan names and a line per artifact.
+/// Live byte progress draws one in-place stderr line when stderr is a terminal, and on a full terminal that line replaces the per-artifact lines.
+fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress, paint: &Paint) {
     // Any non-progress line starts clean, so the in-place drawing never smears.
     if !matches!(ev, Event::ArtifactBytes { .. }) {
         prog.clear();
@@ -295,6 +316,9 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                 return;
             }
             prog.files_done += 1;
+            if !artifact_lines(verbose, calm) {
+                return;
+            }
             let text = match (skipped, dir) {
                 (true, _) => format!("○ {name} skipped"),
                 (false, Dir::Up) => format!("↑ {name} ok"),
@@ -365,5 +389,32 @@ fn human(ev: &Event, quiet: bool, verbose: bool, prog: &mut Progress, paint: &Pa
                 outln!("{}", paint.red(&format!("failed: {}", s.failed.join(", "))));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{artifact_lines, calm_view};
+
+    #[test]
+    fn the_calm_view_needs_both_streams() {
+        assert!(calm_view(true, true));
+        assert!(
+            !calm_view(true, false),
+            "a redirected stderr has no progress line to show"
+        );
+        assert!(
+            !calm_view(false, true),
+            "a redirected stdout is a log that wants every name"
+        );
+        assert!(!calm_view(false, false));
+    }
+
+    #[test]
+    fn a_pipe_keeps_every_name_and_a_terminal_keeps_the_verbose_ones() {
+        assert!(artifact_lines(false, false));
+        assert!(!artifact_lines(false, true));
+        assert!(artifact_lines(true, true));
+        assert!(artifact_lines(true, false));
     }
 }

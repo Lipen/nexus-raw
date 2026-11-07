@@ -129,6 +129,8 @@ uploaded 0, downloaded 0, skipped 2
 verify: 2 ok, FAILED: none
 ```
 
+The block above is the log form: piped, every settled name gets a line, and a terminal shows one live line instead.
+
 The diff verdict rides the exit code: `0` when every name is `same`, `1` when the report holds a difference.
 On an empty server the report is `missing-remote` across the board, and the `up` after it converges the two sides.
 

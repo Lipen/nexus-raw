@@ -87,7 +87,9 @@ uploaded 4, downloaded 0, skipped 0
 ```
 
 With `--claim-first` that name uploads first, alone: the file is an ordinary artifact, and claim-first only fixes its order.
-The remaining `ok` lines print in completion order, so your ordering may differ.
+The transfer transcripts on this page are the log form: piped, each name gets a line.
+A terminal shows one live line instead, and `-v` prints the per-name lines there too.
+The lines print in completion order, so your ordering may differ.
 No marker step appears anywhere because `up` generated every `<name>.sha256` from the bytes before uploading.
 The markers are ordinary `sha256sum -c` lines, and `up` leaves a copy next to your files:
 

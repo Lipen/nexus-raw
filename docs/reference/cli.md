@@ -72,7 +72,7 @@ All flags are global: they may appear before or after the subcommand.
 | `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). The bundle carries the CA that signed the server certificate, not the bare server leaf. Native only, and mutually exclusive with `--tls-insecure` |
 | `--json` | off | machine output, see [output](#output) |
 | `-q, --quiet` | off | the summary line, plus any failures |
-| `-v, --verbose` | off | plan names and transfer starts |
+| `-v, --verbose` | off | plan names, transfer starts, and a line per settled name on a terminal |
 
 ## nxr get
 
@@ -1284,6 +1284,10 @@ A pipe or a file gets the same lines byte-clean: no escapes, ever.
 
 A live progress line draws on stderr while stderr is a terminal: one line, redrawn in place, carrying the settled-file counter and the freshest artifact (`↓ 2/5 files · app.zip 1.1 MiB/4.2 MiB (26%)`).
 Pipes never see it, and it is erased before the next human line prints.
+
+With both stdout and stderr on a terminal, that line replaces the settled-name lines: a transfer shows its plan, the live line and the summary, and `-v` asks for the names back.
+A piped or redirected stdout keeps every settled name, so a log still reads one line per artifact.
+A redirected stderr alone keeps them too, because the live line has nowhere to draw.
 
 ```console
 $ nxr -v up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
