@@ -45,7 +45,7 @@ The canonical protocol text is kept outside this repository.
 |:---------|:-----|
 | the wire protocol, store shape, errors, forbiddances|`crates/nexus-raw-core/src/protocol.md` (the crate docs)|
 | the core API (facade `Nxr`, `Enumeration`, events, actions) | `crates/nexus-raw-core/src/nxr.rs` |
-| CLI flags, credentials order, output examples | [README.md](README.md) |
+| CLI flags, credentials order, output examples | [docs/reference/cli.md](docs/reference/cli.md) |
 | the TUI (keys, config, presets, smoke) | `crates/nexus-raw-tui/README.md`, [docs/reference/tui.md](docs/reference/tui.md) |
 | the mount (`nxr-mount`, FUSE semantics, its limits) | [docs/reference/mount.md](docs/reference/mount.md), `crates/nexus-raw-mount/src/` |
 | a mock scenario's exact behavior | `crates/mock-nexus/src/scenario.rs` doc comment on `Scenario` |
