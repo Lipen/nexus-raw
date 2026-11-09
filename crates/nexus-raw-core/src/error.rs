@@ -117,6 +117,12 @@ impl Error {
     #[must_use]
     pub fn hint(&self) -> Option<String> {
         let hint = match self {
+            // The bare checksum shape already names its own way out in the message, so the
+            // hint carries only what the message cannot: how to make the pair portable.
+            Error::Mismatch { detail, .. } if detail.contains("bare digest") => Some(
+                "this sibling keeps the digest alone: rewrite it as `<digest>  <name>` so `sha256sum` and every nxr read the pair, or read the bytes without it with `nxr get --no-sha`"
+                    .into(),
+            ),
             // A marker that cannot be read is not a divergence the user can resolve on the
             // other side: the remedy is the format, or a fetch that skips the check.
             Error::Mismatch { detail, .. }

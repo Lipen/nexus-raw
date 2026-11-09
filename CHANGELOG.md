@@ -45,6 +45,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A marker that carries the digest alone, the Maven- and Gradle-style checksum file, is named in the refusal instead of reporting a missing two-space separator.
+  The message says what the file is and names `nxr get --no-sha`, which reads the bytes without a marker.
 - A resumed transfer reports the offset it reused in its first `artifact` event and in `resumed_from`, and a part the server refuses with `416` reports `0` instead of the discarded part's size.
   A consumer can render `done` from the first event without a jump, and can add the offset to the bytes it already holds without counting a restart twice.
 - A `get --continue` or `get --segments` run no longer skips its completion check when the `.sha256` sibling does not parse, and a marker read that fails is no longer read as an absent marker.

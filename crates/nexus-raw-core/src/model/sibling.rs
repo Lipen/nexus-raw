@@ -64,9 +64,19 @@ pub fn parse_line(s: &str) -> Result<Sibling, String> {
     if body.contains('\r') {
         return Err("CR found: CRLF is not allowed".into());
     }
-    let (hex, name) = body
-        .split_once("  ")
-        .ok_or("two-space separator not found")?;
+    let (hex, name) = match body.split_once("  ") {
+        Some(parts) => parts,
+        None if body.len() == 64 && Digest::from_hex(body).is_ok() => {
+            // The most common foreign shape: a Maven- or Gradle-style checksum, the
+            // digest and nothing else. Name it, so the refusal describes the file
+            // instead of reporting a missing separator.
+            return Err(
+                "a bare digest with no name: this is a checksum file, not a `sha256sum -c` line"
+                    .into(),
+            );
+        }
+        None => return Err("two-space separator not found".into()),
+    };
     if name.is_empty() || name.contains("  ") || name.starts_with(' ') {
         return Err("name must be non-empty with exactly two spaces before it".into());
     }
@@ -88,6 +98,17 @@ mod tests {
         let parsed = parse_line(OK).unwrap();
         assert_eq!(parsed.name, "a.zip");
         assert_eq!(format_line("a.zip", &parsed.digest), OK);
+    }
+
+    /// The common Maven-style checksum: the digest alone. Refused, and named.
+    #[test]
+    fn a_bare_digest_is_named() {
+        let bare = format!("{}\n", "0".repeat(64));
+        let reason = parse_line(&bare).unwrap_err();
+        assert!(
+            reason.contains("bare digest"),
+            "the reason describes the file: {reason}"
+        );
     }
 
     #[test]

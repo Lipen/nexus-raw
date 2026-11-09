@@ -2023,6 +2023,29 @@ fn get_refuses_a_stale_local_sibling() {
     assert!(!target.exists());
 }
 
+/// A Maven-style checksum file (the digest alone) is refused by name, not as a missing separator.
+#[test]
+fn down_names_a_bare_digest_marker() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert("obj.bin.sha256", format!("{}\n", test_hex(BETA)).as_bytes());
+    let dst = TempDir::new().unwrap();
+    let got = nxr(&[
+        "down",
+        &dir,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "obj.bin",
+    ]);
+    expect_exit(&got, 1, "a checksum file is not a sha256sum line");
+    assert!(
+        stderr(&got).contains("bare digest"),
+        "the refusal describes the file: {}",
+        stderr(&got)
+    );
+}
+
 /// The mock's `marker-crlf` scenario on the fresh path: a marker the strict parse
 /// refuses stops a plain `get -o`, not only a resume.
 #[test]

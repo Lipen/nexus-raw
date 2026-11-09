@@ -86,6 +86,7 @@ The parse is strict, because a loose parse would bless foreign markers:
 | exactly two spaces | one or three spaces |
 | digest is 64 lowercase hex | uppercase hex, garbage, short digests |
 | name is non-empty and contains no double space | `<hex>  \n` |
+| a `sha256sum -c` line, not a bare checksum | a Maven-style `.sha256` that carries the digest alone, with no name. The refusal says so and names `--no-sha` |
 | trailing newline required | the same line without `\n` |
 
 An artifact is complete when bytes and sibling both exist and the digest matches.
