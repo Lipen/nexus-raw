@@ -139,10 +139,22 @@ gcrates_msg=""
 gpins_msg=""
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$branch" = master ]; then
-  gbranch=0; gbranch_msg="master"
-else
+if [ "$branch" != master ]; then
   gbranch=2; gbranch_msg="$branch, not master"; blockers=$((blockers + 1))
+else
+  # The act pushes the bump together with whatever sits on master, so an unpushed
+  # commit would reach a registry before CI ever ran on it. The documented order is
+  # a version-only bump on top of a pushed, CI-green master.
+  git fetch -q origin master 2>/dev/null || true
+  ahead="$(git rev-list --count origin/master..HEAD 2>/dev/null || echo 0)"
+  behind="$(git rev-list --count HEAD..origin/master 2>/dev/null || echo 0)"
+  if [ "$behind" -gt 0 ]; then
+    gbranch=2; gbranch_msg="master is $behind behind origin: rebase first"; blockers=$((blockers + 1))
+  elif [ "$ahead" -gt 0 ]; then
+    gbranch=2; gbranch_msg="$ahead unpushed commit(s): push, wait for just ci, then release"; blockers=$((blockers + 1))
+  else
+    gbranch=0; gbranch_msg="master, in sync with origin"
+  fi
 fi
 
 [ -z "$(git status --porcelain)" ] || {

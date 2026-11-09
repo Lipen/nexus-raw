@@ -82,6 +82,7 @@ It pushes nothing and dispatches nothing.
 The rehearsal runs the gate, every build and the npm staging with nothing published and no tag, and the act stops there when it is red: a workflow that cannot run costs minutes instead of the version number.
 The bump push also starts the full CI matrix on the same commit.
 The bump is a version-only commit on top of an already CI-green master.
+The act refuses to start when `master` is ahead of or behind `origin`: push the work first, wait for `just ci` to report the head green, and release from a synced master.
 The matrix still runs on the bump commit for visibility, but the release gate is the core suite and the release does not wait for the matrix.
 A manual dispatch on a later day runs the same gate, verify and tag, so the release does not depend on the terminal that pushed the bump.
 The act still waits for the rehearsal as a convenience.
