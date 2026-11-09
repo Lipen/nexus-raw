@@ -68,7 +68,14 @@ fn a_malformed_url_is_misuse() {
     assert_eq!(out.status.code(), Some(2), "misuse exit code");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("error:"), "stderr was: {stderr}");
-    assert!(stderr.contains("hint:"), "stderr was: {stderr}");
+    assert!(
+        !stderr.contains("hint:"),
+        "a misuse names its remedy in the message: {stderr}"
+    );
+    assert!(
+        stderr.contains("http(s)://"),
+        "the message names the rule: {stderr}"
+    );
 }
 
 #[test]
@@ -80,7 +87,14 @@ fn a_bad_user_value_is_misuse_without_echoing_it() {
     assert_eq!(out.status.code(), Some(2), "misuse exit code");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("error:"), "stderr was: {stderr}");
-    assert!(stderr.contains("hint:"), "stderr was: {stderr}");
+    assert!(
+        !stderr.contains("hint:"),
+        "a misuse names its remedy in the message: {stderr}"
+    );
+    assert!(
+        stderr.contains("user:pass"),
+        "the message names the expected shape: {stderr}"
+    );
     assert!(
         !stderr.contains("nosplit"),
         "the value must not echo: {stderr}"

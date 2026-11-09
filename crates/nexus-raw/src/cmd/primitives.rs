@@ -1,5 +1,6 @@
 //! The L0 commands: get, put, head, sha.
 
+use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
 
 use nexus_raw_core::config::split_file_url;
@@ -14,6 +15,7 @@ pub(crate) struct GetArgs<'a> {
     pub url: &'a str,
     pub out: Option<&'a Path>,
     pub remote_name: bool,
+    pub stdout: bool,
     pub cont: bool,
     pub segments: Option<usize>,
     pub range: Option<&'a str>,
@@ -25,6 +27,7 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
         url,
         out,
         remote_name,
+        stdout,
         cont,
         segments,
         range,
@@ -40,6 +43,14 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
     if out.is_some_and(|p| p == Path::new("-")) {
         return Err(Error::Misuse(
             "stdout is the default: omit -o for the stream, -o names a real file (a file called - is a trap)"
+                .to_owned(),
+        ));
+    }
+    // A terminal is not a pipe: a body of control bytes garbles the console and can
+    // leave it in a broken state. The three ways out are named in the message itself.
+    if refuses_a_terminal(out, stdout, std::io::stdout().is_terminal()) {
+        return Err(Error::Misuse(
+            "refusing to write a body to a terminal: use -O for the URL's name here, -o FILE to name the file, or --stdout to stream it anyway"
                 .to_owned(),
         ));
     }
@@ -113,6 +124,12 @@ async fn run_get(
     };
     report_get(ctx, url, out, &outcome);
     Ok(())
+}
+
+/// Whether a body would land on a terminal: no file target, no explicit `--stdout`.
+/// Split out of the command so the rule is unit-tested without a pty.
+fn refuses_a_terminal(out: Option<&Path>, force: bool, interactive: bool) -> bool {
+    out.is_none() && !force && interactive
 }
 
 /// The local name `get -O` writes: the URL's last path segment, without a query or a fragment.
@@ -350,5 +367,28 @@ fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core
                 log::debug!("get: {} bytes from {url}", outcome.size);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refuses_a_terminal;
+    use std::path::Path;
+
+    #[test]
+    fn a_terminal_refuses_a_body_unless_asked() {
+        assert!(refuses_a_terminal(None, false, true), "a tty is not a pipe");
+        assert!(
+            !refuses_a_terminal(None, true, true),
+            "--stdout is the opt-in"
+        );
+        assert!(
+            !refuses_a_terminal(None, false, false),
+            "a pipe takes the body"
+        );
+        assert!(
+            !refuses_a_terminal(Some(Path::new("x.bin")), false, true),
+            "a file target never streams"
+        );
     }
 }

@@ -169,7 +169,6 @@ A claim name outside the scanned directory is misuse (exit 2):
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/claim/ --claim-first nope.txt
 error: misuse: claim-first: nope.txt is not among the scanned names of dist/1.4.0/
-hint: check the command line arguments
 $ echo $?
 2
 ```

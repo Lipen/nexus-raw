@@ -12,6 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The wasm surface keeps the browser's own header, since fetch owns it.
 - `nxr get --no-sha` reads the bytes without verifying the sibling.
 - `nxr get -O` writes to the URL's last path segment in the current directory, curl's `-O`: one file, no local path and no shell redirection.
+- `nxr get` refuses a body headed for a terminal (exit 2) instead of garbling it, and `--stdout` is the explicit opt-in.
+  A pipe and a redirect are unaffected, so `nxr get URL | tar xz` keeps working, and the refusal names `-O`, `-o FILE` and `--stdout`.
   The segment must pass the artifact grammar, and a directory URL is misuse with `-o FILE` named as the way out.
 - The `marker-crlf` mock scenario stores `.sha256` markers with CRLF line endings: the digest and the name survive, so the object diverges only in how the line reads.
   The strict parse refuses it, and the core, the CLI and the Python client pin that refusal: the name is `Broken`, `down` refuses it and `up` never overwrites the marker, even when its digest matches the local bytes.
@@ -27,6 +29,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- A misuse prints no `hint:` line any more: its message already names the remedy (`--json with stdout body ... pass -o FILE`), and the generic sentence only repeated the error class.
+  `Error::hint()` returns `None` for `Misuse`, the Node payload carries `hint: null` there, and a parse error from clap keeps its own hint because that one names the help command.
 - `nxr get -o FILE` verifies `<URL>.sha256` by default, the way `--continue` and `--segments` already did.
   A complete object written to a file is now checked everywhere: a matching sibling passes, a missing one skips the check, a marker that does not parse refuses the name, and a divergence refuses it and removes the part.
   A local `<FILE>.sha256` wins over the server one, so a stale marker refuses a download that would leave an inconsistent pair.

@@ -1,7 +1,8 @@
 # Errors and exit codes
 
 Every failure names its kind, the object and both sides of a disagreement.
-Every error also prints one `hint:` line on stderr telling you what to check next.
+Every error that has a next step prints one `hint:` line on stderr telling you what to check next.
+A misuse does not: its message already names the remedy, and a second sentence would only repeat the class.
 The taxonomy has sixteen variants and four exit codes, and the mapping between them lives in exactly one place: `Error::exit_code` in `crates/nexus-raw-core/src/error.rs`.
 A consumer that closes the pipe (`nxr --json up ... | head -1`) ends the run with 141, the shell's code for `SIGPIPE`, the way curl and rg behave.
 The same holds for a `get` stream whose stdout went away: no disk error is reported, because the sink was a pipe, not a file.
@@ -21,7 +22,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 | `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the enumeration source` | a typo, or a name list that drifted from what was published |
 | `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `repeat --name, use --names-from FILE, or use --ls when the server has the search API` | no `--name`, `--names-from` or `--ls` on the call |
 | `UnsafeName { name, reason }` | a name or local entry failed the grammar or the upload policy | 2 | `names must be relative paths of [A-Za-z0-9._-] segments and local entries must be regular files or directories: the .sha256 and .part suffixes are reserved` | spaces, unicode, empty segments, a reserved suffix, or a symlink/non-regular entry |
-| `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | `check the command line arguments` | invocation mistakes the shell cannot catch |
+| `Misuse(String)` | bad flags, missing files, half-set credentials | 2 | none: the message names the remedy | invocation mistakes the shell cannot catch |
 | `Auth { url, reason }` | 401 or 403, or credentials required but absent | 3 | `pass -u user:pass or export NXR_AUTH (base64 user:pass)` | expired token, wrong password, anonymous write attempt |
 | `ReadOnly { url, status }` | the server refuses a write: 405 to PUT (a group repository, a host without PUT support), 403/405 to DELETE | 1 | `the repository answered {status} to a write: a group repository is read-only (target a hosted member), a hosted one needs the write role, and a host without PUT support refuses the same way; that write changed nothing, so rerunning is safe` | a group repository, a host that serves files but accepts no writes, a read-only deployment, or credentials without the write role |
 | `Transport { url, detail }` | network, TLS, timeout or stall after retries | 3 | `check the network: transfers are resumable, rerunning is safe` | server down, connection reset, stalled body |
@@ -109,7 +110,6 @@ Half-set environment credentials are an invocation error, never a silent anonymo
 ```console
 $ env NXR_USERNAME=ci-bot nxr head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
 error: misuse: NXR_USERNAME and NXR_PASSWORD must be set together
-hint: check the command line arguments
 $ echo $?
 2
 ```
@@ -119,7 +119,6 @@ The same class covers flag values:
 ```console
 $ nxr --workers 0 head https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
 error: misuse: --workers must be in 1..=64, got 0
-hint: check the command line arguments
 $ echo $?
 2
 ```

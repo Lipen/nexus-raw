@@ -209,7 +209,7 @@ mod tests {
         };
         let err = build_config("http://host/", &common).unwrap_err();
         assert_eq!(err.exit_code(), 2);
-        assert!(err.hint().is_some());
+        assert!(err.hint().is_none(), "a misuse carries no hint");
     }
 
     #[test]
@@ -217,12 +217,14 @@ mod tests {
         let p = error_payload(&Error::Misuse("bad flags".into()));
         assert_eq!(p.code, "NXR_EXIT_2");
         assert_eq!(p.exit_code, 2);
-        assert_eq!(p.hint, Some("check the command line arguments".into()));
+        assert_eq!(p.hint, None, "a misuse names its remedy in the message");
         assert!(p.message.contains("misuse: bad flags"));
-        assert!(p.message.contains("\nnxr:exit 2\n"));
-        assert!(p
-            .message
-            .ends_with("hint: check the command line arguments"));
+        assert!(
+            p.message.ends_with("\nnxr:exit 2"),
+            "the exit trailer closes the message: {}",
+            p.message
+        );
+        assert!(!p.message.contains("hint:"), "no hint line: {}", p.message);
 
         let p = error_payload(&Error::Enumerate {
             url: "http://host/raw/".into(),

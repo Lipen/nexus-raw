@@ -220,7 +220,6 @@ doctor:
   [  ok  ] settings: workers 8, retry 4 (probes run once), stall 30s, connect 15s
   [  ok  ] probe: HEAD http://127.0.0.1:8734/1.4.0/manifest.json → HTTP 200
 error: misuse: 1 check(s) failed
-hint: check the command line arguments
 ```
 
 A private CA does not need `--tls-insecure`: pass the PEM bundle with `--ca-bundle ca.pem` (or set `NXR_CA_BUNDLE`).

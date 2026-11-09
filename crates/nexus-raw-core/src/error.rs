@@ -158,7 +158,9 @@ impl Error {
             Error::Http { status, .. } => Some(
                 format!("the server answered {status}: check the URL path and the server health"),
             ),
-            Error::Misuse(_) => Some("check the command line arguments".into()),
+            // The message of a misuse names its own remedy (`--json with stdout body ...
+            // pass -o FILE`), so a second sentence here would only repeat the class.
+            Error::Misuse(_) => None,
             Error::RangeIgnored { .. } => Some(
                 "the server does not honor range requests: the download fell back to a single stream".into(),
             ),
@@ -324,7 +326,6 @@ mod tests {
                 path: "a.zip".into(),
                 detail: "disk".into(),
             },
-            Error::Misuse("bad flag".into()),
             Error::RangeIgnored {
                 url: "http://x/".into(),
             },
@@ -333,6 +334,12 @@ mod tests {
             let hint = e.hint().unwrap_or_else(|| panic!("no hint for {e}"));
             assert!(!hint.trim().is_empty(), "empty hint for {e}");
         }
+    }
+
+    /// A misuse names its remedy in the message, so it carries no second sentence.
+    #[test]
+    fn misuse_carries_no_hint() {
+        assert_eq!(Error::Misuse("bad flag".into()).hint(), None);
     }
 
     /// The hint text is public surface, quoted verbatim in the errors reference: pin the exact string.

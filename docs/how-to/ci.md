@@ -27,7 +27,6 @@ Half-set credentials are a misuse error, caught before any request:
 ```console
 $ NXR_USERNAME=ci-bot nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/
 error: misuse: NXR_USERNAME and NXR_PASSWORD must be set together
-hint: check the command line arguments
 ```
 
 !!! warning "Avoid `-u user:pass` in scripts"

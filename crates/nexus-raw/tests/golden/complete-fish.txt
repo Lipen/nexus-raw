@@ -68,6 +68,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand get" -l connect-timeout-secs -d 
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l stall-secs -d 'Fail a transfer when no bytes arrive for this many seconds' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s O -l remote-name -d 'Write to the URL\'s last segment in the current directory, like curl\'s `-O`. The segment must pass the artifact grammar: for any other name, pass `-o FILE`'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l stdout -d 'Stream the body to the terminal anyway. A terminal is not a pipe: the body\'s control bytes would garble the console'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l no-sha -d 'Read the bytes without verifying `<url>.sha256`. File output only: a stdout stream is never verified, and a range has no object digest'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l tls-insecure -d 'Skip TLS certificate verification'

@@ -170,12 +170,17 @@ fn ndjson(out: &Output) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// A clap parse error is misuse 2 with a hint, and `--json` carries the same failure.
+/// A clap parse error is misuse 2, and `--json` carries the same failure.
+/// Clap prints its own usage line, so the error class carries no second sentence.
 #[test]
-fn a_bad_flag_is_misuse_with_a_hint() {
+fn a_bad_flag_is_misuse_with_usage() {
     let out = nxr(&["--bogus"]);
     expect_exit(&out, 2, "an unknown flag is misuse");
-    assert!(stderr(&out).contains("hint:"), "got: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("Usage:"),
+        "clap names the usage line: {}",
+        stderr(&out)
+    );
 
     let json = nxr(&["--json", "--bogus"]);
     expect_exit(&json, 2, "an unknown flag is misuse in json mode too");
@@ -1541,7 +1546,11 @@ fn tls_insecure_is_reported_and_zero_timeout_is_misuse() {
     );
     let zero = nxr(&["--connect-timeout-secs", "0", "doctor"]);
     expect_exit(&zero, 2, "a zero timeout is misuse");
-    assert!(stderr(&zero).contains("hint:"), "{}", stderr(&zero));
+    assert!(
+        !stderr(&zero).contains("hint:"),
+        "the failing check names the setting, a hint would repeat it: {}",
+        stderr(&zero)
+    );
 }
 
 /// `rm --names-from` deletes exactly the listed names.
@@ -2088,6 +2097,13 @@ fn get_no_sha_ignores_a_local_sibling_too() {
     ]);
     expect_exit(&got, 0, "--no-sha reads the bytes only");
     assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// `--stdout` names the stream explicitly, and a file target excludes it.
+#[test]
+fn get_stdout_flag_conflicts_with_a_file() {
+    let got = nxr(&["get", "--stdout", "-o", "x.bin", "http://127.0.0.1:1/x.bin"]);
+    expect_exit(&got, 2, "the stream and a file exclude each other");
 }
 
 /// `get -O` writes the URL's last segment into the current directory: one file, no redirect.
@@ -4205,7 +4221,10 @@ fn complete_unknown_shell_is_misuse_exit_2() {
         err.contains("misuse: unknown shell: tcsh (use bash, zsh, fish or powershell)"),
         "the error names the shell and the supported four: {err}"
     );
-    assert!(err.contains("hint:"), "the misuse hint is printed: {err}");
+    assert!(
+        !err.contains("hint:"),
+        "a misuse names its remedy in the message, with no second line: {err}"
+    );
 }
 
 // ---- doctor ---------------------------------------------------------------
@@ -4376,7 +4395,11 @@ fn doctor_exit_codes() {
 
     let broken = nxr(&["--retry", "0", "doctor"]);
     expect_exit(&broken, 2, "a setting the commands refuse fails the check");
-    assert!(stderr(&broken).contains("hint:"));
+    assert!(
+        !stderr(&broken).contains("hint:"),
+        "the report names the failing check, a hint would repeat it: {}",
+        stderr(&broken)
+    );
 
     // Deep probes talk to a server: without a URL they would silently do
     // nothing and still report "all checks passed".

@@ -77,16 +77,19 @@ All flags are global: they may appear before or after the subcommand.
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE | -O] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
+nxr get <URL> [-o FILE | -O | --stdout] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
 ```
 
 GET a URL to a file or stdout.
 Without `-o` the body goes to stdout in a single attempt: a retry after the body started would duplicate bytes.
+A body headed for a terminal is refused (exit 2): a terminal is not a pipe, and control bytes garble the console, so the refusal names the three ways out, `-O`, `-o FILE` and `--stdout`.
+A pipe, a redirect or `--stdout` bypasses that guard, and `-O` writes the file under its URL name.
 With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only after the transfer completes.
 
 | Flag | Meaning |
 |:-----|:--------|
 | `-o, --out <FILE>` | output file. stdout when omitted. `-o -` is misuse, because a file called `-` is a trap |
+| `--stdout` | stream the body to a terminal anyway. Conflicts with `-o` and `-O` |
 | `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. The assembled bytes are hashed against the local or server-side `.sha256` sibling before the rename, and a divergence is refused (exit 1) with the part removed |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
@@ -99,7 +102,7 @@ Three cases end the transfer: a remote 404 leaves the object unverifiable and th
 `--no-sha` is the opt-out, and `--range` cannot be verified at all: a span has no object digest.
 
 ```console
-$ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
+$ nxr get --stdout https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
 sample app payload for documentation capture
 $ echo $?
 0
@@ -356,7 +359,6 @@ A claim name outside the scanned directory is misuse:
 ```console
 $ nxr up dist/1.4.0/ https://nexus.example.com/repository/raw-main/claim/ --claim-first nope.txt
 error: misuse: claim-first: nope.txt is not among the scanned names of dist/1.4.0/
-hint: check the command line arguments
 $ echo $?
 2
 ```

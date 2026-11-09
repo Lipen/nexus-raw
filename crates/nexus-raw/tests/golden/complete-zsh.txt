@@ -60,6 +60,7 @@ _arguments "${_arguments_options[@]}" : \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '-O[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
 '--remote-name[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
+'(-o --out -O --remote-name)--stdout[Stream the body to the terminal anyway. A terminal is not a pipe\: the body'\''s control bytes would garble the console]' \
 '--continue[Resume from an existing \`<out>\`.part through a Range request]' \
 '--no-sha[Read the bytes without verifying \`<url>.sha256\`. File output only\: a stdout stream is never verified, and a range has no object digest]' \
 '--tls-insecure[Skip TLS certificate verification]' \

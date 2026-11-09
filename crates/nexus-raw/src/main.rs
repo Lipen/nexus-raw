@@ -131,6 +131,10 @@ pub(crate) enum Cmd {
         /// The segment must pass the artifact grammar: for any other name, pass `-o FILE`.
         #[arg(short = 'O', long = "remote-name")]
         remote_name: bool,
+        /// Stream the body to the terminal anyway.
+        /// A terminal is not a pipe: the body's control bytes would garble the console.
+        #[arg(long, conflicts_with_all = ["out", "remote_name"])]
+        stdout: bool,
         /// Resume from an existing `<out>`.part through a Range request.
         #[arg(long = "continue")]
         cont: bool,
