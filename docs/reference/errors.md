@@ -16,7 +16,7 @@ The hint column quotes `Error::hint()` verbatim: the same string the CLI prints 
 
 | Variant | Meaning | Exit | Hint (verbatim) | Typical cause |
 |:--------|:--------|:----:|:----------------|:--------------|
-| `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | `the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object` | the same name was published twice with different content, or a sibling belongs to a foreign object |
+| `Mismatch { name, detail }` | digest or sibling disagreement on a completed artifact | 1 | a divergence: ``the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object``. An unreadable marker: ``the marker is not in `sha256sum -c` format: `nxr get --no-sha` takes the bytes without it, and rewriting the marker as `<digest>  <name>` fixes the pair for every verifier`` | the same name was published twice with different content, or a sibling belongs to a foreign object or is not in the marker grammar |
 | `Incomplete { names }` | the local bytes+marker+digest chain is not closed | 1 | `rerun the same command: finished names are skipped and the rest is retried` | a previous run stopped mid-transfer, or a file was edited after its marker was written |
 | `Missing { names }` | requested names exist neither locally nor remotely | 1 | `the name is absent on both sides: check spelling and the enumeration source` | a typo, or a name list that drifted from what was published |
 | `Enumerate { url, reason }` | `down` or `ls` has no enumeration source | 1 | `repeat --name, use --names-from FILE, or use --ls when the server has the search API` | no `--name`, `--names-from` or `--ls` on the call |

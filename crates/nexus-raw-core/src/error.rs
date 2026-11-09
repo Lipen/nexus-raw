@@ -117,6 +117,16 @@ impl Error {
     #[must_use]
     pub fn hint(&self) -> Option<String> {
         let hint = match self {
+            // A marker that cannot be read is not a divergence the user can resolve on the
+            // other side: the remedy is the format, or a fetch that skips the check.
+            Error::Mismatch { detail, .. }
+                if detail.contains("does not parse") || detail.contains("unparseable") =>
+            {
+                Some(
+                    "the marker is not in `sha256sum -c` format: `nxr get --no-sha` takes the bytes without it, and rewriting the marker as `<digest>  <name>` fixes the pair for every verifier"
+                        .into(),
+                )
+            }
             Error::Mismatch { .. } => Some(
                 "the two sides diverge: delete or fix one copy, never let nxr overwrite a diverging object"
                     .into(),
