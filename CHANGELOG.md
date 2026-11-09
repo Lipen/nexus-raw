@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.26.0] - 2026-11-10
+
 ### Added
 
 - `nxr get` carries the `User-Agent: nxr/<version>` header, and a binary or binding that links the core names itself through `Config::user_agent`.
@@ -678,7 +682,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/Lipen/nexus-raw/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/Lipen/nexus-raw/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/Lipen/nexus-raw/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/Lipen/nexus-raw/compare/v0.23.0...v0.24.0
