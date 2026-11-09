@@ -28,6 +28,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A `get --continue` or `get --segments` run no longer skips its completion check when the `.sha256` sibling does not parse, and a marker read that fails is no longer read as an absent marker.
+  An unreadable digest is a refusal (exit 1) that names the rule, the verdict the rest of the tool gives a foreign marker, so a resume can no longer bless bytes it could not verify.
+  The single-stream resume and both segmented paths share one verifier now.
 - The published-consumer gate in `scripts/verify-published.sh` waits for the platform package to be visible before it installs the shipped copy.
   npm treats an optional dependency the registry has not replicated yet as satisfied by absence, so a release that verified seconds after the publish failed at the addon load with `Cannot find module './nexus-raw.linux-x64-gnu.node'`, and the tag step never ran.
 - The release act's recovery dispatch names the commit that set the version, not whatever `master` holds: the workflow tags the tree it ran on, so a fix that landed on top of a failed publish used to become the tagged tree while the artifacts came from the bump.

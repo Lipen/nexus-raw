@@ -1803,6 +1803,57 @@ fn get_continue_refuses_a_diverged_part() {
     );
 }
 
+/// An unparseable remote marker is a refusal on the resume path, never a skipped check:
+/// a digest that cannot be read verifies nothing.
+#[test]
+fn get_continue_refuses_an_unparseable_remote_marker() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", b"PAYLOAD");
+    srv.insert("obj.bin.sha256", b"deadbeef  obj.bin\n");
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    std::fs::write(out.path().join("obj.bin.part"), b"PAY").unwrap();
+    let url = format!("{dir}obj.bin");
+    let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&got, 1, "an unreadable digest cannot verify anything");
+    assert!(
+        stderr(&got).contains("does not parse"),
+        "the refusal names the rule it applied: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists(), "nothing partial is renamed into place");
+}
+
+/// The same rule on the local side: a sibling that exists but does not parse refuses the name.
+#[test]
+fn get_continue_refuses_an_unparseable_local_marker() {
+    let srv = server(Scenario::Atomic);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "obj.bin", b"PAYLOAD");
+    let dir = root_url(&srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir]),
+        0,
+        "publishing seeds the bytes the resume fetches",
+    );
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    std::fs::write(out.path().join("obj.bin.part"), b"PAY").unwrap();
+    std::fs::write(out.path().join("obj.bin.sha256"), b"deadbeef  obj.bin\n").unwrap();
+    let url = format!("{dir}obj.bin");
+    let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+    expect_exit(&got, 1, "a local marker that does not parse is a refusal");
+    assert!(
+        stderr(&got).contains("local .sha256 marker does not parse"),
+        "the refusal names the local file: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists(), "nothing partial is renamed into place");
+}
+
 /// A part longer than the object answers 416: the client must prove it holds
 /// the whole object before finalizing, and restart from zero when it does not.
 #[test]
@@ -2897,7 +2948,7 @@ fn get_resume_validates_against_the_sibling() {
     srv.insert("1.14.0/a.zip", BETA);
     srv.insert(
         "1.14.0/a.zip.sha256",
-        format!("{}\n", test_hex(BETA)).as_bytes(),
+        format!("{}  a.zip\n", test_hex(BETA)).as_bytes(),
     );
     let url = format!("{}a.zip", dir_url(&srv));
 
@@ -2923,7 +2974,7 @@ fn get_resume_with_matching_part_succeeds() {
     srv.insert("1.14.0/a.zip", BETA);
     srv.insert(
         "1.14.0/a.zip.sha256",
-        format!("{}\n", test_hex(BETA)).as_bytes(),
+        format!("{}  a.zip\n", test_hex(BETA)).as_bytes(),
     );
     let url = format!("{}a.zip", dir_url(&srv));
 
