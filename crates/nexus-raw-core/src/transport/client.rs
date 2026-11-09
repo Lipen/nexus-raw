@@ -848,7 +848,8 @@ impl NexusClient {
     /// A `416` (range already satisfied) finalizes the part: the crash-between-download-end-and-rename edge.
     /// Verifying the finalized bytes is the caller's duty: `down` digest-checks against the sibling, the `get` primitive trusts the part.
     /// The digest covers the whole file, prefix included.
-    /// Returns the final file size and digest.
+    /// Returns the offset the successful attempt actually reused (0 when a stale part restarted from zero),
+    /// the final file size and the digest.
     ///
     /// # Errors
     ///
@@ -861,7 +862,7 @@ impl NexusClient {
         part: &Path,
         resume: bool,
         total_hint: Option<u64>,
-    ) -> Result<(u64, Digest), Error> {
+    ) -> Result<(u64, u64, Digest), Error> {
         let stall = self.stall;
         let progress = self.events.clone();
         let subject_name = subject.0.to_owned();
@@ -915,7 +916,11 @@ impl NexusClient {
                 // must not spend the caller's retry budget.
                 let mut restarted = false;
                 let mut range_end_exclusive: Option<u64> = None;
+                // The offset the successful attempt really reuses: the 416 branch
+                // below restarts from zero, so the value is captured per attempt.
+                let mut started_at: u64;
                 let resp = loop {
+                    started_at = prefix;
                     let mut req = this.authorize(this.http.get(url));
                     if prefix > 0 {
                         // Byte offsets are only meaningful against the stored representation.
@@ -956,7 +961,7 @@ impl NexusClient {
                             let digest = Digest::from_hex_string(crate::model::digest::hex(
                                 &hasher.finalize(),
                             ));
-                            return Ok((prefix, digest));
+                            return Ok((prefix, prefix, digest));
                         }
                         if restarted {
                             return Err(AttemptFailure::stop(Error::transport(
@@ -1041,7 +1046,7 @@ impl NexusClient {
                     None => None,
                 };
                 let total = exact.or(total_hint);
-                progress.started(&subject_name, Dir::Down, total).await;
+                progress.started(&subject_name, Dir::Down, prefix, total).await;
                 let mut body = resp.bytes_stream();
                 let mut file = write_options(append)
                     .open(&part)
@@ -1110,7 +1115,7 @@ impl NexusClient {
                     }
                 }
                 let digest = Digest::from_hex_string(crate::model::digest::hex(&hasher.finalize()));
-                Ok((done, digest))
+                Ok((started_at, done, digest))
             })
         })
         .await
@@ -1189,7 +1194,7 @@ impl NexusClient {
                         ),
                     )));
                 }
-                progress.started(&subject_name, Dir::Down, Some(length)).await;
+                progress.started(&subject_name, Dir::Down, 0, Some(length)).await;
                 let mut body = resp.bytes_stream();
                 let mut out = write_options(false)
                     .open(&file)
@@ -1322,7 +1327,7 @@ impl NexusClient {
                         }
                     }
                 });
-                progress.started(&subject_name, Dir::Up, Some(size)).await;
+                progress.started(&subject_name, Dir::Up, 0, Some(size)).await;
                 let watcher = last.clone();
                 // The digest of what actually hit the wire: the consumer hashes the
                 // chunks it feeds the body, so put never re-reads the file for a marker.

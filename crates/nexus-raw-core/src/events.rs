@@ -68,6 +68,8 @@ pub enum Event {
     ArtifactStarted {
         name: String,
         dir: Dir,
+        /// The bytes already on disk and reused: a resumed transfer starts here, not at zero.
+        done: u64,
         total: Option<u64>,
     },
     /// Coalesced: at most once per 200 ms per name.
@@ -133,11 +135,16 @@ impl Event {
                 "download": download,
                 "skip": skip,
             }),
-            Event::ArtifactStarted { name, dir, total } => serde_json::json!({
+            Event::ArtifactStarted {
+                name,
+                dir,
+                done,
+                total,
+            } => serde_json::json!({
                 "event": "artifact",
                 "name": name,
                 "state": dir.as_state(),
-                "done": 0,
+                "done": done,
                 "total": total,
             }),
             Event::ArtifactBytes {
@@ -243,10 +250,11 @@ impl Progress {
         self.tx.clone()
     }
 
-    pub async fn started(&self, name: &str, dir: Dir, total: Option<u64>) {
+    pub async fn started(&self, name: &str, dir: Dir, done: u64, total: Option<u64>) {
         let _ = self.tx.send(Event::ArtifactStarted {
             name: name.to_owned(),
             dir,
+            done,
             total,
         });
     }

@@ -149,6 +149,9 @@ $ echo $?
 Without `-o` the stdout body is raw bytes and nothing else: stdout mode emits no progress events.
 `--json` without `-o` is refused as misuse (exit 2), and the hint names the two ways out: pass `-o FILE` or drop `--json`.
 
+A resumed transfer starts where the part already ends: the first `artifact` event carries that offset as `done`, and `resumed_from` in the final object repeats it.
+A part the server refuses with `416` and the client restarts from zero reuses nothing, so both report `0` rather than the discarded part's size.
+
 ## nxr put
 
 ```

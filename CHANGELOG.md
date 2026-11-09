@@ -21,6 +21,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- `Progress::started` and `Event::ArtifactStarted` carry the offset a transfer reused, and `NexusClient::download_resumable` returns it alongside the size and the digest.
+  A wrapper that renders progress from its first event sees a resumed transfer start where the part ends, and a restart from zero is reported as zero.
 - A terminal gets the calm view of a transfer: the plan, the live progress line and the summary, instead of one `↑ name ok` line per artifact.
   A few thousand files no longer bury the progress under their own output.
   A piped or redirected stdout keeps every name byte for byte, so logs and scripts that parse them are unchanged, and `-v` brings the names back on a terminal.
@@ -28,6 +30,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A resumed transfer reports the offset it reused in its first `artifact` event and in `resumed_from`, and a part the server refuses with `416` reports `0` instead of the discarded part's size.
+  A consumer can render `done` from the first event without a jump, and can add the offset to the bytes it already holds without counting a restart twice.
 - A `get --continue` or `get --segments` run no longer skips its completion check when the `.sha256` sibling does not parse, and a marker read that fails is no longer read as an absent marker.
   An unreadable digest is a refusal (exit 1) that names the rule, the verdict the rest of the tool gives a foreign marker, so a resume can no longer bless bytes it could not verify.
   The single-stream resume and both segmented paths share one verifier now.

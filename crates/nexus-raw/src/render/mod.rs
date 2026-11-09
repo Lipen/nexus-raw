@@ -287,7 +287,9 @@ fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress
                 }
             }
         }
-        Event::ArtifactStarted { name, dir, total } => {
+        Event::ArtifactStarted {
+            name, dir, total, ..
+        } => {
             if verbose && !quiet {
                 let arrow = match dir {
                     Dir::Up => "↑",

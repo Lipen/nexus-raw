@@ -263,7 +263,7 @@ pub(crate) async fn download_one(
             size_hint,
         )
         .await;
-    let (done, actual) = match fetched {
+    let (_, done, actual) = match fetched {
         Ok(v) => v,
         Err(e) => return Err((name.clone(), Outcome::Failed(e))),
     };

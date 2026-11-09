@@ -73,15 +73,6 @@ pub async fn get(
 ) -> Result<GetOutcome, Error> {
     if let Some(out) = out {
         let part = part_of(&out);
-        let resumed_from = if cont {
-            tokio::fs::symlink_metadata(&part)
-                .await
-                .ok()
-                .filter(std::fs::Metadata::is_file)
-                .map_or(0, |m| m.len())
-        } else {
-            0
-        };
         let name = out
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -94,7 +85,7 @@ pub async fn get(
         // `cont`, not `resumed_from > 0`: an attempt that cut mid-body creates
         // the part, and the retry inside this call must resume it. The client
         // refuses a symlink at the path on its own.
-        let (size, digest) = client
+        let (resumed_from, size, digest) = client
             .download_resumable((&name, Dir::Down), url, &part, cont, None)
             .await?;
         // A `--continue` run may have composed a prefix with a tail across

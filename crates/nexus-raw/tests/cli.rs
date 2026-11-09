@@ -1803,27 +1803,74 @@ fn get_continue_refuses_a_diverged_part() {
     );
 }
 
-/// An unparseable remote marker is a refusal on the resume path, never a skipped check:
-/// a digest that cannot be read verifies nothing.
+/// Every marker outside the strict `sha256sum -c` grammar refuses the resume, the
+/// spellings a loose parse used to bless included: uppercase hex, one space, no newline.
 #[test]
-fn get_continue_refuses_an_unparseable_remote_marker() {
+fn get_continue_refuses_every_marker_outside_the_grammar() {
+    let digest = test_hex(BETA);
+    let cases = [
+        (
+            "uppercase hex",
+            format!("{}  obj.bin\n", digest.to_uppercase()),
+        ),
+        ("one space", format!("{digest} obj.bin\n")),
+        ("no trailing newline", format!("{digest}  obj.bin")),
+        ("not a digest", "deadbeef  obj.bin\n".to_owned()),
+    ];
+    for (what, marker) in cases {
+        let srv = server(Scenario::Atomic);
+        let dir = root_url(&srv);
+        srv.insert("obj.bin", BETA);
+        srv.insert("obj.bin.sha256", marker.as_bytes());
+
+        let out = TempDir::new().unwrap();
+        let target = out.path().join("obj.bin");
+        std::fs::write(out.path().join("obj.bin.part"), &BETA[..8]).unwrap();
+        let url = format!("{dir}obj.bin");
+        let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
+        expect_exit(&got, 1, what);
+        assert!(
+            stderr(&got).contains("does not parse"),
+            "{what}: the refusal names the rule it applied: {}",
+            stderr(&got)
+        );
+        assert!(
+            !target.exists(),
+            "{what}: nothing partial is renamed into place"
+        );
+    }
+}
+
+/// A resumed transfer reports the reused offset in its start event, so a consumer that
+/// renders `done` never sees the stream jump back to zero.
+#[test]
+fn get_continue_reports_the_reused_offset_at_start() {
     let srv = server(Scenario::Atomic);
     let dir = root_url(&srv);
-    srv.insert("obj.bin", b"PAYLOAD");
-    srv.insert("obj.bin.sha256", b"deadbeef  obj.bin\n");
+    srv.insert("obj.bin", BETA);
+    let url = format!("{dir}obj.bin");
 
     let out = TempDir::new().unwrap();
     let target = out.path().join("obj.bin");
-    std::fs::write(out.path().join("obj.bin.part"), b"PAY").unwrap();
-    let url = format!("{dir}obj.bin");
-    let got = nxr(&["get", "--continue", &url, "-o", target.to_str().unwrap()]);
-    expect_exit(&got, 1, "an unreadable digest cannot verify anything");
-    assert!(
-        stderr(&got).contains("does not parse"),
-        "the refusal names the rule it applied: {}",
-        stderr(&got)
+    std::fs::write(out.path().join("obj.bin.part"), &BETA[..8]).unwrap();
+    let got = nxr(&[
+        "get",
+        "--json",
+        "--continue",
+        &url,
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "the honest resume lands");
+    let events = ndjson(&got);
+    let started = events
+        .iter()
+        .find(|e| e["event"] == "artifact" && e["state"] == "downloading")
+        .expect("the start event");
+    assert_eq!(
+        started["done"], 8,
+        "the start event carries the prefix the attempt reused"
     );
-    assert!(!target.exists(), "nothing partial is renamed into place");
 }
 
 /// The same rule on the local side: a sibling that exists but does not parse refuses the name.
@@ -1870,6 +1917,7 @@ fn get_continue_restarts_an_oversized_part() {
 
     let got = nxr(&[
         "get",
+        "--json",
         "--continue",
         &url,
         "-o",
@@ -1878,6 +1926,12 @@ fn get_continue_restarts_an_oversized_part() {
         "1",
     ]);
     expect_exit(&got, 0, "the stale part restarts and completes");
+    let events = ndjson(&got);
+    let outcome = events.last().expect("the result line");
+    assert_eq!(
+        outcome["resumed_from"], 0,
+        "a restart from zero reuses nothing and must not claim the stale part's size"
+    );
     assert_eq!(
         std::fs::read(&target).unwrap(),
         content,

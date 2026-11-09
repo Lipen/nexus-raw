@@ -505,13 +505,10 @@ fn fold_event(event: Event, dir: Dir) -> Option<Msg> {
         }
         Event::ArtifactStarted {
             name,
+            done,
             total,
             dir: seen,
-        } if seen == dir => DlEv::Bytes {
-            name,
-            done: 0,
-            total,
-        },
+        } if seen == dir => DlEv::Bytes { name, done, total },
         Event::ArtifactBytes {
             name,
             done,
@@ -988,6 +985,7 @@ mod tests {
             Event::ArtifactStarted {
                 name: "a.rs".into(),
                 dir: up,
+                done: 0,
                 total: Some(100),
             },
             up,
@@ -1069,6 +1067,7 @@ mod tests {
             Event::ArtifactStarted {
                 name: "x.rs".into(),
                 dir: down,
+                done: 0,
                 total: None,
             },
             up,
