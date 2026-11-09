@@ -125,8 +125,12 @@ pub(crate) enum Cmd {
         url: String,
         /// Output file (stdout when omitted).
         /// Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part.
-        #[arg(short = 'o', long, value_name = "FILE")]
+        #[arg(short = 'o', long, value_name = "FILE", conflicts_with = "remote_name")]
         out: Option<PathBuf>,
+        /// Write to the URL's last segment in the current directory, like curl's `-O`.
+        /// The segment must pass the artifact grammar: for any other name, pass `-o FILE`.
+        #[arg(short = 'O', long = "remote-name")]
+        remote_name: bool,
         /// Resume from an existing `<out>`.part through a Range request.
         #[arg(long = "continue")]
         cont: bool,

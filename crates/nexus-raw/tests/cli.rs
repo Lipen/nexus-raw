@@ -46,6 +46,19 @@ fn nxr(args: &[&str]) -> Output {
         .expect("nxr binary runs")
 }
 
+/// The same hermetic run from `cwd`: for flags whose output name comes from the URL.
+fn nxr_in(args: &[&str], cwd: &Path) -> Output {
+    Command::new(NXR)
+        .current_dir(cwd)
+        .args(args)
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .env_remove("NXR_CA_BUNDLE")
+        .output()
+        .expect("nxr binary runs")
+}
+
 /// The same hermetic run with `stdin` piped in: for `--names-from -`.
 fn nxr_stdin(args: &[&str], stdin: &str) -> Output {
     use std::io::Write;
@@ -2075,6 +2088,67 @@ fn get_no_sha_ignores_a_local_sibling_too() {
     ]);
     expect_exit(&got, 0, "--no-sha reads the bytes only");
     assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// `get -O` writes the URL's last segment into the current directory: one file, no redirect.
+#[test]
+fn get_remote_name_writes_the_url_leaf() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("bom/obj.bin", BETA);
+    let cwd = TempDir::new().unwrap();
+    let url = format!("{dir}bom/obj.bin");
+    let got = nxr_in(&["get", "-O", "--no-sha", &url], cwd.path());
+    expect_exit(&got, 0, "the leaf names the file");
+    assert_eq!(std::fs::read(cwd.path().join("obj.bin")).unwrap(), BETA);
+}
+
+/// `get -O --no-sha` is the whole answer for a repository whose marker is foreign:
+/// the bytes land under the URL's name and the unreadable marker does not block them.
+#[test]
+fn get_remote_name_takes_a_foreign_marker_with_no_sha() {
+    let srv = server(Scenario::MarkerCrlf);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "obj.bin", BETA);
+    let dir = root_url(&srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir]),
+        0,
+        "the upload lands and the server rewrites the marker",
+    );
+    let cwd = TempDir::new().unwrap();
+    let url = format!("{dir}obj.bin");
+
+    let refused = nxr_in(&["get", "-O", &url], cwd.path());
+    expect_exit(&refused, 1, "the foreign marker refuses the default");
+    assert!(
+        stderr(&refused).contains("sha256sum"),
+        "the hint names the format and the way out: {}",
+        stderr(&refused)
+    );
+
+    let got = nxr_in(&["get", "-O", "--no-sha", &url], cwd.path());
+    expect_exit(&got, 0, "--no-sha takes the bytes alone");
+    assert_eq!(std::fs::read(cwd.path().join("obj.bin")).unwrap(), BETA);
+}
+
+/// `-O` and `-o` name the same thing: clap refuses both at once.
+#[test]
+fn get_remote_name_conflicts_with_out() {
+    let got = nxr(&["get", "-O", "-o", "x.bin", "http://127.0.0.1:1/x.bin"]);
+    expect_exit(&got, 2, "two names for one file");
+}
+
+/// `-O` on a directory URL has no leaf to take: misuse, with `-o` named.
+#[test]
+fn get_remote_name_on_a_directory_url_is_misuse() {
+    let got = nxr(&["get", "-O", "http://127.0.0.1:1/repository/raw-main/1.4.0/"]);
+    expect_exit(&got, 2, "a directory URL has no name");
+    assert!(
+        stderr(&got).contains("pass -o FILE"),
+        "the hint names the way out: {}",
+        stderr(&got)
+    );
 }
 
 /// `--no-sha` reads the bytes without looking at the sibling: the raw curl behaviour.

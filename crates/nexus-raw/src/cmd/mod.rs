@@ -65,6 +65,7 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         Cmd::Get {
             url,
             out,
+            remote_name,
             cont,
             segments,
             range,
@@ -72,12 +73,15 @@ async fn run(cli: &Cli) -> Result<(), Error> {
         } => {
             primitives::get(
                 cli,
-                url,
-                out.as_deref(),
-                *cont,
-                *segments,
-                range.as_deref(),
-                *no_sha,
+                primitives::GetArgs {
+                    url,
+                    out: out.as_deref(),
+                    remote_name: *remote_name,
+                    cont: *cont,
+                    segments: *segments,
+                    range: range.as_deref(),
+                    no_sha: *no_sha,
+                },
             )
             .await
         }

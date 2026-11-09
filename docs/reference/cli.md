@@ -77,7 +77,7 @@ All flags are global: they may appear before or after the subcommand.
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
+nxr get <URL> [-o FILE | -O] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
 ```
 
 GET a URL to a file or stdout.
@@ -87,6 +87,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | Flag | Meaning |
 |:-----|:--------|
 | `-o, --out <FILE>` | output file. stdout when omitted. `-o -` is misuse, because a file called `-` is a trap |
+| `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. The assembled bytes are hashed against the local or server-side `.sha256` sibling before the rename, and a divergence is refused (exit 1) with the part removed |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 | `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. The span goes to `-o` or stdout. Conflicts with `--continue` and `--segments` |
@@ -106,7 +107,14 @@ $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o a
 get: 45 bytes → app.zip
 $ echo $?
 0
+$ nxr get -O https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
+get: 45 bytes → app-1.4.0.zip
+$ echo $?
+0
 ```
+
+`-O` takes the name from the URL and writes it into the current directory, so a one-file fetch needs no local path and no shell redirection.
+A URL that ends at a directory, or a last segment outside the artifact grammar (a space, a `?`, a `/`), is misuse: pass `-o FILE` for those.
 
 Resuming from a 20-byte part appends through a Range request and renames when complete:
 

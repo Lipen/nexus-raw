@@ -1,21 +1,42 @@
 //! The L0 commands: get, put, head, sha.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use nexus_raw_core::config::split_file_url;
+use nexus_raw_core::model::name::ArtifactName;
 use nexus_raw_core::{Error, ShaSource};
 
 use crate::cmd::{finish, make_ctx, print_line, Ctx};
 use crate::Cli;
 
-pub(crate) async fn get(
-    cli: &Cli,
-    url: &str,
-    out: Option<&Path>,
-    cont: bool,
-    segments: Option<usize>,
-    range: Option<&str>,
-    no_sha: bool,
-) -> Result<(), Error> {
+/// The `get` invocation: the CLI spelling, resolved into what the transfer needs.
+pub(crate) struct GetArgs<'a> {
+    pub url: &'a str,
+    pub out: Option<&'a Path>,
+    pub remote_name: bool,
+    pub cont: bool,
+    pub segments: Option<usize>,
+    pub range: Option<&'a str>,
+    pub no_sha: bool,
+}
+
+pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
+    let GetArgs {
+        url,
+        out,
+        remote_name,
+        cont,
+        segments,
+        range,
+        no_sha,
+    } = args;
+    // `-O` turns the URL's last segment into the name; everything below reads one `out`.
+    let named = if remote_name {
+        Some(PathBuf::from(remote_name_of(url)?))
+    } else {
+        None
+    };
+    let out = named.as_deref().or(out);
     if out.is_some_and(|p| p == Path::new("-")) {
         return Err(Error::Misuse(
             "stdout is the default: omit -o for the stream, -o names a real file (a file called - is a trap)"
@@ -92,6 +113,23 @@ async fn run_get(
     };
     report_get(ctx, url, out, &outcome);
     Ok(())
+}
+
+/// The local name `get -O` writes: the URL's last path segment, without a query or a fragment.
+fn remote_name_of(url: &str) -> Result<String, Error> {
+    let bare = url.split(['?', '#']).next().unwrap_or(url);
+    let (_, leaf) = split_file_url(bare).ok_or_else(|| {
+        Error::Misuse(format!(
+            "get -O takes the name from a URL that ends at a file, and {bare} ends at a directory: pass -o FILE"
+        ))
+    })?;
+    ArtifactName::parse(&leaf)
+        .map(|name| name.as_str().to_owned())
+        .map_err(|e| {
+            Error::Misuse(format!(
+                "get -O takes the URL's last segment as the name, and the name {leaf:?} is not writable here ({e}): pass -o FILE"
+            ))
+        })
 }
 
 pub(crate) async fn put(

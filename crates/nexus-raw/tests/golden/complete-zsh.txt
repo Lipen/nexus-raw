@@ -45,8 +45,8 @@ _nxr() {
         case $line[1] in
             (get)
 _arguments "${_arguments_options[@]}" : \
-'-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
-'--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
+'(-O --remote-name)-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
+'(-O --remote-name)--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '--segments=[Fetch through N concurrent byte-range requests (2 to 64). File output only\: \`--segments\` with a stdout target is a misuse]:N:_default' \
 '(--continue --segments)--range=[Fetch one byte range\: START-END or START- (inclusive), through a Range request. Conflicts with --continue and --segments]:START-END:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
@@ -58,6 +58,8 @@ _arguments "${_arguments_options[@]}" : \
 '--connect-timeout-secs=[TCP connect timeout in seconds]:SECS:_default' \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
+'-O[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
+'--remote-name[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
 '--continue[Resume from an existing \`<out>\`.part through a Range request]' \
 '--no-sha[Read the bytes without verifying \`<url>.sha256\`. File output only\: a stdout stream is never verified, and a range has no object digest]' \
 '--tls-insecure[Skip TLS certificate verification]' \
