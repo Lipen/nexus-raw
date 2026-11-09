@@ -217,17 +217,22 @@ impl Nxr {
 
     /// GET a URL (spec §5.1).
     ///
+    /// A complete object written to `out` is verified against its `.sha256` sibling unless
+    /// `no_sha` asks for the raw bytes; a span (`get_range`) and a stdout stream cannot be
+    /// verified. A missing sibling skips the check, and a sibling that does not parse is a refusal.
+    ///
     /// # Errors
     ///
-    /// Returns transport, auth or HTTP errors from the GET, [`Error::Io`] when writing or renaming `out` fails, and [`Error::Misuse`] when stdout cannot be written.
+    /// Returns transport, auth or HTTP errors from the GET, [`Error::Io`] when writing or renaming `out` fails, [`Error::Mismatch`] when the sibling diverges or does not parse, and [`Error::Misuse`] when stdout cannot be written.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn get(
         &self,
         url: &str,
         out: Option<PathBuf>,
         cont: bool,
+        no_sha: bool,
     ) -> Result<GetOutcome, Error> {
-        primitive::get(&self.client, url, out, cont).await
+        primitive::get(&self.client, url, out, cont, no_sha).await
     }
 
     /// GET a URL in `segments` concurrent byte-range pieces (spec §5.1 `get --segments`).
@@ -245,8 +250,11 @@ impl Nxr {
         url: &str,
         out: PathBuf,
         segments: usize,
+        no_sha: bool,
     ) -> Result<GetOutcome, Error> {
-        match primitive::get_segmented(&self.client, url, &out, segments, &self.events).await {
+        match primitive::get_segmented(&self.client, url, &out, segments, &self.events, no_sha)
+            .await
+        {
             // The server answers ranged GETs with the whole body: the plain path is the answer,
             // and the fallback is progress, never an error. The switch travels the events channel.
             Err(Error::RangeIgnored { .. }) => {
@@ -262,7 +270,7 @@ impl Nxr {
                             .to_owned(),
                     })
                     .ok();
-                primitive::get(&self.client, url, Some(out), false).await
+                primitive::get(&self.client, url, Some(out), false, no_sha).await
             }
             other => other,
         }

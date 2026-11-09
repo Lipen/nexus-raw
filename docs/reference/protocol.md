@@ -379,6 +379,7 @@ The transfer order follows the user's enumeration verbatim: no name is special.
 | Aspect | Behavior |
 |:-------|:---------|
 | auth | `Basic`, attached to every request when credentials resolve. `-u` beats `NXR_AUTH`, which beats `NXR_USERNAME`+`NXR_PASSWORD` |
+| `User-Agent` | a native client names itself: `nxr/<version>` by default, and a binary or binding that links the core uses its own name (`nxr-tui/…`, `nxr-mount/…`, `nexus-raw-napi/…`). The browser owns its headers, so the wasm surface carries the browser's own |
 | TLS | verified by default (`--tls-insecure` is the only off-switch) |
 | retries | up to 4 attempts per request: connect errors, timeouts, body breaks and 5xx retry, other 4xx never, except 429 |
 | `Retry-After` | any retryable status (429 or 5xx) honors a `Retry-After` pause in seconds, clamped to 1..=60. It replaces the backoff, and exhausting attempts is exit 3 |

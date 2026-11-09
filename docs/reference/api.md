@@ -71,6 +71,8 @@ let nxr = Nxr::new(
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth: Some("Basic Y2ktYm90OnRva2Vu".into()), // resolved from -u or env by callers
+        // None sends `nxr/<version>`; an embedder names itself.
+        user_agent: None,
     },
     tx,
 )?;
@@ -92,7 +94,7 @@ Every method mirrors a CLI command one-to-one.
 
 | Method | Returns | Mirrors | Contract |
 |:--------|:--------|:--------|:---------|
-| `get(url, out, cont)` | `GetOutcome` | `nxr get` | stream a URL to a file or stdout, resume through `<out>.part` |
+| `get(url, out, cont, no_sha)` | `GetOutcome` | `nxr get` | stream a URL to a file or stdout, resume through `<out>.part`, and verify the `.sha256` sibling of a complete file unless `no_sha` asks for the raw bytes |
 | `new(cfg, events)` | `Nxr` | - | build the facade from a `Config` and an event channel |
 | `base()` | `&str` | - | the normalized base URL of this invocation |
 | `last_run_limit()` | `(usize, usize)` | - | the adaptive worker limit of the last directory transfer: the current value and the lowest it reached |
@@ -114,7 +116,7 @@ Every method mirrors a CLI command one-to-one.
 | `delta_search(dir, prefixes)` | `Vec<Delta>` | `nxr diff --via search --ls` | the delta report built from the search index in O(pages) requests, a digestless asset never reads `Same` |
 | `audit(bytes_mode, sample)` | `AuditRun` | `nxr audit` | the structural integrity report over the search tree, markers included. `bytes_mode` verifies bytes, and `sample` limits the byte pass |
 | `audit_filtered(bytes_mode, sample, filter)` | `AuditRun` | `nxr audit --prefix/--name` | the same report narrowed before any request: unselected markers are never fetched |
-| `get_segmented(url, out, segments)` | `GetOutcome` | `nxr get --segments N` | `N` concurrent byte-range spans assembled positionally, verified and renamed atomically, degraded to the single stream when `Range` is ignored |
+| `get_segmented(url, out, segments, no_sha)` | `GetOutcome` | `nxr get --segments N` | `N` concurrent byte-range spans assembled positionally, verified and renamed atomically, degraded to the single stream when `Range` is ignored |
 | `down(dir, enum_src, fresh)` | `Summary` | `nxr down` | verified download: the enumeration source is mandatory |
 | `down_with_segments(dir, enum_src, fresh, segments)` | `Summary` | `nxr down --segments N` | the same download with each artifact split into `N` concurrent Range spans |
 | `clone_plan(dir, prefixes, state, verify)` | `Vec<CloneAction>` | `nxr clone --plan` | the repository-wide clone plan, nothing written |
@@ -168,6 +170,7 @@ let cfg = Config {
     connect_timeout: Duration::from_secs(15),
     stall_timeout: Duration::from_secs(30),
     auth: Some("Basic Y2ktYm90OnRva2Vu".into()),
+    user_agent: None,
 };
 let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
 let client = NexusClient::new(&cfg, nexus_raw_core::Progress::new(tx))?;

@@ -39,6 +39,7 @@ fn config_at(base: String, auth: Option<String>) -> Config {
         stall_timeout: Duration::from_secs(30),
         tls_insecure: false,
         auth,
+        user_agent: None,
     }
 }
 
@@ -2139,7 +2140,10 @@ async fn get_primitive_resumes_with_range() {
     let part = out.path().join("a.zip.part");
     std::fs::write(&part, &CONTENT[..3]).unwrap();
 
-    let outcome = nxr.get(&url, Some(target.clone()), true).await.unwrap();
+    let outcome = nxr
+        .get(&url, Some(target.clone()), true, false)
+        .await
+        .unwrap();
     assert_eq!(outcome.resumed_from, 3);
     assert_eq!(outcome.size, CONTENT.len() as u64);
     assert_eq!(std::fs::read(&target).unwrap(), CONTENT);
@@ -3306,11 +3310,11 @@ async fn segmented_get_matches_the_single_stream_byte_for_byte() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
     let plain = nxr
-        .get(&url, Some(plain_dir.path().join("seg.bin")), false)
+        .get(&url, Some(plain_dir.path().join("seg.bin")), false, false)
         .await
         .unwrap();
     let seg = nxr
-        .get_segmented(&url, seg_dir.path().join("seg.bin"), 4)
+        .get_segmented(&url, seg_dir.path().join("seg.bin"), 4, false)
         .await
         .unwrap();
 
@@ -3339,7 +3343,7 @@ async fn segmented_get_falls_back_when_the_server_ignores_range() {
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
     let outcome = nxr
-        .get_segmented(&url, out.path().join("seg.bin"), 4)
+        .get_segmented(&url, out.path().join("seg.bin"), 4, false)
         .await
         .unwrap();
     assert_eq!(outcome.size, content.len() as u64);
@@ -3380,7 +3384,7 @@ async fn segmented_get_degrades_when_the_object_is_smaller_than_the_segment_coun
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
 
     let outcome = nxr
-        .get_segmented(&url, out.path().join("tiny.bin"), 16)
+        .get_segmented(&url, out.path().join("tiny.bin"), 16, false)
         .await
         .unwrap();
     assert_eq!(outcome.size, 6);
@@ -3408,7 +3412,7 @@ async fn segmented_get_verifies_against_the_sibling_marker() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let nxr = Nxr::new(config(&mock, None), tx).unwrap();
     let outcome = nxr
-        .get_segmented(&url, good.path().join("marked.bin"), 3)
+        .get_segmented(&url, good.path().join("marked.bin"), 3, false)
         .await
         .unwrap();
     assert_eq!(outcome.digest, Some(digest.clone()));
@@ -3427,7 +3431,7 @@ async fn segmented_get_verifies_against_the_sibling_marker() {
     let (tx2, _rx2) = mpsc::unbounded_channel();
     let nxr2 = Nxr::new(config(&drifted, None), tx2).unwrap();
     let err = nxr2
-        .get_segmented(&bad_url, bad_out.path().join("marked.bin"), 3)
+        .get_segmented(&bad_url, bad_out.path().join("marked.bin"), 3, false)
         .await
         .unwrap_err();
     assert!(
@@ -3448,7 +3452,7 @@ async fn segmented_get_refuses_one_segment() {
     let url = format!("{}{VERSION}/a.bin", mock.base_url());
     let out = TempDir::new().unwrap();
     let err = nxr
-        .get_segmented(&url, out.path().join("a.bin"), 1)
+        .get_segmented(&url, out.path().join("a.bin"), 1, false)
         .await
         .unwrap_err();
     assert!(
@@ -3458,7 +3462,7 @@ async fn segmented_get_refuses_one_segment() {
     assert_eq!(err.exit_code(), 2);
 
     let err = nxr
-        .get_segmented(&url, out.path().join("a.bin"), 65)
+        .get_segmented(&url, out.path().join("a.bin"), 65, false)
         .await
         .unwrap_err();
     assert!(

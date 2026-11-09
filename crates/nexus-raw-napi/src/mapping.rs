@@ -56,6 +56,8 @@ pub fn build_config(base: &str, common: &CommonOpts) -> Result<Config, Error> {
             common.stall_ms.unwrap_or(DEFAULT_STALL_MS),
         )),
         auth: creds::resolve(explicit)?.map(|c| c.header),
+        // The addon is its own client in a Nexus access log: the CLI name would be a lie.
+        user_agent: Some(concat!("nexus-raw-napi/", env!("CARGO_PKG_VERSION")).to_owned()),
     };
     cfg.validate()?;
     Ok(cfg)

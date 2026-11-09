@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- `nxr get` carries the `User-Agent: nxr/<version>` header, and a binary or binding that links the core names itself through `Config::user_agent`.
+  A Nexus access log says which client asked instead of showing an empty agent, and a proxy that refuses anonymous clients sees a name.
+  The wasm surface keeps the browser's own header, since fetch owns it.
+- `nxr get --no-sha` reads the bytes without verifying the sibling.
 - The `marker-crlf` mock scenario stores `.sha256` markers with CRLF line endings: the digest and the name survive, so the object diverges only in how the line reads.
   The strict parse refuses it, and the core, the CLI and the Python client pin that refusal: the name is `Broken`, `down` refuses it and `up` never overwrites the marker, even when its digest matches the local bytes.
   The Python client raises the new `MarkerFormat` (an `NxrError` and a `ValueError`, so either catcher works) instead of a bare `ValueError` escaping from `parse_marker`.
@@ -21,6 +25,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- `nxr get -o FILE` verifies `<URL>.sha256` by default, the way `--continue` and `--segments` already did.
+  A complete object written to a file is now checked everywhere: a matching sibling passes, a missing one skips the check, a marker that does not parse refuses the name, and a divergence refuses it and removes the part.
+  A local `<FILE>.sha256` wins over the server one, so a stale marker refuses a download that would leave an inconsistent pair.
+  `--no-sha` restores the raw fetch, and a stdout stream and `--range` are never verified: one is streamed, the other is a span with no object digest.
 - `Progress::started` and `Event::ArtifactStarted` carry the offset a transfer reused, and `NexusClient::download_resumable` returns it alongside the size and the digest.
   A wrapper that renders progress from its first event sees a resumed transfer start where the part ends, and a restart from zero is reported as zero.
 - A terminal gets the calm view of a transfer: the plan, the live progress line and the summary, instead of one `↑ name ok` line per artifact.

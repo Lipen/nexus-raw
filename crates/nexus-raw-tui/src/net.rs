@@ -62,6 +62,8 @@ pub fn config(base: String, session: Session) -> Config {
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth: session.auth,
+        // The browser names itself, not the CLI it links.
+        user_agent: Some(concat!("nxr-tui/", env!("CARGO_PKG_VERSION")).to_owned()),
     }
 }
 
@@ -240,7 +242,8 @@ async fn fetch_one_inner(
     stale.push(".sha256");
     let stale = PathBuf::from(stale);
     let _ = tokio::fs::remove_file(&stale).await;
-    let got = primitive::get(&client, &url, Some(out.clone()), true).await?;
+    // The TUI always checks the sibling: it has no `--no-sha`.
+    let got = primitive::get(&client, &url, Some(out.clone()), true, false).await?;
     if let Some(want) = expected {
         let have = got.digest.clone().map(|d| d.as_str().to_owned());
         if have.as_deref() != Some(want.as_str()) {

@@ -157,6 +157,7 @@ pub(crate) async fn run(
                     connect_timeout: std::time::Duration::from_secs(cli.connect_timeout_secs),
                     stall_timeout: std::time::Duration::from_secs(cli.stall_secs),
                     auth,
+                    user_agent: None,
                 };
                 match nexus_raw_core::NexusClient::new(&cfg, dead_progress()) {
                     Ok(client) => {

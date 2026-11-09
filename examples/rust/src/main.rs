@@ -35,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth: None,
+        user_agent: None,
     };
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<nexus_raw_core::Event>();
     let printer = tokio::spawn(async move {

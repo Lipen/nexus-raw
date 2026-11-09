@@ -121,6 +121,7 @@ mod tests {
             connect_timeout: Duration::from_secs(1),
             stall_timeout: Duration::from_secs(1),
             auth: None,
+            user_agent: None,
         };
         NexusClient::new(&cfg, Progress::new(tx)).unwrap()
     }

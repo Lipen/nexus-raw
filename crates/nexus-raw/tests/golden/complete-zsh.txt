@@ -59,6 +59,7 @@ _arguments "${_arguments_options[@]}" : \
 '--stall-secs=[Fail a transfer when no bytes arrive for this many seconds]:SECS:_default' \
 '(--tls-insecure)--ca-bundle=[A PEM bundle of extra trust roots for a private CA (curl'\''s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure\: a bundle is the safe alternative to disabling verification]:FILE:_files' \
 '--continue[Resume from an existing \`<out>\`.part through a Range request]' \
+'--no-sha[Read the bytes without verifying \`<url>.sha256\`. File output only\: a stdout stream is never verified, and a range has no object digest]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \
 '-q[Print the summary line, plus any failures]' \

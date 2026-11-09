@@ -99,6 +99,9 @@ pub struct NxrGetOpts {
     pub out: Option<String>,
     /// Resume from an existing `<out>.part` through a Range request.
     pub cont: Option<bool>,
+    /// Read the bytes without verifying `<url>.sha256`, default false.
+    /// File output only: a stdout stream is never verified.
+    pub no_sha: Option<bool>,
     /// Fetch one byte range: START-END or START- (inclusive).
     /// Conflicts with `cont`.
     pub range: Option<String>,

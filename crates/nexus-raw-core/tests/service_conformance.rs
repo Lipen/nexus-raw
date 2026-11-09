@@ -15,6 +15,7 @@ fn client(base: String) -> Nxr {
         connect_timeout: std::time::Duration::from_secs(5),
         stall_timeout: std::time::Duration::from_secs(5),
         auth: None,
+        user_agent: None,
     };
     Nxr::new(cfg, tx).expect("client")
 }
@@ -33,6 +34,7 @@ fn creds_client(base: String, user: &str, pass: &str) -> Nxr {
             "Basic {}",
             nexus_raw_core::creds::basic(user, pass)
         )),
+        user_agent: None,
     };
     Nxr::new(cfg, tx).expect("client")
 }

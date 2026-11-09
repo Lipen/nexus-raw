@@ -138,6 +138,10 @@ pub(crate) enum Cmd {
         /// Conflicts with --continue and --segments.
         #[arg(long, value_name = "START-END", conflicts_with_all = ["cont", "segments"])]
         range: Option<String>,
+        /// Read the bytes without verifying `<url>.sha256`.
+        /// File output only: a stdout stream is never verified, and a range has no object digest.
+        #[arg(long = "no-sha")]
+        no_sha: bool,
     },
     /// PUT a file, optionally with its sha-sibling marker.
     Put {

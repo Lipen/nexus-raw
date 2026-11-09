@@ -56,6 +56,8 @@ pub async fn nxr_ls(dir_url: String, auth: Option<String>) -> Result<String, Str
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth,
+        // The browser owns the header: fetch ignores this on wasm.
+        user_agent: None,
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(complain)?;
@@ -95,6 +97,8 @@ pub async fn nxr_put(
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth,
+        // The browser owns the header: fetch ignores this on wasm.
+        user_agent: None,
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let nxr = Nxr::new(cfg, tx).map_err(complain)?;

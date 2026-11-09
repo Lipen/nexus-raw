@@ -29,6 +29,11 @@ pub struct Config {
     pub stall_timeout: Duration,
     /// The `Authorization` header value, resolved from `-u` or env.
     pub auth: Option<String>,
+    /// The `User-Agent` a native client sends.
+    /// `None` means the tool's own name, `nxr/<version>`; a binary or binding that is
+    /// not `nxr` names itself, so a Nexus access log says who really asked.
+    /// The browser owns its headers, so wasm ignores this.
+    pub user_agent: Option<String>,
 }
 
 impl std::fmt::Debug for Config {
@@ -43,6 +48,7 @@ impl std::fmt::Debug for Config {
             .field("connect_timeout", &self.connect_timeout)
             .field("stall_timeout", &self.stall_timeout)
             .field("auth", &self.auth.as_ref().map(|_| "***"))
+            .field("user_agent", &self.user_agent)
             .finish()
     }
 }
@@ -167,6 +173,7 @@ mod tests {
             connect_timeout: Duration::from_secs(15),
             stall_timeout: Duration::from_secs(30),
             auth: None,
+            user_agent: None,
         }
     }
 

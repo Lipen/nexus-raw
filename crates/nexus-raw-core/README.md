@@ -49,6 +49,9 @@ async fn main() -> Result<(), nexus_raw_core::Error> {
             // The ready `Authorization` header, resolved by the caller from
             // `-u`, `NXR_AUTH`, or `NXR_USERNAME` + `NXR_PASSWORD`.
             auth: None,
+            // `None` sends `nxr/<version>`; an embedder names itself, so a Nexus
+            // access log says who really asked. The browser sets its own header.
+            user_agent: None,
         },
         tx,
     )?;

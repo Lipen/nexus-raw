@@ -93,6 +93,7 @@ let nxr = Nxr::new(
         connect_timeout: Duration::from_secs(15),
         stall_timeout: Duration::from_secs(30),
         auth: Some("Basic Y2ktYm90OnRva2Vu".into()),
+        user_agent: None,
     },
     tx,
 )?;

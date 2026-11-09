@@ -175,7 +175,15 @@ impl NexusClient {
                 // Control requests (probe, marker PUT, delete, small get/put) have no body
                 // loop to watch: this read timeout is their only stall guard.
                 .read_timeout(cfg.stall_timeout)
-                .redirect(reqwest::redirect::Policy::none());
+                .redirect(reqwest::redirect::Policy::none())
+                // An empty User-Agent reads as an anonymous client in a Nexus access log,
+                // and some proxies refuse it outright. The tool names itself; a binary that
+                // links this crate names itself through `Config::user_agent`.
+                .user_agent(
+                    cfg.user_agent
+                        .clone()
+                        .unwrap_or_else(|| concat!("nxr/", env!("CARGO_PKG_VERSION")).to_owned()),
+                );
             if cfg.tls_insecure {
                 b = b.danger_accept_invalid_certs(true);
             }

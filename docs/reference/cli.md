@@ -77,7 +77,7 @@ All flags are global: they may appear before or after the subcommand.
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE] [--continue] [--segments N] [--range START-END|START-]
+nxr get <URL> [-o FILE] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
 ```
 
 GET a URL to a file or stdout.
@@ -90,6 +90,12 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. The assembled bytes are hashed against the local or server-side `.sha256` sibling before the rename, and a divergence is refused (exit 1) with the part removed |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 | `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. The span goes to `-o` or stdout. Conflicts with `--continue` and `--segments` |
+| `--no-sha` | read the bytes and never look at `<URL>.sha256`. File output only: the stdout stream is never verified, so the flag there is a misuse (exit 2) |
+
+A complete object written to a file is verified by default: after the bytes land in `<FILE>.part`, the client reads the sibling and renames only when the digests agree.
+A local `<FILE>.sha256` beside the target wins over the server one, so a stale local marker refuses the download instead of leaving an inconsistent pair.
+Three cases end the transfer: a remote 404 leaves the object unverifiable and the bytes land, a marker that does not parse is a refusal (exit 1), and a divergence is a refusal that removes the part.
+`--no-sha` is the opt-out, and `--range` cannot be verified at all: a span has no object digest.
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip
@@ -134,7 +140,7 @@ $ echo $?
 | Exit | When |
 |:----:|:-----|
 | `0` | body delivered |
-| `1` | the URL answered 404 (the object is absent), or local I/O failure around the part file |
+| `1` | the URL answered 404 (the object is absent), the sibling diverges or does not parse, or local I/O failure around the part file |
 | `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, or `--range` with `--continue`/`--segments` |
 | `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
 

@@ -71,6 +71,7 @@ fn nxr_for(
         connect_timeout: Duration::from_secs(5),
         stall_timeout: Duration::from_secs(5),
         auth: None,
+        user_agent: None,
     };
     Nxr::new(cfg, tx)
 }

@@ -1873,6 +1873,171 @@ fn get_continue_reports_the_reused_offset_at_start() {
     );
 }
 
+/// A complete object written to a file is verified: the matching sibling passes.
+#[test]
+fn get_verifies_the_sibling_by_default() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", test_hex(BETA)).as_bytes(),
+    );
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "a matching sibling passes");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// A diverged remote marker refuses the file: no bytes and no part survive.
+#[test]
+fn get_refuses_a_diverged_sibling() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", "0".repeat(64)).as_bytes(),
+    );
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 1, "a diverged sibling is a data refusal");
+    assert!(
+        stderr(&got).contains("diverges"),
+        "the refusal names the divergence: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists(), "the refused file must not land");
+    assert!(
+        !out.path().join("obj.bin.part").exists(),
+        "the part is removed with the refusal"
+    );
+}
+
+/// A missing sibling skips the check: there is nothing to verify against.
+#[test]
+fn get_skips_an_absent_sibling() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "no sibling, nothing to check");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// An unparseable sibling is a refusal, never a skipped check.
+#[test]
+fn get_refuses_an_unparseable_sibling() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert("obj.bin.sha256", b"deadbeef  obj.bin\n");
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 1, "an unreadable digest cannot verify anything");
+    assert!(
+        stderr(&got).contains("does not parse"),
+        "the refusal names the rule: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists());
+}
+
+/// A local sibling beside the target wins over the remote one: a stale marker refuses the
+/// download, because the landing pair would contradict itself.
+#[test]
+fn get_refuses_a_stale_local_sibling() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", test_hex(BETA)).as_bytes(),
+    );
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    std::fs::write(
+        out.path().join("obj.bin.sha256"),
+        format!("{}  obj.bin\n", "0".repeat(64)),
+    )
+    .unwrap();
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 1, "the local pair is the one being extended");
+    assert!(
+        stderr(&got).contains("diverges"),
+        "the refusal names the divergence: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists());
+}
+
+/// `--no-sha` reads the bytes without looking at the sibling: the raw curl behaviour.
+#[test]
+fn get_no_sha_skips_the_check() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", "0".repeat(64)).as_bytes(),
+    );
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        "--no-sha",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "--no-sha opts out of the sibling");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
+/// `--no-sha` on a stdout stream is a dead flag: the stream is never verified.
+#[test]
+fn get_no_sha_without_output_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    let got = nxr(&["get", "--no-sha", &format!("{dir}obj.bin")]);
+    expect_exit(&got, 2, "the stream is never verified");
+    assert!(
+        stderr(&got).contains("never verified"),
+        "the hint names the reason: {}",
+        stderr(&got)
+    );
+}
+
 /// The same rule on the local side: a sibling that exists but does not parse refuses the name.
 #[test]
 fn get_continue_refuses_an_unparseable_local_marker() {

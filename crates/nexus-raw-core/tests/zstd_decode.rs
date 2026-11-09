@@ -21,6 +21,7 @@ fn config(base: String) -> Config {
         stall_timeout: Duration::from_secs(30),
         tls_insecure: false,
         auth: None,
+        user_agent: None,
     }
 }
 
@@ -78,14 +79,18 @@ async fn zstd_body_decodes_and_digest_matches_original() {
         );
 
         // The sibling request: plain bytes, the header may be present, nothing decodes.
-        let (mut stream, _) = listener.accept().unwrap();
-        read_head(&mut stream);
-        respond(
-            &mut stream,
-            "200 OK",
-            "Content-Type: text/plain\r\n",
-            format!("{digest_hex_in_thread}  big.bin\n").as_bytes(),
-        );
+        // The same answer serves the verification of the download and the explicit
+        // download of the marker below, so the server accepts the request twice.
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_head(&mut stream);
+            respond(
+                &mut stream,
+                "200 OK",
+                "Content-Type: text/plain\r\n",
+                format!("{digest_hex_in_thread}  big.bin\n").as_bytes(),
+            );
+        }
     });
 
     let base = format!("http://127.0.0.1:{port}/1.0.0/");
@@ -95,7 +100,7 @@ async fn zstd_body_decodes_and_digest_matches_original() {
     let nxr = Nxr::new(config(base.clone()), ev_tx).unwrap();
 
     let outcome = nxr
-        .get(&format!("{base}big.bin"), Some(out.clone()), false)
+        .get(&format!("{base}big.bin"), Some(out.clone()), false, false)
         .await
         .unwrap();
     assert_eq!(outcome.size, payload.len() as u64, "decoded size");
@@ -112,6 +117,8 @@ async fn zstd_body_decodes_and_digest_matches_original() {
         &format!("{base}big.bin.sha256"),
         Some(sibling_path.clone()),
         false,
+        // The marker itself has no marker: the server accepts exactly one connection per request.
+        true,
     )
     .await
     .unwrap();

@@ -121,6 +121,8 @@ export interface NxrGetOpts extends NxrCommonOpts {
   out?: string
   /** Resume from an existing `<out>.part` through a Range request. */
   cont?: boolean
+  /** Read the bytes without verifying `<url>.sha256`, default false. File output only. */
+  noSha?: boolean
   /** Fetch one byte range: START-END or START- (inclusive). Conflicts with `cont`. */
   range?: string
 }

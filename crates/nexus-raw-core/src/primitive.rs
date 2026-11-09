@@ -70,6 +70,7 @@ pub async fn get(
     url: &str,
     out: Option<PathBuf>,
     cont: bool,
+    no_sha: bool,
 ) -> Result<GetOutcome, Error> {
     if let Some(out) = out {
         let part = part_of(&out);
@@ -96,8 +97,11 @@ pub async fn get(
         // and a divergence is a data error (exit 1), not a warning.
         // A marker that does not parse is a refusal as well: an unreadable
         // digest verifies nothing, so skipping the check would bless the bytes.
-        if cont {
-            verify_sibling(client, url, &out, &part, &digest, "resumed").await?;
+        // Every complete object written to a file is verified, a plain fetch and a
+        // resume alike; `--no-sha` is the opt-out, and a missing sibling skips the check.
+        if !no_sha {
+            let what = if cont { "resumed" } else { "fetched" };
+            verify_sibling(client, url, &out, &part, &digest, what).await?;
         }
         tokio::fs::rename(&part, &out)
             .await
@@ -266,6 +270,7 @@ pub async fn get_segmented(
     out: &Path,
     segments: usize,
     events: &crate::events::Progress,
+    no_sha: bool,
 ) -> Result<GetOutcome, Error> {
     // The ceiling lives where the fan-out is built: the facade and external
     // callers of this primitive share one bound.
@@ -300,7 +305,9 @@ pub async fn get_segmented(
             .map_err(|e| Error::io(&part, e))?;
         empty.flush().await.map_err(|e| Error::io(&part, e))?;
         let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
-        verify_sibling(client, url, out, &part, &digest, "segmented").await?;
+        if !no_sha {
+            verify_sibling(client, url, out, &part, &digest, "segmented").await?;
+        }
         tokio::fs::rename(&part, out)
             .await
             .map_err(|e| Error::io(out, e))?;
@@ -383,7 +390,9 @@ pub async fn get_segmented(
     assemble(&bounds, &staging, &part, total).await?;
     // One read pass over the assembled file: the digest, then the sibling verdict.
     let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
-    verify_sibling(client, url, out, &part, &digest, "segmented").await?;
+    if !no_sha {
+        verify_sibling(client, url, out, &part, &digest, "segmented").await?;
+    }
     tokio::fs::rename(&part, out)
         .await
         .map_err(|e| Error::io(out, e))?;

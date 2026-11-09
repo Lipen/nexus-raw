@@ -91,7 +91,14 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
         )
         .await);
     }
-    let outcome = nxr.get(&url, out, o.cont.unwrap_or(false)).await;
+    let outcome = nxr
+        .get(
+            &url,
+            out,
+            o.cont.unwrap_or(false),
+            o.no_sha.unwrap_or(false),
+        )
+        .await;
     drop(nxr);
     let outcome: GetOutcome = match outcome {
         Ok(v) => v,

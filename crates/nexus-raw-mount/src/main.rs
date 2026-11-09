@@ -112,6 +112,8 @@ fn run(cli: Cli) -> Result<(), String> {
         connect_timeout: Duration::from_secs(cli.connect_timeout_secs),
         stall_timeout: Duration::from_secs(cli.stall_secs),
         auth,
+        // The mount is its own client in a Nexus access log: the CLI name would be a lie.
+        user_agent: Some(concat!("nxr-mount/", env!("CARGO_PKG_VERSION")).to_owned()),
     };
     cfg.validate().map_err(|e| e.to_string())?;
     // Normalize before anything echoes the URL: `normalize_base` refuses a

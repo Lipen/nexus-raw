@@ -14,6 +14,7 @@ pub(crate) async fn get(
     cont: bool,
     segments: Option<usize>,
     range: Option<&str>,
+    no_sha: bool,
 ) -> Result<(), Error> {
     if out.is_some_and(|p| p == Path::new("-")) {
         return Err(Error::Misuse(
@@ -43,6 +44,11 @@ pub(crate) async fn get(
             "--continue resumes a sibling part file: pass -o FILE, or drop --continue".to_owned(),
         ));
     }
+    if no_sha && out.is_none() {
+        return Err(Error::Misuse(
+            "the stdout stream is never verified: --no-sha changes nothing there".to_owned(),
+        ));
+    }
     if range.is_some() && (cont || segments.is_some()) {
         return Err(Error::Misuse(
             "--range reads one span: pass --range without --continue or --segments".to_owned(),
@@ -50,7 +56,7 @@ pub(crate) async fn get(
     }
     let ctx = make_ctx(cli, url)?;
     // The renderer drains on every path: the events the run already emitted must reach the output before the failure is reported.
-    let result = run_get(&ctx, url, out, cont, segments, range).await;
+    let result = run_get(&ctx, url, out, cont, segments, range, no_sha).await;
     finish(ctx).await;
     result
 }
@@ -62,6 +68,7 @@ async fn run_get(
     cont: bool,
     segments: Option<usize>,
     range: Option<&str>,
+    no_sha: bool,
 ) -> Result<(), Error> {
     if let Some(spec) = range {
         return run_get_range(ctx, url, out, spec).await;
@@ -73,10 +80,15 @@ async fn run_get(
                     url,
                     out.expect("segments require a file target").to_owned(),
                     n,
+                    no_sha,
                 )
                 .await?
         }
-        None => ctx.nxr.get(url, out.map(Path::to_owned), cont).await?,
+        None => {
+            ctx.nxr
+                .get(url, out.map(Path::to_owned), cont, no_sha)
+                .await?
+        }
     };
     report_get(ctx, url, out, &outcome);
     Ok(())

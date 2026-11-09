@@ -72,6 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             connect_timeout: Duration::from_secs(15),
             stall_timeout: Duration::from_secs(30),
             auth: None,
+            user_agent: None,
         },
         tx,
     )?;

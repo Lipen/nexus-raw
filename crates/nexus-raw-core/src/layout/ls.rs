@@ -697,6 +697,7 @@ mod tests {
             connect_timeout: std::time::Duration::from_secs(5),
             stall_timeout: std::time::Duration::from_secs(5),
             auth: None,
+            user_agent: None,
         };
         let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
 
@@ -749,6 +750,7 @@ mod tests {
             connect_timeout: std::time::Duration::from_secs(5),
             stall_timeout: std::time::Duration::from_secs(5),
             auth: None,
+            user_agent: None,
         };
         let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
 
@@ -790,6 +792,7 @@ mod tests {
             connect_timeout: std::time::Duration::from_secs(5),
             stall_timeout: std::time::Duration::from_secs(5),
             auth: None,
+            user_agent: None,
         };
         let client = NexusClient::new(&cfg, crate::events::Progress::new(tx)).unwrap();
 
