@@ -2001,6 +2001,82 @@ fn get_refuses_a_stale_local_sibling() {
     assert!(!target.exists());
 }
 
+/// The mock's `marker-crlf` scenario on the fresh path: a marker the strict parse
+/// refuses stops a plain `get -o`, not only a resume.
+#[test]
+fn get_refuses_a_crlf_sibling_on_the_fresh_path() {
+    let srv = server(Scenario::MarkerCrlf);
+    let src = TempDir::new().unwrap();
+    write_file(src.path(), "obj.bin", BETA);
+    let dir = root_url(&srv);
+    expect_exit(
+        &nxr(&["up", src.path().to_str().unwrap(), &dir]),
+        0,
+        "the upload lands and the server rewrites the marker it stored",
+    );
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    let got = nxr(&[
+        "get",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 1, "a marker outside the grammar refuses the download");
+    assert!(
+        stderr(&got).contains("CRLF"),
+        "the refusal names the rule that rejected the marker: {}",
+        stderr(&got)
+    );
+    assert!(!target.exists(), "the refused file must not land");
+}
+
+/// A stdout stream is never verified: the bytes go out as they arrive, so the
+/// diverged sibling cannot turn a successful stream into a refusal.
+#[test]
+fn get_to_stdout_never_verifies() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", "0".repeat(64)).as_bytes(),
+    );
+    let got = nxr(&["get", &format!("{dir}obj.bin")]);
+    expect_exit(&got, 0, "the stream cannot be checked after the bytes left");
+    assert_eq!(got.stdout.as_slice(), BETA, "the bytes are the object");
+}
+
+/// `--no-sha` promises bytes without siblings, the local one included: a stale
+/// marker beside the target must not refuse an opted-out download.
+#[test]
+fn get_no_sha_ignores_a_local_sibling_too() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert(
+        "obj.bin.sha256",
+        format!("{}  obj.bin\n", test_hex(BETA)).as_bytes(),
+    );
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("obj.bin");
+    std::fs::write(
+        out.path().join("obj.bin.sha256"),
+        format!("{}  obj.bin\n", "0".repeat(64)),
+    )
+    .unwrap();
+    let got = nxr(&[
+        "get",
+        "--no-sha",
+        &format!("{dir}obj.bin"),
+        "-o",
+        target.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 0, "--no-sha reads the bytes only");
+    assert_eq!(std::fs::read(&target).unwrap(), BETA);
+}
+
 /// `--no-sha` reads the bytes without looking at the sibling: the raw curl behaviour.
 #[test]
 fn get_no_sha_skips_the_check() {
