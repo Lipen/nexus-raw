@@ -1334,7 +1334,9 @@ Artifact lines arrive in worker completion order, not plan order.
   A transfer `summary` also carries `"failures"`: a list of `{"code","name"}` objects for the same artifacts as `failed`, in the same order, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
   `failed` keeps its legacy strings, so a digest mismatch there still reads `name: detail`, while `failures` always carries the bare name.
 - `head`, `sha`, `channel`, `point` and `doctor` print their objects described in their sections above.
+- an `artifact` event's `done` is the absolute progress of that attempt: on a resume it starts at the bytes already on disk, and a retry that resumes a part continues from what survived.
 - the body of `get` without `-o` is the only thing on stdout: no events are printed in stdout mode, and `--json` without `-o` is refused as misuse (exit 2).
+  A body headed for a terminal is refused too, unless `--stdout` asks for it.
 - a failed run ends stdout with one `error` object before the non-zero exit, carrying the exit `code` and the `hint` that stderr carries:
 
 ```json

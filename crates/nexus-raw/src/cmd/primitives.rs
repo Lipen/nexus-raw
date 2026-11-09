@@ -46,14 +46,6 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
                 .to_owned(),
         ));
     }
-    // A terminal is not a pipe: a body of control bytes garbles the console and can
-    // leave it in a broken state. The three ways out are named in the message itself.
-    if refuses_a_terminal(out, stdout, std::io::stdout().is_terminal()) {
-        return Err(Error::Misuse(
-            "refusing to write a body to a terminal: use -O for the URL's name here, -o FILE to name the file, or --stdout to stream it anyway"
-                .to_owned(),
-        ));
-    }
     if out.is_none() && cli.json {
         return Err(Error::Misuse(
             "--json with stdout body would corrupt the artifact: pass -o FILE, or drop --json"
@@ -84,6 +76,14 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
     if range.is_some() && (cont || segments.is_some()) {
         return Err(Error::Misuse(
             "--range reads one span: pass --range without --continue or --segments".to_owned(),
+        ));
+    }
+    // The flag combinations are judged first, because their refusals name the precise
+    // fix. Only a plain fetch reaches the terminal rule, which owns the three ways out.
+    if refuses_a_terminal(out, stdout, std::io::stdout().is_terminal()) {
+        return Err(Error::Misuse(
+            "refusing to write a body to a terminal: use -O for the URL's name here, -o FILE to name the file, or --stdout to stream it anyway"
+                .to_owned(),
         ));
     }
     let ctx = make_ctx(cli, url)?;
