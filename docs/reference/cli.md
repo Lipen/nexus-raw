@@ -100,6 +100,7 @@ A complete object written to a file is verified by default: after the bytes land
 A local `<FILE>.sha256` beside the target wins over the server one, so a stale local marker refuses the download instead of leaving an inconsistent pair.
 Three cases end the transfer: a remote 404 leaves the object unverifiable and the bytes land, a marker that does not parse is a refusal (exit 1), and a divergence is a refusal that removes the part.
 `--no-sha` is the opt-out, and `--range` cannot be verified at all: a span has no object digest.
+A sibling that carries the digest alone, the Maven-style checksum file, is read and verified, and the run warns once that `sha256sum -c` cannot read that shape.
 
 ```console
 $ nxr get --stdout https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip

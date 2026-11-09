@@ -158,6 +158,12 @@ fn content_range_total(value: &str) -> Option<u64> {
 }
 
 impl NexusClient {
+    /// The run's event channel: the caller-facing progress and warnings.
+    #[must_use]
+    pub(crate) fn events(&self) -> &Progress {
+        &self.events
+    }
+
     /// Build the client from `cfg`.
     ///
     /// # Errors
@@ -817,10 +823,15 @@ impl NexusClient {
         match self.get_small(&sib_url).await? {
             None => Ok(RemoteStatus::Markerless { size }),
             Some(raw) => match sibling::parse_line(&String::from_utf8_lossy(&raw)) {
-                Ok(s) => Ok(RemoteStatus::Complete {
-                    digest: s.digest,
-                    size,
-                }),
+                Ok(s) => {
+                    if s.name.is_none() {
+                        self.events.bare_sibling();
+                    }
+                    Ok(RemoteStatus::Complete {
+                        digest: s.digest,
+                        size,
+                    })
+                }
                 Err(e) => Ok(RemoteStatus::Broken(e)),
             },
         }

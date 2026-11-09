@@ -127,7 +127,7 @@ This one is the client contract: every wire invariant against the implementation
 | Invariant | `nexus-raw-core` | `nxr` | `@nexus-raw/nxr` | `clients/python` |
 |:----------|:----------------:|:-----:|:----------------:|:----------------:|
 | Completion is bytes plus a verified marker. A diverged complete object is never overwritten | yes | yes | via core | yes |
-| The marker is `sha256sum -c` format and follows the bytes of the same name | yes | yes | via core | yes |
+| The marker is `sha256sum -c` format and follows the bytes of the same name. A bare checksum line is read, with a one-time warning | yes | yes | via core | yes |
 | The marker names the artifact relative to the addressed base | yes | yes | via core | yes |
 | A directory URL refuses without an explicit enumeration source | yes | yes | via core | n/a |
 | Resume sends `Accept-Encoding: identity`. A complete part finalizes on `416` | yes | yes | via core | identity only |

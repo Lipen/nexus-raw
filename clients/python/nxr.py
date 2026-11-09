@@ -160,11 +160,13 @@ def format_marker(name: str, digest_hex: str) -> str:
     return f"{digest_hex}  {name}\n"
 
 
-def parse_marker(data: bytes) -> tuple[str, str]:
-    """Strictly parse one marker line and return `(digest, name)`.
+def parse_marker(data: bytes) -> tuple[str, str | None]:
+    """Parse one marker line and return `(digest, name)`.
 
-    The rules mirror the protocol: LF only, exactly two spaces, 64 lowercase hex chars, a non-empty name, the trailing newline required.
-    A loose parse would bless foreign markers, so every deviation raises `ValueError`.
+    Two shapes are read: the canonical `sha256sum -c` line, and a Maven- or
+    Gradle-style checksum file that carries the digest alone (`name` is `None`).
+    The rules mirror the protocol: LF only, one line, 64 lowercase hex chars, and a
+    non-empty name when the line has one. Every other deviation raises `ValueError`.
     """
     try:
         text = data.decode("ascii")
@@ -178,7 +180,9 @@ def parse_marker(data: bytes) -> tuple[str, str]:
     if "\r" in body:
         raise ValueError("CR found: CRLF is not allowed")
     if "  " not in body:
-        raise ValueError("two-space separator not found")
+        if _HEX64.match(body):
+            return body, None
+        raise ValueError("bad digest: expected 64 lowercase hex chars, optionally followed by `  <name>`")
     hex_part, name = body.split("  ", 1)
     if not name or "  " in name or name.startswith(" "):
         raise ValueError("name must be non-empty with exactly two spaces before it")

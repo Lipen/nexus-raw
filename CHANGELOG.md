@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `nxr get` carries the `User-Agent: nxr/<version>` header, and a binary or binding that links the core names itself through `Config::user_agent`.
   A Nexus access log says which client asked instead of showing an empty agent, and a proxy that refuses anonymous clients sees a name.
   The wasm surface keeps the browser's own header, since fetch owns it.
+- A `.sha256` sibling that carries the digest alone, the Maven- and Gradle-style checksum file, is read and verified like any marker, and the run warns once that `sha256sum -c` cannot read the shape.
+  The digest is the whole verification, so the bytes are checked exactly as before. Every writer still produces the canonical line, so a store published by nxr stays portable.
 - `nxr get --no-sha` reads the bytes without verifying the sibling.
 - `nxr get -O` writes to the URL's last path segment in the current directory, curl's `-O`: one file, no local path and no shell redirection.
 - `nxr get` refuses a body headed for a terminal (exit 2) instead of garbling it, and `--stdout` is the explicit opt-in.
@@ -29,6 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- `Sibling::name` is `Option<String>`: a bare checksum line names no artifact, so the parsed form says so instead of inventing an empty name.
 - A misuse prints no `hint:` line any more: its message already names the remedy (`--json with stdout body ... pass -o FILE`), and the generic sentence only repeated the error class.
   `Error::hint()` returns `None` for `Misuse`, the Node payload carries `hint: null` there, and a parse error from clap keeps its own hint because that one names the help command.
 - `nxr get -o FILE` verifies `<URL>.sha256` by default, the way `--continue` and `--segments` already did.
@@ -45,8 +48,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- A marker that carries the digest alone, the Maven- and Gradle-style checksum file, is named in the refusal instead of reporting a missing two-space separator.
-  The message says what the file is and names `nxr get --no-sha`, which reads the bytes without a marker.
 - A resumed transfer reports the offset it reused in its first `artifact` event and in `resumed_from`, and a part the server refuses with `416` reports `0` instead of the discarded part's size.
   A consumer can render `done` from the first event without a jump, and can add the offset to the bytes it already holds without counting a restart twice.
 - A `get --continue` or `get --segments` run no longer skips its completion check when the `.sha256` sibling does not parse, and a marker read that fails is no longer read as an absent marker.

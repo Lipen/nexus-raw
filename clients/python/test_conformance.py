@@ -755,6 +755,8 @@ class Reference(unittest.TestCase):
         digest = hashlib.sha256(CONTENT).hexdigest()
         ok = nxr.format_marker("a.zip", digest).encode()
         self.assertEqual(nxr.parse_marker(ok), (digest, "a.zip"))
+        # A Maven- or Gradle-style checksum file carries the digest alone.
+        self.assertEqual(nxr.parse_marker(f"{digest}\n".encode()), (digest, None))
         broken = {
             "no trailing newline": ok.rstrip(b"\n"),
             "CRLF": ok.rstrip(b"\n") + b"\r\n",

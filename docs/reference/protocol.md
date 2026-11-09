@@ -59,10 +59,11 @@ The grammar lives in `ArtifactName` and is enforced before any byte moves.
 
 ### sha-sibling
 
-Exactly one strict `sha256sum -c` line next to the bytes:
+One line next to the bytes, in one of the two shapes a checksum file comes in:
 
 ```text
-<64 lowercase hex chars>␠␠<name>\n
+<64 lowercase hex chars>␠␠<name>\n     the canonical line: what every writer produces
+<64 lowercase hex chars>\n             a Maven- or Gradle-style checksum: read, never written
 ```
 
 The digest covers the artifact bytes, never the marker itself.
@@ -76,8 +77,10 @@ a8a242091894256798c34ed08c990bccb4a275883335d9209f9954b12e36ac1f  app-1.4.0.zip
 The name is the writer's: every writer names the artifact relative to the base it addressed.
 The transfer verbs address the directory being transferred, so their markers carry the artifact's name relative to it, and a single `put` addresses the object's own directory, so its marker carries the final URL segment.
 A reader compares the digest and ignores the name, so a marker written by another tool loads as long as the line parses and the digest matches.
+A bare checksum line identifies the bytes just as well: the digest is the whole verification, so it is read, and the run warns once that `sha256sum -c` cannot read it.
+A writer always produces the canonical line, so the store stays portable.
 
-The parse is strict, because a loose parse would bless foreign markers:
+The parse is strict about everything else, because a loose parse would bless foreign markers:
 
 | Rule | Rejected input |
 |:-----|:---------------|
@@ -86,7 +89,6 @@ The parse is strict, because a loose parse would bless foreign markers:
 | exactly two spaces | one or three spaces |
 | digest is 64 lowercase hex | uppercase hex, garbage, short digests |
 | name is non-empty and contains no double space | `<hex>  \n` |
-| a `sha256sum -c` line, not a bare checksum | a Maven-style `.sha256` that carries the digest alone, with no name. The refusal says so and names `--no-sha` |
 | trailing newline required | the same line without `\n` |
 
 An artifact is complete when bytes and sibling both exist and the digest matches.

@@ -2023,9 +2023,52 @@ fn get_refuses_a_stale_local_sibling() {
     assert!(!target.exists());
 }
 
-/// A Maven-style checksum file (the digest alone) is refused by name, not as a missing separator.
+/// A Maven- or Gradle-style checksum file (the digest alone) is read: the bytes land,
+/// and the run says once that the marker is not a `sha256sum -c` line.
 #[test]
-fn down_names_a_bare_digest_marker() {
+fn down_reads_a_bare_checksum_marker() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert("obj.bin.sha256", format!("{}\n", test_hex(BETA)).as_bytes());
+    srv.insert("two.bin", ALPHA);
+    srv.insert(
+        "two.bin.sha256",
+        format!("{}\n", test_hex(ALPHA)).as_bytes(),
+    );
+    let dst = TempDir::new().unwrap();
+    let got = nxr(&[
+        "--json",
+        "down",
+        &dir,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "obj.bin",
+        "--name",
+        "two.bin",
+    ]);
+    expect_exit(
+        &got,
+        0,
+        "a bare checksum verifies the bytes like any marker",
+    );
+    assert_eq!(std::fs::read(dst.path().join("obj.bin")).unwrap(), BETA);
+    assert_eq!(std::fs::read(dst.path().join("two.bin")).unwrap(), ALPHA);
+    let events = ndjson(&got);
+    let warnings: Vec<_> = events.iter().filter(|e| e["event"] == "warning").collect();
+    assert_eq!(warnings.len(), 1, "one warning per run: {events:?}");
+    assert!(
+        warnings[0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("digest alone"),
+        "the warning names the shape: {warnings:?}"
+    );
+}
+
+/// The warning also reaches a plain stderr, once, next to the transfer lines.
+#[test]
+fn a_bare_checksum_marker_warns_on_stderr() {
     let srv = server(Scenario::Atomic);
     let dir = root_url(&srv);
     srv.insert("obj.bin", BETA);
@@ -2038,12 +2081,36 @@ fn down_names_a_bare_digest_marker() {
         "--name",
         "obj.bin",
     ]);
-    expect_exit(&got, 1, "a checksum file is not a sha256sum line");
-    assert!(
-        stderr(&got).contains("bare digest"),
-        "the refusal describes the file: {}",
-        stderr(&got)
+    expect_exit(&got, 0, "the transfer lands");
+    let err = stderr(&got);
+    assert_eq!(
+        err.matches("warning:").count(),
+        1,
+        "one warning line: {err}"
     );
+    assert!(
+        err.contains("digest alone"),
+        "the warning names the shape: {err}"
+    );
+}
+
+/// A bare checksum that disagrees with the bytes is a refusal like any other marker.
+#[test]
+fn a_bare_checksum_that_diverges_refuses() {
+    let srv = server(Scenario::Atomic);
+    let dir = root_url(&srv);
+    srv.insert("obj.bin", BETA);
+    srv.insert("obj.bin.sha256", format!("{}\n", "0".repeat(64)).as_bytes());
+    let dst = TempDir::new().unwrap();
+    let got = nxr(&[
+        "down",
+        &dir,
+        dst.path().to_str().unwrap(),
+        "--name",
+        "obj.bin",
+    ]);
+    expect_exit(&got, 1, "a divergent digest is a data refusal");
+    assert!(!dst.path().join("obj.bin").exists());
 }
 
 /// The mock's `marker-crlf` scenario on the fresh path: a marker the strict parse

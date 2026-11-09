@@ -224,6 +224,8 @@ impl Event {
 pub struct Progress {
     tx: mpsc::UnboundedSender<Event>,
     last: Arc<std::sync::Mutex<HashMap<u64, Instant>>>,
+    /// Set once the run has said that a sibling carries the digest alone.
+    bare_sibling: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 const MIN_INTERVAL: Duration = Duration::from_millis(200);
@@ -242,6 +244,7 @@ impl Progress {
         Self {
             tx,
             last: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            bare_sibling: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -323,6 +326,19 @@ impl Progress {
     }
 
     /// A run-level warning: the caller names what it left out and why.
+    /// Say once per run that a sibling carries the digest alone: a Maven- or
+    /// Gradle-style checksum file is read, and `sha256sum -c` cannot read it.
+    pub fn bare_sibling(&self) {
+        if !self
+            .bare_sibling
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            self.warning(
+                "a `.sha256` sibling carries the digest alone (a Maven- or Gradle-style checksum): `sha256sum -c` cannot read it, and the bytes are verified anyway",
+            );
+        }
+    }
+
     pub fn warning(&self, text: impl Into<String>) {
         let _ = self.tx.send(Event::Warning { text: text.into() });
     }

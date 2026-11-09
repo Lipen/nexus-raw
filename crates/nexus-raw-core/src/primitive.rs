@@ -216,6 +216,9 @@ pub async fn sibling_digest(client: &NexusClient, url: &str) -> Result<Option<Di
         name: url.to_owned(),
         detail: format!("the .sha256 marker does not parse: {reason}"),
     })?;
+    if parsed.name.is_none() {
+        client.events().bare_sibling();
+    }
     Ok(Some(parsed.digest))
 }
 
@@ -475,7 +478,7 @@ async fn verify_sibling(
         let text = tokio::fs::read_to_string(&sibling)
             .await
             .map_err(|e| Error::io(&sibling, e))?;
-        Some(parse_marker(&text, out)?)
+        Some(parse_marker(&text, out, client)?)
     } else {
         sibling_digest(client, url).await?
     };
@@ -494,15 +497,17 @@ async fn verify_sibling(
     Ok(())
 }
 
-/// The digest of a local marker file, strictly parsed: a foreign line is a refusal.
+/// The digest of a local marker file: a foreign line is a refusal, a bare checksum is read and noted.
 #[cfg(not(target_arch = "wasm32"))]
-fn parse_marker(text: &str, out: &Path) -> Result<Digest, Error> {
-    crate::model::sibling::parse_line(text)
-        .map(|parsed| parsed.digest)
-        .map_err(|reason| Error::Mismatch {
-            name: out.display().to_string(),
-            detail: format!("the local .sha256 marker does not parse: {reason}"),
-        })
+fn parse_marker(text: &str, out: &Path, client: &NexusClient) -> Result<Digest, Error> {
+    let parsed = crate::model::sibling::parse_line(text).map_err(|reason| Error::Mismatch {
+        name: out.display().to_string(),
+        detail: format!("the local .sha256 marker does not parse: {reason}"),
+    })?;
+    if parsed.name.is_none() {
+        client.events().bare_sibling();
+    }
+    Ok(parsed.digest)
 }
 
 /// The staging directory for a segmented get: `<out>.segments/` beside the output.
