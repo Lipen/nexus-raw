@@ -2094,6 +2094,30 @@ fn a_bare_checksum_marker_warns_on_stderr() {
     );
 }
 
+/// `verify` reads a bare checksum sibling offline and says once that it is not the canonical line.
+#[test]
+fn verify_reads_a_bare_checksum_and_warns() {
+    let dir = TempDir::new().unwrap();
+    write_file(dir.path(), "a.bin", BETA);
+    std::fs::write(
+        dir.path().join("a.bin.sha256"),
+        format!("{}\n", test_hex(BETA)),
+    )
+    .unwrap();
+    let got = nxr(&["verify", dir.path().to_str().unwrap()]);
+    expect_exit(&got, 0, "the pair is complete");
+    let err = stderr(&got);
+    assert_eq!(
+        err.matches("warning:").count(),
+        1,
+        "one warning line: {err}"
+    );
+    assert!(
+        err.contains("digest alone"),
+        "the warning names the shape: {err}"
+    );
+}
+
 /// A bare checksum that disagrees with the bytes is a refusal like any other marker.
 #[test]
 fn a_bare_checksum_that_diverges_refuses() {

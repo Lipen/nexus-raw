@@ -1408,6 +1408,11 @@ impl Nxr {
             Some(v) => v,
             None => sync::scan_dir(dir)?,
         };
+        // A store published by Maven or Gradle writes the digest alone: verify reads it,
+        // and the warning says once what the shape costs elsewhere.
+        if crate::model::state::has_bare_sibling(dir, &names) {
+            self.events.bare_sibling();
+        }
         let locals = sync::local_statuses(dir, names).await;
         let mut summary = Summary::default();
         for (n, st) in &locals {

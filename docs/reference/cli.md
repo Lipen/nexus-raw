@@ -949,6 +949,7 @@ Check local bytes, markers and digests.
 No network.
 Every checked name must be complete: bytes present, sibling present, digest matching.
 Markerless, broken or missing names are reported and the exit is 1.
+A sibling that carries the digest alone, the Maven- or Gradle-style checksum file, is read like the canonical line and the run warns once that `sha256sum -c` cannot read that shape.
 
 ```console
 $ nxr verify dist/1.4.0/
@@ -1328,7 +1329,7 @@ Artifact lines arrive in worker completion order, not plan order.
 `--json` switches stdout to NDJSON:
 
 - `up`, `down`, `mirror`, `rm`, `verify`, `get -o` and `put` print the event stream (`plan`, `artifact`, `removing`/`removed`/`missing`, `retrying`, `warning`, `summary`).
-  A `warning` event carries `{"event":"warning","text":"<one sentence>"}` and says what the run left out, for example a search listing entry outside the artifact grammar that no transfer can carry.
+  A `warning` event carries `{"event":"warning","text":"<one sentence>"}` and says what the run left out or read loosely, for example a search listing entry outside the artifact grammar that no transfer can carry, or a `.sha256` sibling that carries the digest alone (a Maven-style checksum, warned once per run).
   Every `summary` carries `"kind"`: `"transfer"` for the streams above, `"audit"` for `nxr audit`, which reports its own counts under the same `event` name.
   A transfer `summary` also carries `"failures"`: a list of `{"code","name"}` objects for the same artifacts as `failed`, in the same order, where `code` is the exit-code class (1 data, 2 misuse, 3 transport).
   `failed` keeps its legacy strings, so a digest mismatch there still reads `name: detail`, while `failures` always carries the bare name.

@@ -44,6 +44,18 @@ pub fn sibling_path(dir: &Path, name: &ArtifactName) -> PathBuf {
     dir.join(name.sibling())
 }
 
+/// Whether any of `names` carries a bare checksum sibling: the digest alone, a Maven-style file.
+/// A missing or unreadable sibling answers `false`: the classification names those itself.
+#[must_use]
+pub fn has_bare_sibling(dir: &Path, names: &[ArtifactName]) -> bool {
+    names.iter().any(|name| {
+        std::fs::read_to_string(sibling_path(dir, name))
+            .ok()
+            .and_then(|raw| sibling::parse_line(&raw).ok())
+            .is_some_and(|parsed| parsed.name.is_none())
+    })
+}
+
 /// Local state classification.
 /// Bytes decide: a sibling without bytes is Absent.
 #[must_use]

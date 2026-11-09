@@ -16,6 +16,9 @@ Reach for it whenever a task needs to publish, fetch, mirror, rename, delete, ve
 
 Completion is bytes plus the sha sibling with the digest matching.
 A divergent complete artifact is never overwritten, so a rerun is always safe.
+A sibling is read in either shape: the canonical `<hex>  <name>` line, or a Maven- or Gradle-style checksum that carries the digest alone (one warning says that `sha256sum -c` cannot read it). nxr always writes the canonical line.
+`get -o`, `get -O` and `--segments` verify the sibling by default, and `--no-sha` is the opt-out.
+The stdout stream and `--range` are never verified.
 
 - `up` writes markers by default and generates the missing local sibling, and `--no-sha` is the explicit opt-out.
 - The marker of a name is always PUT after that name's bytes, and the order between names is free.
@@ -43,12 +46,12 @@ A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additio
 | every asset of a repo, any format | `nxr service assets <repo-url>` |
 | the server refuses writes with 403 | `nxr service eula <url> --accept` |
 | list a directory | `nxr ls <dir-url>` and `--assets` for flat names |
-| fetch one file | `nxr get <url> -o <file>` |
+| fetch one file | `nxr get <url> -o <file>`, or `nxr get -O <url>` for the URL's own name in the current directory |
 | fetch one file with the marker and resume | `nxr down <file-url> <dst-dir>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch one byte span | `nxr get <url> --range 100-199` |
 | publish a subtree | `nxr up <src-dir> <dir-url> --prefix <dir>/` (only the selected subtrees are scanned) |
-| stream one file to stdout | `nxr get <url>` |
+| stream one file to stdout | `nxr get <url>` in a pipe, or `nxr get --stdout <url>` on a terminal (a body headed for a terminal is refused) |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | publish a directory | `nxr up <src-dir> <dir-url>` |

@@ -56,6 +56,24 @@ stateDiagram-v2
 When the pair is local, the repair is local too: delete the stale `.sha256` and the next scan regenerates it from the bytes.
 `Absent` means no bytes, and a marker without bytes reads as `Absent`.
 
+## The marker carries the digest alone
+
+Some repositories publish Maven- or Gradle-style checksums: the `.sha256` file holds the hex digest and nothing else, no name and no two spaces.
+That is not a `sha256sum -c` line, so `sha256sum -c` cannot read it, and neither can a tool that insists on the canonical shape.
+
+`nxr` reads both shapes for verification, because the digest is the whole check.
+The run says once what the shape costs elsewhere:
+
+```console
+$ nxr down https://nexus.example.com/repository/raw-main/1.4.0/ dist/1.4.0/ --name app.zip
+warning: a `.sha256` sibling carries the digest alone (a Maven- or Gradle-style checksum): `sha256sum -c` cannot read it, and the bytes are verified anyway
+↓ app.zip ok
+```
+
+Nothing has to change: the download is verified, and the local marker `nxr` writes is canonical.
+To make the pair readable by every tool, rewrite the server-side marker as `<digest>  <name>` (one line, two spaces, a trailing newline).
+`nxr get --no-sha` reads the bytes without touching the marker at all.
+
 ## Divergent objects are never overwritten
 
 The refusal you will meet most often, with its two faces.
