@@ -218,3 +218,124 @@ async fn resume_request_pins_identity_encoding() {
         "the resume request did not pin accept-encoding: identity"
     );
 }
+
+/// A zstd-encoded first attempt that breaks mid-frame resumes from the decoded
+/// prefix with `identity`, and the assembled file is byte-equal to the payload.
+/// The part holds decoded bytes, the range is asked in the stored space, and the
+/// two agree because the stored representation is the payload the server encodes
+/// per response.
+#[tokio::test]
+async fn compressed_break_then_resume_stays_byte_equal() {
+    let payload: Vec<u8> = (0..1024 * 1024).map(|i| (i / 131) as u8).collect();
+    let frame = zstd::encode_all(&payload[..], 3).unwrap();
+    let digest_hex = Sha256::digest(&payload)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let payload_len = payload.len();
+    let payload_thread = payload.clone();
+    let digest_thread = digest_hex.clone();
+    std::thread::spawn(move || {
+        // 1: HEAD probe.
+        let (mut stream, _) = listener.accept().unwrap();
+        let head = read_head(&mut stream);
+        assert!(head.starts_with("HEAD"), "expected HEAD, got {head}");
+        let out = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {payload_len}\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(out.as_bytes()).unwrap();
+        stream.flush().unwrap();
+
+        // 2: sibling GET.
+        let (mut stream, _) = listener.accept().unwrap();
+        let head = read_head(&mut stream);
+        assert!(head.contains(".sha256"), "expected sibling, got {head}");
+        respond(
+            &mut stream,
+            "200 OK",
+            "Content-Type: text/plain\r\n",
+            format!("{digest_thread}  big.bin\n").as_bytes(),
+        );
+
+        // 3: the full GET, zstd-encoded, cut mid-frame.
+        let (mut stream, _) = listener.accept().unwrap();
+        let head = read_head(&mut stream);
+        assert!(
+            !head.to_ascii_lowercase().contains("range:"),
+            "the first attempt must be unranged"
+        );
+        let cut = (frame.len() * 6) / 10;
+        let head_out = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Encoding: zstd\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            frame.len()
+        );
+        stream.write_all(head_out.as_bytes()).unwrap();
+        stream.write_all(&frame[..cut]).unwrap();
+        stream.flush().unwrap();
+        drop(stream);
+
+        // 4: the retry: ranged, identity, answers the decoded suffix.
+        let (mut stream, _) = listener.accept().unwrap();
+        let head = read_head(&mut stream);
+        let lower = head.to_ascii_lowercase();
+        let start: usize = lower
+            .split("range: bytes=")
+            .nth(1)
+            .expect("the retry must carry a Range")
+            .split('-')
+            .next()
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let identity = lower.contains("accept-encoding: identity");
+        tx.send(format!("start={start} identity={identity}"))
+            .unwrap();
+        respond(
+            &mut stream,
+            "206 Partial Content",
+            &format!(
+                "Content-Type: application/octet-stream\r\nContent-Range: bytes {start}-{}/{}\r\n",
+                payload_len - 1,
+                payload_len
+            ),
+            &payload_thread[start..],
+        );
+    });
+
+    let base = format!("http://127.0.0.1:{port}/1.0.0/");
+    let dir = tempfile::tempdir().unwrap();
+    let name = ArtifactName::parse("big.bin").unwrap();
+    let (ev_tx, _ev_rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(base.clone()), ev_tx).unwrap();
+    nxr.down(dir.path(), Enumeration::Names(vec![name]), false)
+        .await
+        .unwrap();
+
+    let got = std::fs::read(dir.path().join("big.bin")).unwrap();
+    assert_eq!(
+        got, payload,
+        "the assembled file is byte-equal to the payload"
+    );
+
+    drop(_ev_rx);
+    let report = rx.try_recv().expect("the retry never arrived");
+    let start: usize = report
+        .split("start=")
+        .nth(1)
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(start > 0, "the retry resumed from zero: {report}");
+    assert!(
+        report.ends_with("identity=true"),
+        "the retry did not pin accept-encoding: identity: {report}"
+    );
+}
