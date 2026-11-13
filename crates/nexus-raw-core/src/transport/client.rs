@@ -225,6 +225,9 @@ impl NexusClient {
                 // Control requests (probe, marker PUT, delete, small get/put) have no body
                 // loop to watch: this read timeout is their only stall guard.
                 .read_timeout(cfg.stall_timeout)
+                // A pooled connection the proxy already closed on its own idle
+                // timeout costs a request and a retry: retire ours first.
+                .pool_idle_timeout(Duration::from_secs(30))
                 .redirect(reqwest::redirect::Policy::none())
                 // An empty User-Agent reads as an anonymous client in a Nexus access log,
                 // and some proxies refuse it outright. The tool names itself; a binary that

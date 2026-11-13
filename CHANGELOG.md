@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - A `Retry-After` during the plan phase shrinks the worker budget the transfer then runs under, so a throttled probe phase slows the whole run instead of handing the transfer a fresh maximum.
+- An idle pooled connection retires after 30 seconds instead of 90, so a connection a proxy already closed on its idle timeout is not reused for a request that would only retry.
 
 ## [0.26.0] - 2026-11-10
 
