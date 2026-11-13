@@ -201,6 +201,25 @@ impl Nxr {
         self.client.workers_max()
     }
 
+    /// Start the run's worker budget: one controller for the plan phase and the
+    /// transfer that follows it, so a `Retry-After` during the probes keeps the
+    /// pressure down for the whole run.
+    fn begin_run(&self) -> Arc<crate::transport::aimd::WorkerLimit> {
+        // A fresh budget and a fresh breaker: a reused facade starts every run
+        // from the configured maximum, and the last run's outage says nothing
+        // about this one.
+        self.client.reset_breaker();
+        let budget = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
+        self.client.attach_aimd(budget.clone());
+        *self.last_aimd.lock().expect("last aimd lock") = Some(budget.clone());
+        budget
+    }
+
+    /// The run's budget if the plan already started one, a fresh one otherwise.
+    fn run_budget(&self) -> Arc<crate::transport::aimd::WorkerLimit> {
+        self.client.aimd().unwrap_or_else(|| self.begin_run())
+    }
+
     /// The worker limit of the most recent directory transfer: the current AIMD
     /// value and the lowest value the run reached.
     /// Test and diagnosis surface for the §7 adaptive worker budget.
@@ -534,6 +553,7 @@ impl Nxr {
         mode: Mode,
         markers: bool,
     ) -> Result<Vec<Action>, Error> {
+        self.begin_run();
         let locals = sync::local_statuses(dir, names).await;
         let remotes = self
             .remote_states_for(locals.iter().map(|(n, _)| n))
@@ -556,6 +576,7 @@ impl Nxr {
     /// Returns [`Error::Io`] and [`Error::UnsafeName`] from the local scan, [`Error::Enumerate`] when the enumeration is empty, and transport, auth or HTTP errors while probing the remote states.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn delta(&self, dir: &Path, enum_src: Enumeration) -> Result<Vec<Delta>, Error> {
+        self.begin_run();
         // The prefix filter narrows the whole report, not just the remote side:
         // the local scan sees every name, and a local-only entry outside the
         // prefixes would otherwise report as `missing-remote`.
@@ -829,6 +850,7 @@ impl Nxr {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
+        let aimd = self.begin_run();
         let names = self.resolve_up_names(dir, names)?;
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
@@ -856,11 +878,6 @@ impl Nxr {
         .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
         .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Up);
-        // One AIMD budget per run: workers shrink on `Retry-After` (§7) and
-        // recover additively, capped at the configured maximum.
-        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
-        self.client.attach_aimd(aimd.clone());
-        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
         up::execute(
             self.client.clone(),
             dir.to_owned(),
@@ -893,6 +910,7 @@ impl Nxr {
         if !dir.is_dir() {
             return Err(Error::misuse(format!("not a directory: {}", dir.display())));
         }
+        self.begin_run();
         let names = self.resolve_up_names(dir, names)?;
         let mut locals = sync::local_statuses(dir, names).await;
         if gen_markers {
@@ -941,10 +959,9 @@ impl Nxr {
             .up_if_changed_plan(dir, names, gen_markers, claim.clone())
             .await?;
         self.events.plan(&actions, Dir::Up);
-        // One AIMD budget per run, the same contract as the plain `up`.
-        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
-        self.client.attach_aimd(aimd.clone());
-        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
+        // One AIMD budget per run, the same contract as the plain `up`: the
+        // plan phase already started it, and its 429s carry into the transfer.
+        let aimd = self.run_budget();
         up::execute(
             self.client.clone(),
             dir.to_owned(),
@@ -1006,6 +1023,7 @@ impl Nxr {
                 )));
             }
         }
+        let aimd = self.begin_run();
         ensure_destination(dir)?;
         tokio::fs::create_dir_all(dir)
             .await
@@ -1024,9 +1042,6 @@ impl Nxr {
         .map_err(|e| Error::misuse(format!("task panicked: {e}")))?
         .map_err(Error::from)?;
         self.events.plan(&actions, Dir::Down);
-        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
-        self.client.attach_aimd(aimd.clone());
-        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
         down::execute(
             self.client.clone(),
             dir.to_owned(),
@@ -1060,6 +1075,7 @@ impl Nxr {
         state: crate::sync::StateMode<'_>,
         verify: bool,
     ) -> Result<Vec<crate::sync::CloneAction>, Error> {
+        self.begin_run();
         Ok(self.clone_prepare(dir, prefixes, state, verify).await?.0)
     }
 
@@ -1086,6 +1102,7 @@ impl Nxr {
         // A fresh destination is created, like `down` does: the part files land
         // under it, and a missing directory would fail as a raw I/O error named
         // after a staging file.
+        let aimd = self.begin_run();
         ensure_destination(dir)?;
         tokio::fs::create_dir_all(dir)
             .await
@@ -1094,9 +1111,6 @@ impl Nxr {
             .clone_prepare(dir, prefixes, state_mode, verify)
             .await?;
         self.events.plan_clone(&actions);
-        let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
-        self.client.attach_aimd(aimd.clone());
-        *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
         sync::clone::execute(
             self.client.clone(),
             dir.to_owned(),
@@ -1181,6 +1195,7 @@ impl Nxr {
     // rm_plan fans the probes out over spawned tasks: native-only like the transfers it plans.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn rm_plan(&self, enum_src: Enumeration) -> Result<Vec<RmAction>, Error> {
+        self.begin_run();
         let names = self.resolve_names(enum_src).await?;
         let remotes = self.remote_states_for(&names).await?;
         Ok(names
@@ -1331,8 +1346,14 @@ impl Nxr {
         dst: &Nxr,
         enum_src: Enumeration,
     ) -> Result<Vec<MirrorAction>, Error> {
+        self.begin_run();
         let names = self.resolve_names(enum_src).await?;
         let srcs = self.remote_states_for(&names).await?;
+        // Both legs report into one controller: the destination probes ride the
+        // budget the source probes started, and the transfer keeps it.
+        if let Some(budget) = self.client.aimd() {
+            dst.client.attach_aimd(budget);
+        }
         let dsts = dst.remote_states_for(&names).await?;
         let actions = tokio::task::spawn_blocking(move || mirror::classify(names, srcs, dsts))
             .await
@@ -1367,10 +1388,8 @@ impl Nxr {
         let result = {
             // One AIMD budget per run, covering both legs: the source GET and
             // the destination PUT report into the same controller (§7).
-            let aimd = Arc::new(crate::transport::aimd::WorkerLimit::new(self.max_workers()));
-            self.client.attach_aimd(aimd.clone());
+            let aimd = self.run_budget();
             dst.client.attach_aimd(aimd.clone());
-            *self.last_aimd.lock().expect("last aimd lock") = Some(aimd.clone());
             mirror::execute(
                 self.client.clone(),
                 dst.client.clone(),
@@ -1617,15 +1636,17 @@ impl Nxr {
         &self,
         names: impl IntoIterator<Item = &'a ArtifactName>,
     ) -> Result<BTreeMap<ArtifactName, RemoteStatus>, Error> {
+        // The plan is the run's first remote phase and it sends one or two
+        // requests per name: it runs under the same budget the transfer uses,
+        // so a 429 here already slows the rest of the run down.
+        let budget = self.run_budget();
         let names: Vec<ArtifactName> = names.into_iter().cloned().collect();
         let mut set = tokio::task::JoinSet::new();
         for (i, n) in names.iter().enumerate() {
-            let permit = self
-                .workers
-                .clone()
-                .acquire_owned()
+            let permit = budget
+                .acquire()
                 .await
-                .map_err(|e| Error::misuse(format!("worker semaphore closed: {e}")))?;
+                .map_err(|e| Error::misuse(format!("worker budget closed: {e}")))?;
             let client = self.client.clone();
             let dir = self.base.clone();
             let n = n.clone();

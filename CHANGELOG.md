@@ -5,7 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- A `Retry-After` during the plan phase shrinks the worker budget the transfer then runs under, so a throttled probe phase slows the whole run instead of handing the transfer a fresh maximum.
 
 ## [0.26.0] - 2026-11-10
 
