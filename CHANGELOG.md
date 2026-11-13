@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A run stops after 16 consecutive transport failures with a transport verdict (exit 3) instead of spending every remaining name's retry budget on a server that stopped answering.
+  One success clears the streak, so a partial outage keeps the run going.
+  A `Retry-After` answer does not count: the adaptive budget already responds to it.
+
 ### Changed
 
 - A `Retry-After` during the plan phase shrinks the worker budget the transfer then runs under, so a throttled probe phase slows the whole run instead of handing the transfer a fresh maximum.

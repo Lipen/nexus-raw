@@ -89,6 +89,12 @@ On a streak of successes (one step per four consecutive successes) the limit rec
 A single success after a server-mandated pause does not restore the limit: the recovery slope must fill first.
 The wire behavior is unchanged: only how many transfers run at once.
 
+A run stops opening connections after 16 consecutive transport failures.
+Every request already spent its own retry budget on the same outage, so the remaining names fail at once with [`Error::Transport`] (exit 3) instead of walking the list against a server that stopped answering.
+A `Retry-After` answer is not counted: the budget above already responds to it, and a server that asks for patience is not a server that stopped answering.
+One success clears the streak: a partial outage keeps the run going.
+The floor above describes a run that is still talking to the server, not one the breaker stopped.
+
 ## Range and segmented reads
 
 The wire contract is one open span per request.

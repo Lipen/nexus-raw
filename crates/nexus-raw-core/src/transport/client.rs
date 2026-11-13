@@ -7,6 +7,7 @@ use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Mutex;
@@ -14,6 +15,12 @@ use std::time::Duration;
 
 // Server error bodies are short by nature: read at most this much into `Error.detail`.
 const BODY_DETAIL_CHARS: usize = 120;
+
+/// Transport failures in a row that stop the run.
+/// A server that stopped answering fails every request the same way, and each
+/// failure already spent its own retry budget: sixteen is two full waves of the
+/// default eight workers, enough to tell an outage from a bad artifact.
+const RUN_FAILURE_LIMIT: usize = 16;
 
 use futures_util::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -122,6 +129,41 @@ pub enum DeleteOutcome {
     Missing,
 }
 
+/// The run-level failure breaker.
+/// A server that stopped answering fails every request the same way, so the run
+/// stops opening connections at all once the streak crosses [`RUN_FAILURE_LIMIT`].
+/// One success clears the streak: a partial outage keeps the run going.
+#[derive(Debug, Default)]
+struct Breaker {
+    consecutive: AtomicUsize,
+    open: AtomicBool,
+}
+
+impl Breaker {
+    /// One request ended in a retryable-class failure after its own retries.
+    fn record_failure(&self) {
+        let n = self.consecutive.fetch_add(1, Ordering::Relaxed) + 1;
+        if n >= RUN_FAILURE_LIMIT {
+            self.open.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// One request succeeded: the streak is over.
+    fn record_success(&self) {
+        self.consecutive.store(0, Ordering::Relaxed);
+    }
+
+    fn is_open(&self) -> bool {
+        self.open.load(Ordering::Relaxed)
+    }
+
+    /// A new run on a reused client: the previous streak says nothing about it.
+    fn reset(&self) {
+        self.consecutive.store(0, Ordering::Relaxed);
+        self.open.store(false, Ordering::Relaxed);
+    }
+}
+
 pub struct NexusClient {
     http: reqwest::Client,
     retry: RetryPolicy,
@@ -131,6 +173,8 @@ pub struct NexusClient {
     workers: Arc<Semaphore>,
     /// The configured worker maximum: the AIMD budget never exceeds it.
     workers_max: usize,
+    /// Set when the run stopped after a streak of transport failures.
+    breaker: Breaker,
     /// The run's AIMD worker budget, when one is attached (directory transfers).
     /// Set by the facade after construction. Primitive-only clients have none,
     /// and their retry outcomes never touch a budget.
@@ -231,6 +275,7 @@ impl NexusClient {
             events,
             workers: Arc::new(Semaphore::new(cfg.workers)),
             workers_max: cfg.workers,
+            breaker: Breaker::default(),
             aimd: std::sync::Mutex::new(None),
         })
     }
@@ -257,6 +302,12 @@ impl NexusClient {
     #[must_use]
     pub(crate) fn aimd(&self) -> Option<Arc<crate::transport::aimd::WorkerLimit>> {
         self.aimd.lock().expect("aimd attach lock").clone()
+    }
+
+    /// A new run on a reused client: the previous run's outage streak says
+    /// nothing about this one.
+    pub(crate) fn reset_breaker(&self) {
+        self.breaker.reset();
     }
 
     #[must_use]
@@ -291,9 +342,21 @@ impl NexusClient {
     ) -> Result<T, Error> {
         let mut n = 0u32;
         loop {
+            // The run stops opening connections once the streak of transport
+            // failures says the server is gone: every remaining name would
+            // spend its own retry budget on the same outage.
+            if self.breaker.is_open() {
+                return Err(Error::transport(
+                    url,
+                    format!(
+                        "the run stopped after {RUN_FAILURE_LIMIT} consecutive transport failures"
+                    ),
+                ));
+            }
             n += 1;
             match attempt(self, url).await {
                 Ok(v) => {
+                    self.breaker.record_success();
                     // A full success also recovers the run's budget (§7):
                     // additive increase toward the configured maximum.
                     if let Some(aimd) = self.aimd() {
@@ -328,7 +391,16 @@ impl NexusClient {
                     #[cfg(target_arch = "wasm32")]
                     gloo_timers::future::sleep(pause).await;
                 }
-                Err(fail) => return Err(fail.error),
+                Err(fail) => {
+                    // One outcome, not one attempt: the request already spent
+                    // its retry budget before this branch.
+                    // A server-mandated pause is the server asking for patience,
+                    // not gone: the budget reacts to it, the breaker must not.
+                    if fail.retryable && fail.retry_after.is_none() {
+                        self.breaker.record_failure();
+                    }
+                    return Err(fail.error);
+                }
             }
         }
     }
