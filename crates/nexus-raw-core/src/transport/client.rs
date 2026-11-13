@@ -1504,3 +1504,41 @@ impl HeadInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Breaker, RUN_FAILURE_LIMIT};
+
+    #[test]
+    fn a_success_clears_the_streak_and_a_reset_clears_the_breaker() {
+        let breaker = Breaker::default();
+        // A success in the middle starts the streak over: a partial outage
+        // never opens the breaker.
+        for _ in 0..RUN_FAILURE_LIMIT - 1 {
+            breaker.record_failure();
+        }
+        assert!(!breaker.is_open());
+        breaker.record_success();
+        for _ in 0..RUN_FAILURE_LIMIT - 1 {
+            breaker.record_failure();
+        }
+        assert!(
+            !breaker.is_open(),
+            "a success must clear the streak, {RUN_FAILURE_LIMIT} fresh failures are needed"
+        );
+        breaker.record_failure();
+        assert!(breaker.is_open(), "the full streak must open the breaker");
+
+        // A new run on a reused client starts with a closed breaker, even when
+        // the previous run ended with the server gone.
+        breaker.reset();
+        assert!(!breaker.is_open());
+        for _ in 0..RUN_FAILURE_LIMIT - 1 {
+            breaker.record_failure();
+        }
+        assert!(
+            !breaker.is_open(),
+            "the reset must clear the streak too, not only the flag"
+        );
+    }
+}
