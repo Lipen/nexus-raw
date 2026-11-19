@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `nxr resume` ignores a manifest `part` that is not a bare file name, so a crafted record cannot point the listing at a path outside its directory.
 - A weak or absent validator no longer lets a resume splice bytes from two versions without a word.
 
 ## [0.28.0] - 2026-11-19

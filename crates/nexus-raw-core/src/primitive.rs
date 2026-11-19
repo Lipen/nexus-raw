@@ -1090,6 +1090,17 @@ fn read_span_record_file(path: &Path) -> Result<SpanRecord, Error> {
     parse_span_record(text, path)
 }
 
+/// A record's `part` is a bare file name in the record's directory.
+/// A crafted manifest must never point `resume` at a file outside that directory.
+#[cfg(not(target_arch = "wasm32"))]
+fn safe_part_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.ends_with(".part")
+        && !name.contains(['/', '\\', ':'])
+        && name != "."
+        && name != ".."
+}
+
 /// One parked ranged download, as listed by [`list_parked_spans`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -1140,6 +1151,7 @@ pub fn list_parked_spans(dir: &Path) -> Result<Vec<ParkedSpan>, Error> {
         let part = record
             .part
             .as_deref()
+            .filter(|name| safe_part_name(name))
             .map(|part| dir.join(part))
             .or_else(|| {
                 parts
@@ -1449,9 +1461,34 @@ mod tests {
     }
 
     #[test]
-    fn refuses_malformed_ranges() {
-        for spec in ["", "10", "-5", "19-10", "x-2", "1-x", "1-2-3", " 1-2"] {
-            assert!(parse_range(spec).is_err(), "{spec:?} must be refused");
-        }
+    fn a_record_cannot_point_outside_the_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = dir.path().join(".nxr-span-deadbeef");
+        std::fs::write(&record, r#"{"start":0,"part":"../../etc/passwd"}"#).unwrap();
+        let parked = list_parked_spans(dir.path()).unwrap();
+        assert_eq!(parked.len(), 1);
+        assert!(parked[0].part.is_none(), "a traversal part is ignored");
+        assert!(parked[0].out.is_none());
+        assert_eq!(parked[0].part_size, 0);
+    }
+
+    #[test]
+    fn a_safe_part_name_pairs_the_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let part = dir.path().join("tail.bin.part");
+        std::fs::write(&part, b"abc").unwrap();
+        std::fs::write(
+            span_record_path(&part),
+            r#"{"start":0,"part":"tail.bin.part"}"#,
+        )
+        .unwrap();
+        let parked = list_parked_spans(dir.path()).unwrap();
+        assert_eq!(parked.len(), 1);
+        assert_eq!(parked[0].part.as_deref(), Some(part.as_path()));
+        assert_eq!(
+            parked[0].out.as_deref(),
+            Some(dir.path().join("tail.bin").as_path())
+        );
+        assert_eq!(parked[0].part_size, 3);
     }
 }

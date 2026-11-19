@@ -203,6 +203,7 @@ The command reads local manifests only: no network and no credentials.
 
 A malformed record is a refusal (exit 1), not a silently skipped row.
 A record whose part file disappeared is still listed with `bytes: 0`, so the stale state is visible.
+A `part` that is not a bare file name (no separators, no drive prefix) is ignored, never followed outside the scanned directory.
 
 ## nxr put
 
