@@ -1778,6 +1778,11 @@ impl NexusClient {
         let mut stdout = tokio::io::stdout();
         let mut written = 0u64;
         let mut skipped = 0u64;
+        let progress = self.events.clone();
+        let name = Self::object_label(url);
+        progress
+            .bytes_span(&name, Dir::Down, start, total, start, end_incl)
+            .await;
         loop {
             let next = tokio::time::timeout(self.stall, body.next()).await;
             let chunk = match next {
@@ -1817,6 +1822,16 @@ impl NexusClient {
                 detail: e.to_string(),
             })?;
             written += chunk.len() as u64;
+            progress
+                .bytes_span(
+                    &name,
+                    Dir::Down,
+                    start.saturating_add(written),
+                    total,
+                    start,
+                    end_incl,
+                )
+                .await;
             if take == Some(written) {
                 break;
             }

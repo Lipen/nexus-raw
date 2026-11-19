@@ -195,6 +195,7 @@ async fn local_digest(nxr: &Nxr, path: &str) -> Result<Digest, nexus_raw_core::E
 
 `GetOutcome` carries `size`, the `digest` of the written file (stdout mode skips hashing and returns `None`), and `resumed_from`, the part offset the transfer continued from (`0` for a fresh download).
 `SpanOutcome` carries the resolved `start` and optional `end`, the span's `size` (not the object size), and `resumed_from`, the span prefix the transfer continued from.
+`primitive::list_parked_spans(dir)` returns a `ParkedSpan` per recorded manifest, which is what `nxr resume` renders.
 `RangeOutcome` carries the inclusive `start`, the optional `end`, and the `bytes` of the span.
 
 ## L1: transfer

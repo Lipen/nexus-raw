@@ -1390,6 +1390,24 @@ fn get_continue_without_output_is_misuse() {
     assert!(stderr(&out).contains("--continue"), "{}", stderr(&out));
 }
 
+/// `--json-stderr` keeps a stdout body byte-exact and sends events to stderr.
+#[test]
+fn get_json_stderr_keeps_the_stdout_body_clean() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let got = nxr(&["get", &url, "--json-stderr"]);
+    expect_exit(&got, 0, "json on stderr");
+    assert_eq!(got.stdout, ALPHA);
+    let event = stderr(&got)
+        .lines()
+        .find(|line| line.starts_with('{'))
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("event JSON"))
+        .expect("an artifact event on stderr");
+    assert_eq!(event["event"], "artifact");
+    assert_eq!(event["total"], ALPHA.len());
+}
+
 /// `-o -` is not stdout: naming it creates a file called `-`, a trap, so it is misuse.
 #[test]
 fn get_naming_stdout_as_a_file_is_misuse() {
@@ -3660,6 +3678,72 @@ fn get_range_continue_resumes_the_recorded_span() {
     );
 }
 
+/// `nxr resume` lists a parked span with its URL, bounds and bytes.
+#[cfg(unix)]
+#[test]
+fn resume_lists_a_parked_span() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "5000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    wait_for_part(&part);
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let parked = std::fs::metadata(&part).unwrap().len();
+
+    let got = nxr(&["resume", out.path().to_str().unwrap(), "--json"]);
+    expect_exit(&got, 0, "resume --json");
+    let rows = ndjson(&got);
+    let row = rows
+        .iter()
+        .find(|row| row["event"] == "resume")
+        .unwrap_or_else(|| panic!("a resume row: {rows:?}"));
+    assert_eq!(row["url"], url);
+    assert_eq!(row["start"], 5000);
+    assert_eq!(row["end"], serde_json::Value::Null);
+    assert_eq!(row["bytes"], parked);
+    assert!(row["part"].as_str().unwrap().ends_with("tail.bin.part"));
+    assert!(row["out"].as_str().unwrap().ends_with("tail.bin"));
+
+    let human = nxr(&["resume", out.path().to_str().unwrap()]);
+    expect_exit(&human, 0, "resume human");
+    assert!(
+        stdout(&human).contains("parked of span 5000-"),
+        "{}",
+        stdout(&human)
+    );
+}
+
 /// An explicit `--range` plus `--continue` resumes the same span.
 #[cfg(unix)]
 #[test]
@@ -3902,6 +3986,47 @@ fn get_range_with_segments_and_continue_is_misuse() {
     ]);
     expect_exit(&got, 2, "a segmented span cannot resume one part");
     assert!(stderr(&got).contains("--segments"), "{}", stderr(&got));
+}
+
+#[test]
+fn get_continue_at_offset_maps_to_a_range() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/blob.bin", ALPHA);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let got = nxr(&["get", &url, "-C", "5", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "-C N reads the tail");
+    assert_eq!(std::fs::read(&dst).unwrap(), &ALPHA[5..]);
+    assert!(stdout(&got).contains("range 5-"), "{}", stdout(&got));
+}
+
+#[test]
+fn get_continue_at_dash_resumes_the_part() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/blob.bin", ALPHA);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("blob.bin");
+    std::fs::write(out.path().join("blob.bin.part"), &ALPHA[..3]).unwrap();
+    let got = nxr(&["get", &url, "-C", "-", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "-C - resumes the part");
+    assert_eq!(std::fs::read(&dst).unwrap(), ALPHA);
+    assert!(stdout(&got).contains("resumed from 3"), "{}", stdout(&got));
+}
+
+#[test]
+fn get_continue_at_bad_offset_is_misuse() {
+    let got = nxr(&[
+        "get",
+        "http://127.0.0.1:9/x",
+        "-C",
+        "nope",
+        "-o",
+        "unused.bin",
+    ]);
+    expect_exit(&got, 2, "a bad -C offset");
+    assert!(stderr(&got).contains("-C expects"), "{}", stderr(&got));
 }
 
 #[test]

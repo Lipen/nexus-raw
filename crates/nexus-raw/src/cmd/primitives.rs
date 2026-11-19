@@ -8,6 +8,7 @@ use nexus_raw_core::model::name::ArtifactName;
 use nexus_raw_core::{Error, ShaSource};
 
 use crate::cmd::{finish, make_ctx, print_line, Ctx};
+use crate::render::human_bytes;
 use crate::Cli;
 
 /// The `get` invocation: the CLI spelling, resolved into what the transfer needs.
@@ -46,9 +47,9 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
                 .to_owned(),
         ));
     }
-    if out.is_none() && cli.json {
+    if out.is_none() && cli.json && !cli.json_stderr {
         return Err(Error::Misuse(
-            "--json with stdout body would corrupt the artifact: pass -o FILE, or drop --json"
+            "--json with a stdout body would interleave events and bytes: pass -o FILE, use --json-stderr, or drop --json"
                 .to_owned(),
         ));
     }
@@ -189,6 +190,57 @@ fn remote_name_of(url: &str) -> Result<String, Error> {
                 "get -O takes the URL's last segment as the name, and the name {leaf:?} is not writable here ({e}): pass -o FILE"
             ))
         })
+}
+
+/// List the parked ranged downloads in `dir`: no network, no credentials.
+pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
+    let parked = nexus_raw_core::primitive::list_parked_spans(dir)?;
+    if parked.is_empty() {
+        if !cli.json {
+            print_line(
+                false,
+                &format!("no parked spans in {}", dir.display()),
+                &serde_json::Value::Null,
+            );
+        }
+        return Ok(());
+    }
+    for span in parked {
+        let label = span_spec(span.start, span.end);
+        let total = span.total.map_or_else(|| "?".to_owned(), human_bytes);
+        let human = format!(
+            "{}: {} parked of span {label} (object {total})",
+            span.out.display(),
+            human_bytes(span.part_size),
+        );
+        print_line(
+            cli.json,
+            &human,
+            &serde_json::json!({
+                "event": "resume",
+                "out": span.out.display().to_string(),
+                "part": span.part.as_ref().map(|p| p.display().to_string()),
+                "url": span.url.as_deref(),
+                "start": span.start,
+                "end": span.end,
+                "total": span.total,
+                "bytes": span.part_size,
+            }),
+        );
+        if !cli.json {
+            if let Some(url) = &span.url {
+                print_line(
+                    false,
+                    &format!(
+                        "  resume: nxr get {url} -o {} --continue",
+                        span.out.display()
+                    ),
+                    &serde_json::Value::Null,
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) async fn put(

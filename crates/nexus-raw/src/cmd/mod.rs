@@ -68,10 +68,20 @@ async fn run(cli: &Cli) -> Result<(), Error> {
             remote_name,
             stdout,
             cont,
+            continue_at,
             segments,
             range,
             no_sha,
         } => {
+            let offset_range = match continue_at.as_deref() {
+                Some("-") | None => None,
+                Some(offset) => {
+                    offset.parse::<u64>().map_err(|_| {
+                        Error::Misuse(format!("-C expects `-` or a byte offset, got {offset}"))
+                    })?;
+                    Some(format!("{offset}-"))
+                }
+            };
             primitives::get(
                 cli,
                 primitives::GetArgs {
@@ -79,14 +89,15 @@ async fn run(cli: &Cli) -> Result<(), Error> {
                     out: out.as_deref(),
                     remote_name: *remote_name,
                     stdout: *stdout,
-                    cont: *cont,
+                    cont: *cont || continue_at.as_deref() == Some("-"),
                     segments: *segments,
-                    range: range.as_deref(),
+                    range: offset_range.as_deref().or(range.as_deref()),
                     no_sha: *no_sha,
                 },
             )
             .await
         }
+        Cmd::Resume { dir } => primitives::resume(cli, dir).await,
         Cmd::Put {
             url,
             file,
@@ -267,7 +278,12 @@ pub(crate) struct Ctx {
 
 /// Build the facade for `base`: creds from `-u` or env, renderer attached.
 pub(crate) fn make_ctx(cli: &Cli, base: &str) -> Result<Ctx, Error> {
-    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let session = Session::start(Mode::from_flags(
+        cli.json,
+        cli.json_stderr,
+        cli.quiet,
+        cli.verbose,
+    ));
     let nxr = make_nxr(cli, base, session.sender())?;
     Ok(Ctx {
         nxr,

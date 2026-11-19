@@ -158,8 +158,8 @@ impl Error {
             Error::Http { status, .. } => Some(
                 format!("the server answered {status}: check the URL path and the server health"),
             ),
-            // The message of a misuse names its own remedy (`--json with stdout body ...
-            // pass -o FILE`), so a second sentence here would only repeat the class.
+            // The message of a misuse names its own remedy (`--json with a stdout body ...
+            // pass -o FILE, use --json-stderr`), so a second sentence here would only repeat the class.
             Error::Misuse(_) => None,
             Error::RangeIgnored { .. } => Some(
                 "the server does not honor range requests: the download fell back to a single stream".into(),

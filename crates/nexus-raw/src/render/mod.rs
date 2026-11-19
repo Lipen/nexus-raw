@@ -38,13 +38,15 @@ pub(crate) use outln;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Mode {
     Human { quiet: bool, verbose: bool },
-    Json,
+    Json { stderr: bool },
 }
 
 impl Mode {
-    pub(crate) fn from_flags(json: bool, quiet: bool, verbose: bool) -> Self {
+    pub(crate) fn from_flags(json: bool, json_stderr: bool, quiet: bool, verbose: bool) -> Self {
         if json {
-            Self::Json
+            Self::Json {
+                stderr: json_stderr,
+            }
         } else {
             Self::Human { quiet, verbose }
         }
@@ -90,7 +92,7 @@ async fn run(mut rx: UnboundedReceiver<Event>, mode: Mode) {
             Mode::Human { quiet, verbose } => {
                 human(&ev, quiet, verbose, calm, &mut progress, &paint);
             }
-            Mode::Json => json::line(&ev),
+            Mode::Json { stderr } => json::line(&ev, stderr),
         }
     }
     progress.clear();
@@ -169,7 +171,7 @@ fn human_colors() -> bool {
 }
 
 /// A byte count for humans: B, then KiB, MiB or GiB with one decimal.
-fn human_bytes(n: u64) -> String {
+pub(crate) fn human_bytes(n: u64) -> String {
     const KIB: f64 = 1024.0;
     let f = n as f64;
     if f < KIB {

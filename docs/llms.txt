@@ -38,6 +38,10 @@ Intent to command:
 | fetch one file | `nxr get <url> -o <file>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch one byte span | `nxr get <url> --range 100-199` |
+| fetch the last N bytes | `nxr get <url> --range -1048576 -o tail.bin` |
+| resume like curl | `nxr get <url> -o <file> -C -` |
+| list parked ranges | `nxr resume <dir>` |
+| machine events while the body streams | `nxr get <url> --json-stderr > file` |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
 | clone a whole repository for backup | `nxr clone <repo-url> <dst-dir>` |
 | push a directory | `nxr up <dir> <dir-url>` |

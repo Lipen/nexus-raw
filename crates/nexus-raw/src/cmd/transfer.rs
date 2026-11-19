@@ -561,7 +561,12 @@ pub(crate) async fn mirror(
     dry_run: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
-    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let session = Session::start(Mode::from_flags(
+        cli.json,
+        cli.json_stderr,
+        cli.quiet,
+        cli.verbose,
+    ));
     // Both facades build before anything moves: a bad destination URL is misuse, not a half-poured version.
     // Per-side credentials override the shared `-u`: a mirror between different servers
     // must not leak one server's secret to the other.
@@ -590,7 +595,12 @@ pub(crate) async fn mv(
     yes: bool,
     prefixes: &[String],
 ) -> Result<(), Error> {
-    let session = Session::start(Mode::from_flags(cli.json, cli.quiet, cli.verbose));
+    let session = Session::start(Mode::from_flags(
+        cli.json,
+        cli.json_stderr,
+        cli.quiet,
+        cli.verbose,
+    ));
     let src_nxr = make_nxr_with(cli, args.src, session.sender(), args.src_user)?;
     let dst_nxr = make_nxr_with(cli, args.dst, session.sender(), args.dst_user)?;
     let enum_src =

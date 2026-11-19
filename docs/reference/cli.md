@@ -71,13 +71,14 @@ All flags are global: they may appear before or after the subcommand.
 | `--tls-insecure` | off | skip certificate verification |
 | `--ca-bundle <FILE>` | none | a PEM bundle of extra trust roots for a private CA (also `NXR_CA_BUNDLE`). The bundle carries the CA that signed the server certificate, not the bare server leaf. Native only, and mutually exclusive with `--tls-insecure` |
 | `--json` | off | machine output, see [output](#output) |
+| `--json-stderr` | off | NDJSON events on stderr. It implies `--json`, the only way to keep a stdout body clean while scripts read events |
 | `-q, --quiet` | off | the summary line, plus any failures |
 | `-v, --verbose` | off | plan names, transfer starts, and a line per settled name on a terminal |
 
 ## nxr get
 
 ```
-nxr get <URL> [-o FILE | -O | --stdout] [--no-sha] [--continue] [--segments N] [--range START-END|START-]
+nxr get <URL> [-o FILE | -O | --stdout] [--no-sha] [--continue | -C OFFSET] [--segments N] [--range START-END|START-|-N]
 ```
 
 GET a URL to a file or stdout.
@@ -92,6 +93,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `--stdout` | stream the body to a terminal anyway. Conflicts with `-o` and `-O` |
 | `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. A part parked by `--range` resumes that span, recorded bounds and all, so the flag needs no repeated `--range`. A complete object is hashed against the sibling before the rename. A span is not verifiable and is renamed unchecked |
+| `-C, --continue-at <OFFSET>` | curl-style alias: `-` continues the part, `N` starts at byte N as `--range N-`. Conflicts with `--continue` and `--range` |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). With `--range`, splits the span instead of the whole object. File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
 | `--range <RANGE>` | one byte span, `START-END`, `START-` or `-N` for the last N bytes. A file target streams into `<FILE>.part` and resumes with `--continue`. `--segments N` splits the span. A stdout target streams the span and never retries |
 | `--no-sha` | read the bytes and never look at `<URL>.sha256`. File output only: the stdout stream is never verified, so the flag there is a misuse (exit 2) |
@@ -181,11 +183,26 @@ $ echo $?
 A ranged download emits the same artifact events: `done` is the absolute position in the object and `total` the full object length.
 The final object carries the span as `range` (`START-END` or `START-`), the span length as `bytes` and the reused span prefix as `resumed_from`.
 
-Without `-o` the stdout body is raw bytes and nothing else: stdout mode emits no progress events.
-`--json` without `-o` is refused as misuse (exit 2), and the hint names the two ways out: pass `-o FILE` or drop `--json`.
+Without `-o` the stdout body is raw bytes: progress events go to stderr, and `--json-stderr` puts NDJSON there while the body stays on stdout.
+`--json` without `-o` is refused as misuse (exit 2): pass `-o FILE`, use `--json-stderr`, or drop `--json`.
 
 A resumed transfer starts where the part already ends: the first `artifact` event carries that offset as `done`, and `resumed_from` in the final object repeats it.
 A part the server refuses with `416` and the client restarts from zero reuses nothing, so both report `0` rather than the discarded part's size.
+
+## nxr resume
+
+```
+nxr resume [DIR]
+```
+
+List the parked ranged downloads in `DIR` (the current directory by default).
+Each row names the output, the bytes already parked, the span and the full object size.
+The human output ends with the `--continue` command that finishes the span.
+`--json` prints one `{"event":"resume",...}` row per parked record.
+The command reads local manifests only: no network and no credentials.
+
+A malformed record is a refusal (exit 1), not a silently skipped row.
+A record whose part file disappeared is still listed with `bytes: 0`, so the stale state is visible.
 
 ## nxr put
 

@@ -274,6 +274,7 @@ fn url_slots(cli: &mut crate::Cli) -> Vec<&mut String> {
         | C::Ls { url: dst, .. } => vec![dst],
         C::Mirror { src, dst, .. } | C::Mv { src, dst, .. } => vec![src, dst],
         C::Diff { src, .. } | C::Clone { url: src, .. } => vec![src],
+        C::Resume { .. } => Vec::new(),
         C::Channel { op } => match op {
             crate::ChannelOp::Get { url } | crate::ChannelOp::Set { url, .. } => vec![url],
         },

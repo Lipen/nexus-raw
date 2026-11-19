@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `nxr get --range -N` reads the last N bytes, resolved through a HEAD to a normal `START-` span.
 - `nxr get --range --segments N` splits a span into N concurrent closed ranges, with the same absolute progress and no digest verification.
+- `nxr get -C -` and `-C N` are the curl-style resume aliases for `--continue` and `--range N-`.
+- `nxr resume [DIR]` lists parked ranged downloads with their URL, span and parked bytes, and prints the `--continue` command that finishes each one.
+- `--json-stderr` sends the NDJSON events to stderr, so a stdout body stays byte-exact while scripts read events.
 - `nxr get --range` warns when the server ignores Range, naming the prefix bytes fetched and discarded.
 
 ### Changed

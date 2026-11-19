@@ -157,7 +157,11 @@ pub async fn get(
         })
     } else {
         let resp = client.get_stream(url).await?;
-        // No progress events in stdout mode: anything the renderer prints would corrupt the body.
+        // Byte events only: the human renderer draws them on stderr, so a
+        // stdout body stays clean even with `-v` or `--json-stderr`.
+        let name = last_segment(url);
+        let total = resp.content_length();
+        client.progress().bytes(&name, Dir::Down, 0, total).await;
         let mut body = resp.bytes_stream();
         let mut stdout = tokio::io::stdout();
         let mut size: u64 = 0;
@@ -171,6 +175,7 @@ pub async fn get(
                 }
             })?;
             size += chunk.len() as u64;
+            client.progress().bytes(&name, Dir::Down, size, total).await;
         }
         stdout.flush().await.map_err(|e| Error::Io {
             path: "stdout".into(),
@@ -237,6 +242,7 @@ pub async fn get_span(
                     total: None,
                     etag: None,
                     last_modified: None,
+                    part: None,
                 }
             };
             get_span_to_file(client, url, start, end, &out, cont, probe, record).await
@@ -299,6 +305,9 @@ async fn get_span_to_file(
     record.url = Some(resume_url(url));
     record.start = start;
     record.end = end;
+    record.part = part
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned());
     // With a parked prefix still in play, the probe describes the object now,
     // not the bytes already on disk. Writing its validator into the record
     // would bless those old bytes for the next resume. Keep the parked values
@@ -978,6 +987,9 @@ struct SpanRecord {
     /// Stored for diagnosis, never sent as `If-Range`.
     #[serde(default)]
     last_modified: Option<String>,
+    /// The part file name, so a resume listing can pair the record with its bytes.
+    #[serde(default)]
+    part: Option<String>,
 }
 
 /// The part length, 0 when it does not exist.
@@ -1033,35 +1045,109 @@ fn read_span_record(part: &Path) -> Result<Option<SpanRecord>, Error> {
         Err(e) => return Err(Error::io(&path, e)),
     };
     let text = std::str::from_utf8(&bytes).map_err(|_| bad_span_record(&path))?;
+    Ok(Some(parse_span_record(text, &path)?))
+}
+
+/// Parse a record file body: the JSON manifest or the 0.28.0 plain `START END` line.
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_span_record(text: &str, path: &Path) -> Result<SpanRecord, Error> {
     let text = text.trim();
     if text.is_empty() {
-        return Err(bad_span_record(&path));
+        return Err(bad_span_record(path));
     }
     if text.starts_with('{') {
-        let record: SpanRecord = serde_json::from_str(text).map_err(|_| bad_span_record(&path))?;
+        let record: SpanRecord = serde_json::from_str(text).map_err(|_| bad_span_record(path))?;
         if record.end.is_some_and(|e| e < record.start) {
-            return Err(bad_span_record(&path));
+            return Err(bad_span_record(path));
         }
-        return Ok(Some(record));
+        return Ok(record);
     }
     // 0.28.0 wrote one plain `START END` line.
-    let (start, end) = text.split_once(' ').ok_or_else(|| bad_span_record(&path))?;
-    let start = start.parse::<u64>().map_err(|_| bad_span_record(&path))?;
+    let (start, end) = text.split_once(' ').ok_or_else(|| bad_span_record(path))?;
+    let start = start.parse::<u64>().map_err(|_| bad_span_record(path))?;
     let end = match end.trim() {
         "-" => None,
-        n => Some(n.parse::<u64>().map_err(|_| bad_span_record(&path))?),
+        n => Some(n.parse::<u64>().map_err(|_| bad_span_record(path))?),
     };
     if end.is_some_and(|e| e < start) {
-        return Err(bad_span_record(&path));
+        return Err(bad_span_record(path));
     }
-    Ok(Some(SpanRecord {
+    Ok(SpanRecord {
         url: None,
         start,
         end,
         total: None,
         etag: None,
         last_modified: None,
-    }))
+        part: None,
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_span_record_file(path: &Path) -> Result<SpanRecord, Error> {
+    let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| bad_span_record(path))?;
+    parse_span_record(text, path)
+}
+
+/// One parked ranged download, as listed by [`list_parked_spans`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(not(target_arch = "wasm32"))]
+pub struct ParkedSpan {
+    /// The output path the part would be renamed to.
+    pub out: PathBuf,
+    /// The part file, when the record names it.
+    pub part: Option<PathBuf>,
+    pub url: Option<String>,
+    pub start: u64,
+    pub end: Option<u64>,
+    pub total: Option<u64>,
+    /// Bytes already parked in the part.
+    pub part_size: u64,
+}
+
+/// List the parked span manifests in `dir`.
+/// A malformed record is a refusal, not a silently skipped row.
+///
+/// # Errors
+///
+/// Returns [`Error::Io`] when the directory or a record cannot be read, and a
+/// malformed record is refused.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn list_parked_spans(dir: &Path) -> Result<Vec<ParkedSpan>, Error> {
+    let mut parked = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))? {
+        let entry = entry.map_err(|e| Error::io(dir, e))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with(".nxr-span-") {
+            continue;
+        }
+        let meta = entry.metadata().map_err(|e| Error::io(&entry.path(), e))?;
+        if !meta.is_file() {
+            continue;
+        }
+        let record = read_span_record_file(&entry.path())?;
+        let part = record.part.as_deref().map(|part| dir.join(part));
+        let part_size = part
+            .as_deref()
+            .map_or(0, |part| part_len(part).unwrap_or(0));
+        let out = part
+            .as_ref()
+            .and_then(|part| part.file_stem().map(|stem| dir.join(stem)))
+            .unwrap_or_else(|| dir.to_path_buf());
+        parked.push(ParkedSpan {
+            out,
+            part,
+            url: record.url,
+            start: record.start,
+            end: record.end,
+            total: record.total,
+            part_size,
+        });
+    }
+    parked.sort_by(|a, b| a.out.cmp(&b.out));
+    Ok(parked)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1102,6 +1188,7 @@ fn reconcile_span_record(
         total: None,
         etag: None,
         last_modified: None,
+        part: None,
     };
     if part_len(part)? == 0 {
         return Ok(recorded.unwrap_or(requested));
