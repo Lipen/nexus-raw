@@ -1095,8 +1095,8 @@ fn read_span_record_file(path: &Path) -> Result<SpanRecord, Error> {
 #[cfg(not(target_arch = "wasm32"))]
 pub struct ParkedSpan {
     /// The output path the part would be renamed to.
-    pub out: PathBuf,
-    /// The part file, when the record names it.
+    pub out: Option<PathBuf>,
+    /// The part file, when the record names it or a legacy record matches one.
     pub part: Option<PathBuf>,
     pub url: Option<String>,
     pub start: u64,
@@ -1108,6 +1108,8 @@ pub struct ParkedSpan {
 
 /// List the parked span manifests in `dir`.
 /// A malformed record is a refusal, not a silently skipped row.
+/// A 0.28.0 record has no `part` field: its part is recovered by matching
+/// `span_record_path(part)` against the record file name.
 ///
 /// # Errors
 ///
@@ -1115,27 +1117,42 @@ pub struct ParkedSpan {
 /// malformed record is refused.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn list_parked_spans(dir: &Path) -> Result<Vec<ParkedSpan>, Error> {
-    let mut parked = Vec::new();
+    let mut records = Vec::new();
+    let mut parts = Vec::new();
     for entry in std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))? {
         let entry = entry.map_err(|e| Error::io(dir, e))?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if !name.starts_with(".nxr-span-") {
-            continue;
-        }
-        let meta = entry.metadata().map_err(|e| Error::io(&entry.path(), e))?;
+        let path = entry.path();
+        let meta = entry.metadata().map_err(|e| Error::io(&path, e))?;
         if !meta.is_file() {
             continue;
         }
-        let record = read_span_record_file(&entry.path())?;
-        let part = record.part.as_deref().map(|part| dir.join(part));
+        if name.starts_with(".nxr-span-") {
+            records.push(path);
+        } else if name.ends_with(".part") {
+            parts.push(path);
+        }
+    }
+    let mut parked = Vec::new();
+    for path in records {
+        let record = read_span_record_file(&path)?;
+        let part = record
+            .part
+            .as_deref()
+            .map(|part| dir.join(part))
+            .or_else(|| {
+                parts
+                    .iter()
+                    .find(|part| span_record_path(part) == path)
+                    .cloned()
+            });
         let part_size = part
             .as_deref()
             .map_or(0, |part| part_len(part).unwrap_or(0));
         let out = part
             .as_ref()
-            .and_then(|part| part.file_stem().map(|stem| dir.join(stem)))
-            .unwrap_or_else(|| dir.to_path_buf());
+            .and_then(|part| part.file_stem().map(|stem| dir.join(stem)));
         parked.push(ParkedSpan {
             out,
             part,

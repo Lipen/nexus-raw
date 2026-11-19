@@ -208,9 +208,12 @@ pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
     for span in parked {
         let label = span_spec(span.start, span.end);
         let total = span.total.map_or_else(|| "?".to_owned(), human_bytes);
+        let out_label = span.out.as_ref().map_or_else(
+            || "<unknown part>".to_owned(),
+            |out| out.display().to_string(),
+        );
         let human = format!(
-            "{}: {} parked of span {label} (object {total})",
-            span.out.display(),
+            "{out_label}: {} parked of span {label} (object {total})",
             human_bytes(span.part_size),
         );
         print_line(
@@ -218,7 +221,7 @@ pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
             &human,
             &serde_json::json!({
                 "event": "resume",
-                "out": span.out.display().to_string(),
+                "out": span.out.as_ref().map(|out| out.display().to_string()),
                 "part": span.part.as_ref().map(|p| p.display().to_string()),
                 "url": span.url.as_deref(),
                 "start": span.start,
@@ -228,13 +231,10 @@ pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
             }),
         );
         if !cli.json {
-            if let Some(url) = &span.url {
+            if let (Some(url), Some(out)) = (&span.url, &span.out) {
                 print_line(
                     false,
-                    &format!(
-                        "  resume: nxr get {url} -o {} --continue",
-                        span.out.display()
-                    ),
+                    &format!("  resume: nxr get {url} -o {} --continue", out.display()),
                     &serde_json::Value::Null,
                 );
             }

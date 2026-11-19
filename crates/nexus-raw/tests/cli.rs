@@ -3742,6 +3742,29 @@ fn resume_lists_a_parked_span() {
         "{}",
         stdout(&human)
     );
+
+    // A 0.28.0 record is a plain `START END` line with no part name: the
+    // listing recovers the part by its record hash.
+    let record = std::fs::read_dir(out.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(".nxr-span-"))
+        })
+        .expect("a parked record");
+    std::fs::write(&record, "5000 -\n").unwrap();
+    let legacy = nxr(&["resume", out.path().to_str().unwrap(), "--json"]);
+    expect_exit(&legacy, 0, "legacy resume");
+    let rows = ndjson(&legacy);
+    let row = rows
+        .iter()
+        .find(|row| row["event"] == "resume")
+        .expect("a legacy row");
+    assert_eq!(row["bytes"], parked);
+    assert!(row["out"].as_str().unwrap().ends_with("tail.bin"));
+    assert!(row["url"].is_null());
 }
 
 /// An explicit `--range` plus `--continue` resumes the same span.
