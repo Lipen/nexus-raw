@@ -97,10 +97,18 @@ The floor above describes a run that is still talking to the server, not one the
 
 ## Range and segmented reads
 
-The wire contract is one open span per request.
+The wire contract for a whole-object resume is one open span per request.
 A GET with `Range: bytes=N-` that the server honors answers `206` with `Content-Range` and the suffix body.
+An explicit span (`get --range`) may also send a closed `bytes=START-END`, which the same `206` contract answers.
 A span that starts at or past the object's end answers `416` with `Content-Range: bytes */<total>`.
-Any other `Range` form is the server's business: the client never sends it on the resume path.
+Any other `Range` form is the server's business: the client never sends it.
+
+A single span (`get --range`) is that open or closed span streamed into `<out>.part`, with the same Range resume as a whole-object download.
+A resumed closed span sends `bytes=(START + part)-END`.
+A resumed open one sends `bytes=(START + part)-`.
+Its progress events are absolute: `done` counts from the object start, `total` is the full object length, and a resumed span reuses the part prefix.
+The span bounds are recorded beside the part, so `--continue` resumes the same span without repeating `--range`.
+The open form HEADs for the size, and a probe failure names the status, the missing size, or the start and size when the span begins past the end.
 
 Segmented download (`get --segments N`) is a client-side strategy on top of that contract, not a wire extension.
 The client HEADs the URL for `Content-Length`, splits the object into N contiguous closed spans (`bytes=start-end`), fetches them concurrently, and assembles the answers positionally into one file that the usual digest check and atomic rename complete.

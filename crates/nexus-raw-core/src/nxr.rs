@@ -29,7 +29,7 @@ use crate::model::state::RemoteStatus;
 use crate::primitive;
 use crate::primitive::HeadInfo;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::primitive::{GetOutcome, RangeOutcome, ShaSource};
+use crate::primitive::{GetOutcome, RangeOutcome, ShaSource, SpanOutcome};
 use crate::service;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::sync::{
@@ -451,6 +451,31 @@ impl Nxr {
             }
         }
         Ok(RangeOutcome { start, end, bytes })
+    }
+
+    /// GET one `START-END` or `START-` byte range as a stream (spec §5.1
+    /// `get --range`).
+    ///
+    /// With a file target the span streams into `<out>.part`, reports artifact
+    /// events with absolute object positions and the full object length, and
+    /// resumes through `--continue`; the span bounds are recorded beside the
+    /// part so a later `--continue` needs no repeated `--range`.
+    /// Without a target the span streams to stdout in one attempt.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors from the probe or GET,
+    /// [`Error::Io`] when the part cannot be written or renamed, and
+    /// [`Error::Misuse`] for a malformed range or a start past the object's end.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn get_span(
+        &self,
+        url: &str,
+        spec: &str,
+        out: Option<PathBuf>,
+        cont: bool,
+    ) -> Result<SpanOutcome, Error> {
+        primitive::get_span(&self.client, url, spec, out, cont).await
     }
 
     /// The `.sha256` marker digest of one object, when the server has a marker.

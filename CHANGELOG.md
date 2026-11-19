@@ -5,7 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr get --range A-B --continue` resumes a parked span, recorded bounds and all, so a killed ranged run keeps its bytes without repeating `--range`.
+  A part with no span record is refused when `--range` names the span.
+
+### Changed
+
+- A ranged file download streams into `<out>.part` with the artifact events of a whole download.
+  `done` is now the absolute object position, `total` is the full object length, and the first event precedes the first byte.
+  Downstream consumers that add the range base to `done` must drop it.
+  The napi `get` range path uses the same streaming core.
+
+### Fixed
+
+- An open-ended range probe names its real failure: a 401 or 404 status, a missing `Content-Length`, or a start past the object's end with the size and the start.
 
 ## [0.27.0] - 2026-11-13
 

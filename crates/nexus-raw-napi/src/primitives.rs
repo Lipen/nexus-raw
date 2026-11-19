@@ -34,51 +34,6 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
     let nxr = Nxr::new(cfg, tx).map_err(js_error)?;
     let out = o.out.map(PathBuf::from);
     let pump = spawn_pump(rx, on_event);
-    if let Some(spec) = o.range {
-        if o.cont.unwrap_or(false) {
-            drop(nxr);
-            return Err(finish_pump_err(
-                pump,
-                Error::Misuse("range and cont exclude each other".into()),
-            )
-            .await);
-        }
-        let range = match nxr.get_range(&url, &spec).await {
-            Ok(range) => range,
-            Err(e) => return Err(finish_pump_err(pump, e).await),
-        };
-        if let Some(path) = out {
-            if let Err(e) = nexus_raw_core::primitive::write_bytes_atomically(&path, &range.bytes) {
-                drop(nxr);
-                return Err(finish_pump_err(pump, e).await);
-            }
-        } else {
-            let written = {
-                use std::io::Write as _;
-                let mut stdout = std::io::stdout().lock();
-                stdout.write_all(&range.bytes).and_then(|()| stdout.flush())
-            };
-            if let Err(e) = written {
-                drop(nxr);
-                return Err(finish_pump_err(
-                    pump,
-                    Error::Io {
-                        path: "-".to_owned(),
-                        detail: e.to_string(),
-                    },
-                )
-                .await);
-            }
-        }
-        let size = range.bytes.len();
-        drop(nxr);
-        finish_pump(pump).await?;
-        return Ok(NxrGetResult {
-            size: size as f64,
-            sha256: None,
-            resumed_from: 0.0,
-        });
-    }
     // A resume needs the sibling part file of a named output: without `out`
     // there is nothing to resume and the flag would be silently dead.
     if o.cont.unwrap_or(false) && out.is_none() {
@@ -90,6 +45,25 @@ pub async fn get(url: String, opts: Option<NxrGetOpts>) -> Result<NxrGetResult> 
             ),
         )
         .await);
+    }
+    if let Some(spec) = o.range {
+        let outcome = match nxr
+            .get_span(&url, &spec, out, o.cont.unwrap_or(false))
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                drop(nxr);
+                return Err(finish_pump_err(pump, e).await);
+            }
+        };
+        drop(nxr);
+        finish_pump(pump).await?;
+        return Ok(NxrGetResult {
+            size: outcome.size as f64,
+            sha256: None,
+            resumed_from: outcome.resumed_from as f64,
+        });
     }
     let outcome = nxr
         .get(

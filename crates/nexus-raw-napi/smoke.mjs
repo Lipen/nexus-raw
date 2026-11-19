@@ -8,7 +8,15 @@
 // `missing-remote` without any external network.
 import { createHash } from 'node:crypto'
 import http from 'node:http'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
@@ -199,6 +207,90 @@ try {
   } finally {
     sink.close()
     sink.closeAllConnections()
+  }
+
+  // A ranged get streams into `<out>.part`, reports absolute progress, and a
+  // parked part resumes through `cont` without repeating the range.
+  const payload = Buffer.alloc(10_000)
+  for (let i = 0; i < payload.length; i++) payload[i] = i % 251
+  let cuts = 0
+  const rangeSrv = http.createServer((req, res) => {
+    const head = req.method === 'HEAD'
+    const range = req.headers.range
+    if (!range) {
+      res.writeHead(200, {
+        'content-length': payload.length,
+        'accept-ranges': 'bytes',
+      })
+      res.end(head ? undefined : payload)
+      return
+    }
+    const m = /^bytes=(\d+)-(\d*)$/.exec(range)
+    const start = m ? Number(m[1]) : 0
+    if (start >= payload.length) {
+      res.writeHead(416, { 'content-range': `bytes */${payload.length}` })
+      res.end()
+      return
+    }
+    const end = m && m[2] ? Math.min(Number(m[2]), payload.length - 1) : payload.length - 1
+    const body = payload.subarray(start, end + 1)
+    res.writeHead(206, {
+      'content-range': `bytes ${start}-${end}/${payload.length}`,
+      'content-length': body.length,
+      'accept-ranges': 'bytes',
+    })
+    if (head) {
+      res.end()
+      return
+    }
+    if (cuts > 0) {
+      cuts--
+      const half = body.subarray(0, Math.max(1, body.length >> 1))
+      res.write(half, () => res.destroy())
+      return
+    }
+    res.end(body)
+  })
+  await new Promise((resolve) => rangeSrv.listen(0, '127.0.0.1', resolve))
+  try {
+    const base = `http://127.0.0.1:${rangeSrv.address().port}/raw/`
+    const spanOut = join(dir, 'span.bin')
+    const events = []
+    cuts = 8
+    await assert.rejects(
+      nxr.get(`${base}span.bin`, {
+        range: '5000-',
+        out: spanOut,
+        noSha: true,
+        retry: 4,
+        onEvent: (e) => events.push(e),
+      }),
+      (err) => err.exitCode === 3,
+    )
+    await flush()
+    const parked = statSync(`${spanOut}.part`).size
+    assert.ok(parked > 0, 'the cut scored a part')
+    assert.ok(
+      events.some(
+        (e) => e.event === 'artifact' && e.done >= 5000 && e.total === payload.length,
+      ),
+      'the range events are absolute',
+    )
+
+    cuts = 0
+    const result = await nxr.get(`${base}span.bin`, {
+      cont: true,
+      out: spanOut,
+      noSha: true,
+    })
+    await flush()
+    assert.equal(result.resumedFrom, parked)
+    assert.equal(result.size, payload.length - 5000)
+    assert.deepEqual(readFileSync(spanOut), payload.subarray(5000))
+    assert.ok(!existsSync(`${spanOut}.part`), 'the part is renamed away')
+  } finally {
+    rangeSrv.close()
+    rangeSrv.closeAllConnections()
   }
 
   // A throw inside onEvent rejects the command promise instead of crashing the process.

@@ -2157,6 +2157,45 @@ async fn get_primitive_resumes_with_range() {
 }
 
 #[tokio::test]
+async fn get_primitive_resumes_a_parked_span() {
+    let mock = MockNexus::start(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 512,
+    })
+    .unwrap();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..20_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+    let url = format!("{}big.bin", dir_url(&mock));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+    // Cut the span mid-drip: the part and its recorded bounds stay on disk.
+    let timed = tokio::time::timeout(
+        Duration::from_millis(250),
+        nxr.get_span(&url, "5000-", Some(target.clone()), false),
+    )
+    .await;
+    assert!(timed.is_err(), "the drip outlives the budget");
+    let parked = std::fs::metadata(&part).unwrap().len();
+    assert!(parked > 0, "the part landed before the cut");
+
+    // The whole-object entry resumes the recorded span, not its bytes as a prefix.
+    let outcome = nxr
+        .get(&url, Some(target.clone()), true, true)
+        .await
+        .unwrap();
+    assert_eq!(outcome.resumed_from, parked);
+    assert_eq!(outcome.size, content.len() as u64 - 5000);
+    assert_eq!(std::fs::read(&target).unwrap(), &content[5000..]);
+    assert!(!part.exists());
+}
+
+#[tokio::test]
 async fn down_stale_part_self_heals_without_a_flag() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();

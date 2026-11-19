@@ -48,7 +48,7 @@ _arguments "${_arguments_options[@]}" : \
 '(-O --remote-name)-o+[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '(-O --remote-name)--out=[Output file (stdout when omitted). Must be a real path\: \`<out>.part\` is created beside it while the transfer runs, and \`--continue\` resumes from that part]:FILE:_files' \
 '--segments=[Fetch through N concurrent byte-range requests (2 to 64). File output only\: \`--segments\` with a stdout target is a misuse]:N:_default' \
-'(--continue --segments)--range=[Fetch one byte range\: START-END or START- (inclusive), through a Range request. Conflicts with --continue and --segments]:START-END:_default' \
+'(--segments)--range=[Fetch one byte range\: START-END or START- (inclusive), through a Range request. File output streams into \`<out>.part\` and \`--continue\` resumes it. Conflicts with --segments]:START-END:_default' \
 '-u+[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '--user=[Credentials as user\:pass, curl style. Env stays preferred for CI\: NXR_AUTH (base64 user\:pass) or NXR_USERNAME + NXR_PASSWORD]:USER:PASS:_default' \
 '-R+[A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A \`-u\` on the same call wins over the alias credentials]:ALIAS:_default' \
@@ -61,7 +61,7 @@ _arguments "${_arguments_options[@]}" : \
 '-O[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
 '--remote-name[Write to the URL'\''s last segment in the current directory, like curl'\''s \`-O\`. The segment must pass the artifact grammar\: for any other name, pass \`-o FILE\`]' \
 '(-o --out -O --remote-name)--stdout[Stream the body to the terminal anyway. A terminal is not a pipe\: the body'\''s control bytes would garble the console]' \
-'--continue[Resume from an existing \`<out>\`.part through a Range request]' \
+'--continue[Resume from an existing \`<out>\`.part through a Range request. A part parked by \`--range\` resumes that span, so \`--range\` may be omitted]' \
 '--no-sha[Read the bytes without verifying \`<url>.sha256\`. File output only\: a stdout stream is never verified, and a range has no object digest]' \
 '--tls-insecure[Skip TLS certificate verification]' \
 '--json[Emit one NDJSON event per line on stdout]' \

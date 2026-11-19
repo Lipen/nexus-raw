@@ -30,7 +30,7 @@ pub use crate::model::name::{ArtifactName, NamePrefix};
 pub use crate::model::state::{LocalStatus, RemoteStatus};
 pub use crate::nxr::{Enumeration, Nxr};
 #[cfg(not(target_arch = "wasm32"))]
-pub use crate::primitive::{GetOutcome, ShaSource};
+pub use crate::primitive::{GetOutcome, ShaSource, SpanOutcome};
 #[cfg(not(target_arch = "wasm32"))]
 pub use crate::sync::mirror::{staging_dir, MirrorAction};
 #[cfg(not(target_arch = "wasm32"))]

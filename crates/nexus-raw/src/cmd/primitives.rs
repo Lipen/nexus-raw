@@ -73,9 +73,9 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
             "the stdout stream is never verified: --no-sha changes nothing there".to_owned(),
         ));
     }
-    if range.is_some() && (cont || segments.is_some()) {
+    if range.is_some() && segments.is_some() {
         return Err(Error::Misuse(
-            "--range reads one span: pass --range without --continue or --segments".to_owned(),
+            "--range reads one span: pass --range without --segments".to_owned(),
         ));
     }
     // The flag combinations are judged first, because their refusals name the precise
@@ -103,7 +103,32 @@ async fn run_get(
     no_sha: bool,
 ) -> Result<(), Error> {
     if let Some(spec) = range {
-        return run_get_range(ctx, url, out, spec).await;
+        let outcome = ctx
+            .nxr
+            .get_span(url, spec, out.map(Path::to_owned), cont)
+            .await?;
+        report_span(ctx, url, out, &outcome);
+        return Ok(());
+    }
+    // A parked part may belong to a span: `--continue` resumes that span
+    // instead of reading its bytes as a whole-object prefix.
+    if let Some(path) = out {
+        if cont {
+            if let Some((start, end)) = nexus_raw_core::primitive::recorded_span(path)? {
+                let spec = span_spec(start, end);
+                let outcome = ctx
+                    .nxr
+                    .get_span(url, &spec, Some(path.to_owned()), true)
+                    .await?;
+                report_span(ctx, url, Some(path), &outcome);
+                return Ok(());
+            }
+            // No parked span: the whole-object resume starts clean, and the
+            // core clears a stale record that has no part.
+        } else if segments.is_some() {
+            // A fresh segmented run owns the part, so a parked span goes with it.
+            nexus_raw_core::primitive::clear_parked_span(path)?;
+        }
     }
     let outcome = match segments {
         Some(n) => {
@@ -299,45 +324,40 @@ async fn run_sha(ctx: &Ctx, target: &str) -> Result<(), Error> {
     Ok(())
 }
 
-async fn run_get_range(ctx: &Ctx, url: &str, out: Option<&Path>, spec: &str) -> Result<(), Error> {
-    let range = ctx.nxr.get_range(url, spec).await?;
-    let label = match range.end {
-        Some(end) => format!("{}-{end}", range.start),
-        None => format!("{}-", range.start),
-    };
-    match out {
-        Some(path) => {
-            nexus_raw_core::primitive::write_bytes_atomically(path, &range.bytes)?;
-            print_line(
-                ctx.json,
-                &format!(
-                    "range {label}: {} bytes → {}",
-                    range.bytes.len(),
-                    path.display()
-                ),
-                &serde_json::json!({
-                    "ok": true,
-                    "url": url,
-                    "out": path.display().to_string(),
-                    "range": label,
-                    "bytes": range.bytes.len(),
-                }),
-            );
-        }
-        None => {
-            use std::io::Write;
-            let mut stdout = std::io::stdout().lock();
-            stdout.write_all(&range.bytes).map_err(|e| Error::Io {
-                path: "-".to_owned(),
-                detail: e.to_string(),
-            })?;
-            stdout.flush().map_err(|e| Error::Io {
-                path: "-".to_owned(),
-                detail: e.to_string(),
-            })?;
-        }
+fn span_spec(start: u64, end: Option<u64>) -> String {
+    match end {
+        Some(end) => format!("{start}-{end}"),
+        None => format!("{start}-"),
     }
-    Ok(())
+}
+
+fn report_span(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core::SpanOutcome) {
+    // A stdout span is already the output: a line would corrupt it.
+    let Some(path) = out else {
+        return;
+    };
+    let label = span_spec(outcome.start, outcome.end);
+    let resumed = if outcome.resumed_from > 0 {
+        format!(" (resumed from {})", outcome.resumed_from)
+    } else {
+        String::new()
+    };
+    print_line(
+        ctx.json,
+        &format!(
+            "range {label}: {} bytes → {}{resumed}",
+            outcome.size,
+            path.display()
+        ),
+        &serde_json::json!({
+            "ok": true,
+            "url": url,
+            "out": path.display().to_string(),
+            "range": label,
+            "bytes": outcome.size,
+            "resumed_from": outcome.resumed_from,
+        }),
+    );
 }
 
 fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core::GetOutcome) {

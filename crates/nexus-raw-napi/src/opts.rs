@@ -98,12 +98,13 @@ pub struct NxrGetOpts {
     /// Without it the body streams to the process stdout, like the CLI.
     pub out: Option<String>,
     /// Resume from an existing `<out>.part` through a Range request.
+    /// A part parked by `range` resumes that span.
     pub cont: Option<bool>,
     /// Read the bytes without verifying `<url>.sha256`, default false.
     /// File output only: a stdout stream is never verified.
     pub no_sha: Option<bool>,
     /// Fetch one byte range: START-END or START- (inclusive).
-    /// Conflicts with `cont`.
+    /// File output streams into `<out>.part`; `cont` resumes it.
     pub range: Option<String>,
 }
 

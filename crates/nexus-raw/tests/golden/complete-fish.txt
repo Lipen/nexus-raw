@@ -59,7 +59,7 @@ complete -c nxr -n "__fish_nxr_needs_command" -f -a "complete" -d 'Print a shell
 complete -c nxr -n "__fish_nxr_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s o -l out -d 'Output file (stdout when omitted). Must be a real path: `<out>.part` is created beside it while the transfer runs, and `--continue` resumes from that part' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l segments -d 'Fetch through N concurrent byte-range requests (2 to 64). File output only: `--segments` with a stdout target is a misuse' -r
-complete -c nxr -n "__fish_nxr_using_subcommand get" -l range -d 'Fetch one byte range: START-END or START- (inclusive), through a Range request. Conflicts with --continue and --segments' -r
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l range -d 'Fetch one byte range: START-END or START- (inclusive), through a Range request. File output streams into `<out>.part` and `--continue` resumes it. Conflicts with --segments' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s u -l user -d 'Credentials as user:pass, curl style. Env stays preferred for CI: NXR_AUTH (base64 user:pass) or NXR_USERNAME + NXR_PASSWORD' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s R -l remote -d 'A remote alias from the config file (the file is read only when this names one). The alias expands URL arguments that look relative and supplies the credentials. A `-u` on the same call wins over the alias credentials' -r
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l workers -d 'Parallel artifact transfers' -r
@@ -69,7 +69,7 @@ complete -c nxr -n "__fish_nxr_using_subcommand get" -l stall-secs -d 'Fail a tr
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l ca-bundle -d 'A PEM bundle of extra trust roots for a private CA (curl\'s --cacert). The bundle carries the CA that signed the server certificate, not the bare server leaf. Conflicts with --tls-insecure: a bundle is the safe alternative to disabling verification' -r -F
 complete -c nxr -n "__fish_nxr_using_subcommand get" -s O -l remote-name -d 'Write to the URL\'s last segment in the current directory, like curl\'s `-O`. The segment must pass the artifact grammar: for any other name, pass `-o FILE`'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l stdout -d 'Stream the body to the terminal anyway. A terminal is not a pipe: the body\'s control bytes would garble the console'
-complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request'
+complete -c nxr -n "__fish_nxr_using_subcommand get" -l continue -d 'Resume from an existing `<out>`.part through a Range request. A part parked by `--range` resumes that span, so `--range` may be omitted'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l no-sha -d 'Read the bytes without verifying `<url>.sha256`. File output only: a stdout stream is never verified, and a range has no object digest'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l tls-insecure -d 'Skip TLS certificate verification'
 complete -c nxr -n "__fish_nxr_using_subcommand get" -l json -d 'Emit one NDJSON event per line on stdout'

@@ -3230,6 +3230,20 @@ fn get_range_reads_the_exact_span() {
     assert!(stdout(&got).contains("range 2-5"), "{}", stdout(&got));
 }
 
+/// A closed end past the object is clamped to the object's end, not refused.
+#[test]
+fn get_range_closed_end_past_the_object_clamps() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let got = nxr(&["get", &url, "--range", "5-999", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "a closed end past the object clamps");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[5..]);
+}
+
 #[test]
 fn get_range_open_ended_reads_the_tail() {
     let srv = server(Scenario::Atomic);
@@ -3316,6 +3330,375 @@ fn get_range_missing_object_is_data() {
     let url = format!("{}1.14.0/absent.bin", srv.base_url());
     let got = nxr(&["get", &url, "--range", "0-1"]);
     expect_exit(&got, 1, "a missing range target is data");
+}
+
+/// A ranged file download reports the same artifact events as a whole one:
+/// absolute positions against the full object length, the first before any byte.
+#[test]
+fn get_range_open_ended_streams_progress_events() {
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 20,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "4000-",
+        "-o",
+        dst.to_str().unwrap(),
+        "--json",
+    ]);
+    expect_exit(&got, 0, "open-ended range");
+    assert_eq!(std::fs::read(&dst).unwrap(), &content[4000..]);
+
+    let events = ndjson(&got);
+    let artifacts: Vec<&serde_json::Value> =
+        events.iter().filter(|e| e["event"] == "artifact").collect();
+    assert!(
+        artifacts.len() >= 2,
+        "progress events arrive during the span: {events:?}"
+    );
+    let first = artifacts[0];
+    assert_eq!(
+        first["done"], 4000,
+        "the first event predates the first byte"
+    );
+    assert_eq!(first["total"], 10_000, "total is the full object length");
+    assert!(
+        artifacts
+            .iter()
+            .all(|e| e["total"] == 10_000 && e["done"].as_u64().unwrap() >= 4000),
+        "done is the absolute object position: {events:?}"
+    );
+    assert!(
+        artifacts.iter().any(|e| e["done"].as_u64().unwrap() > 4000),
+        "the events grow with the transfer: {events:?}"
+    );
+    let final_line = events.last().unwrap();
+    assert_eq!(
+        final_line["bytes"], 6_000,
+        "the span length, not the object"
+    );
+    assert_eq!(final_line["range"], "4000-");
+}
+
+/// The part file grows while the span streams: an external observer and a
+/// later `--continue` see the bytes, not only the finished span.
+#[cfg(unix)]
+#[test]
+fn get_range_writes_the_part_while_it_streams() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..20_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "5000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .expect("the started event arrives");
+    let started: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
+    assert_eq!(started["event"], "artifact");
+    assert_eq!(started["done"], 5_000);
+    assert_eq!(started["total"], 20_000);
+    line.clear();
+    reader.read_line(&mut line).expect("a byte event arrives");
+    let bytes: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
+    assert!(bytes["done"].as_u64().unwrap() > 5_000);
+
+    let mid = std::fs::metadata(&part)
+        .expect("the part exists mid-transfer")
+        .len();
+    assert!(
+        mid > 0 && mid < 15_000,
+        "the part grows during the transfer: {mid}"
+    );
+    assert!(
+        !dst.exists(),
+        "the output appears only when the span is whole"
+    );
+    child.kill().unwrap();
+    child.wait().unwrap();
+}
+
+/// A killed ranged run resumes through the recorded span: `--continue` alone
+/// needs no repeated `--range`, and `resumed_from` is the parked span prefix.
+#[cfg(unix)]
+#[test]
+fn get_range_continue_resumes_the_recorded_span() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..20_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "5000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    line.clear();
+    reader.read_line(&mut line).expect("a byte event arrives");
+    child.kill().unwrap();
+    child.wait().unwrap();
+
+    let parked = std::fs::metadata(&part)
+        .expect("the part survives the kill")
+        .len();
+    assert!(parked > 0, "the kill landed some bytes");
+
+    let got = nxr(&[
+        "get",
+        &url,
+        "--continue",
+        "-o",
+        dst.to_str().unwrap(),
+        "--json",
+    ]);
+    expect_exit(&got, 0, "the recorded span resumes");
+    assert_eq!(std::fs::read(&dst).unwrap(), &content[5000..]);
+    let events = ndjson(&got);
+    let final_line = events.last().unwrap();
+    assert_eq!(final_line["resumed_from"], parked);
+    assert_eq!(final_line["range"], "5000-");
+    assert_eq!(final_line["bytes"], 15_000);
+    assert!(!part.exists(), "the completed part is renamed away");
+    assert!(
+        !std::fs::read_dir(out.path()).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".nxr-span-")),
+        "the span record goes with the part"
+    );
+}
+
+/// An explicit `--range` plus `--continue` resumes the same span.
+#[cfg(unix)]
+#[test]
+fn get_range_continue_with_the_same_span_resumes() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "2000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    line.clear();
+    reader.read_line(&mut line).expect("a byte event arrives");
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let parked = std::fs::metadata(&part).unwrap().len();
+
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "2000-",
+        "--continue",
+        "-o",
+        dst.to_str().unwrap(),
+        "--json",
+    ]);
+    expect_exit(&got, 0, "the same span resumes");
+    assert_eq!(std::fs::read(&dst).unwrap(), &content[2000..]);
+    let final_line = ndjson(&got).last().unwrap().clone();
+    assert_eq!(final_line["resumed_from"], parked);
+    assert_eq!(final_line["range"], "2000-");
+}
+
+/// A part parked for one span is never continued as another span.
+#[cfg(unix)]
+#[test]
+fn get_range_continue_with_a_different_span_is_misuse() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "2000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    line.clear();
+    reader.read_line(&mut line).expect("a byte event arrives");
+    child.kill().unwrap();
+    child.wait().unwrap();
+
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "0-",
+        "--continue",
+        "-o",
+        dst.to_str().unwrap(),
+    ]);
+    expect_exit(&got, 2, "a different span cannot reuse the part");
+    assert!(
+        stderr(&got).contains("holds the span 2000-"),
+        "{}",
+        stderr(&got)
+    );
+}
+
+/// The probe's failures name the real cause: the status, the missing size, or
+/// the object size and the start when the span begins past the end.
+#[test]
+fn get_range_probe_401_names_the_status() {
+    let srv = server(Scenario::Auth401 {
+        user: "u".to_owned(),
+        pass: "p".to_owned(),
+    });
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let got = nxr(&["get", &url, "--range", "0-"]);
+    expect_exit(&got, 3, "the probe is the auth verdict");
+    assert!(stderr(&got).contains("401"), "{}", stderr(&got));
+}
+
+#[test]
+fn get_range_probe_404_names_the_status() {
+    let srv = server(Scenario::Atomic);
+    let url = format!("{}absent.bin", root_url(&srv));
+    let got = nxr(&["get", &url, "--range", "0-"]);
+    expect_exit(&got, 1, "a missing open span is data");
+    assert!(stderr(&got).contains("404"), "{}", stderr(&got));
+}
+
+#[test]
+fn get_range_probe_without_a_size_is_misuse() {
+    let srv = server(Scenario::Sizeless);
+    srv.insert("a.bin", ALPHA);
+    let url = format!("{}a.bin", root_url(&srv));
+    let got = nxr(&["get", &url, "--range", "0-"]);
+    expect_exit(&got, 2, "an unbounded span needs a size");
+    assert!(
+        stderr(&got).contains("did not report a size"),
+        "{}",
+        stderr(&got)
+    );
+}
+
+#[test]
+fn get_range_open_ended_past_the_end_names_the_size() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("small.bin", &[0u8; 10]);
+    let url = format!("{}small.bin", root_url(&srv));
+    let got = nxr(&["get", &url, "--range", "999-"]);
+    expect_exit(&got, 2, "a span past the end is misuse");
+    assert!(
+        stderr(&got).contains("range starts at 999, past the end of 10 bytes"),
+        "{}",
+        stderr(&got)
+    );
 }
 
 #[test]

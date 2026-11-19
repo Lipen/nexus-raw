@@ -91,9 +91,9 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `-o, --out <FILE>` | output file. stdout when omitted. `-o -` is misuse, because a file called `-` is a trap |
 | `--stdout` | stream the body to a terminal anyway. Conflicts with `-o` and `-O` |
 | `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
-| `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. The assembled bytes are hashed against the local or server-side `.sha256` sibling before the rename, and a divergence is refused (exit 1) with the part removed |
+| `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. A part parked by `--range` resumes that span, recorded bounds and all, so the flag needs no repeated `--range`. A complete object is hashed against the sibling before the rename. A span is not verifiable and is renamed unchecked |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
-| `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. The span goes to `-o` or stdout. Conflicts with `--continue` and `--segments` |
+| `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. A file target streams into `<FILE>.part` and resumes with `--continue`. A stdout target streams the span and never retries. Conflicts with `--segments` |
 | `--no-sha` | read the bytes and never look at `<URL>.sha256`. File output only: the stdout stream is never verified, so the flag there is a misuse (exit 2) |
 
 A complete object written to a file is verified by default: after the bytes land in `<FILE>.part`, the client reads the sibling and renames only when the digests agree.
@@ -139,8 +139,14 @@ An object smaller than the span count degrades to smaller segments, still byte-e
 
 `--range` reads one span instead of the whole object.
 `START-END` is inclusive, and `START-` reads from `START` to the end, with a HEAD for the size.
-The bytes go to `-o` or stdout: no `.part` file and no resume are involved.
-A missing object is exit 1, and a malformed range or a combination with `--continue`/`--segments` is exit 2.
+A file target streams the span into `<FILE>.part` exactly like a whole-object download: the part grows while the transfer runs, and the bytes are renamed only when the span is whole.
+With `--continue` the span resumes from the part, and `--range` may be omitted: the bounds recorded beside the part name the span.
+An explicit `--range` with `--continue` on a part that carries no span record is a misuse (exit 2): rerun without `--continue` or delete the part.
+The progress events carry absolute object positions: `done` is `START` plus the bytes received, and `total` is the full object length, never the span length.
+A stdout target streams the span in one attempt, since a retry after the first byte would duplicate bytes.
+A span has no object digest, so `--range` is never verified against a `.sha256` sibling.
+The open form's probe names its failure: a non-2xx status, a missing `Content-Length` (use `START-END`), or a start at or past the object's end, which names the size and the start.
+A malformed range or a combination with `--segments` is exit 2.
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4
@@ -153,8 +159,8 @@ $ echo $?
 |:----:|:-----|
 | `0` | body delivered |
 | `1` | the URL answered 404 (the object is absent), the sibling diverges or does not parse, or local I/O failure around the part file |
-| `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, or `--range` with `--continue`/`--segments` |
-| `3` | auth failure, transport exhaustion: see [errors](errors.md#captured-transcripts) |
+| `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, a start past the object's end, or `--range` with `--segments` |
+| `3` | auth failure (including a 401 on the open-range probe), transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:
 
@@ -163,6 +169,9 @@ $ echo $?
 {"done":45,"event":"artifact","name":"app.zip","state":"downloading","total":45}
 {"bytes":45,"ok":true,"out":"app.zip","resumed_from":0,"sha256":"a8a24209…","url":"…"}
 ```
+
+A ranged download emits the same artifact events: `done` is the absolute position in the object and `total` the full object length.
+The final object carries the span as `range` (`START-END` or `START-`), the span length as `bytes` and the reused span prefix as `resumed_from`.
 
 Without `-o` the stdout body is raw bytes and nothing else: stdout mode emits no progress events.
 `--json` without `-o` is refused as misuse (exit 2), and the hint names the two ways out: pass `-o FILE` or drop `--json`.

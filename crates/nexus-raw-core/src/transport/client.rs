@@ -82,6 +82,19 @@ pub(crate) fn write_options(append: bool) -> tokio::fs::OpenOptions {
     options
 }
 
+/// Open an existing file for a size trim: write access, never create, never follow a symlink.
+/// `set_len` on the append-only handle would carry FILE_APPEND_DATA on Windows, where a truncate needs plain write access.
+#[cfg(not(target_arch = "wasm32"))]
+fn trim_options() -> tokio::fs::OpenOptions {
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true);
+    #[cfg(unix)]
+    {
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options
+}
+
 /// The blocking counterpart of `write_options` for `spawn_blocking` code.
 #[cfg(all(not(target_arch = "wasm32"), unix))]
 pub(crate) fn write_options_blocking(append: bool) -> std::fs::OpenOptions {
@@ -199,6 +212,22 @@ fn parse_content_range(value: &str) -> Option<(u64, u64, Option<u64>)> {
 /// Parse the total of a `416` answer: `Content-Range: bytes */total`.
 fn content_range_total(value: &str) -> Option<u64> {
     value.trim().strip_prefix("bytes */")?.trim().parse().ok()
+}
+
+/// The span length once the full object size is known, clamped to the object's end.
+/// `None` when the length is not determinable: an open span without a size, or
+/// a start past the object's end.
+fn span_length(start: u64, end_incl: Option<u64>, total: Option<u64>) -> Option<u64> {
+    match end_incl {
+        Some(end) => {
+            let end = total.map_or(end, |t| end.min(t.saturating_sub(1)));
+            end.checked_sub(start)?.checked_add(1)
+        }
+        None => {
+            let len = total?.checked_sub(start)?;
+            (len > 0).then_some(len)
+        }
+    }
 }
 
 impl NexusClient {
@@ -1213,6 +1242,527 @@ impl NexusClient {
             })
         })
         .await
+    }
+
+    /// GET one byte span into the stable part file, streaming and resuming (§5.1 `get --range`).
+    ///
+    /// The part holds the span's bytes from `start` on: its length is the span
+    /// offset already landed, and `resume` continues there with
+    /// `Range: bytes=(start + len)-...`.
+    /// An object that ignores `Range` answers `200`: the span is cut out of the
+    /// full body by skipping `start + len` and stopping at the end.
+    /// Progress reports absolute object positions (`done = start + landed`) and
+    /// the full object length as `total`, never the span length.
+    /// A `416` starts past the end, and the caller's probe uses the same rule:
+    /// a known total makes the refusal name the object size and the start.
+    ///
+    /// Returns the reused span prefix, the final span length and the full object size when any answer named it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the part cannot be read or written, [`Error::Misuse`] when the span starts past the object's end, and transport, auth or HTTP errors after the retry loop is exhausted.
+    #[allow(clippy::too_many_arguments)]
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn download_span(
+        &self,
+        subject: (&str, Dir),
+        url: &str,
+        start: u64,
+        end_incl: Option<u64>,
+        part: &Path,
+        resume: bool,
+        total_hint: Option<u64>,
+    ) -> Result<(u64, u64, Option<u64>), Error> {
+        let stall = self.stall;
+        let progress = self.events.clone();
+        let subject_name = subject.0.to_owned();
+        self.with_retries(Some(subject), url, |this: &Self, url: &str| {
+            let part: PathBuf = part.to_owned();
+            let progress = progress.clone();
+            let subject_name = subject_name.clone();
+            Box::pin(async move {
+                let mut total = total_hint;
+                let mut prefix: u64 = 0;
+                if resume {
+                    match tokio::fs::symlink_metadata(&part).await {
+                        Ok(meta) if meta.is_file() => prefix = meta.len(),
+                        Ok(_) => {
+                            return Err(AttemptFailure::stop(Error::io(
+                                &part,
+                                std::io::Error::other("the part path is not a regular file"),
+                            )));
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(AttemptFailure::stop(Error::io(&part, e))),
+                    }
+                }
+                if let Some(t) = total {
+                    if start >= t {
+                        return Err(AttemptFailure::stop(Error::Misuse(format!(
+                            "range starts at {start}, past the end of {t} bytes"
+                        ))));
+                    }
+                }
+                // A span already covered by the part needs no request: trim the
+                // excess a stale part may carry and settle.
+                if let Some(len) = span_length(start, end_incl, total) {
+                    if prefix >= len {
+                        if prefix > len {
+                            let file = trim_options()
+                                .open(&part)
+                                .await
+                                .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                            file.set_len(len)
+                                .await
+                                .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                        }
+                        return Ok((len, len, total));
+                    }
+                }
+                let mut restarted = false;
+                loop {
+                    let start_abs = start.checked_add(prefix).ok_or_else(|| {
+                        AttemptFailure::stop(Error::Misuse(
+                            "the byte range overflows u64".to_owned(),
+                        ))
+                    })?;
+                    let end_abs =
+                        end_incl.map(|e| total.map_or(e, |t| e.min(t.saturating_sub(1))));
+                    let mut req = this.authorize(this.http.get(url));
+                    // A closed span always asks for its bound; an open one only
+                    // needs Range once it starts past zero.
+                    if end_incl.is_some() || start_abs > 0 {
+                        let value = match end_abs {
+                            Some(e) => format!("bytes={start_abs}-{e}"),
+                            None => format!("bytes={start_abs}-"),
+                        };
+                        req = req
+                            .header(reqwest::header::RANGE, value)
+                            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                    }
+                    let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                    let status = resp.status().as_u16();
+
+                    if status == 416 {
+                        let declared = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_RANGE)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(content_range_total);
+                        let known = match declared {
+                            Some(t) => Some(t),
+                            None => match total {
+                                Some(t) => Some(t),
+                                None => this.head_info(url).await.ok().and_then(|i| i.size),
+                            },
+                        };
+                        if let Some(t) = known {
+                            total = Some(t);
+                            if start >= t {
+                                return Err(AttemptFailure::stop(Error::Misuse(format!(
+                                    "range starts at {start}, past the end of {t} bytes"
+                                ))));
+                            }
+                            if let Some(len) = span_length(start, end_incl, total) {
+                                if prefix >= len {
+                                    if prefix > len {
+                                        let file = trim_options()
+                                            .open(&part)
+                                            .await
+                                            .map_err(|e| {
+                                                AttemptFailure::stop(Error::io(&part, e))
+                                            })?;
+                                        file.set_len(len).await.map_err(|e| {
+                                            AttemptFailure::stop(Error::io(&part, e))
+                                        })?;
+                                    }
+                                    return Ok((len, len, total));
+                                }
+                            }
+                        }
+                        if restarted {
+                            return Err(AttemptFailure::stop(Error::transport(
+                                url,
+                                "the server keeps refusing the range after a restart from zero",
+                            )));
+                        }
+                        tokio::fs::remove_file(&part).await.ok();
+                        prefix = 0;
+                        restarted = true;
+                        continue;
+                    }
+                    if !(200..300).contains(&status) {
+                        return Err(this.status_failure(url, resp).await);
+                    }
+
+                    let wanted: Option<u64> = if status == 206 {
+                        let parsed = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_RANGE)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(parse_content_range);
+                        let Some((resp_start, resp_end, resp_total)) = parsed else {
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the ranged answer carries no Content-Range after a restart",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            restarted = true;
+                            continue;
+                        };
+                        if let Some(t) = resp_total {
+                            if total.is_some_and(|hint| hint != t) {
+                                // The object changed under the part: its prefix
+                                // describes another representation.
+                                if restarted {
+                                    return Err(AttemptFailure::stop(Error::transport(
+                                        url,
+                                        "the object size still disagrees with the part after a restart",
+                                    )));
+                                }
+                                tokio::fs::remove_file(&part).await.ok();
+                                prefix = 0;
+                                restarted = true;
+                                continue;
+                            }
+                            total = Some(t);
+                        }
+                        if resp_start != start_abs {
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the ranged answer still starts away from the part offset after a restart",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            restarted = true;
+                            continue;
+                        }
+                        if resp_end < resp_start {
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the ranged answer still ends before it starts after a restart",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            restarted = true;
+                            continue;
+                        }
+                        // The span end the answer must reach: a closed span is
+                        // clamped by the object, and an open one runs to the end.
+                        let want_end = match (end_incl, total) {
+                            (Some(e), Some(t)) => Some(e.min(t.saturating_sub(1))),
+                            (Some(e), None) => Some(e),
+                            (None, Some(t)) => Some(t.saturating_sub(1)),
+                            (None, None) => None,
+                        };
+                        if total.is_some_and(|t| resp_end >= t) {
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the ranged answer still runs past the object's end after a restart",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            restarted = true;
+                            continue;
+                        }
+                        // With a known total the answer must reach the span end:
+                        // a short body is a cut transfer, and the completion
+                        // check after the stream retries from the advanced part.
+                        // Without a total the server's end is the only truth.
+                        Some(match (want_end, total) {
+                            (Some(w), Some(_)) => w,
+                            (Some(w), None) => resp_end.min(w),
+                            (None, _) => resp_end,
+                        })
+                    } else {
+                        // Range ignored: the body starts at zero, and the
+                        // advertised length is the full object.
+                        if let Some(len) = resp.content_length() {
+                            total = Some(len);
+                        }
+                        if let Some(t) = total {
+                            if start >= t {
+                                return Err(AttemptFailure::stop(Error::Misuse(format!(
+                                    "range starts at {start}, past the end of {t} bytes"
+                                ))));
+                            }
+                        }
+                        if start == 0 && prefix > 0 {
+                            // The body from zero would duplicate the part: start over.
+                            if restarted {
+                                return Err(AttemptFailure::stop(Error::transport(
+                                    url,
+                                    "the server keeps sending the whole body after a restart from zero",
+                                )));
+                            }
+                            tokio::fs::remove_file(&part).await.ok();
+                            prefix = 0;
+                            restarted = true;
+                            continue;
+                        }
+                        end_incl.map(|e| total.map_or(e, |t| e.min(t.saturating_sub(1))))
+                    };
+
+                    let append = prefix > 0;
+                    // A 206 body starts at `start_abs`; a 200 body starts at zero
+                    // and the part offset (plus the span start) is skipped.
+                    let skip = if status == 206 { 0 } else { start_abs };
+                    let span_take = wanted.map(|e| e.saturating_sub(start).saturating_add(1));
+                    progress
+                        .started(
+                            &subject_name,
+                            Dir::Down,
+                            start.saturating_add(prefix),
+                            total,
+                        )
+                        .await;
+                    let mut body = resp.bytes_stream();
+                    let mut file = write_options(append)
+                        .open(&part)
+                        .await
+                        .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                    let mut written = prefix;
+                    let mut skipped = 0u64;
+                    loop {
+                        let next = tokio::time::timeout(stall, body.next()).await;
+                        let chunk = match next {
+                            Ok(Some(Ok(chunk))) => chunk,
+                            Ok(Some(Err(e))) => return Err(this.wrap_send_err(url, e)),
+                            Ok(None) => break,
+                            Err(_) => {
+                                return Err(AttemptFailure::again(Error::transport(
+                                    url,
+                                    format!("stalled: no bytes for {}s", stall.as_secs_f64()),
+                                )));
+                            }
+                        };
+                        let mut chunk: &[u8] = &chunk;
+                        if skipped < skip {
+                            let need = skip - skipped;
+                            if (chunk.len() as u64) <= need {
+                                skipped += chunk.len() as u64;
+                                continue;
+                            }
+                            chunk = &chunk[usize::try_from(need).unwrap_or(usize::MAX)..];
+                            skipped = skip;
+                        }
+                        if let Some(take) = span_take {
+                            let want = take.saturating_sub(written);
+                            if want == 0 {
+                                break;
+                            }
+                            let n = usize::try_from(want.min(chunk.len() as u64))
+                                .unwrap_or(chunk.len());
+                            chunk = &chunk[..n];
+                        }
+                        if chunk.is_empty() {
+                            break;
+                        }
+                        file.write_all(chunk)
+                            .await
+                            .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                        written += chunk.len() as u64;
+                        progress
+                            .bytes(
+                                &subject_name,
+                                Dir::Down,
+                                start.saturating_add(written),
+                                total,
+                            )
+                            .await;
+                        if span_take == Some(written) {
+                            break;
+                        }
+                    }
+                    file.flush()
+                        .await
+                        .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
+                    // The part on disk must hold exactly the span bytes this
+                    // attempt wrote: a concurrent truncation or extension makes
+                    // the rename land bytes no stream described.
+                    let on_disk = file
+                        .metadata()
+                        .await
+                        .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?
+                        .len();
+                    if on_disk != written {
+                        return Err(AttemptFailure::again(Error::transport(
+                            url,
+                            format!(
+                                "the part on disk is {on_disk} bytes after the span wrote {written}: retrying"
+                            ),
+                        )));
+                    }
+                    // A span with a known end must reach it: a short body is a
+                    // cut transfer, and the part state makes the retry safe.
+                    // An open span without any total has only EOF as its truth.
+                    let expected = match (span_take, total) {
+                        (Some(take), _) => Some(take),
+                        (None, Some(t)) => Some(t.saturating_sub(start)),
+                        (None, None) => None,
+                    };
+                    if let Some(expected) = expected {
+                        if written < expected {
+                            return Err(AttemptFailure::again(Error::transport(
+                                url,
+                                format!(
+                                    "the ranged body ended at {} of {expected} bytes",
+                                    start.saturating_add(written)
+                                ),
+                            )));
+                        }
+                    }
+                    return Ok((prefix, written, total));
+                }
+            })
+        })
+        .await
+    }
+
+    /// GET one byte span straight to stdout.
+    ///
+    /// The response is acquired through the retry loop, so a connect failure or
+    /// a retryable status still retries. The body is read once: a retry after
+    /// the first byte would duplicate bytes on the stream, the same rule the
+    /// whole-object stdout path follows.
+    /// A `200` answer (Range ignored) is cut to the span by skipping and capping.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, auth or HTTP errors, [`Error::Misuse`] when the span
+    /// starts past the object's end, and [`Error::Io`] when stdout cannot be written.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn stream_span(
+        &self,
+        url: &str,
+        start: u64,
+        end_incl: Option<u64>,
+        total_hint: Option<u64>,
+    ) -> Result<u64, Error> {
+        let resp = self
+            .with_retries(None, url, |this: &Self, url: &str| {
+                let mut req = this.authorize(this.http.get(url));
+                if end_incl.is_some() || start > 0 {
+                    let value = match end_incl {
+                        Some(e) => format!("bytes={start}-{e}"),
+                        None => format!("bytes={start}-"),
+                    };
+                    req = req
+                        .header(reqwest::header::RANGE, value)
+                        .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                }
+                Box::pin(async move {
+                    let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
+                    let status = resp.status().as_u16();
+                    if status == 416 || (200..300).contains(&status) {
+                        Ok(resp)
+                    } else {
+                        Err(this.status_failure(url, resp).await)
+                    }
+                })
+            })
+            .await?;
+        let status = resp.status().as_u16();
+        if status == 416 {
+            let declared = resp
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(content_range_total);
+            let total = match declared {
+                Some(t) => Some(t),
+                None => self.head_info(url).await.ok().and_then(|i| i.size),
+            };
+            return Err(match total {
+                Some(t) => Error::Misuse(format!(
+                    "range starts at {start}, past the end of {t} bytes"
+                )),
+                None => Error::Transport {
+                    url: url.to_owned(),
+                    detail: "the server answered 416 without an object size".to_owned(),
+                },
+            });
+        }
+        let total = if status == 200 {
+            resp.content_length().or(total_hint)
+        } else {
+            total_hint
+        };
+        if let Some(t) = total {
+            if start >= t {
+                return Err(Error::Misuse(format!(
+                    "range starts at {start}, past the end of {t} bytes"
+                )));
+            }
+        }
+        let skip = if status == 206 { 0 } else { start };
+        let take = end_incl.map(|e| {
+            total
+                .map_or(e, |t| e.min(t.saturating_sub(1)))
+                .saturating_sub(start)
+                .saturating_add(1)
+        });
+        let mut body = resp.bytes_stream();
+        let mut stdout = tokio::io::stdout();
+        let mut written = 0u64;
+        let mut skipped = 0u64;
+        loop {
+            let next = tokio::time::timeout(self.stall, body.next()).await;
+            let chunk = match next {
+                Ok(Some(Ok(chunk))) => chunk,
+                Ok(Some(Err(e))) => return Err(Error::transport(url, e)),
+                Ok(None) => break,
+                Err(_) => {
+                    return Err(Error::transport(
+                        url,
+                        format!("no bytes for {:?} while reading a range", self.stall),
+                    ));
+                }
+            };
+            let mut chunk: &[u8] = &chunk;
+            if skipped < skip {
+                let need = skip - skipped;
+                if (chunk.len() as u64) <= need {
+                    skipped += chunk.len() as u64;
+                    continue;
+                }
+                chunk = &chunk[usize::try_from(need).unwrap_or(usize::MAX)..];
+                skipped = skip;
+            }
+            if let Some(take) = take {
+                let want = take.saturating_sub(written);
+                if want == 0 {
+                    break;
+                }
+                let n = usize::try_from(want.min(chunk.len() as u64)).unwrap_or(chunk.len());
+                chunk = &chunk[..n];
+            }
+            if chunk.is_empty() {
+                break;
+            }
+            stdout.write_all(chunk).await.map_err(|e| Error::Io {
+                path: "stdout".into(),
+                detail: e.to_string(),
+            })?;
+            written += chunk.len() as u64;
+            if take == Some(written) {
+                break;
+            }
+        }
+        stdout.flush().await.map_err(|e| Error::Io {
+            path: "stdout".into(),
+            detail: e.to_string(),
+        })?;
+        Ok(written)
     }
 
     /// GET one closed byte span into a fresh file (segmented download).

@@ -136,6 +136,7 @@ pub(crate) enum Cmd {
         #[arg(long, conflicts_with_all = ["out", "remote_name"])]
         stdout: bool,
         /// Resume from an existing `<out>`.part through a Range request.
+        /// A part parked by `--range` resumes that span, so `--range` may be omitted.
         #[arg(long = "continue")]
         cont: bool,
         /// Fetch through N concurrent byte-range requests (2 to 64).
@@ -143,8 +144,9 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "N")]
         segments: Option<usize>,
         /// Fetch one byte range: START-END or START- (inclusive), through a Range request.
-        /// Conflicts with --continue and --segments.
-        #[arg(long, value_name = "START-END", conflicts_with_all = ["cont", "segments"])]
+        /// File output streams into `<out>.part` and `--continue` resumes it.
+        /// Conflicts with --segments.
+        #[arg(long, value_name = "START-END", conflicts_with = "segments")]
         range: Option<String>,
         /// Read the bytes without verifying `<url>.sha256`.
         /// File output only: a stdout stream is never verified, and a range has no object digest.

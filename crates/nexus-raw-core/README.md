@@ -79,7 +79,7 @@ The `Enumeration` you pass to `down`, `diff`, `rm` and `mirror` is the name sour
 
 | Surface | Calls |
 |:---|:---|
-| primitives | `get`, `get_segmented`, `get_range`, `put`, `put_bytes`, `head`, `sha`, `sibling_digest`, `read_range` |
+| primitives | `get`, `get_segmented`, `get_span`, `get_range`, `put`, `put_bytes`, `head`, `sha`, `sibling_digest`, `read_range` |
 | transfers | `scan`, `diff`, `delta`, `up`, `up_if_changed`, `down`, `down_with_segments`, `clone_plan`, `clone_to`, `mirror`, `mirror_plan` |
 | layout | `channel_get`, `channel_set`, `ls_entries`, `ls_assets`, `enumerate` |
 | integrity | `audit`, `audit_filtered`, `verify` |
