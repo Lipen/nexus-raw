@@ -183,6 +183,16 @@ fn human_bytes(n: u64) -> String {
     }
 }
 
+/// The freshest byte event: the artifact and, for a range, its span.
+#[derive(Clone)]
+struct Current {
+    name: String,
+    dir: Dir,
+    done: u64,
+    total: Option<u64>,
+    span: Option<(u64, Option<u64>)>,
+}
+
 /// Live transfer state behind the single in-place progress line.
 ///
 /// One line, not one per artifact: parallel workers would otherwise smear each
@@ -193,15 +203,49 @@ struct Progress {
     files_total: usize,
     /// Settled artifacts, skips included.
     files_done: usize,
-    /// The artifact of the most recent byte event: name, direction, done, total.
-    current: Option<(String, Dir, u64, Option<u64>)>,
+    /// The artifact of the most recent byte event.
+    current: Option<Current>,
+    /// The previous rate sample: time and absolute bytes.
+    last: Option<(std::time::Instant, u64)>,
+    /// Smoothed bytes per second.
+    rate: f64,
     /// Visible width of the last drawn line, for erasing it.
     width: u16,
 }
 
 impl Progress {
     fn note_bytes(&mut self, name: &str, dir: Dir, done: u64, total: Option<u64>) {
-        self.current = Some((name.to_owned(), dir, done, total));
+        self.current = Some(Current {
+            name: name.to_owned(),
+            dir,
+            done,
+            total,
+            span: None,
+        });
+    }
+
+    fn note_span_bytes(
+        &mut self,
+        name: &str,
+        dir: Dir,
+        done: u64,
+        total: Option<u64>,
+        start: u64,
+        end: Option<u64>,
+    ) {
+        self.current = Some(Current {
+            name: name.to_owned(),
+            dir,
+            done,
+            total,
+            span: Some((start, end)),
+        });
+    }
+
+    /// A new artifact starts its own rate window.
+    fn reset_rate(&mut self) {
+        self.last = None;
+        self.rate = 0.0;
     }
 
     /// Erase the in-place line, if one is drawn.
@@ -220,10 +264,25 @@ impl Progress {
         if !std::io::stderr().is_terminal() {
             return;
         }
-        let Some((name, dir, done, total)) = self.current.clone() else {
+        let Some(current) = self.current.clone() else {
             return;
         };
-        let arrow = match dir {
+        let now = std::time::Instant::now();
+        if let Some((last_at, last_done)) = self.last {
+            let dt = now.duration_since(last_at).as_secs_f64();
+            if dt >= 0.2 && current.done >= last_done {
+                let instant = (current.done - last_done) as f64 / dt;
+                self.rate = if self.rate == 0.0 {
+                    instant
+                } else {
+                    self.rate * 0.7 + instant * 0.3
+                };
+                self.last = Some((now, current.done));
+            }
+        } else {
+            self.last = Some((now, current.done));
+        }
+        let arrow = match current.dir {
             Dir::Up => "↑",
             Dir::Down => "↓",
         };
@@ -233,19 +292,58 @@ impl Progress {
             arrow.to_owned()
         };
         line.push_str(" · ");
-        line.push_str(&name);
-        match total {
-            Some(t) if t > 0 => line.push_str(&format!(
-                " {}/{} ({}%)",
-                human_bytes(done),
-                human_bytes(t),
-                done * 100 / t
-            )),
-            _ => line.push_str(&format!(" {}", human_bytes(done))),
+        line.push_str(&current.name);
+        let (span_done, span_total) = if let Some((start, end)) = current.span {
+            let total = end.map_or_else(
+                || current.total.map(|t| t.saturating_sub(start)),
+                |e| Some(e.saturating_sub(start).saturating_add(1)),
+            );
+            (current.done.saturating_sub(start), total)
+        } else {
+            (current.done, current.total)
+        };
+        match span_total.filter(|t| *t > 0) {
+            Some(t) => {
+                line.push_str(&format!(
+                    " {}/{} ({}%)",
+                    human_bytes(span_done),
+                    human_bytes(t),
+                    span_done * 100 / t
+                ));
+                if current.span.is_some() {
+                    if let Some(object_total) = current.total {
+                        line.push_str(&format!(
+                            " · object {}/{}",
+                            human_bytes(current.done),
+                            human_bytes(object_total)
+                        ));
+                    }
+                }
+            }
+            None => line.push_str(&format!(" {}", human_bytes(span_done))),
+        }
+        if self.rate > 0.0 {
+            line.push_str(&format!(" · {}/s", human_bytes(self.rate as u64)));
+            if let Some(t) = span_total.filter(|t| *t > 0) {
+                let remaining = t.saturating_sub(span_done) as f64;
+                line.push_str(&format!(" · ETA {}", human_eta(remaining / self.rate)));
+            }
         }
         let pad = (self.width as usize).saturating_sub(line.len());
         eprint!("\r{line}{}", " ".repeat(pad));
         self.width = line.len().min(u16::MAX as usize) as u16;
+    }
+}
+
+/// A short duration for the progress line.
+fn human_eta(seconds: f64) -> String {
+    let total = seconds.max(0.0).round() as u64;
+    if total >= 3600 {
+        format!("{}h {:02}m", total / 3600, (total % 3600) / 60)
+    } else if total >= 60 {
+        format!("{}:{:02}", total / 60, total % 60)
+    } else {
+        format!("{total}s")
     }
 }
 
@@ -256,7 +354,10 @@ impl Progress {
 /// Live byte progress draws one in-place stderr line when stderr is a terminal, and on a full terminal that line replaces the per-artifact lines.
 fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress, paint: &Paint) {
     // Any non-progress line starts clean, so the in-place drawing never smears.
-    if !matches!(ev, Event::ArtifactBytes { .. }) {
+    if !matches!(
+        ev,
+        Event::ArtifactBytes { .. } | Event::ArtifactSpanBytes { .. }
+    ) {
         prog.clear();
     }
     match ev {
@@ -290,6 +391,7 @@ fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress
         Event::ArtifactStarted {
             name, dir, total, ..
         } => {
+            prog.reset_rate();
             if verbose && !quiet {
                 let arrow = match dir {
                     Dir::Up => "↑",
@@ -309,6 +411,20 @@ fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress
                 return;
             }
             prog.note_bytes(name, *dir, *done, *total);
+            prog.draw();
+        }
+        Event::ArtifactSpanBytes {
+            name,
+            dir,
+            done,
+            total,
+            start,
+            end,
+        } => {
+            if quiet {
+                return;
+            }
+            prog.note_span_bytes(name, *dir, *done, *total, *start, *end);
             prog.draw();
         }
         Event::ArtifactDone {
@@ -396,7 +512,15 @@ fn human(ev: &Event, quiet: bool, verbose: bool, calm: bool, prog: &mut Progress
 
 #[cfg(test)]
 mod tests {
-    use super::{artifact_lines, calm_view};
+    use super::{artifact_lines, calm_view, human_eta};
+
+    #[test]
+    fn the_eta_reads_as_a_short_duration() {
+        assert_eq!(human_eta(0.0), "0s");
+        assert_eq!(human_eta(42.4), "42s");
+        assert_eq!(human_eta(90.0), "1:30");
+        assert_eq!(human_eta(3661.0), "1h 01m");
+    }
 
     #[test]
     fn the_calm_view_needs_both_streams() {

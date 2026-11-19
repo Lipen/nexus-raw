@@ -20,7 +20,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::events::Dir;
+use crate::events::{Dir, Event};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::model::digest;
 use crate::model::digest::Digest;
@@ -87,15 +87,28 @@ pub async fn get(
 ) -> Result<GetOutcome, Error> {
     if let Some(out) = out {
         if cont {
-            if let Some((start, end)) = recorded_span(&out)? {
-                // A part parked by a ranged download continues that span. A
-                // span has no object digest, so no sibling check applies.
-                let span = get_span_to_file(client, url, start, end, &out, true).await?;
-                return Ok(GetOutcome {
-                    size: span.size,
-                    digest: None,
-                    resumed_from: span.resumed_from,
-                });
+            let part = part_of(&out);
+            if let Some(record) = read_span_record(&part)? {
+                if part_len(&part)? > 0 {
+                    let record = reconcile_span_record(&part, url, record.start, record.end)?;
+                    let probe = probe_span(client, url, record.start, record.end).await?;
+                    let span = get_span_to_file(
+                        client,
+                        url,
+                        record.start,
+                        record.end,
+                        &out,
+                        true,
+                        probe,
+                        record,
+                    )
+                    .await?;
+                    return Ok(GetOutcome {
+                        size: span.size,
+                        digest: None,
+                        resumed_from: span.resumed_from,
+                    });
+                }
             }
             // A record without its part is stale state.
             clear_span_record(&out);
@@ -197,27 +210,39 @@ pub async fn get_span(
     out: Option<PathBuf>,
     cont: bool,
 ) -> Result<SpanOutcome, Error> {
-    let (start, end) = parse_range(spec)?;
+    let (start, end, probe) = resolve_span(client, url, spec).await?;
     match out {
         Some(out) => {
             let part = part_of(&out);
-            if cont {
-                reconcile_span_record(&part, start, end)?;
+            let record = if cont {
+                reconcile_span_record(&part, url, start, end)?
             } else {
-                // A fresh span owns the part: bytes recorded for another span,
-                // or unrecorded bytes, cannot be its prefix. The same span is
-                // kept until the first answer truncates it, so a failed fresh
-                // retry still resumes cleanly.
+                // A fresh span owns the part: bytes recorded for another span
+                // or another URL, or unrecorded bytes, cannot be its prefix.
+                // The same span of the same URL is kept until the first answer
+                // truncates it, so a failed fresh retry still resumes cleanly.
                 let recorded = read_span_record(&part)?;
-                if recorded != Some((start, end)) {
+                let requested_url = resume_url(url);
+                let same = recorded.as_ref().is_some_and(|r| {
+                    (r.start, r.end) == (start, end)
+                        && r.url.as_deref().is_none_or(|u| u == requested_url)
+                });
+                if !same {
                     let _ = std::fs::remove_file(&part);
                 }
-            }
-            get_span_to_file(client, url, start, end, &out, cont).await
+                SpanRecord {
+                    url: Some(requested_url),
+                    start,
+                    end,
+                    total: None,
+                    etag: None,
+                    last_modified: None,
+                }
+            };
+            get_span_to_file(client, url, start, end, &out, cont, probe, record).await
         }
         None => {
-            let total = probe_span(client, url, start, end).await?;
-            let size = client.stream_span(url, start, end, total).await?;
+            let size = client.stream_span(url, start, end, probe.total).await?;
             Ok(SpanOutcome {
                 start,
                 end,
@@ -228,9 +253,10 @@ pub async fn get_span(
     }
 }
 
-/// The file half of [`get_span`]: probe, record the span, stream into the part,
-/// rename, and drop the record.
+/// The file half of [`get_span`]: fill the record, stream into the part, rename,
+/// and drop the record.
 /// The bounds and the part state are already reconciled by the caller.
+#[allow(clippy::too_many_arguments)]
 #[cfg(not(target_arch = "wasm32"))]
 async fn get_span_to_file(
     client: &NexusClient,
@@ -239,16 +265,80 @@ async fn get_span_to_file(
     end: Option<u64>,
     out: &Path,
     cont: bool,
+    probe: SpanProbe,
+    mut record: SpanRecord,
 ) -> Result<SpanOutcome, Error> {
     let part = part_of(out);
-    let total = probe_span(client, url, start, end).await?;
+    let old_total = record.total;
+    let old_strong = strong_etag(record.etag.as_deref()).map(str::to_owned);
+    let had_prefix = part_len(&part)? > 0;
+    // The probe describes the object now. Compare it with what the part was
+    // written against before the record is overwritten, or the new validator
+    // would match its own object and splice the old bytes silently.
+    let mut restart = false;
+    if cont && had_prefix {
+        if let (Some(old), Some(new)) = (old_total, probe.total) {
+            if old != new {
+                restart = true;
+            }
+        }
+        if let (Some(old), Some(new)) = (old_strong.as_deref(), strong_etag(probe.etag.as_deref()))
+        {
+            if old != new {
+                restart = true;
+            }
+        }
+    }
+    if restart {
+        let _ = std::fs::remove_file(&part);
+        let _ = client.events().sender().send(Event::Warning {
+            text: "the object changed since the part was written: the span restarts from its beginning"
+                .to_owned(),
+        });
+    }
+    record.url = Some(resume_url(url));
+    record.start = start;
+    record.end = end;
+    // With a parked prefix still in play, the probe describes the object now,
+    // not the bytes already on disk. Writing its validator into the record
+    // would bless those old bytes for the next resume. Keep the parked values
+    // until the part is discarded or the transfer completes.
+    if !had_prefix || restart {
+        if probe.total.is_some() {
+            record.total = probe.total;
+        }
+        if probe.etag.is_some() {
+            record.etag = probe.etag;
+        }
+        if probe.last_modified.is_some() {
+            record.last_modified = probe.last_modified;
+        }
+    }
+    write_span_record(&part, &record)?;
+    // A fresh run has nothing to validate, a restart just discarded the part,
+    // and a weak ETag cannot prove the object unchanged inside the same second:
+    // only the parked strong ETag goes out.
+    let if_range = if cont && !restart && had_prefix {
+        old_strong.as_deref()
+    } else {
+        None
+    };
+    let resumed = cont && !restart;
     let name = out
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    write_span_record(&part, start, end)?;
     let (resumed_from, size, _) = client
-        .download_span((&name, Dir::Down), url, start, end, &part, cont, total)
+        .download_span(
+            (&name, Dir::Down),
+            url,
+            start,
+            end,
+            &part,
+            resumed,
+            record.total,
+            if_range,
+        )
         .await?;
     tokio::fs::rename(&part, out)
         .await
@@ -274,7 +364,7 @@ async fn get_span_to_file(
 pub fn recorded_span(out: &Path) -> Result<Option<(u64, Option<u64>)>, Error> {
     let part = part_of(out);
     match std::fs::symlink_metadata(&part) {
-        Ok(meta) if meta.is_file() => read_span_record(&part),
+        Ok(meta) if meta.is_file() => Ok(read_span_record(&part)?.map(|r| (r.start, r.end))),
         Ok(_) => Err(Error::Io {
             path: part.display().to_string(),
             detail: "the part path is not a regular file".to_owned(),
@@ -711,18 +801,66 @@ fn span_record_path(part: &Path) -> PathBuf {
     parent.join(format!(".nxr-span-{token}"))
 }
 
+/// The parked-span manifest beside a part.
+/// A strong ETag is the only validator a resume sends through `If-Range`.
 #[cfg(not(target_arch = "wasm32"))]
-fn bad_span_record(path: &Path) -> Error {
-    Error::Io {
-        path: path.display().to_string(),
-        detail:
-            "the span record does not parse (expected `START END` or `START -`): delete it and the part"
-                .to_owned(),
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct SpanRecord {
+    /// The object URL with userinfo, query and fragment removed.
+    #[serde(default)]
+    url: Option<String>,
+    start: u64,
+    #[serde(default)]
+    end: Option<u64>,
+    #[serde(default)]
+    total: Option<u64>,
+    #[serde(default)]
+    etag: Option<String>,
+    /// Stored for diagnosis, never sent as `If-Range`.
+    #[serde(default)]
+    last_modified: Option<String>,
+}
+
+/// The part length, 0 when it does not exist.
+#[cfg(not(target_arch = "wasm32"))]
+fn part_len(part: &Path) -> Result<u64, Error> {
+    match std::fs::symlink_metadata(part) {
+        Ok(meta) if meta.is_file() => Ok(meta.len()),
+        Ok(_) => Err(Error::Io {
+            path: part.display().to_string(),
+            detail: "the part path is not a regular file".to_owned(),
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(0),
+        Err(e) => Err(Error::io(part, e)),
+    }
+}
+
+/// The URL as a resume identity: a different query, fragment or credential
+/// never changes which object the part holds.
+#[cfg(not(target_arch = "wasm32"))]
+fn resume_url(url: &str) -> String {
+    match reqwest::Url::parse(url) {
+        Ok(mut url) => {
+            url.set_query(None);
+            url.set_fragment(None);
+            let _ = url.set_username("");
+            let _ = url.set_password(None);
+            url.to_string()
+        }
+        Err(_) => url.to_owned(),
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn read_span_record(part: &Path) -> Result<Option<(u64, Option<u64>)>, Error> {
+fn bad_span_record(path: &Path) -> Error {
+    Error::Io {
+        path: path.display().to_string(),
+        detail: "the span record does not parse: delete it and the part".to_owned(),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_span_record(part: &Path) -> Result<Option<SpanRecord>, Error> {
     let path = span_record_path(part);
     let bytes = match std::fs::symlink_metadata(&path) {
         Ok(meta) if meta.is_file() => std::fs::read(&path).map_err(|e| Error::io(&path, e))?,
@@ -736,10 +874,19 @@ fn read_span_record(part: &Path) -> Result<Option<(u64, Option<u64>)>, Error> {
         Err(e) => return Err(Error::io(&path, e)),
     };
     let text = std::str::from_utf8(&bytes).map_err(|_| bad_span_record(&path))?;
-    let (start, end) = text
-        .trim()
-        .split_once(' ')
-        .ok_or_else(|| bad_span_record(&path))?;
+    let text = text.trim();
+    if text.is_empty() {
+        return Err(bad_span_record(&path));
+    }
+    if text.starts_with('{') {
+        let record: SpanRecord = serde_json::from_str(text).map_err(|_| bad_span_record(&path))?;
+        if record.end.is_some_and(|e| e < record.start) {
+            return Err(bad_span_record(&path));
+        }
+        return Ok(Some(record));
+    }
+    // 0.28.0 wrote one plain `START END` line.
+    let (start, end) = text.split_once(' ').ok_or_else(|| bad_span_record(&path))?;
     let start = start.parse::<u64>().map_err(|_| bad_span_record(&path))?;
     let end = match end.trim() {
         "-" => None,
@@ -748,16 +895,23 @@ fn read_span_record(part: &Path) -> Result<Option<(u64, Option<u64>)>, Error> {
     if end.is_some_and(|e| e < start) {
         return Err(bad_span_record(&path));
     }
-    Ok(Some((start, end)))
+    Ok(Some(SpanRecord {
+        url: None,
+        start,
+        end,
+        total: None,
+        etag: None,
+        last_modified: None,
+    }))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn write_span_record(part: &Path, start: u64, end: Option<u64>) -> Result<(), Error> {
-    let line = match end {
-        Some(e) => format!("{start} {e}\n"),
-        None => format!("{start} -\n"),
-    };
-    write_bytes_atomically(&span_record_path(part), line.as_bytes())
+fn write_span_record(part: &Path, record: &SpanRecord) -> Result<(), Error> {
+    let bytes = serde_json::to_vec(record).map_err(|e| Error::Io {
+        path: span_record_path(part).display().to_string(),
+        detail: format!("the span record cannot serialize: {e}"),
+    })?;
+    write_bytes_atomically(&span_record_path(part), &bytes)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -768,59 +922,91 @@ fn span_label(start: u64, end: Option<u64>) -> String {
     }
 }
 
-/// A `--continue` that names a span must name the same span the part holds.
-/// An empty part carries no bytes to misplace, so a new span may claim it.
+/// A `--continue` that names a span must name the same span of the same object
+/// the part holds.
+/// An empty part carries no bytes to misplace, so a new span or URL may claim it.
 /// A non-empty part without a record belongs to a whole-object download, and
 /// appending a span after its bytes would assemble an artifact no request described.
 #[cfg(not(target_arch = "wasm32"))]
-fn reconcile_span_record(part: &Path, start: u64, end: Option<u64>) -> Result<(), Error> {
+fn reconcile_span_record(
+    part: &Path,
+    url: &str,
+    start: u64,
+    end: Option<u64>,
+) -> Result<SpanRecord, Error> {
     let recorded = read_span_record(part)?;
-    let len = match std::fs::symlink_metadata(part) {
-        Ok(meta) if meta.is_file() => meta.len(),
-        Ok(_) => {
-            return Err(Error::Io {
-                path: part.display().to_string(),
-                detail: "the part path is not a regular file".to_owned(),
-            });
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
-        Err(e) => return Err(Error::io(part, e)),
+    let requested_url = resume_url(url);
+    let requested = SpanRecord {
+        url: Some(requested_url.clone()),
+        start,
+        end,
+        total: None,
+        etag: None,
+        last_modified: None,
     };
-    if len == 0 {
-        return Ok(());
+    if part_len(part)? == 0 {
+        return Ok(recorded.unwrap_or(requested));
     }
-    match recorded {
-        Some((recorded_start, recorded_end)) if (recorded_start, recorded_end) == (start, end) => {
-            Ok(())
-        }
-        Some((recorded_start, recorded_end)) => {
-            let recorded = span_label(recorded_start, recorded_end);
-            let requested = span_label(start, end);
-            Err(Error::Misuse(format!(
-                "the part {} holds the span {recorded}, not {requested}: pass --continue with the recorded range, or delete the part",
-                part.display()
-            )))
-        }
-        None => Err(Error::Misuse(format!(
+    let Some(recorded) = recorded else {
+        return Err(Error::Misuse(format!(
             "the part {} has no span record: rerun without --continue to start the span over, or delete the part",
             part.display()
-        ))),
+        )));
+    };
+    if (recorded.start, recorded.end) != (start, end) {
+        let recorded_label = span_label(recorded.start, recorded.end);
+        let requested_label = span_label(start, end);
+        return Err(Error::Misuse(format!(
+            "the part {} holds the span {recorded_label}, not {requested_label}: pass --continue with the recorded range, or delete the part",
+            part.display()
+        )));
     }
+    if let Some(recorded_url) = &recorded.url {
+        if recorded_url != &requested_url {
+            return Err(Error::Misuse(format!(
+                "the part {} belongs to {recorded_url}, not {requested_url}: delete the part, or resume the original URL",
+                part.display()
+            )));
+        }
+    }
+    Ok(recorded)
 }
 
-/// The full object size an open-ended span needs, with the probe failures named:
-/// a non-2xx status reaches the transport's verdicts, a missing `Content-Length`
-/// is a misuse that points at `START-END`, and a start past the object's end
-/// names the size.
+/// The strong ETag, the only validator `If-Range` accepts.
+/// A weak `W/...` value can match an object rewritten inside the same second.
+#[cfg(not(target_arch = "wasm32"))]
+fn strong_etag(etag: Option<&str>) -> Option<&str> {
+    etag.filter(|value| !value.trim_start().starts_with("W/"))
+}
+
+/// What the resume probe learned about the object.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Default)]
+struct SpanProbe {
+    total: Option<u64>,
+    etag: Option<String>,
+    last_modified: Option<String>,
+}
+
+/// The full object metadata a span can use.
+/// An open span requires the HEAD, a closed span treats it as best effort,
+/// so a server without HEAD still serves an explicit `START-END`.
 #[cfg(not(target_arch = "wasm32"))]
 async fn probe_span(
     client: &NexusClient,
     url: &str,
     start: u64,
     end: Option<u64>,
-) -> Result<Option<u64>, Error> {
+) -> Result<SpanProbe, Error> {
     if end.is_some() {
-        return Ok(None);
+        return Ok(match client.head_transfer(url).await {
+            Ok(info) => SpanProbe {
+                total: info.size,
+                etag: info.etag,
+                last_modified: info.last_modified,
+            },
+            Err(_) => SpanProbe::default(),
+        });
     }
     let info = client.head_transfer(url).await?;
     let Some(size) = info.size else {
@@ -833,7 +1019,54 @@ async fn probe_span(
             "range starts at {start}, past the end of {size} bytes"
         )));
     }
-    Ok(Some(size))
+    Ok(SpanProbe {
+        total: Some(size),
+        etag: info.etag,
+        last_modified: info.last_modified,
+    })
+}
+
+/// Resolve `START-END`, `START-` or the curl-style suffix `-N` into concrete bounds and a probe.
+#[cfg(not(target_arch = "wasm32"))]
+async fn resolve_span(
+    client: &NexusClient,
+    url: &str,
+    spec: &str,
+) -> Result<(u64, Option<u64>, SpanProbe), Error> {
+    if let Some(suffix) = spec.strip_prefix('-') {
+        let n = suffix
+            .parse::<u64>()
+            .map_err(|_| Error::Misuse(format!("range suffix is not a number: {spec}")))?;
+        if n == 0 {
+            return Err(Error::Misuse(
+                "range suffix must cover at least one byte".to_owned(),
+            ));
+        }
+        let info = client.head_transfer(url).await?;
+        let Some(size) = info.size else {
+            return Err(Error::Misuse(format!(
+                "the server did not report a size for {url}: the suffix range needs a Content-Length"
+            )));
+        };
+        if size == 0 {
+            return Err(Error::Misuse(format!(
+                "the object is empty: {url} has no suffix to read"
+            )));
+        }
+        let start = size.saturating_sub(n);
+        return Ok((
+            start,
+            None,
+            SpanProbe {
+                total: Some(size),
+                etag: info.etag,
+                last_modified: info.last_modified,
+            },
+        ));
+    }
+    let (start, end) = parse_range(spec)?;
+    let probe = probe_span(client, url, start, end).await?;
+    Ok((start, end, probe))
 }
 
 /// The final path segment of a URL, percent-decoded: the marker's name field.

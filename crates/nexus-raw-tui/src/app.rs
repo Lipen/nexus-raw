@@ -4313,6 +4313,8 @@ mod tests {
                 status: 200,
                 size: Some(1),
                 content_type: None,
+                etag: None,
+                last_modified: None,
             }),
         });
         app.handle(Msg::Head {
@@ -4323,6 +4325,8 @@ mod tests {
                 status: 200,
                 size: Some(2),
                 content_type: None,
+                etag: None,
+                last_modified: None,
             }),
         });
         app.handle(Msg::Head {
@@ -4333,6 +4337,8 @@ mod tests {
                 status: 200,
                 size: Some(3),
                 content_type: None,
+                etag: None,
+                last_modified: None,
             }),
         });
         let Mode::Card(Card::File(card)) = app.mode.clone() else {
@@ -4348,6 +4354,8 @@ mod tests {
                 status: 200,
                 size: Some(21),
                 content_type: Some("text/plain".into()),
+                etag: None,
+                last_modified: None,
             }),
         });
         let Mode::Card(Card::File(card)) = app.mode.clone() else {

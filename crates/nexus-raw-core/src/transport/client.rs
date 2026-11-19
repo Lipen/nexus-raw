@@ -131,6 +131,21 @@ pub struct HeadInfo {
     pub status: u16,
     pub size: Option<u64>,
     pub content_type: Option<String>,
+    /// A strong ETag is the only validator a resume sends through `If-Range`.
+    pub etag: Option<String>,
+    /// Stored for diagnosis, never sent as `If-Range`: one-second granularity can miss a rewrite.
+    pub last_modified: Option<String>,
+}
+
+/// One response header as text, when present and UTF-8.
+fn header_text(
+    headers: &reqwest::header::HeaderMap,
+    name: reqwest::header::HeaderName,
+) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned)
 }
 
 /// The result of a DELETE (§5.4).
@@ -581,6 +596,8 @@ impl NexusClient {
                         .get(reqwest::header::CONTENT_TYPE)
                         .and_then(|v| v.to_str().ok())
                         .map(str::to_owned),
+                    etag: header_text(resp.headers(), reqwest::header::ETAG),
+                    last_modified: header_text(resp.headers(), reqwest::header::LAST_MODIFIED),
                 };
                 if (200..300).contains(&status) {
                     info.size = resp
@@ -630,6 +647,8 @@ impl NexusClient {
                         .get(reqwest::header::CONTENT_TYPE)
                         .and_then(|v| v.to_str().ok())
                         .map(str::to_owned),
+                    etag: header_text(resp.headers(), reqwest::header::ETAG),
+                    last_modified: header_text(resp.headers(), reqwest::header::LAST_MODIFIED),
                 })
             })
         })
@@ -899,6 +918,11 @@ impl NexusClient {
                                 .get(reqwest::header::CONTENT_TYPE)
                                 .and_then(|v| v.to_str().ok())
                                 .map(str::to_owned),
+                            etag: header_text(resp.headers(), reqwest::header::ETAG),
+                            last_modified: header_text(
+                                resp.headers(),
+                                reqwest::header::LAST_MODIFIED,
+                            ),
                         };
                         match status {
                             s if (200..300).contains(&s) => Ok(Some(info)),
@@ -1272,14 +1296,21 @@ impl NexusClient {
         part: &Path,
         resume: bool,
         total_hint: Option<u64>,
+        if_range: Option<&str>,
     ) -> Result<(u64, u64, Option<u64>), Error> {
         let stall = self.stall;
         let progress = self.events.clone();
         let subject_name = subject.0.to_owned();
+        let if_range = if_range.map(str::to_owned);
+        let warned_ignored = Arc::new(AtomicBool::new(false));
+        let warned_changed = Arc::new(AtomicBool::new(false));
         self.with_retries(Some(subject), url, |this: &Self, url: &str| {
             let part: PathBuf = part.to_owned();
             let progress = progress.clone();
             let subject_name = subject_name.clone();
+            let if_range = if_range.clone();
+            let warned_ignored = warned_ignored.clone();
+            let warned_changed = warned_changed.clone();
             Box::pin(async move {
                 let mut total = total_hint;
                 let mut prefix: u64 = 0;
@@ -1339,6 +1370,11 @@ impl NexusClient {
                         req = req
                             .header(reqwest::header::RANGE, value)
                             .header(reqwest::header::ACCEPT_ENCODING, "identity");
+                    }
+                    if prefix > 0 {
+                        if let Some(etag) = if_range.as_deref() {
+                            req = req.header(reqwest::header::IF_RANGE, etag);
+                        }
                     }
                     let resp = req.send().await.map_err(|e| this.wrap_send_err(url, e))?;
                     let status = resp.status().as_u16();
@@ -1496,8 +1532,16 @@ impl NexusClient {
                                 ))));
                             }
                         }
-                        if start == 0 && prefix > 0 {
-                            // The body from zero would duplicate the part: start over.
+                        let validator_changed = prefix > 0 && if_range.is_some();
+                        if (start == 0 && prefix > 0) || validator_changed {
+                            // A whole body from zero either ignored Range or
+                            // answered with a new representation. A stale
+                            // prefix can never prepend it.
+                            if validator_changed && !warned_changed.swap(true, Ordering::Relaxed) {
+                                let _ = progress.sender().send(Event::Warning {
+                                    text: "the object changed since the part was written: the span restarts from its beginning".to_owned(),
+                                });
+                            }
                             if restarted {
                                 return Err(AttemptFailure::stop(Error::transport(
                                     url,
@@ -1508,6 +1552,13 @@ impl NexusClient {
                             prefix = 0;
                             restarted = true;
                             continue;
+                        }
+                        if start_abs > 0 && prefix == 0 && !warned_ignored.swap(true, Ordering::Relaxed) {
+                            let _ = progress.sender().send(Event::Warning {
+                                text: format!(
+                                    "the server ignores Range: fetching {start_abs} bytes before the span and discarding them"
+                                ),
+                            });
                         }
                         end_incl.map(|e| total.map_or(e, |t| e.min(t.saturating_sub(1))))
                     };
@@ -1572,11 +1623,13 @@ impl NexusClient {
                             .map_err(|e| AttemptFailure::stop(Error::io(&part, e)))?;
                         written += chunk.len() as u64;
                         progress
-                            .bytes(
+                            .bytes_span(
                                 &subject_name,
                                 Dir::Down,
                                 start.saturating_add(written),
                                 total,
+                                start,
+                                end_incl,
                             )
                             .await;
                         if span_take == Some(written) {

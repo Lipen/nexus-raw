@@ -478,7 +478,14 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
         "GET" => {
             if let Some(payload) = drift_or_store(shared, path) {
                 let total = payload.len();
-                let range = if shared.spec.ignore_range {
+                let etag = etag_of(&payload);
+                // A mismatched strong validator turns the ranged GET into a
+                // whole-body answer, exactly as RFC 9110 says.
+                let range = if shared.spec.ignore_range
+                    || req
+                        .header("If-Range")
+                        .is_some_and(|value| value != etag.as_str())
+                {
                     None
                 } else {
                     range_span(req.header("Range"))
@@ -499,10 +506,10 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         log_request(shared, &req.method, path, Outcome::Status(206));
                         let resp = Resp {
                             status: 206,
-                            extra_headers: vec![(
-                                "Content-Range",
-                                format!("bytes {start}-{stop}/{total}"),
-                            )],
+                            extra_headers: vec![
+                                ("Content-Range", format!("bytes {start}-{stop}/{total}")),
+                                ("ETag", etag.clone()),
+                            ],
                             content_length: body.len(),
                             body,
                             drip: shared.drip,
@@ -517,6 +524,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         if let Some((after_bytes, fake_length)) = cut_plan(shared, path) {
                             let taken = after_bytes.min(total);
                             let mut resp = plain(200, &payload[..taken], shared.drip);
+                            resp.extra_headers.push(("ETag", etag.clone()));
                             resp.content_length = if fake_length {
                                 total + FAKE_LENGTH_LIE
                             } else {
@@ -527,7 +535,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                         }
                         let resp = Resp {
                             status: 200,
-                            extra_headers: Vec::new(),
+                            extra_headers: vec![("ETag", etag)],
                             content_length: total,
                             body: payload,
                             drip: shared.drip,
@@ -542,13 +550,15 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
             }
         }
         "HEAD" => {
-            let found = lock(&shared.store).get(path).map(Vec::len);
-            let (status, content_length) = match found {
-                Some(len) => (200, len),
-                None => (404, b"not found\n".len()),
+            let found = lock(&shared.store)
+                .get(path)
+                .map(|bytes| (bytes.len(), etag_of(bytes)));
+            let (status, content_length, etag) = match found {
+                Some((len, etag)) => (200, len, Some(etag)),
+                None => (404, b"not found\n".len(), None),
             };
             log_request(shared, &req.method, path, Outcome::Status(status));
-            let resp = Resp {
+            let mut resp = Resp {
                 status,
                 extra_headers: Vec::new(),
                 content_length,
@@ -556,6 +566,9 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                 drip: shared.drip,
                 hide_length: shared.sizeless && status == 200,
             };
+            if let Some(etag) = etag {
+                resp.extra_headers.push(("ETag", etag));
+            }
             let _ = server::write_response(stream, &resp);
         }
         "PUT" => {
@@ -615,6 +628,17 @@ fn cut_plan(shared: &Shared, path: &str) -> Option<(usize, bool)> {
     let (cut, fake) = shared.cut_first_get?;
     let mut seq = lock(&shared.first_get);
     (bump(&mut seq, path) == 0).then_some((cut, fake))
+}
+
+/// A strong ETag for the stored bytes: a stable FNV-1a hash plus the length.
+/// The mock is std-only, so this is a cheap change detector, not a digest.
+fn etag_of(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for &byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("\"{hash:016x}-{}\"", bytes.len())
 }
 
 /// Decide Basic auth: the header must be `Basic <token>` with the expected token.

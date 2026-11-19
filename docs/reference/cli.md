@@ -93,7 +93,7 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. A part parked by `--range` resumes that span, recorded bounds and all, so the flag needs no repeated `--range`. A complete object is hashed against the sibling before the rename. A span is not verifiable and is renamed unchecked |
 | `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
-| `--range <RANGE>` | one byte span, `START-END` or `START-`, where `START-` reads to the end. A file target streams into `<FILE>.part` and resumes with `--continue`. A stdout target streams the span and never retries. Conflicts with `--segments` |
+| `--range <RANGE>` | one byte span, `START-END`, `START-` or `-N` for the last N bytes. A file target streams into `<FILE>.part` and resumes with `--continue`. A stdout target streams the span and never retries. Conflicts with `--segments` |
 | `--no-sha` | read the bytes and never look at `<URL>.sha256`. File output only: the stdout stream is never verified, so the flag there is a misuse (exit 2) |
 
 A complete object written to a file is verified by default: after the bytes land in `<FILE>.part`, the client reads the sibling and renames only when the digests agree.
@@ -138,15 +138,20 @@ A server that answers a ranged GET with the whole body gets a plain single-strea
 An object smaller than the span count degrades to smaller segments, still byte-exact.
 
 `--range` reads one span instead of the whole object.
-`START-END` is inclusive, and `START-` reads from `START` to the end, with a HEAD for the size.
+`START-END` is inclusive, `START-` reads from `START` to the end, and `-N` reads the last N bytes.
+The open and suffix forms learn the size with a HEAD.
 A file target streams the span into `<FILE>.part` exactly like a whole-object download: the part grows while the transfer runs, and the bytes are renamed only when the span is whole.
 With `--continue` the span resumes from the part, and `--range` may be omitted: the bounds recorded beside the part name the span.
 An explicit `--range` with `--continue` on a part that carries no span record is a misuse (exit 2): rerun without `--continue` or delete the part.
+The record also carries the source URL, the full object size and a strong ETag.
+A resume of another URL is refused, and a changed size or ETag restarts the span from its beginning instead of splicing two objects.
+`If-Range` is sent only with a strong ETag: a weak one or `Last-Modified` can miss a rewrite inside the same second.
 The progress events carry absolute object positions: `done` is `START` plus the bytes received, and `total` is the full object length, never the span length.
 A stdout target streams the span in one attempt, since a retry after the first byte would duplicate bytes.
 A span has no object digest, so `--range` is never verified against a `.sha256` sibling.
+When the server ignores Range, the run warns with the prefix size it fetched and discarded.
 The open form's probe names its failure: a non-2xx status, a missing `Content-Length` (use `START-END`), or a start at or past the object's end, which names the size and the start.
-A malformed range or a combination with `--segments` is exit 2.
+A malformed range, a zero suffix or a combination with `--segments` is exit 2.
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4

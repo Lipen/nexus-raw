@@ -2196,6 +2196,56 @@ async fn get_primitive_resumes_a_parked_span() {
 }
 
 #[tokio::test]
+async fn get_primitive_restarts_a_span_when_the_object_changes() {
+    let mock = MockNexus::start(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 512,
+    })
+    .unwrap();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let nxr = Nxr::new(config(&mock, None), tx).unwrap();
+    let content: Vec<u8> = (0..20_000u32).map(|i| (i % 251) as u8).collect();
+    let src = TempDir::new().unwrap();
+    seed_complete(src.path(), "big.bin", &content);
+    nxr.up(src.path(), None, true, None).await.unwrap();
+    let url = format!("{}big.bin", dir_url(&mock));
+
+    let out = TempDir::new().unwrap();
+    let target = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+    let timed = tokio::time::timeout(
+        Duration::from_millis(250),
+        nxr.get_span(&url, "5000-", Some(target.clone()), false),
+    )
+    .await;
+    assert!(timed.is_err(), "the drip outlives the budget");
+    let parked = std::fs::metadata(&part).unwrap().len();
+    assert!(parked > 0, "the part landed before the cut");
+
+    // Same length, different bytes: only the ETag can tell the object changed.
+    let changed: Vec<u8> = content.iter().map(|byte| byte.wrapping_add(1)).collect();
+    mock.insert(&format!("{VERSION}/big.bin"), &changed);
+    let outcome = nxr
+        .get(&url, Some(target.clone()), true, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome.resumed_from, 0,
+        "a changed object re-fetches the span"
+    );
+    assert_eq!(outcome.size, changed.len() as u64 - 5000);
+    assert_eq!(std::fs::read(&target).unwrap(), &changed[5000..]);
+    assert!(!part.exists());
+    let events = collect_events(&mut rx);
+    assert!(
+        events.iter().any(
+            |event| matches!(event, Event::Warning { text } if text.contains("object changed"))
+        ),
+        "the restart is announced: {events:?}"
+    );
+}
+
+#[tokio::test]
 async fn down_stale_part_self_heals_without_a_flag() {
     let mock = MockNexus::start(Scenario::Atomic).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();

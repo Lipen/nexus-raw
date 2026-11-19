@@ -518,6 +518,13 @@ fn fold_event(event: Event, dir: Dir) -> Option<Msg> {
             total,
             dir: seen,
         } if seen == dir => DlEv::Bytes { name, done, total },
+        Event::ArtifactSpanBytes {
+            name,
+            done,
+            total,
+            dir: seen,
+            ..
+        } if seen == dir => DlEv::Bytes { name, done, total },
         Event::ArtifactDone {
             name,
             skipped,

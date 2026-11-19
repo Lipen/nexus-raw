@@ -106,6 +106,8 @@ Any other `Range` form is the server's business: the client never sends it.
 A single span (`get --range`) is that open or closed span streamed into `<out>.part`, with the same Range resume as a whole-object download.
 A resumed closed span sends `bytes=(START + part)-END`.
 A resumed open one sends `bytes=(START + part)-`.
+The parked record carries the source URL, full object size and strong ETag.
+A different URL is a misuse, a changed size or ETag restarts the span from its beginning, and `If-Range` goes out only with a strong ETag.
 Its progress events are absolute: `done` counts from the object start, `total` is the full object length, and a resumed span reuses the part prefix.
 The span bounds are recorded beside the part, so `--continue` resumes the same span without repeating `--range`.
 The open form HEADs for the size, and a probe failure names the status, the missing size, or the start and size when the span begins past the end.

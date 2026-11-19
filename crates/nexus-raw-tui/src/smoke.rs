@@ -149,6 +149,7 @@ pub async fn run(args: &Args, cfg: ConfigFile) -> anyhow::Result<()> {
                 Event::Summary(_)
                 | Event::ArtifactStarted { .. }
                 | Event::ArtifactBytes { .. }
+                | Event::ArtifactSpanBytes { .. }
                 | Event::Removing { .. }
                 | Event::Removed { .. }
                 | Event::Missing { .. } => {}

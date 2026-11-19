@@ -143,10 +143,15 @@ pub(crate) enum Cmd {
         /// File output only: `--segments` with a stdout target is a misuse.
         #[arg(long, value_name = "N")]
         segments: Option<usize>,
-        /// Fetch one byte range: START-END or START- (inclusive), through a Range request.
+        /// Fetch one byte range: START-END, START- (inclusive), or the curl-style suffix -N.
         /// File output streams into `<out>.part` and `--continue` resumes it.
         /// Conflicts with --segments.
-        #[arg(long, value_name = "START-END", conflicts_with = "segments")]
+        #[arg(
+            long,
+            value_name = "START-END",
+            conflicts_with = "segments",
+            allow_hyphen_values = true
+        )]
         range: Option<String>,
         /// Read the bytes without verifying `<url>.sha256`.
         /// File output only: a stdout stream is never verified, and a range has no object digest.

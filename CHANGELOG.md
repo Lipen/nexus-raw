@@ -5,7 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `nxr get --range -N` reads the last N bytes, resolved through a HEAD to a normal `START-` span.
+- `nxr get --range` warns when the server ignores Range, naming the prefix bytes fetched and discarded.
+
+### Changed
+
+- The parked span record is now a small manifest with the source URL, full object size and strong ETag.
+  A resume of another URL is refused, and a changed size or ETag restarts the span from its beginning.
+  `If-Range` is sent only with a strong ETag, because a weak one or `Last-Modified` can miss a rewrite.
+
+### Fixed
+
+- A weak or absent validator no longer lets a resume splice bytes from two versions without a word.
 
 ## [0.28.0] - 2026-11-19
 

@@ -121,6 +121,25 @@ fn expect_exit(out: &Output, want: i32, what: &str) {
     );
 }
 
+/// Wait for a running transfer to land its first part bytes, so a kill cannot
+/// race the first chunk under a loaded test runner.
+#[cfg(unix)]
+fn wait_for_part(part: &Path) -> u64 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Ok(meta) = std::fs::metadata(part) {
+            if meta.len() > 0 {
+                return meta.len();
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the part never landed a byte"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 fn write_file(dir: &Path, name: &str, bytes: &[u8]) {
     let path = dir.join(name);
     std::fs::write(&path, bytes).expect("fixture write");
@@ -3257,6 +3276,115 @@ fn get_range_open_ended_reads_the_tail() {
     assert_eq!(std::fs::read(&dst).unwrap(), &payload[5..]);
 }
 
+/// A curl-style suffix reads from the end without knowing the size in the argument.
+#[test]
+fn get_range_suffix_reads_the_last_bytes() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let got = nxr(&["get", &url, "--range", "-4", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "a suffix range");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[6..]);
+    assert!(stdout(&got).contains("range 6-"), "{}", stdout(&got));
+}
+
+#[test]
+fn get_range_suffix_larger_than_the_object_reads_it_all() {
+    let srv = server(Scenario::Atomic);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("all.bin");
+    let got = nxr(&["get", &url, "--range", "-999", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "a suffix above the size");
+    assert_eq!(std::fs::read(&dst).unwrap(), payload);
+}
+
+#[test]
+fn get_range_suffix_zero_is_misuse() {
+    let srv = server(Scenario::Atomic);
+    srv.insert("1.14.0/blob.bin", ALPHA);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let got = nxr(&["get", &url, "--range", "-0"]);
+    expect_exit(&got, 2, "a zero-byte suffix");
+    assert!(
+        stderr(&got).contains("at least one byte"),
+        "{}",
+        stderr(&got)
+    );
+}
+
+/// A part parked for one URL never resumes another object.
+#[cfg(unix)]
+#[test]
+fn get_range_continue_with_a_different_url_is_misuse() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let srv = server(Scenario::Slow {
+        chunk_delay_ms: 30,
+        chunk_size: 1_000,
+    });
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("big.bin", &content);
+    srv.insert("other.bin", &content);
+    let url = format!("{}big.bin", root_url(&srv));
+    let other = format!("{}other.bin", root_url(&srv));
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
+
+    let mut child = Command::new(NXR)
+        .args([
+            "get",
+            &url,
+            "--range",
+            "2000-",
+            "-o",
+            dst.to_str().unwrap(),
+            "--json",
+        ])
+        .env_remove("NXR_AUTH")
+        .env_remove("NXR_USERNAME")
+        .env_remove("NXR_PASSWORD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nxr starts");
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    wait_for_part(&part);
+    child.kill().unwrap();
+    child.wait().unwrap();
+
+    let got = nxr(&["get", &other, "--continue", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 2, "another URL cannot reuse the part");
+    assert!(stderr(&got).contains("belongs to"), "{}", stderr(&got));
+}
+
+#[test]
+fn get_range_warns_when_the_server_ignores_range() {
+    let srv = server(Scenario::IgnoreRange);
+    let payload: &[u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    srv.insert("1.14.0/blob.bin", payload);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("tail.bin");
+    let got = nxr(&["get", &url, "--range", "5-", "-o", dst.to_str().unwrap()]);
+    expect_exit(&got, 0, "an open range on an ignoring server");
+    assert_eq!(std::fs::read(&dst).unwrap(), &payload[5..]);
+    assert!(
+        stderr(&got).contains("ignores Range: fetching 5 bytes"),
+        "{}",
+        stderr(&got)
+    );
+}
+
 #[test]
 fn get_range_to_stdout_writes_only_the_span() {
     let srv = server(Scenario::Atomic);
@@ -3378,6 +3506,12 @@ fn get_range_open_ended_streams_progress_events() {
         "done is the absolute object position: {events:?}"
     );
     assert!(
+        artifacts
+            .iter()
+            .any(|e| e["range_start"] == 4000 && e["range_end"].is_null()),
+        "the span bounds travel with the progress: {events:?}"
+    );
+    assert!(
         artifacts.iter().any(|e| e["done"].as_u64().unwrap() > 4000),
         "the events grow with the transfer: {events:?}"
     );
@@ -3439,9 +3573,7 @@ fn get_range_writes_the_part_while_it_streams() {
     let bytes: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
     assert!(bytes["done"].as_u64().unwrap() > 5_000);
 
-    let mid = std::fs::metadata(&part)
-        .expect("the part exists mid-transfer")
-        .len();
+    let mid = wait_for_part(&part);
     assert!(
         mid > 0 && mid < 15_000,
         "the part grows during the transfer: {mid}"
@@ -3493,8 +3625,7 @@ fn get_range_continue_resumes_the_recorded_span() {
     let mut reader = BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
     reader.read_line(&mut line).unwrap();
-    line.clear();
-    reader.read_line(&mut line).expect("a byte event arrives");
+    wait_for_part(&part);
     child.kill().unwrap();
     child.wait().unwrap();
 
@@ -3567,8 +3698,7 @@ fn get_range_continue_with_the_same_span_resumes() {
     let mut reader = BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
     reader.read_line(&mut line).unwrap();
-    line.clear();
-    reader.read_line(&mut line).expect("a byte event arrives");
+    wait_for_part(&part);
     child.kill().unwrap();
     child.wait().unwrap();
     let parked = std::fs::metadata(&part).unwrap().len();
@@ -3606,6 +3736,7 @@ fn get_range_continue_with_a_different_span_is_misuse() {
     let url = format!("{}big.bin", root_url(&srv));
     let out = TempDir::new().unwrap();
     let dst = out.path().join("tail.bin");
+    let part = out.path().join("tail.bin.part");
 
     let mut child = Command::new(NXR)
         .args([
@@ -3627,8 +3758,7 @@ fn get_range_continue_with_a_different_span_is_misuse() {
     let mut reader = BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
     reader.read_line(&mut line).unwrap();
-    line.clear();
-    reader.read_line(&mut line).expect("a byte event arrives");
+    wait_for_part(&part);
     child.kill().unwrap();
     child.wait().unwrap();
 

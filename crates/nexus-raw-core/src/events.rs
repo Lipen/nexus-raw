@@ -79,6 +79,17 @@ pub enum Event {
         done: u64,
         total: Option<u64>,
     },
+    /// Ranged byte progress: the same absolute `done` and full `total`, plus
+    /// the span the bytes belong to, so a consumer can draw span progress.
+    /// Coalesced like [`Event::ArtifactBytes`].
+    ArtifactSpanBytes {
+        name: String,
+        dir: Dir,
+        done: u64,
+        total: Option<u64>,
+        start: u64,
+        end: Option<u64>,
+    },
     ArtifactDone {
         name: String,
         dir: Dir,
@@ -158,6 +169,22 @@ impl Event {
                 "state": dir.as_state(),
                 "done": done,
                 "total": total,
+            }),
+            Event::ArtifactSpanBytes {
+                name,
+                dir,
+                done,
+                total,
+                start,
+                end,
+            } => serde_json::json!({
+                "event": "artifact",
+                "name": name,
+                "state": dir.as_state(),
+                "done": done,
+                "total": total,
+                "range_start": start,
+                "range_end": end,
             }),
             Event::ArtifactDone {
                 name,
@@ -262,7 +289,8 @@ impl Progress {
         });
     }
 
-    pub async fn bytes(&self, name: &str, dir: Dir, done: u64, total: Option<u64>) {
+    /// Whether this (name, dir) slot may emit a byte event now, and mark it.
+    fn due(&self, name: &str, dir: Dir) -> bool {
         let key = throttle_key(name, dir);
         let now = Instant::now();
         let due = {
@@ -273,23 +301,49 @@ impl Progress {
             }
         };
         if due {
-            {
-                let mut last = self.last.lock().expect("progress throttle lock");
-                last.insert(key, now);
-                // A long-running mirror sees a name per file: without a prune
-                // the throttle map grows with the tree, one entry per key.
-                // Past a bound, entries older than two intervals are dead
-                // weight (their next event is due anyway) and go.
-                if last.len() > 1024 {
-                    let cutoff = now - 2 * MIN_INTERVAL;
-                    last.retain(|_, t| *t > cutoff);
-                }
+            let mut last = self.last.lock().expect("progress throttle lock");
+            last.insert(key, now);
+            // A long-running mirror sees a name per file: without a prune
+            // the throttle map grows with the tree, one entry per key.
+            // Past a bound, entries older than two intervals are dead
+            // weight (their next event is due anyway) and go.
+            if last.len() > 1024 {
+                let cutoff = now - 2 * MIN_INTERVAL;
+                last.retain(|_, t| *t > cutoff);
             }
+        }
+        due
+    }
+
+    pub async fn bytes(&self, name: &str, dir: Dir, done: u64, total: Option<u64>) {
+        if self.due(name, dir) {
             let _ = self.tx.send(Event::ArtifactBytes {
                 name: name.to_owned(),
                 dir,
                 done,
                 total,
+            });
+        }
+    }
+
+    /// Ranged byte progress: absolute `done` against the full `total`, plus the span.
+    pub async fn bytes_span(
+        &self,
+        name: &str,
+        dir: Dir,
+        done: u64,
+        total: Option<u64>,
+        start: u64,
+        end: Option<u64>,
+    ) {
+        if self.due(name, dir) {
+            let _ = self.tx.send(Event::ArtifactSpanBytes {
+                name: name.to_owned(),
+                dir,
+                done,
+                total,
+                start,
+                end,
             });
         }
     }
