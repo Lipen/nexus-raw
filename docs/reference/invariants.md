@@ -15,6 +15,7 @@ Straight-through storage, the control group.
 Every fully-read request is served normally.
 PUT stores the bytes and answers `201`, GET serves the stored bytes and HEAD their length, DELETE removes an existing object with `204` and answers `404` on an absent one, and unknown paths answer `404`.
 A GET honors resumable downloads: a single open `Range: bytes=N-` is answered with `206` and `Content-Range`, an out-of-range start with `416`.
+Every stored object carries a strong `ETag`: a ranged GET with a mismatched `If-Range` answers `200` with the whole body, so a client can detect a changed object before it appends to a parked part.
 
 **Pinned invariant:** The happy path of the protocol, the baseline every other scenario deviates from on one axis.
 
