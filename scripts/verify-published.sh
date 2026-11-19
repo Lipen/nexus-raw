@@ -62,8 +62,22 @@ wait_visible() {
   attempt=1
   limit="${VERIFY_WAIT_ATTEMPTS:-24}"
   pause="${VERIFY_WAIT_SECONDS:-5}"
+  case "$pkg" in
+    @*/*)
+      scope="${pkg%%/*}"
+      leaf="${pkg#*/}"
+      tarball="https://registry.npmjs.org/$scope/$leaf/-/$leaf-$version.tgz"
+      ;;
+    *)
+      tarball="https://registry.npmjs.org/$pkg/-/$pkg-$version.tgz"
+      ;;
+  esac
   while [ "$attempt" -le "$limit" ]; do
-    if npm view "$pkg@$version" version >/dev/null 2>&1; then
+    # The version document appears with the publish; the tarball rides the CDN
+    # behind it, so a visible version can still 404 for a few seconds. Both
+    # must answer before npm install is worth running.
+    if "$repo/scripts/registry-probe.sh" npm "$pkg" "$version" >/dev/null 2>&1 \
+      && curl -fsSIL --max-time 10 "$tarball" >/dev/null 2>&1; then
       return 0
     fi
     if [ "$attempt" -eq "$limit" ]; then
@@ -79,6 +93,8 @@ triple="$(platform_pkg)"
 if [ -n "$triple" ]; then
   wait_visible "@nexus-raw/nxr-$triple" || :
 fi
+wait_visible "@nexus-raw/nxr" || :
+wait_visible "nexus-raw" || :
 
 cd "$tmp"
 echo '{"name":"published-example","private":true}' > package.json
