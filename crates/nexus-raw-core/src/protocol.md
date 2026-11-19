@@ -110,6 +110,7 @@ The parked record carries the source URL, full object size and strong ETag.
 A different URL is a misuse, a changed size or ETag restarts the span from its beginning, and `If-Range` goes out only with a strong ETag.
 Its progress events are absolute: `done` counts from the object start, `total` is the full object length, and a resumed span reuses the part prefix.
 The span bounds are recorded beside the part, so `--continue` resumes the same span without repeating `--range`.
+With `--segments N` the span splits into N contiguous closed ranges, fetched concurrently and assembled at the window offset.
 The open form HEADs for the size, and a probe failure names the status, the missing size, or the start and size when the span begins past the end.
 
 Segmented download (`get --segments N`) is a client-side strategy on top of that contract, not a wire extension.

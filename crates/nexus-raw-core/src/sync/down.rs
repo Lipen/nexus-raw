@@ -569,7 +569,7 @@ async fn download_segmented(
             return Err((name.clone(), Outcome::Failed(e)));
         }
     }
-    if let Err(e) = assemble(&bounds, &staging, &part, total).await {
+    if let Err(e) = assemble(&bounds, &staging, &part, total, 0).await {
         return Err((name.clone(), Outcome::Failed(e)));
     }
     let actual = match crate::model::digest::sha256_file(&part) {

@@ -92,8 +92,8 @@ With `-o` the bytes stream into `<FILE>.part`, which is renamed to `FILE` only a
 | `--stdout` | stream the body to a terminal anyway. Conflicts with `-o` and `-O` |
 | `-O, --remote-name` | write to the URL's last path segment in the current directory, curl's `-O`. Conflicts with `-o`. The segment must pass the artifact grammar: anything else is misuse (exit 2) with `-o` named as the way out |
 | `--continue` | resume from an existing `<FILE>.part` through a `Range: bytes=N-` request. A part parked by `--range` resumes that span, recorded bounds and all, so the flag needs no repeated `--range`. A complete object is hashed against the sibling before the rename. A span is not verifiable and is renamed unchecked |
-| `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
-| `--range <RANGE>` | one byte span, `START-END`, `START-` or `-N` for the last N bytes. A file target streams into `<FILE>.part` and resumes with `--continue`. A stdout target streams the span and never retries. Conflicts with `--segments` |
+| `--segments <N>` | fetch through `N` concurrent byte-range requests (2 to 64). With `--range`, splits the span instead of the whole object. File output only: a stdout target is a misuse (exit 2). `--continue` and `--segments` exclude each other |
+| `--range <RANGE>` | one byte span, `START-END`, `START-` or `-N` for the last N bytes. A file target streams into `<FILE>.part` and resumes with `--continue`. `--segments N` splits the span. A stdout target streams the span and never retries |
 | `--no-sha` | read the bytes and never look at `<URL>.sha256`. File output only: the stdout stream is never verified, so the flag there is a misuse (exit 2) |
 
 A complete object written to a file is verified by default: after the bytes land in `<FILE>.part`, the client reads the sibling and renames only when the digests agree.
@@ -148,7 +148,10 @@ A resume of another URL is refused, and a changed size or ETag restarts the span
 `If-Range` is sent only with a strong ETag: a weak one or `Last-Modified` can miss a rewrite inside the same second.
 The progress events carry absolute object positions: `done` is `START` plus the bytes received, and `total` is the full object length, never the span length.
 A stdout target streams the span in one attempt, since a retry after the first byte would duplicate bytes.
+With `--segments N` the span splits into N contiguous closed ranges, fetched concurrently and assembled into the same `<FILE>.part`.
+The progress stays absolute against the full object, and a segmented span carries the same span bounds.
 A span has no object digest, so `--range` is never verified against a `.sha256` sibling.
+`--segments` with `--continue` is still a misuse: the segmented staging is its own resume state.
 When the server ignores Range, the run warns with the prefix size it fetched and discarded.
 The open form's probe names its failure: a non-2xx status, a missing `Content-Length` (use `START-END`), or a start at or past the object's end, which names the size and the start.
 A malformed range, a zero suffix or a combination with `--segments` is exit 2.
@@ -164,7 +167,7 @@ $ echo $?
 |:----:|:-----|
 | `0` | body delivered |
 | `1` | the URL answered 404 (the object is absent), the sibling diverges or does not parse, or local I/O failure around the part file |
-| `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, a start past the object's end, or `--range` with `--segments` |
+| `2` | misuse: a non-http URL, `--segments` with a stdout target, a segment count outside `2..=64`, a malformed `--range`, a start past the object's end, or `--range` with `--segments` and `--continue` |
 | `3` | auth failure (including a 401 on the open-range probe), transport exhaustion: see [errors](errors.md#captured-transcripts) |
 
 `--json` with `-o` prints the artifact events and then one final object, where `sha256` is the digest of the written file and `resumed_from` the part offset:

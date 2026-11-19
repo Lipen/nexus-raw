@@ -148,6 +148,16 @@ fn header_text(
         .map(str::to_owned)
 }
 
+/// How a ranged segment reports progress: its absolute base, the full object
+/// total, and the span it belongs to.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RangeProgress {
+    pub base: u64,
+    pub total: Option<u64>,
+    pub span: Option<(u64, u64)>,
+    pub announce: bool,
+}
+
 /// The result of a DELETE (§5.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteOutcome {
@@ -1841,6 +1851,34 @@ impl NexusClient {
         end_incl: u64,
         file: &Path,
     ) -> Result<u64, Error> {
+        self.fetch_range_in(
+            subject,
+            url,
+            start,
+            end_incl,
+            file,
+            RangeProgress {
+                base: 0,
+                total: None,
+                span: None,
+                announce: true,
+            },
+        )
+        .await
+    }
+
+    /// The same segment fetch with explicit progress coordinates: an absolute
+    /// base, the full object total and the span the segment belongs to.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn fetch_range_in(
+        &self,
+        subject: (&str, Dir),
+        url: &str,
+        start: u64,
+        end_incl: u64,
+        file: &Path,
+        progress_at: RangeProgress,
+    ) -> Result<u64, Error> {
         let stall = self.stall;
         let progress = self.events.clone();
         let subject_name = subject.0.to_owned();
@@ -1891,7 +1929,11 @@ impl NexusClient {
                         ),
                     )));
                 }
-                progress.started(&subject_name, Dir::Down, 0, Some(length)).await;
+                if progress_at.announce {
+                    progress
+                        .started(&subject_name, Dir::Down, 0, Some(length))
+                        .await;
+                }
                 let mut body = resp.bytes_stream();
                 let mut out = write_options(false)
                     .open(&file)
@@ -1913,7 +1955,27 @@ impl NexusClient {
                         .await
                         .map_err(|e| AttemptFailure::stop(Error::io(&file, e)))?;
                     done += chunk.len() as u64;
-                    progress.bytes(&subject_name, Dir::Down, done, Some(length)).await;
+                    if let Some((span_start, span_end)) = progress_at.span {
+                        progress
+                            .bytes_span(
+                                &subject_name,
+                                Dir::Down,
+                                progress_at.base.saturating_add(done),
+                                progress_at.total.or(Some(length)),
+                                span_start,
+                                Some(span_end),
+                            )
+                            .await;
+                    } else {
+                        progress
+                            .bytes(
+                                &subject_name,
+                                Dir::Down,
+                                done,
+                                progress_at.total.or(Some(length)),
+                            )
+                            .await;
+                    }
                 }
                 out.flush()
                     .await

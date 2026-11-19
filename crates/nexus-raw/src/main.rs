@@ -144,14 +144,8 @@ pub(crate) enum Cmd {
         #[arg(long, value_name = "N")]
         segments: Option<usize>,
         /// Fetch one byte range: START-END, START- (inclusive), or the curl-style suffix -N.
-        /// File output streams into `<out>.part` and `--continue` resumes it.
-        /// Conflicts with --segments.
-        #[arg(
-            long,
-            value_name = "START-END",
-            conflicts_with = "segments",
-            allow_hyphen_values = true
-        )]
+        /// A file target streams into `<out>.part`, `--continue` resumes it, and `--segments N` splits the span into N concurrent requests.
+        #[arg(long, value_name = "START-END", allow_hyphen_values = true)]
         range: Option<String>,
         /// Read the bytes without verifying `<url>.sha256`.
         /// File output only: a stdout stream is never verified, and a range has no object digest.

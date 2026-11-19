@@ -295,6 +295,28 @@ impl Nxr {
         }
     }
 
+    /// GET one `START-END`, `START-` or `-N` span through `segments` concurrent
+    /// byte ranges (spec §5.1 `get --range --segments`).
+    ///
+    /// The span resolves like the single-stream path, the window splits into
+    /// contiguous closed ranges, and progress stays absolute against the full
+    /// object. A span has no digest, so no sibling verification applies.
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors of [`Nxr::get_span`] plus any segment failure, and
+    /// [`Error::Misuse`] outside `2..=64`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn get_segmented_span(
+        &self,
+        url: &str,
+        spec: &str,
+        out: PathBuf,
+        segments: usize,
+    ) -> Result<SpanOutcome, Error> {
+        primitive::get_segmented_span(&self.client, url, spec, &out, segments, &self.events).await
+    }
+
     /// PUT a file, optionally with its sha-sibling (spec §5.1).
     ///
     /// # Errors

@@ -3832,9 +3832,10 @@ fn get_range_open_ended_past_the_end_names_the_size() {
 }
 
 #[test]
-fn get_range_with_segments_is_misuse() {
+fn get_range_with_segments_splits_the_span() {
     let srv = server(Scenario::Atomic);
-    srv.insert("1.14.0/blob.bin", ALPHA);
+    let content: Vec<u8> = (0..100_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("1.14.0/blob.bin", &content);
     let url = format!("{}1.14.0/blob.bin", srv.base_url());
     let out = TempDir::new().unwrap();
     let dst = out.path().join("span.bin");
@@ -3842,13 +3843,65 @@ fn get_range_with_segments_is_misuse() {
         "get",
         &url,
         "--range",
-        "2-5",
+        "5000-",
         "--segments",
-        "2",
+        "4",
+        "-o",
+        dst.to_str().unwrap(),
+        "--json",
+    ]);
+    expect_exit(&got, 0, "a segmented span");
+    assert_eq!(std::fs::read(&dst).unwrap(), &content[5000..]);
+    let events = ndjson(&got);
+    let ranged = events
+        .iter()
+        .any(|e| e["event"] == "artifact" && e["range_start"] == 5000 && e["total"] == 100_000);
+    assert!(ranged, "the segment events carry span bounds: {events:?}");
+    let gets = srv
+        .requests()
+        .into_iter()
+        .filter(|r| r.method == "GET" && r.path == "1.14.0/blob.bin")
+        .count();
+    assert!(gets >= 4, "the span went out in segments: {gets}");
+}
+
+#[test]
+fn get_range_closed_with_segments_splits_the_span() {
+    let srv = server(Scenario::Atomic);
+    let content: Vec<u8> = (0..10_000u32).map(|i| (i % 251) as u8).collect();
+    srv.insert("1.14.0/blob.bin", &content);
+    let url = format!("{}1.14.0/blob.bin", srv.base_url());
+    let out = TempDir::new().unwrap();
+    let dst = out.path().join("slice.bin");
+    let got = nxr(&[
+        "get",
+        &url,
+        "--range",
+        "2000-4999",
+        "--segments",
+        "4",
         "-o",
         dst.to_str().unwrap(),
     ]);
-    expect_exit(&got, 2, "range and segments conflict");
+    expect_exit(&got, 0, "a closed segmented span");
+    assert_eq!(std::fs::read(&dst).unwrap(), &content[2000..=4999]);
+}
+
+#[test]
+fn get_range_with_segments_and_continue_is_misuse() {
+    let got = nxr(&[
+        "get",
+        "http://127.0.0.1:9/x",
+        "--range",
+        "2-5",
+        "--segments",
+        "2",
+        "--continue",
+        "-o",
+        "unused.bin",
+    ]);
+    expect_exit(&got, 2, "a segmented span cannot resume one part");
+    assert!(stderr(&got).contains("--segments"), "{}", stderr(&got));
 }
 
 #[test]

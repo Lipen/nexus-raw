@@ -98,6 +98,7 @@ Every method mirrors a CLI command one-to-one.
 | `new(cfg, events)` | `Nxr` | - | build the facade from a `Config` and an event channel |
 | `base()` | `&str` | - | the normalized base URL of this invocation |
 | `last_run_limit()` | `(usize, usize)` | - | the adaptive worker limit of the last directory transfer: the current value and the lowest it reached |
+| `get_segmented_span(url, spec, out, segments)` | `SpanOutcome` | `nxr get --range --segments` | fetch one span through `N` concurrent closed ranges, assemble it into `<out>.part`, and keep progress absolute |
 | `get_span(url, spec, out, cont)` | `SpanOutcome` | `nxr get --range`, the napi `get` range | stream one `START-END`/`START-`/`-N` span: a file target writes `<out>.part` with absolute progress, resumes through the recorded manifest, and restarts a span whose object changed |
 | `get_range(url, spec)` | `RangeOutcome` | - | one `START-END`/`START-` span in memory: HEAD for the open form, a past-the-end start is misuse |
 | `read_range(url, start, len)` | `Option<Vec<u8>>` | the mount read path | one in-memory byte span, and `None` means the object is absent |

@@ -577,28 +577,89 @@ pub async fn get_segmented(
             resumed_from: 0,
         });
     }
-    // Every segment spans at least one byte. Spans are `total / segments` sized with
+    let (size, digest) = segment_ranges(
+        client,
+        url,
+        out,
+        segments,
+        events,
+        no_sha,
+        SegmentWindow {
+            start: 0,
+            end: total.saturating_sub(1),
+            total,
+        },
+        false,
+    )
+    .await?;
+    Ok(GetOutcome {
+        size,
+        digest,
+        resumed_from: 0,
+    })
+}
+
+/// The object window a segmented download covers.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy)]
+struct SegmentWindow {
+    start: u64,
+    /// Inclusive.
+    end: u64,
+    /// The full object length, for absolute progress.
+    total: u64,
+}
+
+/// The fan-out of [`get_segmented`] and [`get_segmented_span`].
+///
+/// `span` selects the progress shape and the digest rule: a whole object is
+/// hashed and verified against its sibling, a span is neither.
+#[allow(clippy::too_many_arguments)]
+#[cfg(not(target_arch = "wasm32"))]
+async fn segment_ranges(
+    client: &NexusClient,
+    url: &str,
+    out: &Path,
+    segments: usize,
+    events: &crate::events::Progress,
+    no_sha: bool,
+    window: SegmentWindow,
+    span: bool,
+) -> Result<(u64, Option<Digest>), Error> {
+    let name = out
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let part = part_of(out);
+    let len = window.end.saturating_sub(window.start).saturating_add(1);
+    // Every segment spans at least one byte. Spans are `len / segments` sized with
     // the remainder spread over the leading segments.
-    let base = total / segments as u64;
+    let base = len / segments as u64;
     let segments = if base == 0 {
-        // The object is smaller than the segment count: one segment per byte,
+        // The window is smaller than the segment count: one segment per byte,
         // computed iteratively (a recursive degrade re-entered this huge frame
         // on the same stack and overflowed the default windows thread stack).
-        total as usize
+        len as usize
     } else {
         segments
     };
-    let base = total / segments as u64;
-    let rem = total % segments as u64;
+    let base = len / segments as u64;
+    let rem = len % segments as u64;
+    if span {
+        events
+            .started(&name, Dir::Down, window.start, Some(window.total))
+            .await;
+    }
     let staging = temp_staging_dir(out).await?;
     let mut bounds: Vec<(u64, u64)> = Vec::with_capacity(segments);
-    let mut start: u64 = 0;
+    let mut offset: u64 = 0;
     for i in 0..segments {
-        let len = base + u64::from(i < rem as usize);
-        bounds.push((start, start + len - 1));
-        start += len;
+        let size = base + u64::from(i < rem as usize);
+        let start = window.start + offset;
+        bounds.push((start, start + size - 1));
+        offset += size;
     }
-    debug_assert_eq!(start, total, "the spans must tile the object exactly");
+    debug_assert_eq!(offset, len, "the spans must tile the window exactly");
 
     // Each segment streams into its own staging file, concurrently, retries included.
     // The worker ceiling still applies: `--segments` splits the object, it does
@@ -612,13 +673,35 @@ pub async fn get_segmented(
             let url = url.to_owned();
             let name = name.clone();
             let workers = workers.clone();
+            let progress_at = if span {
+                crate::transport::client::RangeProgress {
+                    base: start,
+                    total: Some(window.total),
+                    span: Some((window.start, window.end)),
+                    announce: false,
+                }
+            } else {
+                crate::transport::client::RangeProgress {
+                    base: 0,
+                    total: None,
+                    span: None,
+                    announce: true,
+                }
+            };
             async move {
                 let _permit = workers
                     .acquire_owned()
                     .await
                     .expect("the worker semaphore is never closed");
                 let done = client
-                    .fetch_range((&name, Dir::Down), &url, start, end_incl, &file)
+                    .fetch_range_in(
+                        (&name, Dir::Down),
+                        &url,
+                        start,
+                        end_incl,
+                        &file,
+                        progress_at,
+                    )
                     .await
                     .map_err(|e| (i, e))?;
                 Ok::<(usize, u64), (usize, Error)>((i, done))
@@ -646,23 +729,98 @@ pub async fn get_segmented(
     }
 
     // Positional assembly into the part file: each segment streams in at its offset.
-    assemble(&bounds, &staging, &part, total).await?;
-    // One read pass over the assembled file: the digest, then the sibling verdict.
-    let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
-    if !no_sha {
-        verify_sibling(client, url, out, &part, &digest, "segmented").await?;
-    }
+    assemble(&bounds, &staging, &part, len, window.start).await?;
+    let digest = if span {
+        None
+    } else {
+        let digest = crate::model::digest::sha256_file(&part).map_err(|e| Error::io(&part, e))?;
+        if !no_sha {
+            verify_sibling(client, url, out, &part, &digest, "segmented").await?;
+        }
+        Some(digest)
+    };
     tokio::fs::rename(&part, out)
         .await
         .map_err(|e| Error::io(out, e))?;
     // The staging area only outlives a failed run.
     let _ = tokio::fs::remove_dir_all(&staging).await;
-    events
-        .done(&name, Dir::Down, false, total, Some(total))
-        .await;
-    Ok(GetOutcome {
-        size: total,
-        digest: Some(digest),
+    if span {
+        events
+            .done(
+                &name,
+                Dir::Down,
+                false,
+                window.end.saturating_add(1),
+                Some(window.total),
+            )
+            .await;
+    } else {
+        events
+            .done(&name, Dir::Down, false, window.total, Some(window.total))
+            .await;
+    }
+    Ok((len, digest))
+}
+
+/// GET one span through `segments` concurrent closed ranges (spec §5.1 `get --range --segments`).
+///
+/// The span resolves like the single-stream path (including `-N`), the object
+/// size comes from the HEAD, and the window splits into contiguous segments.
+/// Progress is absolute against the full object, and a span has no digest to verify.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn get_segmented_span(
+    client: &NexusClient,
+    url: &str,
+    spec: &str,
+    out: &Path,
+    segments: usize,
+    events: &crate::events::Progress,
+) -> Result<SpanOutcome, Error> {
+    if !(2..=MAX_SEGMENTS).contains(&segments) {
+        return Err(Error::misuse(format!(
+            "segments must be between 2 and {MAX_SEGMENTS}, got {segments}"
+        )));
+    }
+    let (start, end, probe) = resolve_span(client, url, spec).await?;
+    let Some(total) = probe.total else {
+        return Err(Error::transport(
+            url,
+            "the object size is unknown: --segments needs a Content-Length",
+        ));
+    };
+    if total == 0 || start >= total {
+        return Err(Error::Misuse(format!(
+            "range starts at {start}, past the end of {total} bytes"
+        )));
+    }
+    let concrete_end = end.unwrap_or(total.saturating_sub(1)).min(total - 1);
+    if concrete_end < start {
+        return Err(Error::Misuse(format!(
+            "range ends at {concrete_end}, before its start {start}"
+        )));
+    }
+    // A segmented run assembles the part from scratch; a parked span record
+    // would misread that part as resume state.
+    clear_parked_span(out)?;
+    let (size, _) = segment_ranges(
+        client,
+        url,
+        out,
+        segments,
+        events,
+        true,
+        SegmentWindow {
+            start,
+            end: concrete_end,
+            total,
+        },
+        true,
+    )
+    .await?;
+    Ok(SpanOutcome {
+        start,
+        end,
+        size,
         resumed_from: 0,
     })
 }
@@ -675,6 +833,7 @@ pub(crate) async fn assemble(
     staging: &Path,
     part: &Path,
     total: u64,
+    origin: u64,
 ) -> Result<(), Error> {
     use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
     let mut out = crate::transport::client::write_options(false)
@@ -687,7 +846,7 @@ pub(crate) async fn assemble(
         let mut seg = tokio::fs::File::open(&file)
             .await
             .map_err(|e| Error::io(&file, e))?;
-        out.seek(std::io::SeekFrom::Start(start))
+        out.seek(std::io::SeekFrom::Start(start.saturating_sub(origin)))
             .await
             .map_err(|e| Error::io(part, e))?;
         let mut buf = [0u8; 64 * 1024];

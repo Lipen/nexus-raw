@@ -74,9 +74,13 @@ pub(crate) async fn get(cli: &Cli, args: GetArgs<'_>) -> Result<(), Error> {
         ));
     }
     if range.is_some() && segments.is_some() {
-        return Err(Error::Misuse(
-            "--range reads one span: pass --range without --segments".to_owned(),
-        ));
+        // The ranged segment path owns the combination: the guard stays for
+        // `--continue`, which cannot resume a segmented span.
+        if cont {
+            return Err(Error::Misuse(
+                "--continue resumes one part file: pass --range with --segments without --continue, or drop --segments".to_owned(),
+            ));
+        }
     }
     // The flag combinations are judged first, because their refusals name the precise
     // fix. Only a plain fetch reaches the terminal rule, which owns the three ways out.
@@ -103,6 +107,19 @@ async fn run_get(
     no_sha: bool,
 ) -> Result<(), Error> {
     if let Some(spec) = range {
+        if let Some(n) = segments {
+            let outcome = ctx
+                .nxr
+                .get_segmented_span(
+                    url,
+                    spec,
+                    out.expect("segments require a file target").to_owned(),
+                    n,
+                )
+                .await?;
+            report_span(ctx, url, out, &outcome);
+            return Ok(());
+        }
         let outcome = ctx
             .nxr
             .get_span(url, spec, out.map(Path::to_owned), cont)

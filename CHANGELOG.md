@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - `nxr get --range -N` reads the last N bytes, resolved through a HEAD to a normal `START-` span.
+- `nxr get --range --segments N` splits a span into N concurrent closed ranges, with the same absolute progress and no digest verification.
 - `nxr get --range` warns when the server ignores Range, naming the prefix bytes fetched and discarded.
 
 ### Changed
