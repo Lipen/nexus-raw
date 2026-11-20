@@ -192,6 +192,21 @@ fn remote_name_of(url: &str) -> Result<String, Error> {
         })
 }
 
+/// Quote one argument for the copy-paste shell line.
+/// A bare word stays bare; anything else is single-quoted, with an embedded
+/// quote written as `'\''`.
+fn shell_quote(value: &str) -> String {
+    let bare = !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./:@%+=".contains(c));
+    if bare {
+        value.to_owned()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
 /// List the parked ranged downloads in `dir`: no network, no credentials.
 pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
     let parked = nexus_raw_core::primitive::list_parked_spans(dir)?;
@@ -234,7 +249,11 @@ pub(crate) async fn resume(cli: &Cli, dir: &Path) -> Result<(), Error> {
             if let (Some(url), Some(out)) = (&span.url, &span.out) {
                 print_line(
                     false,
-                    &format!("  resume: nxr get {url} -o {} --continue", out.display()),
+                    &format!(
+                        "  resume: nxr get {} -o {} --continue",
+                        shell_quote(url),
+                        shell_quote(&out.display().to_string())
+                    ),
                     &serde_json::Value::Null,
                 );
             }
@@ -461,8 +480,20 @@ fn report_get(ctx: &Ctx, url: &str, out: Option<&Path>, outcome: &nexus_raw_core
 
 #[cfg(test)]
 mod tests {
-    use super::refuses_a_terminal;
+    use super::{refuses_a_terminal, shell_quote};
     use std::path::Path;
+
+    #[test]
+    fn shell_quote_keeps_the_hint_copy_pasteable() {
+        assert_eq!(shell_quote("app.zip"), "app.zip");
+        assert_eq!(shell_quote("dir/app.zip"), "dir/app.zip");
+        assert_eq!(
+            shell_quote("dir with space/app.zip"),
+            "'dir with space/app.zip'"
+        );
+        assert_eq!(shell_quote("it's.bin"), "'it'\\''s.bin'");
+        assert_eq!(shell_quote(""), "''");
+    }
 
     #[test]
     fn a_terminal_refuses_a_body_unless_asked() {
