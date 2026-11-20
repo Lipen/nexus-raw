@@ -50,6 +50,11 @@ A private CA is `--ca-bundle FILE` (or `NXR_CA_BUNDLE`), a PEM bundle of additio
 | fetch one file with the marker and resume | `nxr down <file-url> <dst-dir>` |
 | fetch one file through 8 ranges | `nxr get <url> -o <file> --segments 8` |
 | fetch one byte span | `nxr get <url> --range 100-199` |
+| fetch the last 1 MiB | `nxr get <url> --range -1048576 -o tail.bin` |
+| split a byte span across 4 ranges | `nxr get <url> --range 100-199 --segments 4 -o span.bin` |
+| resume a parked ranged download | `nxr resume <dir>`, then `nxr get <url> --continue -o <file>` |
+| start at an explicit byte offset | `nxr get <url> -C 1048576 -o file` |
+| keep the NDJSON events off the body | `nxr get <url> --json-stderr > file.bin 2> events.ndjson` |
 | publish a subtree | `nxr up <src-dir> <dir-url> --prefix <dir>/` (only the selected subtrees are scanned) |
 | stream one file to stdout | `nxr get <url>` in a pipe, or `nxr get --stdout <url>` on a terminal (a body headed for a terminal is refused) |
 | fetch a directory | `nxr down <dir-url> <dst-dir> --names-from list.txt` |
@@ -84,11 +89,15 @@ If `nxr` is not on PATH, install it with `cargo install nexus-raw`, `npm install
     A failure before that stage (an enumeration refusal, a divergence in the diff) prints only an `error` object.
     `failures` is `[{code, name}]` with the exit class (1 data, 2 misuse, 3 transport), in the same order as `failed`.
   - `put` and `get -o` print `artifact` events and then one result object shaped like `{"ok":true,…}`.
+    A ranged `get` adds `range_start` and `range_end` (null when open-ended) to each artifact event.
+  - `resume` prints one `{"event":"resume",...}` row per parked span, with no network.
   - `verify` prints a `summary` event and, when names failed, a closing `error` object.
   - `audit` prints one `finding` event per finding and then a `summary` event carrying `audited` and `findings`.
   - `ls` prints one object per entry, then a `{"event":"hidden","count":N}` line when it hid markers.
   - `doctor` prints one object per check.
   - `head`, `sha`, `channel`, `point` and `service` print a single object.
+- `--json` without `-o` is refused: a stdout body cannot carry events.
+  `--json-stderr` keeps the body byte-exact on stdout and the NDJSON on stderr.
 
 ## Recipes
 

@@ -25,6 +25,20 @@ nxr up dist/1.4.0/ "$NEXUS/repository/releases/1.4.0/"
 Finished names are skipped, and the `<name>.part` files left by the killed run are the resume fuel.
 Use `--fresh` when you want every name to start from zero instead.
 
+## Resume a parked byte range
+
+A killed `get --range` leaves `<file>.part` and a span record beside it.
+`nxr resume` lists them and prints the command that finishes each one.
+
+```sh
+nxr resume downloads/
+nxr get "$NEXUS/repository/releases/1.4.0/app.zip" --continue -o downloads/app.zip --no-sha
+```
+
+`--continue` resumes the recorded span, so `--range` may be omitted.
+A resume whose record has no strong ETag warns once: a same-size rewrite cannot be detected.
+A resume of another URL, or one whose size or ETag changed, restarts the span from its beginning.
+
 ## Download one large artifact through concurrent ranges
 
 ```sh
