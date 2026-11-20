@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.29.0] - 2026-11-20
+
 ### Added
 
 - `nxr get --range -N` reads the last N bytes, resolved through a HEAD to a normal `START-` span.
@@ -732,7 +736,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/Lipen/nexus-raw/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/Lipen/nexus-raw/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/Lipen/nexus-raw/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/Lipen/nexus-raw/compare/v0.25.0...v0.26.0
