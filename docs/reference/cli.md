@@ -148,6 +148,7 @@ An explicit `--range` with `--continue` on a part that carries no span record is
 The record also carries the source URL, the full object size and a strong ETag.
 A resume of another URL is refused, and a changed size or ETag restarts the span from its beginning instead of splicing two objects.
 `If-Range` is sent only with a strong ETag: a weak one or `Last-Modified` can miss a rewrite inside the same second.
+A resume whose parked record has no strong ETag warns once: a same-size rewrite cannot be detected, so the bytes may mix two versions.
 The progress events carry absolute object positions: `done` is `START` plus the bytes received, and `total` is the full object length, never the span length.
 A stdout target streams the span in one attempt, since a retry after the first byte would duplicate bytes.
 With `--segments N` the span splits into N contiguous closed ranges, fetched concurrently and assembled into the same `<FILE>.part`.
@@ -156,7 +157,8 @@ A span has no object digest, so `--range` is never verified against a `.sha256` 
 `--segments` with `--continue` is still a misuse: the segmented staging is its own resume state.
 When the server ignores Range, the run warns with the prefix size it fetched and discarded.
 The open form's probe names its failure: a non-2xx status, a missing `Content-Length` (use `START-END`), or a start at or past the object's end, which names the size and the start.
-A malformed range, a zero suffix or a combination with `--segments` is exit 2.
+A malformed range or a zero suffix is exit 2.
+`--range` and `--segments` combine, while `--continue` with both is a misuse.
 
 ```console
 $ nxr get https://nexus.example.com/repository/raw-main/1.4.0/app-1.4.0.zip -o app.zip --segments 4

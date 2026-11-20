@@ -3810,6 +3810,22 @@ fn get_range_continue_with_the_same_span_resumes() {
     child.wait().unwrap();
     let parked = std::fs::metadata(&part).unwrap().len();
 
+    // A record without a strong ETag cannot prove the object unchanged:
+    // the resume says so instead of trusting the parked prefix silently.
+    let record = std::fs::read_dir(out.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(".nxr-span-"))
+        })
+        .expect("a parked record");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&record).unwrap()).unwrap();
+    value.as_object_mut().unwrap().remove("etag");
+    std::fs::write(&record, serde_json::to_vec(&value).unwrap()).unwrap();
+
     let got = nxr(&[
         "get",
         &url,
@@ -3822,7 +3838,17 @@ fn get_range_continue_with_the_same_span_resumes() {
     ]);
     expect_exit(&got, 0, "the same span resumes");
     assert_eq!(std::fs::read(&dst).unwrap(), &content[2000..]);
-    let final_line = ndjson(&got).last().unwrap().clone();
+    let events = ndjson(&got);
+    assert!(
+        events.iter().any(|event| {
+            event["event"] == "warning"
+                && event["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("no strong ETag"))
+        }),
+        "the validator warning: {events:?}"
+    );
+    let final_line = events.last().unwrap().clone();
     assert_eq!(final_line["resumed_from"], parked);
     assert_eq!(final_line["range"], "2000-");
 }

@@ -19,11 +19,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The parked span record is now a small manifest with the source URL, full object size and strong ETag.
   A resume of another URL is refused, and a changed size or ETag restarts the span from its beginning.
   `If-Range` is sent only with a strong ETag, because a weak one or `Last-Modified` can miss a rewrite.
+- The mock server sends a strong ETag and honors `If-Range`, so the changed-object restart is exercised on the wire.
 
 ### Fixed
 
 - `nxr resume` ignores a manifest `part` that is not a bare file name, so a crafted record cannot point the listing at a path outside its directory.
-- A weak or absent validator no longer lets a resume splice bytes from two versions without a word.
+- A resumed span now says when its parked record has no strong ETag, instead of trusting a same-size rewrite silently.
 
 ## [0.28.0] - 2026-11-19
 

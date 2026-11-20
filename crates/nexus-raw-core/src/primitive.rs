@@ -259,6 +259,20 @@ pub async fn get_span(
     }
 }
 
+/// The warning a resumed span owes when its parked record carries no strong
+/// validator: a same-size rewrite cannot be ruled out.
+#[cfg(not(target_arch = "wasm32"))]
+fn validator_warning(
+    cont: bool,
+    had_prefix: bool,
+    restart: bool,
+    old_strong: Option<&str>,
+) -> Option<&'static str> {
+    (cont && had_prefix && !restart && old_strong.is_none()).then_some(
+        "the parked part has no strong ETag: a same-size rewrite cannot be detected, so the resumed span may mix two versions",
+    )
+}
+
 /// The file half of [`get_span`]: fill the record, stream into the part, rename,
 /// and drop the record.
 /// The bounds and the part state are already reconciled by the caller.
@@ -300,6 +314,11 @@ async fn get_span_to_file(
         let _ = client.events().sender().send(Event::Warning {
             text: "the object changed since the part was written: the span restarts from its beginning"
                 .to_owned(),
+        });
+    }
+    if let Some(text) = validator_warning(cont, had_prefix, restart, old_strong.as_deref()) {
+        let _ = client.events().sender().send(Event::Warning {
+            text: text.to_owned(),
         });
     }
     record.url = Some(resume_url(url));
@@ -1490,5 +1509,16 @@ mod tests {
             Some(dir.path().join("tail.bin").as_path())
         );
         assert_eq!(parked[0].part_size, 3);
+    }
+
+    #[test]
+    fn a_resume_without_a_strong_etag_warns() {
+        assert!(validator_warning(true, true, false, None)
+            .unwrap()
+            .contains("no strong ETag"));
+        assert!(validator_warning(true, true, false, Some("\"abc\"")).is_none());
+        assert!(validator_warning(false, true, false, None).is_none());
+        assert!(validator_warning(true, false, false, None).is_none());
+        assert!(validator_warning(true, true, true, None).is_none());
     }
 }
