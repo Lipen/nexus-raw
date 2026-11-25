@@ -301,11 +301,12 @@ else
     no "the prefix kept its path and left the rest out"
 fi
 
-# 24-28. A directory listing asks the search API with `q=<directory>/` and keeps the prefix
-# filter client-side (the rule the protocol page names). The seeded fixture is the manual
-# measurement in miniature: the listing must equal the repository-wide walk restricted to
-# that directory, and the copy seeded under another parent, which the server's loose `q`
-# match rides, must never reach it.
+# 24-28. A directory listing asks the search API with the quoted phrase `q="<directory>/"`
+# and keeps the prefix filter client-side (the rule the protocol page names). A literal
+# server answers the phrase empty, so this also exercises the one unquoted retry. The seeded
+# fixture is the manual measurement in miniature: the listing must equal the repository-wide
+# walk restricted to that directory, and the copy seeded under another parent, which the
+# server's loose `q` match rides, must never reach it.
 mkdir -p "$WORK/qsrc/bench/flat" "$WORK/qsrc/backup/bench/flat"
 for i in 1 2 3 4 5 6; do printf 'flat %s\n' "$i" > "$WORK/qsrc/bench/flat/q-$i.bin"; done
 for i in 1 2; do printf 'copy %s\n' "$i" > "$WORK/qsrc/backup/bench/flat/decoy-$i.bin"; done
@@ -333,8 +334,9 @@ else
     no "a directory listing equals the walk restricted to it"
 fi
 
-# The server's `q` is loose: the same query rides the copy under another parent, so the
-# equality above is the client-side filter's doing, not the server's narrowness.
+# The explicit `--q` is passed through unquoted and stays loose: the same query rides the copy
+# under another parent, so the equality above is the client-side filter's doing, not the
+# server's narrowness.
 if "$NXR" service assets "$URL/" --q 'bench/flat/' --json 2> /dev/null | grep -q 'backup/bench/flat/decoy-1.bin'; then
     ok "the server's q is a loose path substring"
 else

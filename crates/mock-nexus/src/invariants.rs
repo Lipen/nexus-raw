@@ -296,8 +296,19 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         behavior: &[
             "The search serves a generated repository: a 300-name directory, its name-continuing sibling, a 200-name copy of that directory under another parent, a 5000-name bulk and 35 plain assets, 50 rows a page.",
             "`q` matches a case-sensitive path substring after percent-decoding, the pinned server's loose match: `dir/` also matches a copy under another parent, and `dir` without the trailing slash drags the sibling in.",
+            "The client asks with the quoted phrase first, this fixture answers it empty, and one unquoted retry carries the 10 pages: a scoped listing costs 11 search requests.",
         ],
         invariant: "A server-side `q` and a client-side prefix compose: `q` cuts the pages (10 for the directory against 111 repository-wide) and the prefix filter turns the possible superset into exactly the directory's names.",
+    },
+    ScenarioDoc {
+        id: "assets-token-q",
+        name: "The search q is a token query until it is quoted.",
+        behavior: &[
+            "The search serves a generated repository under a common top-level directory: 120 names in `bench/1.30.0/`, 22 in its `bom/` subdirectory, a 60-name copy under another parent, a 60-name sibling version, a 60-name same-version directory under another parent, 1000 filler rows and 35 plain assets, 50 rows a page.",
+            "An unquoted `q` is a token query with OR semantics, the lab server's match: `bench/1.30.0/` matches every path carrying the `bench` token or the `1.30.0` token, the whole repository.",
+            "A double-quoted value is a phrase: `\"bench/1.30.0/\"` matches that literal path wherever it sits in the asset path.",
+        ],
+        invariant: "A quoted directory scope cuts a token server to the directory's rows (5 pages against 28 repository-wide) while the client-side prefix filter still drops the copy under another parent.",
     },
     ScenarioDoc {
         id: "eula-gate",

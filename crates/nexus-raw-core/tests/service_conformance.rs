@@ -20,6 +20,14 @@ fn client(base: String) -> Nxr {
     Nxr::new(cfg, tx).expect("client")
 }
 
+fn search_requests(server: &mock_nexus::MockNexus) -> usize {
+    server
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count()
+}
+
 fn creds_client(base: String, user: &str, pass: &str) -> Nxr {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let cfg = Config {
@@ -194,8 +202,11 @@ async fn assets_prefix_q_filters() {
     assert_eq!(by_q.len(), 10, "asset-010..asset-019");
 }
 
-/// A directory listing asks the search with `q=<directory>/`, so the 300-name directory of a
-/// 5539-row repository costs 10 pages instead of 111, and stays complete.
+/// A directory listing asks the search with the quoted phrase `q="<directory>/"`, so the
+/// 300-name directory of a 5539-row repository costs 11 search requests (one empty quoted
+/// probe plus 10 fallback pages) instead of 111, and stays complete.
+/// This fixture models a server that treats `q` as a literal substring: the quoted phrase
+/// answers an empty first page, and the one unquoted retry costs the extra request.
 /// The loose match drags a copy of the directory under another parent into those pages, and the
 /// client-side prefix filter is what keeps it out of the answer.
 /// Before `q` this listing was a repository-wide walk past the 100-page bound: `Error::Enumerate`.
@@ -223,9 +234,69 @@ async fn assets_prefix_q_scoped_listing_cuts_pages_and_keeps_the_names() {
         .filter(|r| r.path == "service/rest/v1/search/assets")
         .count();
     assert_eq!(
-        pages, 10,
-        "300 directory rows plus 200 decoy rows the loose q drags in, 50 a page"
+        pages, 11,
+        "the quoted probe is empty on this literal server, then 10 fallback pages carry the 500 rows"
     );
+}
+
+/// The lab server's `q`: an unquoted directory value is a token query whose OR drags the whole
+/// repository, and the quoted phrase is what cuts it to the directory.
+/// The explicit `--q` surface still passes the value through unquoted: 1357 rows over 28 pages.
+/// The scoped listing quotes the scope: 202 rows over 5 pages, and the client filter drops the
+/// copy under another parent.
+#[tokio::test]
+async fn assets_token_q_scoped_listing_quotes_the_scope() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsTokenQ).unwrap();
+    let base = format!("{}repository/raw-main/", server.base_url());
+    let nxr = client(base.clone());
+
+    let (loose, summary) = nxr
+        .service_assets(Some("bench/1.30.0/"), &[])
+        .await
+        .unwrap();
+    assert_eq!(
+        loose.len(),
+        1357,
+        "the unquoted tokens cover the whole repository"
+    );
+    assert_eq!(summary.pages, 28, "1357 rows at 50 a page");
+
+    let base = format!("{base}bench/1.30.0/");
+    let nxr = client(base);
+    let before = search_requests(&server);
+    let (entries, hidden) = nxr.ls_entries_counted().await.unwrap();
+    assert_eq!(hidden, 0, "the generated rows carry no markers");
+    assert_eq!(entries.len(), 121, "120 flat files plus the bom/ directory");
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.kind == nexus_raw_core::EntryKind::Dir && e.name == "bom"),
+        "the nested directory is an entry, not a lost subtree"
+    );
+    assert!(
+        !entries.iter().any(|e| e.name.starts_with("decoy-")),
+        "the copy under another parent never surfaces"
+    );
+    let pages = search_requests(&server) - before;
+    assert_eq!(pages, 5, "the quoted phrase serves 202 rows, 50 a page");
+}
+
+/// The nested scope is a phrase too: 22 rows and one page, not the 28 pages an unquoted token
+/// query would pay.
+#[tokio::test]
+async fn assets_token_q_nested_scope_is_one_page() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsTokenQ).unwrap();
+    let base = format!("{}repository/raw-main/bench/1.30.0/bom/", server.base_url());
+    let nxr = client(base);
+    let names = nxr.ls_assets().await.unwrap();
+    assert_eq!(names.len(), 22);
+    assert!(names.iter().all(|n| n.as_str().starts_with("bom-")));
+    let pages = server
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(pages, 1, "22 rows fit one page");
 }
 
 /// The same directory through the artifact listing (`ls --assets`, the `down --ls` source):
@@ -241,6 +312,25 @@ async fn assets_prefix_q_scoped_assets_listing_is_exact() {
     assert!(
         !names.iter().any(|n| n.as_str().starts_with("decoy-")),
         "the prefix filter, not the server's q, decides the answer"
+    );
+}
+
+/// A quoted miss on an empty directory retries exactly once: the quoted probe and one unquoted
+/// fallback, then an empty success.
+#[tokio::test]
+async fn assets_prefix_q_empty_directory_retries_once() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsPrefixQ).unwrap();
+    let base = format!("{}repository/raw-main/v9.9.9/", server.base_url());
+    let nxr = client(base);
+    let entries = nxr.ls_entries().await.unwrap();
+    assert!(
+        entries.is_empty(),
+        "a missing directory is an empty listing"
+    );
+    assert_eq!(
+        search_requests(&server),
+        2,
+        "the quoted probe and one unquoted retry, never a third"
     );
 }
 

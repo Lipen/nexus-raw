@@ -321,10 +321,12 @@ class Nxr:
         """List a repository, or one directory of it, through the search API, following continuation tokens.
 
         Returns the raw asset paths, relative to the repository root.
-        `directory` scopes the walk the way a directory listing does: the search asks with
-        `q=<directory>/` (percent-encoded), which cuts the pages down to that directory, and the
-        client keeps only the paths under that whole-segment prefix.
-        The server's `q` is a loose path substring and may serve a superset (a copy of the directory under another parent).
+        `directory` scopes the walk the way a directory listing does: the search asks with the
+        quoted phrase `q="<directory>/"` (percent-encoded), which cuts a token-OR server to that
+        directory, and the client keeps only the paths under that whole-segment prefix.
+        A server that treats `q` as a literal substring answers the phrase with an empty first
+        page: the walk then retries once with the same scope unquoted.
+        The page set may carry a superset (a copy of the directory under another parent).
         The filter, not `q`, is what makes the answer exact.
         The walk is best-effort: the search API exists on common Nexus 3 releases but is not guaranteed.
         The server-side `group` parameter is deliberately not sent: on a real Nexus it matches Maven
@@ -334,10 +336,34 @@ class Nxr:
         endpoint = f"{parts.scheme}://{parts.netloc}/service/rest/v1/search/assets"
         query = {"repository": repository}
         scope = [segment for segment in directory.split("/") if segment]
-        if scope:
-            query["q"] = "/".join(scope) + "/"
+        if not scope:
+            return self._ls_pages(endpoint, repository, query, None, scope)[0]
+        quoted = f'"{"/".join(scope)}/"'
+        paths, saw_rows = self._ls_pages(endpoint, repository, query, quoted, scope)
+        if saw_rows:
+            return paths
+        return self._ls_pages(endpoint, repository, query, "/".join(scope) + "/", scope)[0]
+
+    def _ls_pages(
+        self,
+        endpoint: str,
+        repository: str,
+        query: dict[str, str],
+        q: str | None,
+        scope: list[str],
+    ) -> tuple[list[str], bool]:
+        """Walk one search query to its last continuation token: the shared body of `ls`.
+
+        Returns the filtered paths and whether the server served any row at all.
+        An empty page, not an empty filtered answer, is what arms the unquoted retry: a
+        phrase that matches only a copy outside the scope is a working phrase server.
+        """
+        query = dict(query)
+        if q is not None:
+            query["q"] = q
         first_page = f"{endpoint}?{urlencode(query)}"
         paths: list[str] = []
+        saw_rows = False
         token: str | None = None
         for _page in range(MAX_SEARCH_PAGES):
             url = first_page if token is None else f"{first_page}&{urlencode({'continuationToken': token})}"
@@ -363,13 +389,16 @@ class Nxr:
                 raise EnumerateError(f"cannot enumerate: {url}: the search response is not JSON: {err}") from None
             if not isinstance(page, dict):
                 raise EnumerateError(f"cannot enumerate: {url}: the search response is not a JSON object") from None
-            for item in page.get("items") or []:
+            items = page.get("items") or []
+            if items:
+                saw_rows = True
+            for item in items:
                 path = item.get("path") if isinstance(item, dict) else None
                 if isinstance(path, str) and _under(path, scope):
                     paths.append(path)
             token = page.get("continuationToken")
             if not isinstance(token, str):
-                return paths
+                return paths, saw_rows
         raise EnumerateError(
             f"cannot enumerate: {first_page}: search pagination exceeded {MAX_SEARCH_PAGES} pages",
             hint="the endpoint never stops emitting continuation tokens",

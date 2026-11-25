@@ -321,6 +321,10 @@ q=bench/tricky/name+with+space/ (wire +)|RAW:bench/tricky/name+with+space/|bench
 q=bench/tricky/amp&ersand/ (client-encoded)|bench/tricky/amp&ersand/|bench/tricky/amp&ersand/
 q=bench/tricky/hash#tag/ (client-encoded)|bench/tricky/hash#tag/|bench/tricky/hash#tag/
 q=bench/tricky/v1.2.3/|bench/tricky/v1.2.3/|bench/tricky/v1.2.3/
+q="bench/flat/" (quoted phrase)|"bench/flat/"|bench/flat/
+q="bench/wide/b/" (quoted phrase)|"bench/wide/b/"|bench/wide/b/
+q="bench/deep/l2/l3/l4/l5/l6/" (quoted phrase)|"bench/deep/l2/l3/l4/l5/l6/"|bench/deep/l2/l3/l4/l5/l6/
+q="bench/tricky/v1.2.3/" (quoted phrase)|"bench/tricky/v1.2.3/"|bench/tricky/v1.2.3/
 q=bench/tricky/UPPER/|bench/tricky/UPPER/|bench/tricky/UPPER/
 q=bench/upper/ (wrong case)|bench/upper/|bench/tricky/UPPER/
 q=ψ-unicode/|ψ-unicode/|bench/tricky/ψ-unicode/
@@ -392,10 +396,42 @@ nxr_evidence() {
             printf 'nxr ls %-58s FAILED (%ss): %s' "$URL/$d" "$(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.2f", b - a }')" "$(head -1 "$WORK/nxr.err")"
         fi
         if [ "$counted" = 1 ]; then
-            printf ', %s search requests seen by the server' "$(( $(requests_now) - before ))"
+            seen=$(( $(requests_now) - before ))
+            if [ "$seen" -gt 0 ]; then
+                printf ', %s search requests seen by the server' "$seen"
+            else
+                printf ', search request count unavailable'
+            fi
         fi
         printf '\n'
     done
+
+    # The scoped-listing gate: a token-OR server must be cut by the quoted scope.
+    # `bench/wide/b/` shares `bench` with the whole tree, so an unquoted scope pays the full
+    # walk. Half the full page count is the bound: the scoped walk is a fraction of it on
+    # either server family (a phrase match, or one empty probe plus the unquoted fallback).
+    if [ "$counted" = 1 ]; then
+        read -r full_pages _ _ _ _ _ < "$WORK/stats.full"
+        bound=$((full_pages / 2))
+        before=$(requests_now)
+        if "$nxr" ls "$URL/bench/wide/b/" > /dev/null 2>&1; then
+            after=$(requests_now)
+            if [ "$after" -le "$before" ]; then
+                echo "scoped listing: the request count did not advance ($before -> $after): FAIL" >&2
+                exit 1
+            fi
+            pages=$((after - before))
+            if [ "$pages" -le "$bound" ]; then
+                echo "scoped listing: $pages search requests for bench/wide/b/ (full walk $full_pages): PASS"
+            else
+                echo "scoped listing: $pages search requests for bench/wide/b/ (full walk $full_pages, bound $bound): FAIL" >&2
+                exit 1
+            fi
+        else
+            echo "scoped listing: nxr ls $URL/bench/wide/b/ failed: FAIL" >&2
+            exit 1
+        fi
+    fi
 }
 
 # Lines in the server's request log so far, as docker reports them, rotated segments included, so a rotation mid-window does not shift the count.

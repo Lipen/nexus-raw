@@ -38,6 +38,7 @@ impl Scenario {
             Scenario::AssetsPagination => "assets-pagination",
             Scenario::AssetsAbsent => "assets-absent",
             Scenario::AssetsPrefixQ => "assets-prefix-q",
+            Scenario::AssetsTokenQ => "assets-token-q",
             Scenario::EulaGate => "eula-gate",
             Scenario::EulaAbsent => "eula-absent",
             Scenario::SearchLag { .. } => "search-lag",
@@ -80,6 +81,7 @@ pub const SCENARIOS: &[&str] = &[
     "assets-pagination",
     "assets-absent",
     "assets-prefix-q",
+    "assets-token-q",
     "eula-gate",
     "eula-absent",
     "search-lag",
@@ -214,6 +216,15 @@ pub enum Scenario {
     /// used to carry, while a scoped listing of the 300-name directory is 10.
     /// Storage behavior is [`Scenario::Atomic`].
     AssetsPrefixQ,
+    /// The search API serves a generated repository for `raw-main` under a common top-level
+    /// directory: 120 names in `bench/1.30.0/`, 22 in its `bom/` subdirectory, a 60-name copy
+    /// under another parent, a 60-name sibling version, a 60-name same-version directory under
+    /// another parent, 1000 filler rows and 35 plain assets, 50 rows a page.
+    /// A quoted `q` is a phrase; an unquoted `q` is a token query with OR semantics, so
+    /// `bench/1.30.0/` matches the whole repository (28 pages) while `"bench/1.30.0/"` matches
+    /// the directory (5 pages).
+    /// Storage behavior is [`Scenario::Atomic`].
+    AssetsTokenQ,
     /// The CE 3.79 EULA gate: `GET /v1/system/eula` presents the disclaimer, PUT answers `403` with the EULA body until
     /// `POST /v1/system/eula` echoes it back with `accepted: true` (204), after which PUTs store normally.
     /// Storage behavior is otherwise [`Scenario::Atomic`].

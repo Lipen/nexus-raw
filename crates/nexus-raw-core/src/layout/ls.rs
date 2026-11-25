@@ -1,10 +1,14 @@
 //! Best-effort listings through the Nexus search API (spec §5.3, §10).
 //!
 //! The endpoint is `/service/rest/v1/search/assets`.
-//! A directory listing asks it with `q=<percent-encoded directory path>/`, which cuts the
-//! pages down to that directory.
-//! The server's `q` match is loose (a path substring), so the client-side prefix filter stays
-//! the correctness mechanism, and `q` only saves requests.
+//! A directory listing asks it with `q="<percent-encoded directory path>/"`: the value is a
+//! quoted phrase, which cuts a token-OR server to that directory instead of every path that
+//! shares a token.
+//! A successful empty first page retries once with the same scope unquoted: a server that
+//! treats `q` as a literal substring matches nothing against the quotes, while an empty
+//! directory on a token server pays the wider unquoted walk before it answers empty.
+//! The server's `q` match is loose either way (a path substring, or a token query), so the
+//! client-side prefix filter stays the correctness mechanism, and `q` only saves requests.
 //! A repository-wide walk (`audit`, the delta's search path) asks without `q`: there the page
 //! set must be the repository, and a filter mismatch would be a silent hole.
 //! It exists on common Nexus 3 releases but is not guaranteed.
@@ -46,7 +50,7 @@ pub enum EntryKind {
 /// The immediate children of a raw directory URL: folders first, then files, each sorted.
 ///
 /// Works at any depth, because the raw tree has no fixed shape: the search is scoped to the
-/// repository and asks with `q=<directory>/` to cut the pages, and the prefix filter is
+/// repository and asks with `q="<directory>/"` to cut the pages, and the prefix filter is
 /// applied client-side, so the possible superset `q` serves becomes the exact answer.
 /// The `group` search parameter is deliberately not used: on a real Nexus release it matched
 /// Maven coordinates rather than raw path prefixes, which made nested listings lie.
@@ -485,14 +489,24 @@ fn drop_segments(path: &str, n: usize) -> String {
         .join("/")
 }
 
-/// The `q` value a directory listing asks with: the directory path with a trailing slash.
+/// The `q` value a directory listing asks with: the directory path with a trailing slash, as a
+/// double-quoted phrase.
 ///
 /// The trailing slash is what keeps a name-continuing sibling (`flat` against `flat2`) out of
-/// the cut. The server matches the value loosely (a case-sensitive path substring), so the
-/// page set is a possible superset and the client-side prefix filter is what makes it exact.
+/// the cut. The phrase is what keeps a token-OR server from matching every path that shares a
+/// token: on a measured lab server, `bench/1.30.0/` matched the whole repository, while
+/// `"bench/1.30.0/"` matched the directory.
+/// The page set is a possible superset either way, and the client-side prefix filter is what
+/// makes it exact.
 /// The repository root has no scope: its walk is the repository, and `q` would only pretend.
 fn scope_path(segments: &[String]) -> Option<String> {
-    (!segments.is_empty()).then(|| format!("{}/", segments.join("/")))
+    (!segments.is_empty()).then(|| format!("\"{}/\"", segments.join("/")))
+}
+
+/// The unquoted form of a scope: the fallback for a server that treats `q` literally and
+/// answers the quoted phrase with an empty page.
+fn unquoted_scope(q: &str) -> Option<&str> {
+    q.strip_prefix('"')?.strip_suffix('"')
 }
 
 /// The same scope for a `<group…>/<version>/` directory, which always has at least the version.
@@ -539,7 +553,29 @@ pub(crate) struct SearchAsset {
 /// repository-wide walk, the `group` parameter is never sent, and the caller filters client-side.
 /// The page cap, the 400 → [`Error::SearchRepoMissing`] mapping and the
 /// 404 → [`Error::Enumerate`] mapping are shared with every listing helper.
+/// A quoted scope that answers an empty first page is retried once unquoted: a server that
+/// treats `q` as a literal substring matches nothing against the quotes, and the unquoted
+/// value is still a superset of the directory on a token server.
+/// An empty directory on a token server pays that wider walk: a successful empty page is the
+/// only trigger, and the response carries no signal to tell the two apart.
 async fn walk(
+    client: &NexusClient,
+    base: &str,
+    repo: &str,
+    q: Option<&str>,
+) -> Result<Vec<SearchAsset>, Error> {
+    let assets = walk_pages(client, base, repo, q).await?;
+    if !assets.is_empty() {
+        return Ok(assets);
+    }
+    match q.and_then(unquoted_scope) {
+        Some(fallback) => walk_pages(client, base, repo, Some(fallback)).await,
+        None => Ok(assets),
+    }
+}
+
+/// One pass over the search pages for exactly one `q` value: the body [`walk`] retries.
+async fn walk_pages(
     client: &NexusClient,
     base: &str,
     repo: &str,
@@ -710,21 +746,30 @@ mod tests {
         );
     }
 
-    /// The scope a directory listing asks with: the directory path and a trailing slash.
-    /// The root has no scope, and the slash is what stops a name-continuing sibling.
+    /// The scope a directory listing asks with: the directory path and a trailing slash, as a
+    /// quoted phrase. The root has no scope, and the slash is what stops a name-continuing
+    /// sibling.
     #[test]
-    fn directory_scope_carries_the_trailing_slash() {
+    fn directory_scope_is_a_quoted_phrase() {
         let seg = |s: &str| s.to_owned();
         assert_eq!(scope_path(&[]), None, "the repository root is not a scope");
         assert_eq!(
             scope_path(&[seg("bench"), seg("flat")]),
-            Some("bench/flat/".into())
+            Some("\"bench/flat/\"".into())
         );
         assert_eq!(
             directory_scope(&[seg("lib"), seg("app")], "1.4.0"),
-            Some("lib/app/1.4.0/".into())
+            Some("\"lib/app/1.4.0/\"".into())
         );
-        assert_eq!(directory_scope(&[], "1.4.0"), Some("1.4.0/".into()));
+        assert_eq!(directory_scope(&[], "1.4.0"), Some("\"1.4.0/\"".into()));
+    }
+
+    /// Only a quoted scope has an unquoted fallback: a plain value is already literal.
+    #[test]
+    fn unquoted_scope_strips_the_phrase() {
+        assert_eq!(unquoted_scope("\"bench/flat/\""), Some("bench/flat/"));
+        assert_eq!(unquoted_scope("bench/flat/"), None);
+        assert_eq!(unquoted_scope("\"\""), Some(""));
     }
 
     /// A directory listing never trusts the loose server match: a copy of the path under

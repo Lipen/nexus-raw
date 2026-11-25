@@ -341,6 +341,23 @@ class Conformance(unittest.TestCase):
                 "the search must be repository-scoped",
             )
 
+    def test_atomic_ls_retries_only_an_empty_phrase_page(self):
+        """A page with rows outside the scope is a working phrase server: no unquoted retry."""
+        with mock_server("atomic") as mock:
+            nx = self.client()
+            raw_put(
+                f"{mock.base}service/rest/v1/search/assets",
+                search_document(["/backup/x/a.zip"]),
+            )
+            self.assertEqual(nx.ls(mock.base, "raw-main", directory="x"), [], "the copy stays out")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(
+                len(searches),
+                1,
+                "non-empty rows arm no retry, even when the prefix filter drops all of them",
+            )
+            self.assertIn("q=%22x%2F%22", searches[0])
+
     def test_assets_pagination(self):
         """ls walks the server's continuation tokens to the end: 35 assets across 10-per-page chunks."""
         with mock_server("assets-pagination") as mock:
@@ -365,7 +382,7 @@ class Conformance(unittest.TestCase):
             self.assertEqual(len(pages), 110, "111 pages total: the first has no token, 110 follow it")
 
     def test_assets_prefix_q_scoped_directory(self):
-        """A directory listing asks with q=<directory>/: 10 pages for 300 names, and the loose match's decoy is filtered out."""
+        """A directory listing asks with the quoted q="<directory>/": 10 pages for 300 names, and the loose match's decoy is filtered out."""
         with mock_server("assets-prefix-q") as mock:
             nx = self.client()
             paths = nx.ls(mock.base, "raw-main", directory="v1.1.0-dir")
@@ -376,10 +393,42 @@ class Conformance(unittest.TestCase):
             searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
             self.assertEqual(
                 len(searches),
-                10,
-                "q=v1.1.0-dir/ cuts the pages to 500 rows the loose match serves, at 50 a page",
+                11,
+                "the quoted probe is empty on this literal server, then 10 fallback pages carry the 500 rows",
             )
-            self.assertIn("q=v1.1.0-dir%2F", searches[0], "the scope rides percent-encoded, trailing slash and all")
+            self.assertIn(
+                "q=%22v1.1.0-dir%2F%22",
+                searches[0],
+                "the scope is a percent-encoded phrase, trailing slash and all",
+            )
+            self.assertIn("q=v1.1.0-dir%2F", searches[1], "the empty phrase retries unquoted")
+
+    def test_assets_token_q(self):
+        """The token server's unquoted q spans the repository: 1357 rows over 28 pages without a scope."""
+        with mock_server("assets-token-q") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main")
+            self.assertEqual(len(paths), 1357, "the generated repository has 1357 rows")
+            pages = [p for _, p in nx.requests if "continuationToken" in p]
+            self.assertEqual(len(pages), 27, "28 pages total: the first has no token, 27 follow it")
+
+    def test_assets_token_q_scoped_directory(self):
+        """The quoted phrase cuts a token server to the directory: 5 pages for 202 rows, decoy filtered out."""
+        with mock_server("assets-token-q") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main", directory="bench/1.30.0")
+            self.assertEqual(len(paths), 142, "120 flat names plus 22 nested names")
+            self.assertTrue(all(p.startswith("/bench/1.30.0/") for p in paths))
+            self.assertFalse(any(p.startswith("/backup/") for p in paths), "the copy under another parent stays out")
+            self.assertFalse(any(p.startswith("/bench/1.31.0/") for p in paths), "the sibling version stays out")
+            self.assertFalse(any(p.startswith("/other/1.30.0/") for p in paths), "the other parent stays out")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(len(searches), 5, "202 rows the phrase serves, at 50 a page")
+            self.assertIn(
+                "q=%22bench%2F1.30.0%2F%22",
+                searches[0],
+                "the scope is a percent-encoded phrase",
+            )
 
     def test_assets_absent(self):
         """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""

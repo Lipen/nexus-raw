@@ -329,7 +329,7 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                 _ => None,
             },
             "service/rest/v1/search/assets" => match shared.scenario {
-                Scenario::AssetsPagination | Scenario::AssetsPrefixQ => {
+                Scenario::AssetsPagination | Scenario::AssetsPrefixQ | Scenario::AssetsTokenQ => {
                     Some(assets_page(shared, req))
                 }
                 Scenario::AuditLitter => Some(audit_litter_page(shared)),

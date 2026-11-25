@@ -344,8 +344,10 @@ Treat `--ls` output as a hint only.
 
 Each search item carries the path and, when the index holds them, the digest (`checksum.sha256`) and the size (`fileSize`), so a client reads the facts instead of a HEAD per name.
 The size key is `fileSize` on the pinned 3.96.3, never `size`, and the client accepts the flat `size` form only as a fallback for a proxy that rewrites the document.
-A directory listing (`ls`, `ls --assets`, and the `down --ls` enumeration at a version directory) asks the same endpoint with `q=<percent-encoded directory path>/`.
-`q` is a page cutter, never the answer: the server matches it loosely (a case-sensitive path substring, measured against the pinned 3.96.3), so the pages may carry a superset (a copy of the directory under another parent, or a name-continuing sibling when the trailing slash is missing), and the client-side whole-segment prefix filter turns that superset into exactly the directory's names.
+A directory listing (`ls`, `ls --assets`, and the `down --ls` enumeration at a version directory) asks the same endpoint with `q="<percent-encoded directory path>/"`.
+The value is a quoted phrase: a token-OR server (`bench/1.30.0/` matching every path that carries the `bench` token) narrows to that one directory, while a copy of the directory under another parent still rides the page set.
+A server that treats `q` as a literal substring answers the quoted phrase with an empty page, and the client retries once with the same scope unquoted: only a successful empty first page triggers the retry, never a 400 or a transport error.
+`q` is a page cutter, never the answer: the pages may carry a superset (a copy of the directory under another parent, or a name-continuing sibling when the trailing slash is missing), and the client-side whole-segment prefix filter turns that superset into exactly the directory's names.
 The property that a directory query never drops a name is versioned, not verified at run time: the search answer carries no count to compare against.
 The stand battery pins it against the pinned Nexus image (`stand/real-nexus/battery.sh`): a seeded directory's `q` listing must equal the repository-wide walk restricted to that directory.
 Repository-wide walks (`audit`, `diff --via search`, the `up --wait-index` visibility poll) send no `q`: there the page set has to be the repository, and a filter the audit trusts would be a hole in the audit.

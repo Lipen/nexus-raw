@@ -1191,6 +1191,59 @@ fn assets_prefix_q_matches_loosely_like_the_pinned_server() {
     );
 }
 
+/// assets-token-q: the lab server's `q` is a token query with OR semantics until the value is
+/// quoted, where it becomes a phrase.
+/// The common `bench` segment makes an unquoted directory value the whole repository; the
+/// quoted phrase narrows to the directory, and the copy under another parent still rides it.
+#[test]
+fn assets_token_q_is_a_token_query_until_quoted() {
+    let server = MockNexus::start(Scenario::AssetsTokenQ).unwrap();
+
+    let unquoted = search_paths(server.addr(), "&q=bench%2F1.30.0%2F");
+    assert_eq!(
+        unquoted.len(),
+        1357,
+        "the bench token or the 1.30.0 token matches every generated row"
+    );
+    assert!(
+        unquoted
+            .iter()
+            .any(|p| p.starts_with("/bench/archive/bulk-"))
+            && unquoted.iter().any(|p| p.starts_with("/other/1.30.0/"))
+            && unquoted.iter().any(|p| p.starts_with("/bench/1.31.0/")),
+        "both tokens widen the unquoted query"
+    );
+
+    let quoted = search_paths(server.addr(), "&q=%22bench%2F1.30.0%2F%22");
+    assert_eq!(
+        quoted.len(),
+        202,
+        "120 directory rows, 22 nested rows and 60 decoy rows"
+    );
+    assert!(
+        quoted
+            .iter()
+            .any(|p| p.starts_with("/backup/bench/1.30.0/")),
+        "the phrase still matches the copy under another parent: the client filter drops it"
+    );
+    assert!(
+        !quoted.iter().any(|p| p.starts_with("/bench/1.31.0/")
+            || p.starts_with("/other/1.30.0/")
+            || p.starts_with("/bench/archive/")),
+        "the phrase never widens to the sibling, the other parent or the filler"
+    );
+
+    let nested = search_paths(server.addr(), "&q=%22bench%2F1.30.0%2Fbom%2F%22");
+    assert_eq!(nested.len(), 22, "the nested directory cuts to one page");
+
+    let version_only = search_paths(server.addr(), "&q=1.30.0");
+    assert_eq!(
+        version_only.len(),
+        262,
+        "the version token alone spans both parents and the decoy"
+    );
+}
+
 /// The query value is percent-decoded before the match, and a malformed escape stays verbatim.
 #[test]
 fn query_percent_decoding_keeps_malformed_escapes() {

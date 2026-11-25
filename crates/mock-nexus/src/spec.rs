@@ -213,6 +213,7 @@ impl From<&Scenario> for Spec {
             Scenario::AssetsPagination => {}
             Scenario::AssetsAbsent => {}
             Scenario::AssetsPrefixQ => {}
+            Scenario::AssetsTokenQ => {}
             Scenario::EulaGate => {}
             Scenario::EulaAbsent => {}
             Scenario::SearchLag { .. } => {}

@@ -35,12 +35,56 @@ const PREFIX_Q_DECOY: usize = 200;
 /// past the 100-page bound a listing used to carry.
 const PREFIX_Q_BULK: usize = 5000;
 
+/// The flat names of the `assets-token-q` version directory.
+const TOKEN_Q_DIR: usize = 120;
+
+/// The names in the version directory's `bom/` subdirectory: one page on their own.
+const TOKEN_Q_NESTED: usize = 22;
+
+/// A copy of the version directory under another parent: a quoted phrase still rides it, so
+/// only the client-side prefix filter keeps it out.
+const TOKEN_Q_DECOY: usize = 60;
+
+/// A sibling version: the `bench` token and not the `1.30.0` token.
+const TOKEN_Q_SIBLING: usize = 60;
+
+/// A same-version directory under another parent: the `1.30.0` token and not the `bench` token.
+const TOKEN_Q_OTHER: usize = 60;
+
+/// The bulk under the common token that makes an unquoted query the whole repository.
+const TOKEN_Q_FILLER: usize = 1000;
+
 /// The generated search corpus of a scenario, in the order the server pages it.
 /// The paths carry the leading slash, the shape a real Nexus reports.
 fn corpus(scenario: &Scenario) -> Vec<String> {
     let mut paths = Vec::new();
-    for i in 0..ASSETS_TOTAL {
-        paths.push(format!("/v0.9.0-assets/asset-{i:03}.bin"));
+    if *scenario != Scenario::AssetsTokenQ {
+        for i in 0..ASSETS_TOTAL {
+            paths.push(format!("/v0.9.0-assets/asset-{i:03}.bin"));
+        }
+    }
+    if *scenario == Scenario::AssetsTokenQ {
+        for i in 0..ASSETS_TOTAL {
+            paths.push(format!("/bench/v0.9.0-assets/asset-{i:03}.bin"));
+        }
+        for i in 0..TOKEN_Q_DIR {
+            paths.push(format!("/bench/1.30.0/dir-{i:03}.bin"));
+        }
+        for i in 0..TOKEN_Q_NESTED {
+            paths.push(format!("/bench/1.30.0/bom/bom-{i:02}.json"));
+        }
+        for i in 0..TOKEN_Q_DECOY {
+            paths.push(format!("/backup/bench/1.30.0/decoy-{i:02}.bin"));
+        }
+        for i in 0..TOKEN_Q_SIBLING {
+            paths.push(format!("/bench/1.31.0/next-{i:02}.bin"));
+        }
+        for i in 0..TOKEN_Q_OTHER {
+            paths.push(format!("/other/1.30.0/other-{i:02}.bin"));
+        }
+        for i in 0..TOKEN_Q_FILLER {
+            paths.push(format!("/bench/archive/bulk-{i:04}.bin"));
+        }
     }
     if *scenario == Scenario::AssetsPrefixQ {
         for i in 0..PREFIX_Q_DIR {
@@ -69,6 +113,22 @@ pub(super) fn q_matches(q: &str, path: &str) -> bool {
     path.contains(q)
 }
 
+/// The lab server's `q` match: an unquoted value is a token query with OR semantics, and a
+/// double-quoted value is a phrase.
+/// The tokens are whole path segments: `bench/1.30.0/` matches every path that carries a
+/// `bench` or a `1.30.0` segment, the observed overmatch of a common first segment.
+/// A phrase matches only paths carrying that literal directory.
+/// A superset is safe for a listing, which filters client-side; a narrower set would not be.
+pub(super) fn token_q_matches(q: &str, path: &str) -> bool {
+    if let Some(phrase) = q.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+        return path.contains(phrase);
+    }
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    q.split('/')
+        .filter(|token| !token.is_empty())
+        .any(|token| segments.contains(&token))
+}
+
 /// One search row, the shape `/search/assets` reports.
 fn search_item(base: &str, path: &str, seed: usize) -> String {
     let sha = format!("{seed:064x}");
@@ -82,21 +142,29 @@ fn search_item(base: &str, path: &str, seed: usize) -> String {
 }
 
 /// Serve one page of the generated asset list: items for the current token, plus the next token until the list is exhausted.
-/// `q`, when present, matches paths as a loose substring after decoding, the way the real server does.
+/// `q`, when present, matches the scenario's server after decoding: a loose path substring for
+/// `assets-prefix-q`, a token query with phrase support for `assets-token-q`.
 pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
     let q = query_param(&req.target, "q").map(percent_decode);
     let token = query_param(&req.target, "continuationToken");
     let start = token.and_then(|t| t.parse::<usize>().ok()).unwrap_or(0);
-    let page_size = if shared.scenario == Scenario::AssetsPrefixQ {
+    let page_size = if matches!(
+        shared.scenario,
+        Scenario::AssetsPrefixQ | Scenario::AssetsTokenQ
+    ) {
         SEARCH_ROWS_PER_PAGE
     } else {
         ASSETS_PAGE
     };
     let all = corpus(&shared.scenario);
+    let matches = |q: &str, path: &str| match shared.scenario {
+        Scenario::AssetsTokenQ => token_q_matches(q, path),
+        _ => q_matches(q, path),
+    };
     let matching: Vec<usize> = all
         .iter()
         .enumerate()
-        .filter(|(_, path)| q.as_deref().is_none_or(|q| q_matches(q, path)))
+        .filter(|(_, path)| q.as_deref().is_none_or(|q| matches(q, path)))
         .map(|(i, _)| i)
         .collect();
     let total = matching.len();

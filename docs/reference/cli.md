@@ -861,8 +861,9 @@ When the enumerator hides markers, `ls` names the count in a trailing line (`N m
 |:-----|:--------|
 | `--assets` | flat artifact names under the directory URL instead of the entry tree |
 
-The listing asks the search API in the repository scope with `q=<directory>/` (percent-encoded), so the pages cover the directory instead of the whole repository, and the tree is cut client-side.
-`q` only saves requests: the server matches it loosely, so the pages may carry extra names, and the whole-segment prefix filter is what makes the answer exact.
+The listing asks the search API in the repository scope with `q="<directory>/"` (percent-encoded), a quoted phrase, so a token-OR server narrows to the directory instead of every path that shares a token, and the tree is cut client-side.
+A server that treats `q` literally answers the phrase with an empty page, and the walk retries once with the same scope unquoted.
+`q` only saves requests: the pages may carry extra names, and the whole-segment prefix filter is what makes the answer exact.
 The walk is bounded at 1000 pages of 50 rows.
 Passing the bound is a `cannot enumerate` refusal, never a truncated list.
 This capture was taken against a live Nexus Repository with a neutralized host:
@@ -881,7 +882,7 @@ $ echo $?
 
 `--assets` lists the artifact names under a version directory (`/repository/<name>/<group…>/<version>/`), the enumeration `down --ls` consumes.
 The tree form (`ls <URL>`) works at any depth, the repository root included. `--assets` makes the same version-directory assumption the transfer commands make.
-It scopes the search with `q=<directory>/` exactly like the entry listing, and cuts the names client-side.
+It scopes the search with `q="<directory>/"` exactly like the entry listing, and cuts the names client-side.
 Neither listing sends the `group` parameter: on one measured Nexus release it matched Maven coordinates rather than raw path prefixes, and nested listings lied.
 Treat both as conveniences only.
 `down` takes its names from the flags, and the enumeration guarantees live in [the protocol page](protocol.md#enumeration).

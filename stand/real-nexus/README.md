@@ -44,7 +44,8 @@ and measures whether the search `q` parameter may cut the full walk that the
 listing pays today. It compares returned path sets per directory (the walk's
 set against the `q` set: dropped, extra, equal) and prints tables, plus the
 server's own request count per `nxr ls` from the request log.
-It is a measurement, not a gate, so it is not wired into the battery or CI.
+It is mostly a measurement: the scoped-listing check at the end fails the run when a token server widens the pages past half the full walk, because that regression is silent.
+It is still not wired into the battery or CI.
 With the stack from `compose.yaml` up and bootstrapped:
 
 ```sh
@@ -52,6 +53,10 @@ sh stand/real-nexus/search-pages.sh both   # stage1 under nxr's page cap, stage2
 ```
 
 The property the measurement established is what `battery.sh` pins: a directory listing asks
-the search with `q=<directory>/`, and on the pinned version that answer, filtered client-side,
+the search with the quoted phrase `q="<directory>/"`, and that answer, filtered client-side,
 equals the repository-wide walk restricted to the directory.
+A server that treats `q` as a literal substring answers the phrase empty, and the client
+retries once with the same scope unquoted, so the equality holds on both server families.
 The battery seeds a handful of names for it and compares the two sets on every run.
+`search-pages.sh` also measures the quoted phrase against the unquoted value, which shows on
+one table whether that server is a token-OR server or a literal substring server.

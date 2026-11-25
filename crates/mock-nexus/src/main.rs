@@ -261,6 +261,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "assets-pagination" => Some(Scenario::AssetsPagination),
         "assets-absent" => Some(Scenario::AssetsAbsent),
         "assets-prefix-q" => Some(Scenario::AssetsPrefixQ),
+        "assets-token-q" => Some(Scenario::AssetsTokenQ),
         "eula-gate" => Some(Scenario::EulaGate),
         "eula-absent" => Some(Scenario::EulaAbsent),
         "search-lag" => Some(Scenario::SearchLag {

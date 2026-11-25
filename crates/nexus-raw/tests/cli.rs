@@ -6934,9 +6934,12 @@ fn ls_unknown_repository_prints_the_repository_hint() {
     );
 }
 
-/// A directory listing asks the search with `q=<directory>/`: the 300-name directory of a
-/// 5539-row repository lists in 10 pages, not the 111 a repository-wide walk costs (and not
-/// the 100-page bound a listing used to carry), and the loose match's decoy names stay out.
+/// A directory listing asks the search with the quoted phrase `q="<directory>/"`: the
+/// 300-name directory of a 5539-row repository costs 11 search requests (one empty quoted
+/// probe plus 10 fallback pages), not the 111 a repository-wide walk costs (and not the
+/// 100-page bound a listing used to carry), and the loose match's decoy names stay out.
+/// This fixture treats `q` literally, so the quoted probe is empty and the one unquoted retry
+/// costs the extra request.
 #[test]
 fn ls_scopes_the_search_to_the_directory() {
     let srv = server(Scenario::AssetsPrefixQ);
@@ -6962,8 +6965,8 @@ fn ls_scopes_the_search_to_the_directory() {
         .filter(|r| r.path == "service/rest/v1/search/assets")
         .count();
     assert_eq!(
-        pages, 10,
-        "300 directory rows plus 200 decoy rows the loose q drags in, 50 a page"
+        pages, 11,
+        "the quoted probe is empty on this literal server, then 10 fallback pages carry the 500 rows"
     );
 
     // The same directory as flat names (`--assets`), the enumeration `down --ls` consumes.
@@ -6980,6 +6983,37 @@ fn ls_scopes_the_search_to_the_directory() {
         !lines.iter().any(|l| l.starts_with("decoy-")),
         "the copy under another parent never surfaces"
     );
+}
+
+/// On a token-OR server an unquoted directory value spans the whole repository: the quoted
+/// phrase is what cuts the 1357 rows to the 202 the directory and its copy hold.
+#[test]
+fn ls_quotes_the_scope_on_a_token_server() {
+    let srv = server(Scenario::AssetsTokenQ);
+    let out = nxr(&[
+        "ls",
+        &format!("{}repository/raw-main/bench/1.30.0/", srv.base_url()),
+    ]);
+    expect_exit(&out, 0, "the scoped listing succeeds");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 121, "120 flat files plus the bom/ directory");
+    assert!(
+        lines.contains(&"bom/"),
+        "the nested directory is an entry: {lines:?}"
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l.starts_with("decoy-") || l.starts_with("next-") || l.starts_with("bulk-")),
+        "the sibling, the copy under another parent and the filler stay out"
+    );
+    let pages = srv
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(pages, 5, "the quoted phrase serves 202 rows, 50 a page");
 }
 
 /// Two served paths that decode to one name give the row no facts at all: one
