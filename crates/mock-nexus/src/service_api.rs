@@ -58,12 +58,12 @@ const TOKEN_Q_FILLER: usize = 1000;
 /// The paths carry the leading slash, the shape a real Nexus reports.
 fn corpus(scenario: &Scenario) -> Vec<String> {
     let mut paths = Vec::new();
-    if *scenario != Scenario::AssetsTokenQ {
+    if !matches!(*scenario, Scenario::AssetsTokenQ | Scenario::AssetsMixedQ) {
         for i in 0..ASSETS_TOTAL {
             paths.push(format!("/v0.9.0-assets/asset-{i:03}.bin"));
         }
     }
-    if *scenario == Scenario::AssetsTokenQ {
+    if matches!(*scenario, Scenario::AssetsTokenQ | Scenario::AssetsMixedQ) {
         for i in 0..ASSETS_TOTAL {
             paths.push(format!("/bench/v0.9.0-assets/asset-{i:03}.bin"));
         }
@@ -143,22 +143,28 @@ fn search_item(base: &str, path: &str, seed: usize) -> String {
 
 /// Serve one page of the generated asset list: items for the current token, plus the next token until the list is exhausted.
 /// `q`, when present, matches the scenario's server after decoding: a loose path substring for
-/// `assets-prefix-q`, a token query with phrase support for `assets-token-q`.
+/// `assets-prefix-q`, a token query with phrase support for `assets-token-q`, and a per-page
+/// alternation of the two for `assets-mixed-q`.
 pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
     let q = query_param(&req.target, "q").map(percent_decode);
     let token = query_param(&req.target, "continuationToken");
     let start = token.and_then(|t| t.parse::<usize>().ok()).unwrap_or(0);
     let page_size = if matches!(
         shared.scenario,
-        Scenario::AssetsPrefixQ | Scenario::AssetsTokenQ
+        Scenario::AssetsPrefixQ | Scenario::AssetsTokenQ | Scenario::AssetsMixedQ
     ) {
         SEARCH_ROWS_PER_PAGE
     } else {
         ASSETS_PAGE
     };
     let all = corpus(&shared.scenario);
+    let quoted = q
+        .as_deref()
+        .is_some_and(|q| q.starts_with('"') && q.ends_with('"'));
+    let page = start / page_size;
     let matches = |q: &str, path: &str| match shared.scenario {
         Scenario::AssetsTokenQ => token_q_matches(q, path),
+        Scenario::AssetsMixedQ if quoted && page.is_multiple_of(2) => token_q_matches(q, path),
         _ => q_matches(q, path),
     };
     let matching: Vec<usize> = all

@@ -7016,6 +7016,35 @@ fn ls_quotes_the_scope_on_a_token_server() {
     assert_eq!(pages, 5, "the quoted phrase serves 202 rows, 50 a page");
 }
 
+/// A mixed front answers the quoted page 0 and then an empty page 1: the client must not pass
+/// the 50-row prefix off as the directory. The unquoted retry carries the listing.
+#[test]
+fn ls_recovers_a_truncated_phrase_on_a_mixed_front() {
+    let srv = server(Scenario::AssetsMixedQ);
+    let out = nxr(&[
+        "ls",
+        &format!("{}repository/raw-main/bench/1.30.0/", srv.base_url()),
+    ]);
+    expect_exit(&out, 0, "the scoped listing succeeds");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 121, "120 flat files plus the bom/ directory");
+    assert!(
+        lines.contains(&"bom/"),
+        "the nested directory is an entry: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.starts_with("decoy-")),
+        "the copy under another parent never surfaces"
+    );
+    let pages = srv
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(pages, 7, "two quoted pages, then five unquoted retry pages");
+}
+
 /// Two served paths that decode to one name give the row no facts at all: one
 /// object's size on the other object's name would be a lie.
 #[test]

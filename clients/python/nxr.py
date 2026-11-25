@@ -339,10 +339,10 @@ class Nxr:
         if not scope:
             return self._ls_pages(endpoint, repository, query, None, scope)[0]
         quoted = f'"{"/".join(scope)}/"'
-        paths, saw_rows = self._ls_pages(endpoint, repository, query, quoted, scope)
-        if saw_rows:
-            return paths
-        return self._ls_pages(endpoint, repository, query, "/".join(scope) + "/", scope)[0]
+        paths, saw_rows, truncated = self._ls_pages(endpoint, repository, query, quoted, scope)
+        if truncated or not saw_rows:
+            return self._ls_pages(endpoint, repository, query, "/".join(scope) + "/", scope)[0]
+        return paths
 
     def _ls_pages(
         self,
@@ -351,12 +351,15 @@ class Nxr:
         query: dict[str, str],
         q: str | None,
         scope: list[str],
-    ) -> tuple[list[str], bool]:
+    ) -> tuple[list[str], bool, bool]:
         """Walk one search query to its last continuation token: the shared body of `ls`.
 
-        Returns the filtered paths and whether the server served any row at all.
+        Returns the filtered paths, whether the server served any row at all, and whether a
+        non-empty walk ended on an empty page.
         An empty page, not an empty filtered answer, is what arms the unquoted retry: a
         phrase that matches only a copy outside the scope is a working phrase server.
+        An empty final page after rows is a truncation signal: a load-balanced front can route
+        later pages to a backend that does not understand the query.
         """
         query = dict(query)
         if q is not None:
@@ -364,6 +367,7 @@ class Nxr:
         first_page = f"{endpoint}?{urlencode(query)}"
         paths: list[str] = []
         saw_rows = False
+        truncated = False
         token: str | None = None
         for _page in range(MAX_SEARCH_PAGES):
             url = first_page if token is None else f"{first_page}&{urlencode({'continuationToken': token})}"
@@ -398,7 +402,9 @@ class Nxr:
                     paths.append(path)
             token = page.get("continuationToken")
             if not isinstance(token, str):
-                return paths, saw_rows
+                if not items and saw_rows:
+                    truncated = True
+                return paths, saw_rows, truncated
         raise EnumerateError(
             f"cannot enumerate: {first_page}: search pagination exceeded {MAX_SEARCH_PAGES} pages",
             hint="the endpoint never stops emitting continuation tokens",

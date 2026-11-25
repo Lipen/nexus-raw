@@ -214,6 +214,7 @@ impl From<&Scenario> for Spec {
             Scenario::AssetsAbsent => {}
             Scenario::AssetsPrefixQ => {}
             Scenario::AssetsTokenQ => {}
+            Scenario::AssetsMixedQ => {}
             Scenario::EulaGate => {}
             Scenario::EulaAbsent => {}
             Scenario::SearchLag { .. } => {}

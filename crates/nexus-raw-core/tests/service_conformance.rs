@@ -299,6 +299,35 @@ async fn assets_token_q_nested_scope_is_one_page() {
     assert_eq!(pages, 1, "22 rows fit one page");
 }
 
+/// A load-balanced front can route quoted page 0 to a phrase-aware backend and page 1 to a
+/// literal one. The non-empty prefix is not a complete listing: the empty final page is the
+/// truncation signal, the unquoted retry carries all 202 rows, and the filter keeps 121 entries.
+#[tokio::test]
+async fn assets_mixed_q_recovers_a_truncated_phrase() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsMixedQ).unwrap();
+    let base = format!("{}repository/raw-main/bench/1.30.0/", server.base_url());
+    let nxr = client(base);
+    let before = search_requests(&server);
+    let (entries, hidden) = nxr.ls_entries_counted().await.unwrap();
+    assert_eq!(hidden, 0, "the generated rows carry no markers");
+    assert_eq!(entries.len(), 121, "120 flat files plus the bom/ directory");
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.kind == nexus_raw_core::EntryKind::Dir && e.name == "bom"),
+        "the nested directory is an entry, not a lost subtree"
+    );
+    assert!(
+        !entries.iter().any(|e| e.name.starts_with("decoy-")),
+        "the copy under another parent never surfaces"
+    );
+    assert_eq!(
+        search_requests(&server) - before,
+        7,
+        "two quoted pages then five unquoted retry pages"
+    );
+}
+
 /// The same directory through the artifact listing (`ls --assets`, the `down --ls` source):
 /// the scoped walk returns the flat names, decoy excluded.
 #[tokio::test]

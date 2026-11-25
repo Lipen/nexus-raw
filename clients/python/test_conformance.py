@@ -430,6 +430,19 @@ class Conformance(unittest.TestCase):
                 "the scope is a percent-encoded phrase",
             )
 
+    def test_assets_mixed_q(self):
+        """A mixed front truncates the quoted walk: the unquoted retry returns all 142 paths."""
+        with mock_server("assets-mixed-q") as mock:
+            nx = self.client()
+            paths = nx.ls(mock.base, "raw-main", directory="bench/1.30.0")
+            self.assertEqual(len(paths), 142, "120 flat names plus 22 nested names")
+            self.assertTrue(all(p.startswith("/bench/1.30.0/") for p in paths))
+            self.assertFalse(any(p.startswith("/backup/") for p in paths), "the copy stays out")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(len(searches), 7, "two quoted pages then five unquoted retry pages")
+            self.assertIn("q=%22bench%2F1.30.0%2F%22", searches[0], "the quoted walk starts")
+            self.assertIn("q=bench%2F1.30.0%2F", searches[2], "the retry starts after the two quoted pages")
+
     def test_assets_absent(self):
         """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""
         with mock_server("assets-absent") as mock:

@@ -311,6 +311,15 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         invariant: "A quoted directory scope cuts a token server to the directory's rows (5 pages against 28 repository-wide) while the client-side prefix filter still drops the copy under another parent.",
     },
     ScenarioDoc {
+        id: "assets-mixed-q",
+        name: "A load-balanced front disagrees about phrase support.",
+        behavior: &[
+            "The search serves the `assets-token-q` corpus: quoted requests on even pages reach a phrase-aware backend, quoted requests on odd pages reach a literal backend that answers empty, and every unquoted request uses the literal substring match on both.",
+            "A quoted walk of `bench/1.30.0/` returns 50 rows and then stops on an empty page, while the unquoted retry returns all 202 rows in 5 pages.",
+        ],
+        invariant: "A non-empty quoted prefix is not a complete listing: the client treats the empty final page as truncation, retries unquoted, and returns all 120 flat names plus the `bom/` directory.",
+    },
+    ScenarioDoc {
         id: "eula-gate",
         name: "The CE 3.79 EULA gate.",
         behavior: &[

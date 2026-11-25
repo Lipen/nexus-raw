@@ -39,6 +39,7 @@ impl Scenario {
             Scenario::AssetsAbsent => "assets-absent",
             Scenario::AssetsPrefixQ => "assets-prefix-q",
             Scenario::AssetsTokenQ => "assets-token-q",
+            Scenario::AssetsMixedQ => "assets-mixed-q",
             Scenario::EulaGate => "eula-gate",
             Scenario::EulaAbsent => "eula-absent",
             Scenario::SearchLag { .. } => "search-lag",
@@ -82,6 +83,7 @@ pub const SCENARIOS: &[&str] = &[
     "assets-absent",
     "assets-prefix-q",
     "assets-token-q",
+    "assets-mixed-q",
     "eula-gate",
     "eula-absent",
     "search-lag",
@@ -225,6 +227,14 @@ pub enum Scenario {
     /// the directory (5 pages).
     /// Storage behavior is [`Scenario::Atomic`].
     AssetsTokenQ,
+    /// A load-balanced search front whose backends disagree about phrase support: quoted
+    /// requests on even pages reach a phrase-aware backend, quoted requests on odd pages reach
+    /// a literal backend that answers empty, and every unquoted request uses the literal
+    /// substring match on both.
+    /// The quoted walk of `bench/1.30.0/` returns 50 rows and then stops; the unquoted retry
+    /// returns all 202 rows in 5 pages.
+    /// Storage behavior is [`Scenario::Atomic`].
+    AssetsMixedQ,
     /// The CE 3.79 EULA gate: `GET /v1/system/eula` presents the disclaimer, PUT answers `403` with the EULA body until
     /// `POST /v1/system/eula` echoes it back with `accepted: true` (204), after which PUTs store normally.
     /// Storage behavior is otherwise [`Scenario::Atomic`].

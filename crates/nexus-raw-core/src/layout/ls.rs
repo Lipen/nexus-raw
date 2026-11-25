@@ -7,6 +7,8 @@
 //! A successful empty first page retries once with the same scope unquoted: a server that
 //! treats `q` as a literal substring matches nothing against the quotes, while an empty
 //! directory on a token server pays the wider unquoted walk before it answers empty.
+//! An empty final page after rows is a truncation signal from a mixed front: the quoted walk is
+//! replaced by the unquoted scope, and a retry that truncates too emits a warning.
 //! The server's `q` match is loose either way (a path substring, or a token query), so the
 //! client-side prefix filter stays the correctness mechanism, and `q` only saves requests.
 //! A repository-wide walk (`audit`, the delta's search path) asks without `q`: there the page
@@ -536,6 +538,14 @@ async fn paginate(
         .collect())
 }
 
+/// One search walk: the assets and whether a backend dropped its later pages.
+struct Walked {
+    assets: Vec<SearchAsset>,
+    /// An empty final page after rows: a load-balanced front routed later pages to a backend
+    /// that does not understand the query.
+    truncated: bool,
+}
+
 /// One search-API asset, reduced to the facts a digest comparison needs.
 #[derive(Debug, Clone)]
 pub(crate) struct SearchAsset {
@@ -558,20 +568,33 @@ pub(crate) struct SearchAsset {
 /// value is still a superset of the directory on a token server.
 /// An empty directory on a token server pays that wider walk: a successful empty page is the
 /// only trigger, and the response carries no signal to tell the two apart.
+/// An empty final page after rows is a truncation signal: a load-balanced front can route
+/// later pages to a backend that does not understand the query, and the unquoted retry is the
+/// pre-fix superset on both analyzer models.
 async fn walk(
     client: &NexusClient,
     base: &str,
     repo: &str,
     q: Option<&str>,
 ) -> Result<Vec<SearchAsset>, Error> {
-    let assets = walk_pages(client, base, repo, q).await?;
-    if !assets.is_empty() {
-        return Ok(assets);
+    let first = walk_pages(client, base, repo, q).await?;
+    if first.truncated || first.assets.is_empty() {
+        if let Some(fallback) = q.and_then(unquoted_scope) {
+            let retry = walk_pages(client, base, repo, Some(fallback)).await?;
+            if retry.truncated {
+                client.events().warning(format!(
+                    "{base}: the search answered an empty page mid-walk after the unquoted retry; the listing may be incomplete"
+                ));
+            }
+            return Ok(retry.assets);
+        }
     }
-    match q.and_then(unquoted_scope) {
-        Some(fallback) => walk_pages(client, base, repo, Some(fallback)).await,
-        None => Ok(assets),
+    if first.truncated {
+        client.events().warning(format!(
+            "{base}: the search answered an empty page mid-walk; the listing may be incomplete"
+        ));
     }
+    Ok(first.assets)
 }
 
 /// One pass over the search pages for exactly one `q` value: the body [`walk`] retries.
@@ -580,7 +603,7 @@ async fn walk_pages(
     base: &str,
     repo: &str,
     q: Option<&str>,
-) -> Result<Vec<SearchAsset>, Error> {
+) -> Result<Walked, Error> {
     let url = reqwest::Url::parse(base).map_err(|e| Error::misuse(format!("base URL: {e}")))?;
     let mut origin = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
     if let Some(port) = url.port() {
@@ -593,7 +616,10 @@ async fn walk_pages(
         // Percent-encoded by the URL builder, which is the form the server is measured to accept.
         endpoint.query_pairs_mut().append_pair("q", q);
     }
-    let mut assets = Vec::new();
+    let mut walked = Walked {
+        assets: Vec::new(),
+        truncated: false,
+    };
     let mut next: Option<String> = None;
     // A hostile or broken endpoint can emit continuation tokens forever.
     // The page cap turns an endless scroll into an Enumerate refusal.
@@ -638,12 +664,14 @@ async fn walk_pages(
                 url: page_url.clone(),
                 reason: format!("search response is not JSON: {e}"),
             })?;
-        if let Some(items) = value.get("items").and_then(|i| i.as_array()) {
+        let items = value.get("items").and_then(|i| i.as_array());
+        let page_empty = items.is_none_or(|items| items.is_empty());
+        if let Some(items) = items {
             for item in items {
                 let Some(p) = item.get("path").and_then(|p| p.as_str()) else {
                     continue;
                 };
-                assets.push(SearchAsset {
+                walked.assets.push(SearchAsset {
                     path: p.to_owned(),
                     sha256: item
                         .get("checksum")
@@ -665,10 +693,13 @@ async fn walk_pages(
             .and_then(|t| t.as_str())
             .map(str::to_owned);
         if next.is_none() {
+            if page_empty && !walked.assets.is_empty() {
+                walked.truncated = true;
+            }
             break;
         }
     }
-    Ok(assets)
+    Ok(walked)
 }
 
 /// The set of repo-relative asset paths the search index currently reports for the repository.

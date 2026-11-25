@@ -48,7 +48,10 @@ A search refusal (400 for an unknown repository, 404 for a missing endpoint) deg
 
 `ls` lists a directory through the same search API, scoped with `q="<percent-encoded directory path>/"`, and the whole-segment path filter is applied client-side.
 The value is a quoted phrase: a token-OR server (`bench/1.30.0/` matching every path that carries the `bench` token) narrows to that one directory, while a copy of the directory under another parent still rides the page set.
-A server that treats `q` as a literal substring answers the quoted phrase with an empty page, and the client retries once with the same scope unquoted: only a successful empty first page triggers the retry, never a 400 or a transport error.
+A server that treats `q` as a literal substring answers the quoted phrase with an empty walk, and the client retries once with the same scope unquoted: an empty walk or an empty final page after rows triggers the retry, never a 400 or a transport error.
+A load-balanced front can route pages to backends that disagree about phrase support.
+An empty final page after rows is the truncation signal: the client replaces the quoted walk with the unquoted scope, the pre-fix superset on both analyzer models.
+A retry that also ends on an empty page after rows keeps what it got and emits a warning that the search answered inconsistently.
 `q` is a page cutter only: the page set is a possible superset, and the filter is the answer.
 The property that a directory query never drops a name is versioned, not verified at run time, because the response carries no count: the stand battery pins it against the pinned Nexus image.
 Repository-wide walks (`audit`, `diff --via search`, the `up --wait-index` visibility poll) send no `q`: the page set there has to be the repository.

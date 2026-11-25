@@ -23,7 +23,7 @@ The interesting rules are all client-side and all present:
 - A 405 to a PUT is `ReadOnlyError` (exit 1, never retried, the hint names the group repository), the class the Rust core gives it: a refused write is a data verdict, not a transport one.
 - The per-operation socket timeout is the stall watchdog: a frozen server aborts the attempt, a slow-but-moving transfer never trips it.
 - `ls` walks `/service/rest/v1/search/assets` with continuation tokens, capped at 1000 pages, and diagnoses a repository-scoped 400 as "missing or not raw".
-  With `directory`, it scopes the walk the way a directory listing does: the search asks with the quoted phrase `q="<directory>/"` (and retries unquoted when a literal server answers empty), and the client keeps the paths under that whole-segment prefix, so `q` can only widen the pages, never the answer.
+  With `directory`, it scopes the walk the way a directory listing does: the search asks with the quoted phrase `q="<directory>/"`, and it retries unquoted when a literal server answers empty or a mixed front truncates the walk on an empty page, while the client keeps the paths under that whole-segment prefix, so `q` can only widen the pages, never the answer.
 - Markers parse strictly (`sha256sum -c` shape: LF only, exactly two spaces, 64 lowercase hex, trailing newline), because a loose parse would bless foreign markers.
   The reference decodes marker bytes as ASCII, one notch stricter than the Rust core's lossy UTF-8: harmless today, since both sides compare digests only, but a porter may loosen it the same way.
 

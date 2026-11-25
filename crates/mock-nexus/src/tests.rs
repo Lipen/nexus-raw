@@ -1244,6 +1244,32 @@ fn assets_token_q_is_a_token_query_until_quoted() {
     );
 }
 
+/// assets-mixed-q: the front routes quoted page 0 to a phrase-aware backend and quoted page 1
+/// to a literal one, which answers empty. The quoted walk sees a non-empty prefix and stops;
+/// the unquoted walk is served by the literal model on every page and is complete.
+#[test]
+fn assets_mixed_q_truncates_a_quoted_walk_but_not_the_unquoted_retry() {
+    let server = MockNexus::start(Scenario::AssetsMixedQ).unwrap();
+
+    let quoted = search_paths(server.addr(), "&q=%22bench%2F1.30.0%2F%22");
+    assert_eq!(
+        quoted.len(),
+        50,
+        "one phrase page, then the literal backend answers empty"
+    );
+    assert!(
+        !quoted.iter().any(|p| p.starts_with("/backup/")),
+        "the 50 rows are the first page of the phrase match, not the whole set"
+    );
+
+    let unquoted = search_paths(server.addr(), "&q=bench%2F1.30.0%2F");
+    assert_eq!(
+        unquoted.len(),
+        202,
+        "the unquoted retry sees the directory and its copy in full"
+    );
+}
+
 /// The query value is percent-decoded before the match, and a malformed escape stays verbatim.
 #[test]
 fn query_percent_decoding_keeps_malformed_escapes() {

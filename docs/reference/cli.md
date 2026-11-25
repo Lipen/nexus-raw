@@ -863,6 +863,7 @@ When the enumerator hides markers, `ls` names the count in a trailing line (`N m
 
 The listing asks the search API in the repository scope with `q="<directory>/"` (percent-encoded), a quoted phrase, so a token-OR server narrows to the directory instead of every path that shares a token, and the tree is cut client-side.
 A server that treats `q` literally answers the phrase with an empty page, and the walk retries once with the same scope unquoted.
+A mixed front that truncates the quoted walk on an empty page falls back to the same scope, and a retry that truncates too prints a warning instead of a short listing.
 `q` only saves requests: the pages may carry extra names, and the whole-segment prefix filter is what makes the answer exact.
 The walk is bounded at 1000 pages of 50 rows.
 Passing the bound is a `cannot enumerate` refusal, never a truncated list.

@@ -346,7 +346,10 @@ Each search item carries the path and, when the index holds them, the digest (`c
 The size key is `fileSize` on the pinned 3.96.3, never `size`, and the client accepts the flat `size` form only as a fallback for a proxy that rewrites the document.
 A directory listing (`ls`, `ls --assets`, and the `down --ls` enumeration at a version directory) asks the same endpoint with `q="<percent-encoded directory path>/"`.
 The value is a quoted phrase: a token-OR server (`bench/1.30.0/` matching every path that carries the `bench` token) narrows to that one directory, while a copy of the directory under another parent still rides the page set.
-A server that treats `q` as a literal substring answers the quoted phrase with an empty page, and the client retries once with the same scope unquoted: only a successful empty first page triggers the retry, never a 400 or a transport error.
+A server that treats `q` as a literal substring answers the quoted phrase with an empty walk, and the client retries once with the same scope unquoted: an empty walk or an empty final page after rows triggers the retry, never a 400 or a transport error.
+A load-balanced front can route pages to backends that disagree about phrase support.
+An empty final page after rows is the truncation signal: the client replaces the quoted walk with the unquoted scope, the pre-fix superset on both analyzer models.
+A retry that also ends on an empty page after rows keeps what it got and emits a warning that the search answered inconsistently.
 `q` is a page cutter, never the answer: the pages may carry a superset (a copy of the directory under another parent, or a name-continuing sibling when the trailing slash is missing), and the client-side whole-segment prefix filter turns that superset into exactly the directory's names.
 The property that a directory query never drops a name is versioned, not verified at run time: the search answer carries no count to compare against.
 The stand battery pins it against the pinned Nexus image (`stand/real-nexus/battery.sh`): a seeded directory's `q` listing must equal the repository-wide walk restricted to that directory.
