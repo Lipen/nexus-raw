@@ -338,7 +338,14 @@ class Nxr:
         query = {"repository": repository}
         scope = [segment for segment in directory.split("/") if segment]
         if not scope:
-            return self._ls_pages(endpoint, repository, query, None, scope)[0]
+            paths, _saw_rows, truncated = self._ls_pages(endpoint, repository, query, None, scope)
+            if truncated:
+                warnings.warn(
+                    f"{endpoint}: the search answered an empty page mid-walk; the listing may be incomplete",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return paths
         quoted = f'"{"/".join(scope)}/"'
         paths, saw_rows, truncated = self._ls_pages(endpoint, repository, query, quoted, scope)
         if truncated or not saw_rows:

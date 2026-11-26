@@ -453,6 +453,16 @@ class Conformance(unittest.TestCase):
             searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
             self.assertEqual(len(searches), 4, "two pages for each walk")
 
+    def test_assets_dead_q_repository_wide(self):
+        """A repository-wide walk has no retry: a truncated page warns directly after two requests."""
+        with mock_server("assets-dead-q") as mock:
+            nx = self.client()
+            with self.assertWarns(RuntimeWarning):
+                paths = nx.ls(mock.base, "raw-main")
+            self.assertEqual(len(paths), 50, "the first page only")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(len(searches), 2, "one normal page and one empty page")
+
     def test_assets_absent(self):
         """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""
         with mock_server("assets-absent") as mock:
