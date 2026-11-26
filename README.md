@@ -85,7 +85,7 @@ The [CLI reference](docs/reference/cli.md) has every flag, output format and edg
 A GitHub Actions workflow can run the composite action from this repository:
 
 ```yaml
-- uses: Lipen/nexus-raw@v0.29.0
+- uses: Lipen/nexus-raw@v0.29.1
   with:
     command: up
     args: ./dist/1.4.0/ https://nexus.example.com/repository/raw-main/1.4.0/

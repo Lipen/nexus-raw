@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.29.1] - 2026-11-26
+
 ### Changed
 
 - A directory listing scopes the search with a quoted phrase, so a token-OR server cuts the pages to that directory instead of every path that shares a token.
@@ -749,7 +753,8 @@ The attach job names its repository without a checkout.
 - The `mock-nexus` server with nine failure scenarios as the conformance contract.
 - The documentation site with README in English and Russian.
 
-[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/Lipen/nexus-raw/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/Lipen/nexus-raw/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/Lipen/nexus-raw/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/Lipen/nexus-raw/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/Lipen/nexus-raw/compare/v0.26.0...v0.27.0
