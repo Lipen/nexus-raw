@@ -5,7 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- A directory listing scopes the search with a quoted phrase, so a token-OR server cuts the pages to that directory instead of every path that shares a token.
+  A server that answers the phrase empty falls back to the unquoted scope, and a mixed front that truncates the walk is retried instead of returning the short prefix.
+  A retry that truncates too returns its partial listing and warns that the listing may be incomplete.
+
+### Fixed
+
+- A scoped listing on a token-OR search server no longer pages the whole repository: `bench/1.30.0/` is 5 pages instead of 79 on the measured lab.
+  The client-side prefix filter still makes the answer exact, and the page set stays a superset on both analyzer models.
+
+### Security
+
+- `url` 2.5.9 replaces 2.5.8 for RUSTSEC-2026-0592, the nested `blob:` stack overflow in `Url::origin()`.
 
 ## [0.29.0] - 2026-11-20
 
