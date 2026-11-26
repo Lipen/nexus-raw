@@ -320,6 +320,14 @@ pub const SCENARIO_DOCS: &[ScenarioDoc] = &[
         invariant: "A non-empty quoted prefix is not a complete listing: the client treats the empty final page as truncation, retries unquoted, and returns all 120 flat names plus the `bom/` directory.",
     },
     ScenarioDoc {
+        id: "assets-dead-q",
+        name: "The later search pages are served by a dead backend.",
+        behavior: &[
+            "The search serves the `assets-token-q` corpus with one normal page and then empty pages for every query: the quoted walk sees 50 rows and stops, and the unquoted retry also sees 50 rows and stops.",
+        ],
+        invariant: "A retry that truncates too is not a silent short listing: the client keeps the first page and emits a warning that the listing may be incomplete.",
+    },
+    ScenarioDoc {
         id: "eula-gate",
         name: "The CE 3.79 EULA gate.",
         behavior: &[

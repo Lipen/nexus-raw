@@ -1270,6 +1270,22 @@ fn assets_mixed_q_truncates_a_quoted_walk_but_not_the_unquoted_retry() {
     );
 }
 
+/// assets-dead-q: page 0 answers, every later page is empty. Both the quoted walk and the
+/// unquoted retry stop after 50 rows, which is the double-truncation the warning covers.
+#[test]
+fn assets_dead_q_truncates_every_walk_after_the_first_page() {
+    let server = MockNexus::start(Scenario::AssetsDeadQ).unwrap();
+
+    let quoted = search_paths(server.addr(), "&q=%22bench%2F1.30.0%2F%22");
+    assert_eq!(quoted.len(), 50, "one normal page, then an empty page");
+
+    let unquoted = search_paths(server.addr(), "&q=bench%2F1.30.0%2F");
+    assert_eq!(unquoted.len(), 50, "the retry truncates too");
+
+    let full = search_paths(server.addr(), "");
+    assert_eq!(full.len(), 50, "a repository-wide walk stops after page 0");
+}
+
 /// The query value is percent-decoded before the match, and a malformed escape stays verbatim.
 #[test]
 fn query_percent_decoding_keeps_malformed_escapes() {

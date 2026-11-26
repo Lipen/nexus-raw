@@ -40,6 +40,7 @@ impl Scenario {
             Scenario::AssetsPrefixQ => "assets-prefix-q",
             Scenario::AssetsTokenQ => "assets-token-q",
             Scenario::AssetsMixedQ => "assets-mixed-q",
+            Scenario::AssetsDeadQ => "assets-dead-q",
             Scenario::EulaGate => "eula-gate",
             Scenario::EulaAbsent => "eula-absent",
             Scenario::SearchLag { .. } => "search-lag",
@@ -84,6 +85,7 @@ pub const SCENARIOS: &[&str] = &[
     "assets-prefix-q",
     "assets-token-q",
     "assets-mixed-q",
+    "assets-dead-q",
     "eula-gate",
     "eula-absent",
     "search-lag",
@@ -235,6 +237,12 @@ pub enum Scenario {
     /// returns all 202 rows in 5 pages.
     /// Storage behavior is [`Scenario::Atomic`].
     AssetsMixedQ,
+    /// A load-balanced front whose later pages are served by a dead backend: page 0 answers
+    /// with the normal match for the query, and page 1 and later answer empty for every query.
+    /// Both the quoted walk and the unquoted retry return 50 rows and then stop, so the client
+    /// keeps the first page and emits a warning that the listing may be incomplete.
+    /// Storage behavior is [`Scenario::Atomic`].
+    AssetsDeadQ,
     /// The CE 3.79 EULA gate: `GET /v1/system/eula` presents the disclaimer, PUT answers `403` with the EULA body until
     /// `POST /v1/system/eula` echoes it back with `accepted: true` (204), after which PUTs store normally.
     /// Storage behavior is otherwise [`Scenario::Atomic`].

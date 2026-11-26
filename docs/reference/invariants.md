@@ -304,6 +304,14 @@ A quoted walk of `bench/1.30.0/` returns 50 rows and then stops on an empty page
 
 **Pinned invariant:** A non-empty quoted prefix is not a complete listing: the client treats the empty final page as truncation, retries unquoted, and returns all 120 flat names plus the `bom/` directory.
 
+## `assets-dead-q`
+
+The later search pages are served by a dead backend.
+
+The search serves the `assets-token-q` corpus with one normal page and then empty pages for every query: the quoted walk sees 50 rows and stops, and the unquoted retry also sees 50 rows and stops.
+
+**Pinned invariant:** A retry that truncates too is not a silent short listing: the client keeps the first page and emits a warning that the listing may be incomplete.
+
 ## `eula-gate`
 
 The CE 3.79 EULA gate.

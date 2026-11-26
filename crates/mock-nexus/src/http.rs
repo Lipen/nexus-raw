@@ -332,7 +332,8 @@ fn handle(shared: &Shared, stream: &mut TcpStream, req: &Request, path: &str) {
                 Scenario::AssetsPagination
                 | Scenario::AssetsPrefixQ
                 | Scenario::AssetsTokenQ
-                | Scenario::AssetsMixedQ => Some(assets_page(shared, req)),
+                | Scenario::AssetsMixedQ
+                | Scenario::AssetsDeadQ => Some(assets_page(shared, req)),
                 Scenario::AuditLitter => Some(audit_litter_page(shared)),
                 Scenario::AssetsAbsent => Some(plain(404, b"not found\n", None)),
                 Scenario::SearchLag { .. } => {

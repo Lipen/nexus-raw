@@ -17,6 +17,7 @@ import json
 import random
 import re
 import time
+import warnings
 from dataclasses import dataclass
 from urllib.parse import unquote, urlencode, urlsplit
 
@@ -341,7 +342,16 @@ class Nxr:
         quoted = f'"{"/".join(scope)}/"'
         paths, saw_rows, truncated = self._ls_pages(endpoint, repository, query, quoted, scope)
         if truncated or not saw_rows:
-            return self._ls_pages(endpoint, repository, query, "/".join(scope) + "/", scope)[0]
+            retry_paths, _retry_rows, retry_truncated = self._ls_pages(
+                endpoint, repository, query, "/".join(scope) + "/", scope
+            )
+            if retry_truncated:
+                warnings.warn(
+                    f"{endpoint}: the search answered an empty page mid-walk after the unquoted retry; the listing may be incomplete",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return retry_paths
         return paths
 
     def _ls_pages(

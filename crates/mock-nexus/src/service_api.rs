@@ -58,12 +58,18 @@ const TOKEN_Q_FILLER: usize = 1000;
 /// The paths carry the leading slash, the shape a real Nexus reports.
 fn corpus(scenario: &Scenario) -> Vec<String> {
     let mut paths = Vec::new();
-    if !matches!(*scenario, Scenario::AssetsTokenQ | Scenario::AssetsMixedQ) {
+    if !matches!(
+        *scenario,
+        Scenario::AssetsTokenQ | Scenario::AssetsMixedQ | Scenario::AssetsDeadQ
+    ) {
         for i in 0..ASSETS_TOTAL {
             paths.push(format!("/v0.9.0-assets/asset-{i:03}.bin"));
         }
     }
-    if matches!(*scenario, Scenario::AssetsTokenQ | Scenario::AssetsMixedQ) {
+    if matches!(
+        *scenario,
+        Scenario::AssetsTokenQ | Scenario::AssetsMixedQ | Scenario::AssetsDeadQ
+    ) {
         for i in 0..ASSETS_TOTAL {
             paths.push(format!("/bench/v0.9.0-assets/asset-{i:03}.bin"));
         }
@@ -143,15 +149,19 @@ fn search_item(base: &str, path: &str, seed: usize) -> String {
 
 /// Serve one page of the generated asset list: items for the current token, plus the next token until the list is exhausted.
 /// `q`, when present, matches the scenario's server after decoding: a loose path substring for
-/// `assets-prefix-q`, a token query with phrase support for `assets-token-q`, and a per-page
-/// alternation of the two for `assets-mixed-q`.
+/// `assets-prefix-q`, a token query with phrase support for `assets-token-q`, a per-page
+/// alternation of the two for `assets-mixed-q`, and one normal page followed by empty pages for
+/// `assets-dead-q`.
 pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
     let q = query_param(&req.target, "q").map(percent_decode);
     let token = query_param(&req.target, "continuationToken");
     let start = token.and_then(|t| t.parse::<usize>().ok()).unwrap_or(0);
     let page_size = if matches!(
         shared.scenario,
-        Scenario::AssetsPrefixQ | Scenario::AssetsTokenQ | Scenario::AssetsMixedQ
+        Scenario::AssetsPrefixQ
+            | Scenario::AssetsTokenQ
+            | Scenario::AssetsMixedQ
+            | Scenario::AssetsDeadQ
     ) {
         SEARCH_ROWS_PER_PAGE
     } else {
@@ -165,12 +175,25 @@ pub(super) fn assets_page(shared: &Shared, req: &Request) -> Resp {
     let matches = |q: &str, path: &str| match shared.scenario {
         Scenario::AssetsTokenQ => token_q_matches(q, path),
         Scenario::AssetsMixedQ if quoted && page.is_multiple_of(2) => token_q_matches(q, path),
+        Scenario::AssetsDeadQ if page == 0 => {
+            if quoted {
+                token_q_matches(q, path)
+            } else {
+                q_matches(q, path)
+            }
+        }
+        Scenario::AssetsDeadQ => false,
         _ => q_matches(q, path),
     };
     let matching: Vec<usize> = all
         .iter()
         .enumerate()
-        .filter(|(_, path)| q.as_deref().is_none_or(|q| matches(q, path)))
+        .filter(|(_, path)| {
+            if shared.scenario == Scenario::AssetsDeadQ && page > 0 {
+                return false;
+            }
+            q.as_deref().is_none_or(|q| matches(q, path))
+        })
         .map(|(i, _)| i)
         .collect();
     let total = matching.len();

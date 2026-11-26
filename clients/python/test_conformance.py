@@ -443,6 +443,16 @@ class Conformance(unittest.TestCase):
             self.assertIn("q=%22bench%2F1.30.0%2F%22", searches[0], "the quoted walk starts")
             self.assertIn("q=bench%2F1.30.0%2F", searches[2], "the retry starts after the two quoted pages")
 
+    def test_assets_dead_q(self):
+        """A dead later backend truncates both walks: the client warns and keeps the first page."""
+        with mock_server("assets-dead-q") as mock:
+            nx = self.client()
+            with self.assertWarns(RuntimeWarning):
+                paths = nx.ls(mock.base, "raw-main", directory="bench/1.30.0")
+            self.assertEqual(len(paths), 50, "the first page only")
+            searches = [p for m, p in nx.requests if m == "GET" and "search/assets" in p]
+            self.assertEqual(len(searches), 4, "two pages for each walk")
+
     def test_assets_absent(self):
         """A server without the search endpoint answers 404: the client refuses with the enumeration guidance."""
         with mock_server("assets-absent") as mock:

@@ -7045,6 +7045,32 @@ fn ls_recovers_a_truncated_phrase_on_a_mixed_front() {
     assert_eq!(pages, 7, "two quoted pages, then five unquoted retry pages");
 }
 
+/// A dead later backend truncates both walks: the CLI keeps the first page and says so.
+#[test]
+fn ls_warns_when_the_unquoted_retry_truncates_too() {
+    let srv = server(Scenario::AssetsDeadQ);
+    let out = nxr(&[
+        "ls",
+        &format!("{}repository/raw-main/bench/1.30.0/", srv.base_url()),
+    ]);
+    expect_exit(&out, 0, "a warning is not an error");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 50, "the first page only");
+    let err = stderr(&out);
+    assert!(
+        err.lines()
+            .any(|l| l.starts_with("warning:") && l.contains("may be incomplete")),
+        "the warning names the incomplete listing: {err}"
+    );
+    let pages = srv
+        .requests()
+        .iter()
+        .filter(|r| r.path == "service/rest/v1/search/assets")
+        .count();
+    assert_eq!(pages, 4, "two pages for each walk");
+}
+
 /// Two served paths that decode to one name give the row no facts at all: one
 /// object's size on the other object's name would be a lie.
 #[test]

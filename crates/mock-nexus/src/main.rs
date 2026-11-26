@@ -263,6 +263,7 @@ fn build_scenario(name: &str, flags: &Flags) -> Option<Scenario> {
         "assets-prefix-q" => Some(Scenario::AssetsPrefixQ),
         "assets-token-q" => Some(Scenario::AssetsTokenQ),
         "assets-mixed-q" => Some(Scenario::AssetsMixedQ),
+        "assets-dead-q" => Some(Scenario::AssetsDeadQ),
         "eula-gate" => Some(Scenario::EulaGate),
         "eula-absent" => Some(Scenario::EulaAbsent),
         "search-lag" => Some(Scenario::SearchLag {

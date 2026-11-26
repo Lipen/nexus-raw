@@ -2,10 +2,11 @@
 //! The scenario list is the contract (`crates/mock-nexus/src/scenario.rs`): a scenario and its test land in the same PR.
 
 use nexus_raw_core::config::Config;
+use nexus_raw_core::events::Event;
 use nexus_raw_core::Nxr;
 
-fn client(base: String) -> Nxr {
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+fn client_with_events(base: String) -> (Nxr, tokio::sync::mpsc::UnboundedReceiver<Event>) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let cfg = Config {
         base,
         tls_insecure: false,
@@ -17,7 +18,11 @@ fn client(base: String) -> Nxr {
         auth: None,
         user_agent: None,
     };
-    Nxr::new(cfg, tx).expect("client")
+    (Nxr::new(cfg, tx).expect("client"), rx)
+}
+
+fn client(base: String) -> Nxr {
+    client_with_events(base).0
 }
 
 fn search_requests(server: &mock_nexus::MockNexus) -> usize {
@@ -326,6 +331,50 @@ async fn assets_mixed_q_recovers_a_truncated_phrase() {
         7,
         "two quoted pages then five unquoted retry pages"
     );
+}
+
+/// When the unquoted retry truncates too, there is no complete answer to return: the client
+/// keeps the first page and emits a warning instead of passing it off as the listing.
+#[tokio::test]
+async fn assets_dead_q_warns_when_the_retry_truncates_too() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsDeadQ).unwrap();
+    let base = format!("{}repository/raw-main/bench/1.30.0/", server.base_url());
+    let (nxr, mut events) = client_with_events(base);
+    let before = search_requests(&server);
+    let entries = nxr.ls_entries().await.unwrap();
+    assert_eq!(entries.len(), 50, "the first page only");
+    assert_eq!(
+        search_requests(&server) - before,
+        4,
+        "two pages for the quoted walk, two for the retry"
+    );
+
+    let mut warning = None;
+    while let Ok(event) = events.try_recv() {
+        if let Event::Warning { text } = event {
+            warning = Some(text);
+        }
+    }
+    let text = warning.expect("a warning after the retry truncates too");
+    assert!(text.contains("may be incomplete"), "{text}");
+}
+
+/// A repository-wide walk has no narrower scope to retry: a truncation there warns directly.
+#[tokio::test]
+async fn assets_dead_q_warns_on_a_repository_wide_walk() {
+    let server = mock_nexus::MockNexus::start(mock_nexus::Scenario::AssetsDeadQ).unwrap();
+    let base = format!("{}repository/raw-main/", server.base_url());
+    let (nxr, mut events) = client_with_events(base);
+    let entries = nxr.ls_entries().await.unwrap();
+    assert_eq!(entries.len(), 1, "page 0 only reaches the bench/ directory");
+    let mut warning = None;
+    while let Ok(event) = events.try_recv() {
+        if let Event::Warning { text } = event {
+            warning = Some(text);
+        }
+    }
+    let text = warning.expect("a warning for the truncated repository walk");
+    assert!(text.contains("may be incomplete"), "{text}");
 }
 
 /// The same directory through the artifact listing (`ls --assets`, the `down --ls` source):
